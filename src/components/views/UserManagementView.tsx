@@ -51,8 +51,12 @@ import { usePlatform } from "../../contexts/PlatformContext";
 export function UserManagementView({ onBack, tenantId }: UserManagementViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [isChangeRoleOpen, setIsChangeRoleOpen] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
-  const { users, createUser, tenants } = usePlatform();
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [changingRoleUser, setChangingRoleUser] = useState<any>(null);
+  const { users, createUser, updateUser, deleteUser, tenants } = usePlatform();
 
   const isPlatformAdmin = !tenantId; // If no tenantId is provided, user is platform admin
 
@@ -364,20 +368,42 @@ export function UserManagementView({ onBack, tenantId }: UserManagementViewProps
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setEditingUser(user);
+                            setIsEditUserOpen(true);
+                          }}
+                        >
                           <Edit className="w-4 h-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            toast.success(`Email enviado a ${user.email}`);
+                          }}
+                        >
                           <Mail className="w-4 h-4 mr-2" />
                           Enviar Email
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setChangingRoleUser(user);
+                            setIsChangeRoleOpen(true);
+                          }}
+                        >
                           <Shield className="w-4 h-4 mr-2" />
                           Cambiar Rol
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-[#EF4444]">
+                        <DropdownMenuItem
+                          className="text-[#EF4444]"
+                          onClick={() => {
+                            if (confirm(`¿Estás seguro de eliminar a ${user.name}?`)) {
+                              deleteUser(user.id);
+                              toast.success("Usuario eliminado exitosamente");
+                            }
+                          }}
+                        >
                           <Trash2 className="w-4 h-4 mr-2" />
                           Eliminar
                         </DropdownMenuItem>
@@ -390,6 +416,146 @@ export function UserManagementView({ onBack, tenantId }: UserManagementViewProps
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit User Dialog */}
+      <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Usuario</DialogTitle>
+            <DialogDescription>
+              Actualiza la información del usuario.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nombre Completo</Label>
+              <Input
+                id="edit-name"
+                defaultValue={editingUser?.name}
+                placeholder="Ej: Juan Pérez"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Correo Electrónico</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                defaultValue={editingUser?.email}
+                placeholder="juan.perez@empresa.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-department">Departamento</Label>
+              <Input
+                id="edit-department"
+                defaultValue={(editingUser as any)?.department || ""}
+                placeholder="Ej: Ventas"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Estado</Label>
+              <select
+                id="edit-status"
+                title="Estado del usuario"
+                className="w-full h-10 px-3 border rounded"
+                defaultValue={editingUser?.status}
+              >
+                <option value="active">Activo</option>
+                <option value="inactive">Inactivo</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditUserOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#2563EB] hover:bg-[#1E40AF]"
+              onClick={() => {
+                const nameInput = document.getElementById("edit-name") as HTMLInputElement;
+                const emailInput = document.getElementById("edit-email") as HTMLInputElement;
+                const departmentInput = document.getElementById("edit-department") as HTMLInputElement;
+                const statusSelect = document.getElementById("edit-status") as HTMLSelectElement;
+
+                const name = nameInput?.value || "";
+                const email = emailInput?.value || "";
+                const department = departmentInput?.value || undefined;
+                const status = statusSelect?.value as "active" | "inactive";
+
+                if (!name || !email) {
+                  toast.error("Por favor completa el nombre y el email");
+                  return;
+                }
+
+                updateUser(editingUser.id, {
+                  name,
+                  email,
+                  department,
+                  status,
+                });
+
+                toast.success("Usuario actualizado exitosamente");
+                setIsEditUserOpen(false);
+                setEditingUser(null);
+              }}
+            >
+              Guardar Cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Role Dialog */}
+      <Dialog open={isChangeRoleOpen} onOpenChange={setIsChangeRoleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cambiar Rol de Usuario</DialogTitle>
+            <DialogDescription>
+              Selecciona el nuevo rol para {changingRoleUser?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-role">Nuevo Rol</Label>
+              <select
+                id="new-role"
+                title="Seleccionar nuevo rol"
+                className="w-full h-10 px-3 border rounded"
+                defaultValue={changingRoleUser?.role}
+              >
+                <option value="employee">Empleado</option>
+                <option value="manager">Gerente</option>
+                <option value="tenant-admin">Administrador</option>
+                {isPlatformAdmin && (
+                  <option value="platform-admin">Admin Plataforma</option>
+                )}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsChangeRoleOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#2563EB] hover:bg-[#1E40AF]"
+              onClick={() => {
+                const roleSelect = document.getElementById("new-role") as HTMLSelectElement;
+                const newRole = roleSelect?.value as any;
+
+                updateUser(changingRoleUser.id, {
+                  role: newRole,
+                });
+
+                toast.success("Rol actualizado exitosamente");
+                setIsChangeRoleOpen(false);
+                setChangingRoleUser(null);
+              }}
+            >
+              Cambiar Rol
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

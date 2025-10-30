@@ -19,6 +19,7 @@ export interface User {
   role: UserRole;
   tenantId?: string; // undefined for platform-admin
   status?: "active" | "inactive";
+  department?: string;
 }
 
 interface PlatformContextType {
