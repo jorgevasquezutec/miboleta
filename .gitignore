@@ -1,0 +1,37 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependency directories
+node_modules/
+
+# Build output directories
+dist/
+dist-ssr/
+build/
+
+# Local configuration files
+.env.local
+.env.*.local
+.vscode/ # VS Code specific settings (optional, if you want to ignore all of it)
+!.vscode/extensions.json # Keep extensions.json if you want to share recommended extensions
+.idea/ # IntelliJ IDEA specific settings
+.DS_Store # macOS specific file
+Thumbs.db # Windows specific file
+
+# Editor specific files
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Vite specific
+*.local # Local Vite configuration files
+
+# Test coverage
+coverage/
