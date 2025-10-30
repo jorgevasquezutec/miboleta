@@ -1,3 +1,4 @@
+import React from "react";
 import { Navigate } from "react-router-dom";
 import { AdminDashboardView } from "./components/views/AdminDashboardView";
 import { EmployeeDashboardView } from "./components/views/EmployeeDashboardView";
@@ -8,11 +9,11 @@ import { CompanySettingsView } from "./components/views/CompanySettingsView";
 import { TenantManagementView } from "./components/views/TenantManagementView";
 import { BarChart3 } from "lucide-react";
 
-export type UserRole = "platform-admin" | "tenant-admin" | "employee" | null;
+export type UserRole = "platform-admin" | "tenant-admin" | "manager" | "employee" | null;
 
 interface RouteConfig {
   path: string;
-  element: JSX.Element;
+  element: React.ReactElement;
   allowedRoles: UserRole[];
 }
 

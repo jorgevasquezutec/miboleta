@@ -6,6 +6,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
 import { Alert, AlertDescription } from "../ui/alert";
+import { toast } from "sonner";
 
 interface DocumentViewerViewProps {
   onBack: () => void;
@@ -14,15 +15,33 @@ interface DocumentViewerViewProps {
 export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
   const [hasRead, setHasRead] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = 3;
 
   const handleSign = () => {
     setIsSigning(true);
     // Simulate signing process
     setTimeout(() => {
       setIsSigning(false);
-      alert("¡Documento firmado exitosamente!");
+      toast.success("¡Documento firmado exitosamente!");
       onBack();
     }, 1500);
+  };
+
+  const handleDownload = () => {
+    toast.info("Descargando documento...");
+    // Simulate download
+    setTimeout(() => {
+      toast.success("Documento descargado exitosamente");
+    }, 1000);
+  };
+
+  const handleShare = () => {
+    toast.info("Compartiendo documento...");
+    // Simulate share
+    setTimeout(() => {
+      toast.success("Enlace copiado al portapapeles");
+    }, 800);
   };
 
   return (
@@ -43,11 +62,11 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={handleDownload}>
               <Download className="w-4 h-4" />
               Descargar
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={handleShare}>
               <Share2 className="w-4 h-4" />
               Compartir
             </Button>
@@ -100,11 +119,25 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
 
                 {/* Document Controls */}
                 <div className="p-4 bg-white flex items-center justify-center gap-4">
-                  <Button variant="outline" size="sm">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
                     Página Anterior
                   </Button>
-                  <span className="text-[#64748B]">Página 1 de 3</span>
-                  <Button variant="outline" size="sm">
+                  <span className="text-[#64748B]">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  >
                     Página Siguiente
                   </Button>
                 </div>
@@ -177,7 +210,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
                     <Checkbox
                       id="read-confirm"
                       checked={hasRead}
-                      onCheckedChange={(checked) => setHasRead(checked as boolean)}
+                      onCheckedChange={(checked: boolean | "indeterminate") => setHasRead(checked === true)}
                     />
                     <label htmlFor="read-confirm" className="cursor-pointer flex-1">
                       <p>
