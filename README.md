@@ -2,6 +2,102 @@
 
 Sistema multi-tenant de gestión de documentos para empresas. Basado en el diseño original de Figma disponible en https://www.figma.com/design/7tyJxcpdePhaIBf7fxyVwF/Create-Mockups-for-MiBoleta.
 
+## 🚀 Quick Start (Monolito Laravel + React + Docker)
+
+### Opción 1: Script Automático (Recomendado)
+
+```bash
+./setup.sh
+```
+
+Este script:
+- ✅ Instala Laravel en `backend/`
+- ✅ Configura `.env` con credenciales Docker
+- ✅ Compila el frontend React
+- ✅ Construye y levanta los contenedores (PHP-FPM + Nginx + MySQL)
+- ✅ Ejecuta migraciones
+
+### Opción 2: Paso a Paso Manual
+
+Ver [SETUP.md](SETUP.md) para instalación detallada paso a paso.
+
+### Accesos
+
+- **Web**: http://localhost:8080
+- **MySQL**: localhost:3307
+  - Usuario: `miboleta_user`
+  - Password: `secret123`
+  - Database: `miboleta`
+
+## 📦 Scripts NPM Disponibles
+
+### Desarrollo con Hot Reload (Recomendado)
+```bash
+npm run dev              # Vite dev server con HMR en :5173
+npm run docker:dev:up    # Levantar solo Laravel + MySQL
+npm run dev:fullstack    # Levantar backend Y frontend (todo en uno)
+```
+👉 **Ver [DEVELOPMENT.md](DEVELOPMENT.md) para desarrollo con hot reload completo**
+
+### Desarrollo Frontend
+```bash
+npm run dev              # Vite dev server (desarrollo frontend solo)
+npm run build            # Compilar frontend para producción
+```
+
+### Docker y Backend (Producción)
+```bash
+npm run docker:build     # Construir imágenes Docker
+npm run docker:up        # Levantar contenedores
+npm run docker:down      # Parar contenedores
+npm run docker:logs      # Ver logs en tiempo real
+npm run docker:restart   # Reiniciar contenedores
+```
+
+### Laravel Commands
+```bash
+npm run laravel:migrate       # Ejecutar migraciones (producción)
+npm run laravel:fresh         # Reset DB y ejecutar seeds
+npm run laravel:shell         # Acceder al contenedor PHP
+npm run laravel:cache         # Cachear config y rutas de Laravel
+npm run laravel:dev:migrate   # Ejecutar migraciones (desarrollo)
+npm run laravel:dev:shell     # Shell en contenedor dev
+```
+
+### Setup
+```bash
+npm run setup:full       # Instalación completa automatizada
+```
+
+## Arquitectura
+
+Este proyecto es un **monolito Laravel** que sirve el frontend React compilado:
+
+- **Frontend**: React + TypeScript (compilado a `backend/public/`)
+- **Backend**: Laravel API (rutas bajo `/api`)
+- **Base de datos**: MySQL 8.0
+- **Servidor web**: Nginx + PHP-FPM
+- **Orquestación**: Docker Compose
+
+**Importante**: NO necesitas PHP ni Composer instalados localmente. Todo corre en Docker.
+
+### ¿Por qué no teníamos routing antes?
+
+El frontend original usaba **estado local** (`currentView`) en lugar de rutas de navegador:
+
+❌ **Sin routing de URL**:
+- No hay URLs directas (ej. `/users`, `/documents/123`)
+- No se puede compartir enlaces a vistas específicas
+- El botón "atrás" del navegador no funciona como esperado
+- Al recargar la página, pierdes el estado
+
+✅ **Con routing (React Router)** — ya instalado:
+- URLs semánticas: `/admin/users`, `/documents/123`
+- Enlaces compartibles
+- Navegación del navegador funciona
+- Estado se mantiene en la URL
+- Nginx ya configurado con fallback a `index.html` para SPA
+
 ## Características
 
 - Sistema multi-tenant con aislamiento de datos por empresa
@@ -108,3 +204,8 @@ Para migrar a una API real, reemplaza las llamadas en `src/services/mockApi.ts` 
 ## Licencia
 
 Este proyecto es privado y confidencial.
+
+
+platform@miboleta.com - Platform Administrator
+carlos@empresa1.com - Tenant Administrator
+maria@empresa1.com - Employee

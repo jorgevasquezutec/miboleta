@@ -1,0 +1,35 @@
+# Dockerfile para desarrollo (sin frontend build)
+FROM php:8.4-fpm-alpine
+
+# Install system dependencies and PHP extensions
+RUN apk add --no-cache \
+    bash \
+    git \
+    curl \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    libzip-dev \
+    icu-dev \
+    oniguruma-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+    pdo \
+    pdo_mysql \
+    zip \
+    gd \
+    intl \
+    mbstring
+
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /var/www/html
+
+# En desarrollo, el código se monta como volumen
+# No copiamos nada aquí, todo se monta en docker-compose.dev.yml
+
+EXPOSE 9000
+
+CMD ["php-fpm"]

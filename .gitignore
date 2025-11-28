@@ -29,9 +29,28 @@ Thumbs.db # Windows specific file
 *.ntvs*
 *.njsproj
 *.sln
+*.swp
+*.swo
+*~
 
 # Vite specific
 *.local # Local Vite configuration files
 
 # Test coverage
 coverage/
+
+# Laravel backend
+/backend/vendor/
+/backend/node_modules/
+/backend/.env
+/backend/.env.backup
+/backend/.phpunit.result.cache
+/backend/storage/*.key
+/backend/storage/logs/
+/backend/storage/framework/cache/**
+/backend/storage/framework/sessions/**
+/backend/storage/framework/views/**
+/backend/storage/debugbar/
+
+# Docker volumes
+/docker/mysql/

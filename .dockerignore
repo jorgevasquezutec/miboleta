@@ -1,0 +1,40 @@
+# Node
+node_modules
+npm-debug.log
+.npm
+
+# Build artifacts
+dist
+build
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Laravel (if in backend/)
+backend/vendor
+backend/node_modules
+backend/.env
+backend/storage/logs/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+
+# Testing
+coverage
+.phpunit.result.cache

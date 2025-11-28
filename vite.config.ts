@@ -3,8 +3,9 @@
   import react from '@vitejs/plugin-react-swc';
   import path from 'path';
 
-  export default defineConfig({
-    base: '/miboleta/', // Cambiar 'miboleta' por el nombre de tu repo
+  export default defineConfig(({ mode }) => ({
+    // Base path: always use root since we're serving from Laravel
+    base: '/',
     plugins: [react()],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
@@ -48,6 +49,10 @@
         '@radix-ui/react-alert-dialog@1.1.6': '@radix-ui/react-alert-dialog',
         '@radix-ui/react-accordion@1.2.3': '@radix-ui/react-accordion',
         '@': path.resolve(__dirname, './src'),
+        '@/core': path.resolve(__dirname, './src/core'),
+        '@/infrastructure': path.resolve(__dirname, './src/infrastructure'),
+        '@/presentation': path.resolve(__dirname, './src/presentation'),
+        '@/shared': path.resolve(__dirname, './src/shared'),
       },
     },
     build: {
@@ -55,7 +60,15 @@
       outDir: 'dist',
     },
     server: {
-      port: 3000,
+      port: 5173,
       open: true,
+      // Proxy API requests to Laravel backend
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
     },
-  });
+  }));

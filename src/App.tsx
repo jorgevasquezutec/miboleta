@@ -1,18 +1,21 @@
-import React, { useState } from "react";
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { TenantProvider, useTenant } from "./contexts/TenantContext";
-import { PlatformProvider, usePlatform } from "./contexts/PlatformContext";
-import { Navbar } from "./components/Navbar";
-import { LoginView } from "./components/views/LoginView";
-import { AdminDashboardView } from "./components/views/AdminDashboardView";
-import { EmployeeDashboardView } from "./components/views/EmployeeDashboardView";
-import { DocumentUploadView } from "./components/views/DocumentUploadView";
-import { DocumentViewerView } from "./components/views/DocumentViewerView";
-import { UserManagementView } from "./components/views/UserManagementView";
-import { CompanySettingsView } from "./components/views/CompanySettingsView";
-import { TenantManagementView } from "./components/views/TenantManagementView";
-import { UserProfileView } from "./components/views/UserProfileView";
-import { Toaster } from "./components/ui/sonner";
+import { useAuthStore } from "@/presentation/stores";
+import { Navbar } from "@/presentation/components/layout";
+import { LoginView } from "@/presentation/pages/auth";
+import {
+  DashboardPage as AdminDashboardPage,
+  TenantsPage,
+  UsersPage,
+  SettingsPage,
+} from "@/presentation/pages/admin";
+import {
+  DashboardPage as EmployeeDashboardPage,
+  DocumentUploadView,
+  DocumentViewerView,
+  UserProfileView,
+} from "@/presentation/pages/employee";
+import { Toaster } from "@/presentation/components/ui/sonner";
 import {
   LayoutDashboard,
   FileText,
@@ -22,19 +25,19 @@ import {
   BarChart3,
 } from "lucide-react";
 
-type UserRole = "platform-admin" | "tenant-admin" | "manager" | "employee" | null;
+type UserRole = "platform_admin" | "tenant_admin" | "employee" | null;
 
 // Protected Route Component
 function ProtectedRoute({
   children,
   allowedRoles,
-  currentUserRole,
 }: {
   children: React.ReactElement;
   allowedRoles: UserRole[];
-  currentUserRole: UserRole;
 }) {
   const location = useLocation();
+  const { user } = useAuthStore();
+  const currentUserRole = user?.role || null;
 
   if (!currentUserRole) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -48,16 +51,21 @@ function ProtectedRoute({
 }
 
 // Sidebar Component
-function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenantId?: string }; tenant: any }) {
+function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuthStore();
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Mock tenant colors (TODO: get from tenant store)
+  const primaryColor = "#2563EB";
+  const secondaryColor = "#1E40AF";
 
   return (
     <aside className="w-64 bg-white border-r border-[rgba(0,0,0,0.1)] min-h-[calc(100vh-73px)]">
       <nav className="p-4 space-y-2">
-        {currentUser.role === "platform-admin" ? (
+        {user?.role === "platform_admin" ? (
           // Platform admin menu
           <>
             <button
@@ -67,8 +75,8 @@ function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenan
                 isActive("/admin") ? "text-white" : "hover:bg-[#F1F5F9]"
               }`}
               style={{
-                backgroundColor: isActive("/admin") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/admin") ? "#FFFFFF" : tenant.branding.secondaryColor,
+                backgroundColor: isActive("/admin") ? primaryColor : undefined,
+                color: isActive("/admin") ? "#FFFFFF" : secondaryColor,
               }}
             >
               <LayoutDashboard className="w-5 h-5" />
@@ -82,8 +90,8 @@ function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenan
                 isActive("/tenants") ? "text-white" : "hover:bg-[#F1F5F9]"
               }`}
               style={{
-                backgroundColor: isActive("/tenants") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/tenants") ? "#FFFFFF" : tenant.branding.secondaryColor,
+                backgroundColor: isActive("/tenants") ? primaryColor : undefined,
+                color: isActive("/tenants") ? "#FFFFFF" : secondaryColor,
               }}
             >
               <Building2 className="w-5 h-5" />
@@ -97,8 +105,8 @@ function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenan
                 isActive("/users") ? "text-white" : "hover:bg-[#F1F5F9]"
               }`}
               style={{
-                backgroundColor: isActive("/users") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/users") ? "#FFFFFF" : tenant.branding.secondaryColor,
+                backgroundColor: isActive("/users") ? primaryColor : undefined,
+                color: isActive("/users") ? "#FFFFFF" : secondaryColor,
               }}
             >
               <Users className="w-5 h-5" />
@@ -112,8 +120,8 @@ function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenan
                 isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
               }`}
               style={{
-                backgroundColor: isActive("/settings") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/settings") ? "#FFFFFF" : tenant.branding.secondaryColor,
+                backgroundColor: isActive("/settings") ? primaryColor : undefined,
+                color: isActive("/settings") ? "#FFFFFF" : secondaryColor,
               }}
             >
               <Settings className="w-5 h-5" />
@@ -121,17 +129,17 @@ function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenan
             </button>
           </>
         ) : (
-          // Tenant admin menu
+          // Tenant admin/employee menu
           <>
             <button
               type="button"
-              onClick={() => navigate("/admin")}
+              onClick={() => navigate("/dashboard")}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive("/admin") ? "text-white" : "hover:bg-[#F1F5F9]"
+                isActive("/dashboard") ? "text-white" : "hover:bg-[#F1F5F9]"
               }`}
               style={{
-                backgroundColor: isActive("/admin") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/admin") ? "#FFFFFF" : tenant.branding.secondaryColor,
+                backgroundColor: isActive("/dashboard") ? primaryColor : undefined,
+                color: isActive("/dashboard") ? "#FFFFFF" : secondaryColor,
               }}
             >
               <LayoutDashboard className="w-5 h-5" />
@@ -145,73 +153,62 @@ function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenan
                 isActive("/upload") ? "text-white" : "hover:bg-[#F1F5F9]"
               }`}
               style={{
-                backgroundColor: isActive("/upload") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/upload") ? "#FFFFFF" : tenant.branding.secondaryColor,
+                backgroundColor: isActive("/upload") ? primaryColor : undefined,
+                color: isActive("/upload") ? "#FFFFFF" : secondaryColor,
               }}
             >
               <FileText className="w-5 h-5" />
               <span>Cargar Documentos</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigate("/documents")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive("/documents") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
-              style={{
-                backgroundColor: isActive("/documents") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/documents") ? "#FFFFFF" : tenant.branding.secondaryColor,
-              }}
-            >
-              <FileText className="w-5 h-5" />
-              <span>Documentos</span>
-            </button>
+            {user?.role === "tenant_admin" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate("/users")}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive("/users") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                  style={{
+                    backgroundColor: isActive("/users") ? primaryColor : undefined,
+                    color: isActive("/users") ? "#FFFFFF" : secondaryColor,
+                  }}
+                >
+                  <Users className="w-5 h-5" />
+                  <span>Usuarios</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => navigate("/users")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive("/users") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
-              style={{
-                backgroundColor: isActive("/users") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/users") ? "#FFFFFF" : tenant.branding.secondaryColor,
-              }}
-            >
-              <Users className="w-5 h-5" />
-              <span>Usuarios</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/reports")}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive("/reports") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                  style={{
+                    backgroundColor: isActive("/reports") ? primaryColor : undefined,
+                    color: isActive("/reports") ? "#FFFFFF" : secondaryColor,
+                  }}
+                >
+                  <BarChart3 className="w-5 h-5" />
+                  <span>Reportes</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => navigate("/reports")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive("/reports") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
-              style={{
-                backgroundColor: isActive("/reports") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/reports") ? "#FFFFFF" : tenant.branding.secondaryColor,
-              }}
-            >
-              <BarChart3 className="w-5 h-5" />
-              <span>Reportes</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate("/settings")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
-              style={{
-                backgroundColor: isActive("/settings") ? tenant.branding.primaryColor : undefined,
-                color: isActive("/settings") ? "#FFFFFF" : tenant.branding.secondaryColor,
-              }}
-            >
-              <Settings className="w-5 h-5" />
-              <span>Configuración</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/settings")}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                  style={{
+                    backgroundColor: isActive("/settings") ? primaryColor : undefined,
+                    color: isActive("/settings") ? "#FFFFFF" : secondaryColor,
+                  }}
+                >
+                  <Settings className="w-5 h-5" />
+                  <span>Configuración</span>
+                </button>
+              </>
+            )}
           </>
         )}
       </nav>
@@ -221,44 +218,21 @@ function Sidebar({ currentUser, tenant }: { currentUser: { role: UserRole; tenan
 
 // App Content with Router
 function AppContent() {
-  const { tenant } = useTenant();
-  const { users, tenants } = usePlatform();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, login, logout } = useAuthStore();
 
-  const [currentUser, setCurrentUser] = useState<{
-    role: UserRole | null;
-    name: string;
-    email: string;
-    tenantId?: string;
-  }>({ role: null, name: "", email: "" });
-
-  const handleLogin = (email: string, _password: string) => {
-    // Try find a user in the platform mock
-    const found = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (found) {
-      setCurrentUser({ role: found.role as UserRole, name: found.name, email: found.email, tenantId: found.tenantId });
-      navigate(found.role === "employee" ? "/dashboard" : "/admin");
-      return;
-    }
-
-    // Fallback mock heuristics
-    if (email.includes("platform")) {
-      setCurrentUser({ role: "platform-admin", name: "Platform Admin", email });
-      navigate("/admin");
-    } else if (email.includes("admin") || email.includes("carlos")) {
-      const tenantId = tenants && tenants.length ? tenants[0].id : undefined;
-      setCurrentUser({ role: "tenant-admin", name: "Admin (mock)", email, tenantId });
-      navigate("/admin");
-    } else {
-      const tenantId = tenants && tenants.length ? tenants[0].id : undefined;
-      setCurrentUser({ role: "employee", name: "Empleado (mock)", email, tenantId });
-      navigate("/dashboard");
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      await login(email, password);
+      navigate(user?.role === "employee" ? "/dashboard" : "/admin");
+    } catch (error) {
+      console.error("Login error:", error);
     }
   };
 
-  const handleLogout = () => {
-    setCurrentUser({ role: null, name: "", email: "" });
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
@@ -268,7 +242,7 @@ function AppContent() {
   };
 
   // Show login if not authenticated
-  if (!currentUser.role && location.pathname !== "/login") {
+  if (!user && location.pathname !== "/login") {
     return (
       <>
         <LoginView onLogin={handleLogin} />
@@ -287,21 +261,20 @@ function AppContent() {
     );
   }
 
-  const showSidebar = (currentUser.role === "platform-admin" || currentUser.role === "tenant-admin") && location.pathname !== "/viewer";
+  const showSidebar = (user?.role === "platform_admin" || user?.role === "tenant_admin") && location.pathname !== "/viewer";
 
   return (
     <div className="min-h-screen bg-[#F1F5F9]">
       <Navbar
-        userName={currentUser.name}
+        userName={user?.name || "Usuario"}
         userRole={
-          currentUser.role === "platform-admin"
+          user?.role === "platform_admin"
             ? "Administrador Plataforma"
-            : currentUser.role === "tenant-admin"
+            : user?.role === "tenant_admin"
             ? "Administrador"
             : "Empleado"
         }
-        companyName={tenant.name}
-        companyLogo={tenant.branding.logoUrl || undefined}
+        companyName="MiBoleta"
         notificationCount={3}
         onLogout={handleLogout}
         onSettings={() => navigate("/settings")}
@@ -309,7 +282,7 @@ function AppContent() {
       />
 
       <div className="flex">
-        {showSidebar && <Sidebar currentUser={currentUser} tenant={tenant} />}
+        {showSidebar && <Sidebar />}
 
         <main className={`flex-1 ${location.pathname === "/viewer" ? "" : "p-8"}`}>
           <Routes>
@@ -318,7 +291,7 @@ function AppContent() {
             <Route
               path="/"
               element={
-                currentUser.role === "employee" ? (
+                user?.role === "employee" ? (
                   <Navigate to="/dashboard" replace />
                 ) : (
                   <Navigate to="/admin" replace />
@@ -329,8 +302,8 @@ function AppContent() {
             <Route
               path="/admin"
               element={
-                <ProtectedRoute allowedRoles={["platform-admin", "tenant-admin"]} currentUserRole={currentUser.role}>
-                  <AdminDashboardView onNavigate={(path) => navigate(path)} />
+                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin"]}>
+                  <AdminDashboardPage onNavigate={(path) => navigate(path)} />
                 </ProtectedRoute>
               }
             />
@@ -338,8 +311,8 @@ function AppContent() {
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute allowedRoles={["employee"]} currentUserRole={currentUser.role}>
-                  <EmployeeDashboardView onViewDocument={handleViewDocument} />
+                <ProtectedRoute allowedRoles={["employee", "tenant_admin"]}>
+                  <EmployeeDashboardPage onViewDocument={handleViewDocument} />
                 </ProtectedRoute>
               }
             />
@@ -347,17 +320,8 @@ function AppContent() {
             <Route
               path="/upload"
               element={
-                <ProtectedRoute allowedRoles={["tenant-admin", "employee"]} currentUserRole={currentUser.role}>
-                  <DocumentUploadView onBack={() => navigate(currentUser.role === "employee" ? "/dashboard" : "/admin")} />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/documents"
-              element={
-                <ProtectedRoute allowedRoles={["platform-admin", "tenant-admin", "employee"]} currentUserRole={currentUser.role}>
-                  <EmployeeDashboardView onViewDocument={handleViewDocument} />
+                <ProtectedRoute allowedRoles={["tenant_admin", "employee"]}>
+                  <DocumentUploadView onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")} />
                 </ProtectedRoute>
               }
             />
@@ -365,8 +329,8 @@ function AppContent() {
             <Route
               path="/viewer"
               element={
-                <ProtectedRoute allowedRoles={["platform-admin", "tenant-admin", "employee"]} currentUserRole={currentUser.role}>
-                  <DocumentViewerView onBack={() => navigate(currentUser.role === "employee" ? "/dashboard" : "/documents")} />
+                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin", "employee"]}>
+                  <DocumentViewerView onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")} />
                 </ProtectedRoute>
               }
             />
@@ -374,10 +338,10 @@ function AppContent() {
             <Route
               path="/users"
               element={
-                <ProtectedRoute allowedRoles={["platform-admin", "tenant-admin"]} currentUserRole={currentUser.role}>
-                  <UserManagementView
+                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin"]}>
+                  <UsersPage
                     onBack={() => navigate("/admin")}
-                    tenantId={currentUser.role === "tenant-admin" ? currentUser.tenantId : undefined}
+                    tenantId={user?.role === "tenant_admin" && user?.tenantId ? user.tenantId : undefined}
                   />
                 </ProtectedRoute>
               }
@@ -386,8 +350,8 @@ function AppContent() {
             <Route
               path="/tenants"
               element={
-                <ProtectedRoute allowedRoles={["platform-admin"]} currentUserRole={currentUser.role}>
-                  <TenantManagementView onBack={() => navigate("/admin")} />
+                <ProtectedRoute allowedRoles={["platform_admin"]}>
+                  <TenantsPage onBack={() => navigate("/admin")} />
                 </ProtectedRoute>
               }
             />
@@ -395,8 +359,8 @@ function AppContent() {
             <Route
               path="/settings"
               element={
-                <ProtectedRoute allowedRoles={["platform-admin", "tenant-admin"]} currentUserRole={currentUser.role}>
-                  <CompanySettingsView onBack={() => navigate(currentUser.role === "employee" ? "/dashboard" : "/admin")} />
+                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin"]}>
+                  <SettingsPage onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")} />
                 </ProtectedRoute>
               }
             />
@@ -404,10 +368,10 @@ function AppContent() {
             <Route
               path="/profile"
               element={
-                <ProtectedRoute allowedRoles={["platform-admin", "tenant-admin", "manager", "employee"]} currentUserRole={currentUser.role}>
+                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin", "employee"]}>
                   <UserProfileView
-                    onBack={() => navigate(currentUser.role === "employee" ? "/dashboard" : "/admin")}
-                    currentUser={currentUser}
+                    onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")}
+                    currentUser={user || undefined}
                   />
                 </ProtectedRoute>
               }
@@ -416,7 +380,7 @@ function AppContent() {
             <Route
               path="/reports"
               element={
-                <ProtectedRoute allowedRoles={["tenant-admin"]} currentUserRole={currentUser.role}>
+                <ProtectedRoute allowedRoles={["tenant_admin"]}>
                   <div className="space-y-6">
                     <h1>Reportes y Análisis</h1>
                     <div className="bg-white rounded-lg p-12 text-center border border-[rgba(0,0,0,0.1)]">
@@ -442,11 +406,7 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <PlatformProvider>
-        <TenantProvider>
-          <AppContent />
-        </TenantProvider>
-      </PlatformProvider>
+      <AppContent />
     </BrowserRouter>
   );
 }
