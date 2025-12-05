@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, User, Mail, Building2, Shield, Calendar, Save } from "lucide-react";
+import { ArrowLeft, User as UserIcon, Mail, Building2, Shield, Calendar, Save } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
@@ -8,15 +8,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/presentation/components/u
 import { Badge } from "@/presentation/components/ui/badge";
 import { toast } from "sonner";
 import { useUsersStore } from "@/presentation/stores";
+import { User } from "@/core/domain/entities";
 
 interface UserProfileViewProps {
   onBack: () => void;
-  currentUser?: {
-    name: string;
-    email: string;
-    role: "platform_admin" | "tenant_admin" | "employee" | null;
-    tenantId?: string | null;
-  };
+  currentUser?: User;
 }
 
 export function UserProfileView({ onBack, currentUser }: UserProfileViewProps) {
@@ -165,7 +161,7 @@ export function UserProfileView({ onBack, currentUser }: UserProfileViewProps) {
               <div className="space-y-2">
                 <Label htmlFor="profile-name">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4" />
+                    <UserIcon className="w-4 h-4" />
                     Nombre Completo
                   </div>
                 </Label>

@@ -25,7 +25,7 @@ import {
   BarChart3,
 } from "lucide-react";
 
-type UserRole = "platform_admin" | "tenant_admin" | "employee" | null;
+type UserRole = "root" | "admin" | "client" | null;
 
 // Protected Route Component
 function ProtectedRoute({
@@ -65,8 +65,8 @@ function Sidebar() {
   return (
     <aside className="w-64 bg-white border-r border-[rgba(0,0,0,0.1)] min-h-[calc(100vh-73px)]">
       <nav className="p-4 space-y-2">
-        {user?.role === "platform_admin" ? (
-          // Platform admin menu
+        {user?.role === "root" ? (
+          // Root admin menu
           <>
             <button
               type="button"
@@ -161,7 +161,7 @@ function Sidebar() {
               <span>Cargar Documentos</span>
             </button>
 
-            {user?.role === "tenant_admin" && (
+            {user?.role === "admin" && (
               <>
                 <button
                   type="button"
@@ -220,16 +220,7 @@ function Sidebar() {
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, login, logout } = useAuthStore();
-
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      await login(email, password);
-      navigate(user?.role === "employee" ? "/dashboard" : "/admin");
-    } catch (error) {
-      console.error("Login error:", error);
-    }
-  };
+  const { user, logout } = useAuthStore();
 
   const handleLogout = async () => {
     await logout();
@@ -245,7 +236,7 @@ function AppContent() {
   if (!user && location.pathname !== "/login") {
     return (
       <>
-        <LoginView onLogin={handleLogin} />
+        <LoginView />
         <Toaster />
       </>
     );
@@ -255,24 +246,24 @@ function AppContent() {
   if (location.pathname === "/login") {
     return (
       <>
-        <LoginView onLogin={handleLogin} />
+        <LoginView />
         <Toaster />
       </>
     );
   }
 
-  const showSidebar = (user?.role === "platform_admin" || user?.role === "tenant_admin") && location.pathname !== "/viewer";
+  const showSidebar = (user?.role === "root" || user?.role === "admin") && location.pathname !== "/viewer";
 
   return (
     <div className="min-h-screen bg-[#F1F5F9]">
       <Navbar
         userName={user?.name || "Usuario"}
         userRole={
-          user?.role === "platform_admin"
+          user?.role === "root"
             ? "Administrador Plataforma"
-            : user?.role === "tenant_admin"
+            : user?.role === "admin"
             ? "Administrador"
-            : "Empleado"
+            : "Cliente"
         }
         companyName="MiBoleta"
         notificationCount={3}
@@ -286,12 +277,12 @@ function AppContent() {
 
         <main className={`flex-1 ${location.pathname === "/viewer" ? "" : "p-8"}`}>
           <Routes>
-            <Route path="/login" element={<LoginView onLogin={handleLogin} />} />
+            <Route path="/login" element={<LoginView />} />
 
             <Route
               path="/"
               element={
-                user?.role === "employee" ? (
+                user?.role === "client" ? (
                   <Navigate to="/dashboard" replace />
                 ) : (
                   <Navigate to="/admin" replace />
@@ -302,7 +293,7 @@ function AppContent() {
             <Route
               path="/admin"
               element={
-                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin"]}>
+                <ProtectedRoute allowedRoles={["root", "admin"]}>
                   <AdminDashboardPage onNavigate={(path) => navigate(path)} />
                 </ProtectedRoute>
               }
@@ -311,7 +302,7 @@ function AppContent() {
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute allowedRoles={["employee", "tenant_admin"]}>
+                <ProtectedRoute allowedRoles={["client", "admin"]}>
                   <EmployeeDashboardPage onViewDocument={handleViewDocument} />
                 </ProtectedRoute>
               }
@@ -320,8 +311,8 @@ function AppContent() {
             <Route
               path="/upload"
               element={
-                <ProtectedRoute allowedRoles={["tenant_admin", "employee"]}>
-                  <DocumentUploadView onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")} />
+                <ProtectedRoute allowedRoles={["admin", "client"]}>
+                  <DocumentUploadView onBack={() => navigate(user?.role === "client" ? "/dashboard" : "/admin")} />
                 </ProtectedRoute>
               }
             />
@@ -329,8 +320,8 @@ function AppContent() {
             <Route
               path="/viewer"
               element={
-                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin", "employee"]}>
-                  <DocumentViewerView onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")} />
+                <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+                  <DocumentViewerView onBack={() => navigate(user?.role === "client" ? "/dashboard" : "/admin")} />
                 </ProtectedRoute>
               }
             />
@@ -338,10 +329,9 @@ function AppContent() {
             <Route
               path="/users"
               element={
-                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin"]}>
+                <ProtectedRoute allowedRoles={["root", "admin"]}>
                   <UsersPage
                     onBack={() => navigate("/admin")}
-                    tenantId={user?.role === "tenant_admin" && user?.tenantId ? user.tenantId : undefined}
                   />
                 </ProtectedRoute>
               }
@@ -350,7 +340,7 @@ function AppContent() {
             <Route
               path="/tenants"
               element={
-                <ProtectedRoute allowedRoles={["platform_admin"]}>
+                <ProtectedRoute allowedRoles={["root"]}>
                   <TenantsPage onBack={() => navigate("/admin")} />
                 </ProtectedRoute>
               }
@@ -359,8 +349,8 @@ function AppContent() {
             <Route
               path="/settings"
               element={
-                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin"]}>
-                  <SettingsPage onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")} />
+                <ProtectedRoute allowedRoles={["root", "admin"]}>
+                  <SettingsPage onBack={() => navigate(user?.role === "client" ? "/dashboard" : "/admin")} />
                 </ProtectedRoute>
               }
             />
@@ -368,10 +358,10 @@ function AppContent() {
             <Route
               path="/profile"
               element={
-                <ProtectedRoute allowedRoles={["platform_admin", "tenant_admin", "employee"]}>
+                <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
                   <UserProfileView
-                    onBack={() => navigate(user?.role === "employee" ? "/dashboard" : "/admin")}
-                    currentUser={user || undefined}
+                    onBack={() => navigate(user?.role === "client" ? "/dashboard" : "/admin")}
+                    currentUser={user ?? undefined}
                   />
                 </ProtectedRoute>
               }
@@ -380,7 +370,7 @@ function AppContent() {
             <Route
               path="/reports"
               element={
-                <ProtectedRoute allowedRoles={["tenant_admin"]}>
+                <ProtectedRoute allowedRoles={["admin"]}>
                   <div className="space-y-6">
                     <h1>Reportes y Análisis</h1>
                     <div className="bg-white rounded-lg p-12 text-center border border-[rgba(0,0,0,0.1)]">

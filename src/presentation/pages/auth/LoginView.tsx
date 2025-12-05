@@ -1,21 +1,35 @@
 import { useState } from "react";
-import { Building2, Mail, Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Building2, Mail, Lock, Loader2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/presentation/components/ui/card";
+import { useAuth } from "@/presentation/hooks/useAuth";
+import { toast } from "sonner";
 
-interface LoginViewProps {
-  onLogin: (email: string, password: string) => void;
-}
-
-export default function LoginView({ onLogin }: LoginViewProps) {
+export default function LoginView() {
+  const navigate = useNavigate();
+  const { login, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(email, password);
+
+    try {
+      await login(email, password);
+      toast.success("¡Bienvenido!");
+      navigate("/");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al iniciar sesión");
+    }
+  };
+
+  // Quick login helper
+  const quickLogin = (testEmail: string) => {
+    setEmail(testEmail);
+    setPassword("password");
   };
 
   // Mock tenant branding
@@ -66,6 +80,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 h-11"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -82,22 +97,9 @@ export default function LoginView({ onLogin }: LoginViewProps) {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 h-11"
                     required
+                    disabled={isLoading}
                   />
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded" />
-                  <span className="text-[#64748B]">Recordarme</span>
-                </label>
-                <Button 
-                  variant="link" 
-                  className="p-0"
-                  style={{ color: primaryColor }}
-                >
-                  ¿Olvidaste tu contraseña?
-                </Button>
               </div>
 
               <Button
@@ -106,39 +108,69 @@ export default function LoginView({ onLogin }: LoginViewProps) {
                 style={{ 
                   backgroundColor: primaryColor,
                 }}
-                onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.currentTarget.style.backgroundColor = gradientTo;
-                }}
-                onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.currentTarget.style.backgroundColor = primaryColor;
-                }}
+                disabled={isLoading}
               >
-                Iniciar Sesión
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Iniciando sesión...
+                  </>
+                ) : (
+                  'Iniciar Sesión'
+                )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <p className="text-[#64748B]">
-                ¿Tu empresa no está registrada?{" "}
-                <Button 
-                  variant="link" 
-                  className="p-0"
-                  style={{ color: primaryColor }}
-                >
-                  Crear cuenta empresarial
-                </Button>
-              </p>
-            </div>
-
             {/* Development Mode - Show Test Credentials */}
             {import.meta.env.DEV && (
-              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm font-semibold text-blue-900 mb-2">🔧 Credenciales de prueba:</p>
-                <div className="text-xs text-blue-800 space-y-1">
-                  <p><strong>Admin Plataforma:</strong> platform@miboleta.com</p>
-                  <p><strong>Admin Empresa:</strong> carlos@empresa1.com</p>
-                  <p><strong>Empleado:</strong> maria@empresa1.com</p>
-                  <p className="text-blue-600 mt-2">Contraseña: cualquiera (en desarrollo)</p>
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm font-semibold text-blue-900 mb-3">🔧 Usuarios de prueba:</p>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-left"
+                    onClick={() => quickLogin('root@miboleta.com')}
+                  >
+                    <span className="text-xs">
+                      <strong>Root Admin</strong> - root@miboleta.com
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-left"
+                    onClick={() => quickLogin('admin@corporacionabc.com')}
+                  >
+                    <span className="text-xs">
+                      <strong>Admin ABC</strong> - admin@corporacionabc.com
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-left"
+                    onClick={() => quickLogin('juan.perez@corporacionabc.com')}
+                  >
+                    <span className="text-xs">
+                      <strong>Cliente ABC</strong> - juan.perez@corporacionabc.com
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-left"
+                    onClick={() => quickLogin('ana.torres@email.com')}
+                  >
+                    <span className="text-xs">
+                      <strong>Multi-tenant</strong> - ana.torres@email.com
+                    </span>
+                  </Button>
+                  <p className="text-xs text-blue-600 mt-2">Contraseña para todos: <strong>password</strong></p>
                 </div>
               </div>
             )}

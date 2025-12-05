@@ -39,7 +39,7 @@ export function Navbar({
 
   return (
     <nav className="bg-white border-b border-[rgba(0,0,0,0.1)] px-6 py-4">
-      <div className="flex items-center justify-between max-w-[1400px] mx-auto">
+      <div className="flex items-center justify-between">
         {/* Logo and Company Name */}
         <div className="flex items-center gap-3">
           {brandingLogo ? (

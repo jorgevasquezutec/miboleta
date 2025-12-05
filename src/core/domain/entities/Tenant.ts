@@ -3,19 +3,16 @@ export interface Tenant {
   id: string;
   name: string;
   ruc: string;
+  business_name?: string;
   address?: string;
   phone?: string;
-  email?: string;
-  logo?: string;
+  logo_path?: string;
   status: 'active' | 'inactive' | 'suspended';
-  primaryColor?: string;
-  secondaryColor?: string;
-  subscriptionPlan?: 'basic' | 'premium' | 'enterprise';
-  maxUsers?: number;
-  maxStorage?: number;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export type CreateTenantData = Omit<Tenant, 'id' | 'createdAt' | 'updatedAt'>;
-export type UpdateTenantData = Partial<Omit<Tenant, 'id' | 'createdAt' | 'updatedAt'>>;
+export type CreateTenantData = Omit<Tenant, 'id' | 'createdAt' | 'updatedAt' | 'created_at' | 'updated_at'>;
+export type UpdateTenantData = Partial<Omit<Tenant, 'id' | 'createdAt' | 'updatedAt' | 'created_at' | 'updated_at'>>;

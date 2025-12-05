@@ -1,22 +1,80 @@
 import { IUserRepository } from '@/core/domain/repositories';
 import { User, CreateUserData, UpdateUserData } from '@/core/domain/entities';
-import { mockApi } from '@/infrastructure/http/api';
+import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
+
+// Tipos de respuesta de la API
+interface LoginResponse {
+  user: User;
+  // No incluimos token porque ahora se maneja en cookies HttpOnly
+}
+
+interface ApiResponse<T> {
+  data: T;
+}
 
 /**
  * Implementación del repositorio de usuarios
- * Conecta con la API (mock o real)
+ * Conecta con la API real de Laravel
+ * Los tokens se manejan automáticamente vía cookies HttpOnly
  */
 export class UserRepository implements IUserRepository {
+  /**
+   * Login - Autenticar usuario
+   * Las cookies con access_token y refresh_token se establecen automáticamente
+   */
+  async login(email: string, password: string): Promise<LoginResponse> {
+    try {
+      const response = await apiClient.post<LoginResponse>('/login', {
+        email,
+        password,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Logout - Cerrar sesión
+   * Invalida los tokens en el backend y limpia las cookies
+   */
+  async logout(): Promise<void> {
+    try {
+      await apiClient.post('/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // No lanzar error en logout para permitir limpieza local
+    }
+  }
+
+  /**
+   * Me - Obtener usuario actual
+   * El access_token se envía automáticamente desde la cookie
+   */
+  async me(): Promise<User> {
+    try {
+      const response = await apiClient.get<User>('/me');
+      return response.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
   async findAll(): Promise<User[]> {
-    const response = await mockApi.get<User[]>('/users');
-    return response.data;
+    try {
+      const response = await apiClient.get<ApiResponse<User[]>>('/users');
+      return response.data.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
   }
 
   async findById(id: string): Promise<User | null> {
     try {
-      const response = await mockApi.get<User>(`/users/${id}`);
-      return response.data;
+      const response = await apiClient.get<ApiResponse<User>>(`/users/${id}`);
+      return response.data.data;
     } catch (error) {
+      console.error('Find user by id error:', error);
       return null;
     }
   }
@@ -31,17 +89,29 @@ export class UserRepository implements IUserRepository {
   }
 
   async create(data: CreateUserData): Promise<User> {
-    const response = await mockApi.post<User>('/users', data);
-    return response.data;
+    try {
+      const response = await apiClient.post<ApiResponse<User>>('/users', data);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
   }
 
   async update(id: string, data: UpdateUserData): Promise<User> {
-    const response = await mockApi.put<User>(`/users/${id}`, data);
-    return response.data;
+    try {
+      const response = await apiClient.put<ApiResponse<User>>(`/users/${id}`, data);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
   }
 
   async delete(id: string): Promise<void> {
-    await mockApi.delete(`/users/${id}`);
+    try {
+      await apiClient.delete(`/users/${id}`);
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
   }
 }
 

@@ -1,23 +1,19 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { User } from "@/core/domain/entities";
-import { LoginUseCase } from "@/core/domain/use-cases/auth";
-import { UpdateUserUseCase } from "@/core/domain/use-cases/users";
+import { User, TenantAssociation } from "@/core/domain/entities";
 import { userRepository } from "@/infrastructure/persistence/repositories";
-
-// Instanciar use cases
-const loginUseCase = new LoginUseCase(userRepository);
-const updateUserUseCase = new UpdateUserUseCase(userRepository);
 
 interface AuthState {
   user: User | null;
-  token: string | null;
+  currentTenant: TenantAssociation | null;
   isLoading: boolean;
   error: string | null;
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  me: () => Promise<void>;
+  switchTenant: (tenantId: string) => void;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   clearError: () => void;
 }
@@ -26,7 +22,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
-      token: null,
+      currentTenant: null,
       isLoading: false,
       error: null,
 
@@ -34,12 +30,18 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
 
         try {
-          // Usar el LoginUseCase en vez de llamar directamente al API
-          const response = await loginUseCase.execute({ email, password });
+          // Llamar directamente al repositorio (cookies se manejan automáticamente)
+          const response = await userRepository.login(email, password);
+
+          // Determinar tenant actual (primary o primero de la lista)
+          const currentTenant = 
+            response.user.tenants?.find(t => t.is_primary) ||
+            response.user.tenants?.[0] ||
+            null;
 
           set({
             user: response.user,
-            token: response.token,
+            currentTenant,
             isLoading: false,
             error: null,
           });
@@ -47,6 +49,8 @@ export const useAuthStore = create<AuthState>()(
           set({
             error: error instanceof Error ? error.message : "Error al iniciar sesión",
             isLoading: false,
+            user: null,
+            currentTenant: null,
           });
           throw error;
         }
@@ -56,21 +60,59 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          // TODO: Llamar al backend para invalidar el token
-          // await mockApi.logout();
-
+          // Llamar al backend para invalidar tokens y limpiar cookies
+          await userRepository.logout();
+        } catch (error) {
+          console.error('Logout error:', error);
+        } finally {
+          // Limpiar estado local independientemente del resultado
           set({
             user: null,
-            token: null,
+            currentTenant: null,
             isLoading: false,
             error: null,
           });
-        } catch (error) {
+        }
+      },
+
+      me: async () => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const user = await userRepository.me();
+          
+          // Actualizar tenant actual si el usuario cambió
+          const currentTenant = 
+            user.tenants?.find(t => t.is_primary) ||
+            user.tenants?.[0] ||
+            null;
+
           set({
-            error: error instanceof Error ? error.message : "Error al cerrar sesión",
+            user,
+            currentTenant,
             isLoading: false,
           });
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : "Error al obtener usuario",
+            isLoading: false,
+          });
+          throw error;
         }
+      },
+
+      switchTenant: (tenantId: string) => {
+        const { user } = get();
+        if (!user || !user.tenants) {
+          throw new Error('No user or tenants available');
+        }
+
+        const tenant = user.tenants.find(t => t.id === tenantId);
+        if (!tenant) {
+          throw new Error('Tenant not found');
+        }
+
+        set({ currentTenant: tenant });
       },
 
       updateProfile: async (updates: Partial<User>) => {
@@ -80,8 +122,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
 
         try {
-          // Usar UpdateUserUseCase
-          const updatedUser = await updateUserUseCase.execute(user.id, updates);
+          const updatedUser = await userRepository.update(user.id, updates);
 
           set({
             user: updatedUser,
@@ -102,7 +143,8 @@ export const useAuthStore = create<AuthState>()(
       name: "auth-storage",
       partialize: (state) => ({
         user: state.user,
-        token: state.token,
+        currentTenant: state.currentTenant,
+        // No persistimos token porque ahora está en cookies HttpOnly
       }),
     }
   )
