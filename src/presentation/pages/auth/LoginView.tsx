@@ -122,7 +122,7 @@ export default function LoginView() {
             </form>
 
             {/* Development Mode - Show Test Credentials */}
-            {import.meta.env.DEV && (
+            {(import.meta.env.DEV || import.meta.env.VITE_SHOW_TEST_USERS) && (
               <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-sm font-semibold text-blue-900 mb-3">🔧 Usuarios de prueba:</p>
                 <div className="space-y-2">

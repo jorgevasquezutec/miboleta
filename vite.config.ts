@@ -61,11 +61,11 @@
     },
     server: {
       port: 5173,
-      open: true,
+      open: false, // No abrir automáticamente porque accederemos desde localhost
       // Proxy API requests to Laravel backend
       proxy: {
         '/api': {
-          target: 'http://localhost:8080',
+          target: 'http://localhost',
           changeOrigin: true,
           secure: false,
         },

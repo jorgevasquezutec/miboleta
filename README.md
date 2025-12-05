@@ -197,6 +197,68 @@ El proyecto utiliza un sistema de API mock con `setTimeout` para simular latenci
 - `tenantsStore` - Gestión de empresas/tenants
 - `documentsStore` - Gestión de documentos con paginación
 
+## ✅ Progreso del Proyecto
+
+### Backend - Completado
+- ✅ **Módulo 0**: Configuración de base de datos, migraciones y seeders
+- ✅ **Módulo 1**: Sistema de autenticación con Laravel Sanctum
+- ✅ **Módulo 2**: Sistema multi-tenant con pivot tables
+- ✅ **Seguridad**: Sistema completo de HttpOnly cookies con access + refresh tokens
+  - Access token: 1 hora (HttpOnly, SameSite=Lax)
+  - Refresh token: 30 días (HttpOnly, SameSite=Strict)
+  - Middleware para inyección automática de tokens desde cookies
+  - Endpoint `/api/refresh` para renovación automática de tokens
+  - Revocación de tokens en base de datos
+  - Auditoría con IP y User Agent
+
+### Frontend - Completado
+- ✅ **apiClient.ts**: Cliente Axios configurado con:
+  - `withCredentials: true` para manejo automático de cookies
+  - Interceptor de request para X-Tenant-ID header
+  - Interceptor de response con auto-refresh de tokens
+  - Cola de requests durante refresh para evitar race conditions
+  - Manejo completo de errores HTTP (401, 403, 404, 422, 500)
+- ✅ **authStore**: Actualizado para trabajar sin token manual (cookies HttpOnly)
+- ✅ **UserRepository**: Tipos actualizados para respuestas del backend real
+- ✅ **useAuth hook**: Lógica de autenticación basada en usuario (no en token)
+
+### Documentación
+- ✅ **AUTH_SYSTEM.md**: Documentación completa del sistema de autenticación
+  - Diagramas de arquitectura (backend + frontend)
+  - Flujos completos: Login, Authenticated Request, Token Refresh, Logout
+  - Guía de testing con curl
+  - Configuración y troubleshooting
+  - Comandos de mantenimiento
+
+### Próximos Pasos
+
+#### Inmediato: Testing
+1. Probar sistema de autenticación end-to-end
+2. Verificar cookies en DevTools del navegador
+3. Probar auto-refresh de tokens (esperar 1h o modificar duración)
+4. Probar multi-tenant switching
+5. Probar logout y limpieza de cookies
+
+#### Módulo 3: Gestión de Usuarios (CRUD Completo)
+- [ ] Backend: Controlador CRUD con endpoints REST
+  - GET /api/users (list con paginación y filtros)
+  - POST /api/users (crear con validación)
+  - GET /api/users/{id} (detalle)
+  - PUT /api/users/{id} (actualizar)
+  - DELETE /api/users/{id} (soft delete)
+  - POST /api/users/{id}/assign-role
+  - POST /api/users/{id}/assign-tenant
+- [ ] Frontend: Actualizar UsersView para usar API real
+- [ ] Implementar filtros y búsqueda server-side
+- [ ] Implementar paginación server-side
+
+#### Módulos Pendientes
+- [ ] **Módulo 4**: Gestión de Documentos (CRUD + Upload)
+- [ ] **Módulo 5**: Sistema de Vacaciones
+- [ ] **Módulo 6**: Notificaciones
+- [ ] **Módulo 7**: Reportes y Analytics
+- [ ] **Módulo 8**: Testing automatizado
+
 ### Migración a API Real
 
 Para migrar a una API real, reemplaza las llamadas en `src/services/mockApi.ts` con llamadas `fetch` reales. Los stores ya están preparados para trabajar con APIs reales.

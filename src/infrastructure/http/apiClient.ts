@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 
 // Configuración base de la API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost/api';
-
+console.log('API Base URL:', API_BASE_URL);
 // Crear instancia de Axios
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

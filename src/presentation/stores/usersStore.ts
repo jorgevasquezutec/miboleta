@@ -117,7 +117,10 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
     if (!tenantId) return users;
 
-    return users.filter((u) => u.tenantId === tenantId);
+    return users.filter((u) =>
+      u.tenants?.some(tenant => tenant.id === tenantId) ||
+      u.primary_tenant?.id === tenantId
+    );
   },
 
   clearError: () => set({ error: null }),
