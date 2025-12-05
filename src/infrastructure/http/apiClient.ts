@@ -34,9 +34,13 @@ const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Interceptor de Request - Agregar tenant header
+// Interceptor de Request - Agregar tenant header y logging
 apiClient.interceptors.request.use(
   (config) => {
+    console.log(`🔵 [API Request] ${config.method?.toUpperCase()} ${config.url}`);
+    console.log('   withCredentials:', config.withCredentials);
+    console.log('   Cookies:', document.cookie ? 'Present (but HttpOnly not visible)' : 'None visible');
+
     // Obtener tenant actual del localStorage
     const authStorage = localStorage.getItem('auth-storage');
     if (authStorage) {
@@ -47,6 +51,7 @@ apiClient.interceptors.request.use(
         // Agregar X-Tenant-ID header si hay tenant seleccionado
         if (currentTenantId) {
           config.headers['X-Tenant-ID'] = currentTenantId;
+          console.log('   X-Tenant-ID:', currentTenantId);
         }
       } catch (error) {
         console.error('Error parsing auth storage:', error);
@@ -56,6 +61,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('❌ [Request Error]', error);
     return Promise.reject(error);
   }
 );
@@ -63,6 +69,7 @@ apiClient.interceptors.request.use(
 // Interceptor de Response - Manejar errores y refresh token
 apiClient.interceptors.response.use(
   (response) => {
+    console.log(`✅ [API Response] ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
     return response;
   },
   async (error: AxiosError) => {
@@ -71,14 +78,19 @@ apiClient.interceptors.response.use(
     // Manejo de errores HTTP
     if (error.response) {
       const status = error.response.status;
+      console.log(`❌ [API Error] ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url} - ${status}`);
 
       // Error 401: Token expirado o inválido
       if (status === 401 && originalRequest && !originalRequest._retry) {
+        console.log('🔄 [401 Detected] Token might be expired, attempting refresh...');
+
         // Si ya estamos intentando refrescar, agregar request a la cola
         if (isRefreshing) {
+          console.log('⏳ [Queueing] Already refreshing, adding to queue...');
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject });
           }).then(() => {
+            console.log('🔁 [Retry from Queue] Retrying original request');
             return apiClient(originalRequest);
           }).catch(err => {
             return Promise.reject(err);
@@ -89,32 +101,38 @@ apiClient.interceptors.response.use(
         isRefreshing = true;
 
         try {
+          console.log('🔑 [Refreshing Token] Calling /refresh endpoint...');
           // Intentar refrescar el token
-          await axios.post(
+          const refreshResponse = await axios.post(
             `${API_BASE_URL}/refresh`,
             {},
             { withCredentials: true }
           );
 
+          console.log('✅ [Token Refreshed] New token received:', refreshResponse.status);
+
           // Token refrescado exitosamente
           isRefreshing = false;
           processQueue(null);
 
+          console.log('🔁 [Retrying] Original request after refresh');
           // Reintentar el request original
           return apiClient(originalRequest);
         } catch (refreshError) {
+          console.error('❌ [Refresh Failed] Token refresh failed:', refreshError);
+
           // Refresh falló - limpiar storage y redirigir a login
           isRefreshing = false;
           processQueue(new Error('Token refresh failed'), null);
-          
-          console.error('Refresh token failed - redirecting to login');
+
+          console.error('🚪 [Redirecting] Sending to login page');
           localStorage.removeItem('auth-storage');
-          
+
           // Solo redirigir si no estamos ya en login
           if (window.location.pathname !== '/login') {
             window.location.href = '/login';
           }
-          
+
           return Promise.reject(refreshError);
         }
       }

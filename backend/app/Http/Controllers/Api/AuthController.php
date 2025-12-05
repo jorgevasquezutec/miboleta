@@ -76,7 +76,7 @@ class AuthController extends Controller
         $user->tokens()->delete();
 
         // Crear access token (duración: 1 hora)
-        $accessToken = $user->createToken('access-token', ['*'], Carbon::now()->addHour())->plainTextToken;
+        $accessToken = $user->createToken('access_token', ['*'], now()->addHour())->plainTextToken;
 
         // Crear refresh token en BD (duración: 30 días)
         $refreshToken = RefreshToken::generate(
@@ -127,7 +127,7 @@ class AuthController extends Controller
             60, // 1 hora en minutos
             '/',
             null,
-            true, // secure (solo HTTPS en producción)
+            false, // secure - false en desarrollo, true en producción
             true, // httpOnly
             false,
             'Lax'
@@ -137,7 +137,7 @@ class AuthController extends Controller
             60 * 24 * 30, // 30 días en minutos
             '/',
             null,
-            true, // secure
+            false, // secure - false en desarrollo, true en producción
             true, // httpOnly
             false,
             'Strict'
@@ -189,7 +189,7 @@ class AuthController extends Controller
         $user->tokens()->delete();
 
         // Crear nuevo access token (1 hora)
-        $accessToken = $user->createToken('access-token', ['*'], Carbon::now()->addHour())->plainTextToken;
+        $accessToken = $user->createToken('access_token', ['*'], now()->addHour())->plainTextToken;
 
         // Cargar relaciones
         $user->load(['roles', 'tenants']);
@@ -227,7 +227,7 @@ class AuthController extends Controller
             60, // 1 hora
             '/',
             null,
-            true,
+            false, // secure - false en desarrollo
             true,
             false,
             'Lax'
@@ -330,7 +330,7 @@ class AuthController extends Controller
             -1, // Expirar inmediatamente
             '/',
             null,
-            true,
+            false, // secure - false en desarrollo
             true,
             false,
             'Lax'
@@ -340,7 +340,7 @@ class AuthController extends Controller
             -1, // Expirar inmediatamente
             '/',
             null,
-            true,
+            false, // secure - false en desarrollo
             true,
             false,
             'Strict'

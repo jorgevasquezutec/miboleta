@@ -15,7 +15,11 @@ export interface User {
   // Multi-tenancy
   tenants?: TenantAssociation[];
   primary_tenant?: TenantBasic | null;
-  
+
+  // Supervisor
+  immediate_supervisor?: SupervisorBasic | null;
+  immediate_supervisor_id?: string | null;
+
   // Metadata
   avatar?: string;
   createdAt?: Date;
@@ -37,6 +41,14 @@ export interface TenantBasic {
   id: string;
   name: string;
   ruc: string;
+}
+
+// Información básica de supervisor
+export interface SupervisorBasic {
+  id: string;
+  name: string;
+  full_name?: string;
+  email?: string;
 }
 
 export type CreateUserData = Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'created_at' | 'updated_at'>;

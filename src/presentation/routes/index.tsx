@@ -9,7 +9,7 @@ import { LoginView } from "@/presentation/pages/auth";
 import {
   DashboardPage as AdminDashboardPage,
   TenantsPage,
-  UsersPage,
+  UsersListPage,
   SettingsPage,
 } from "@/presentation/pages/admin";
 
@@ -18,8 +18,10 @@ import {
   DashboardPage as EmployeeDashboardPage,
   DocumentUploadView,
   DocumentViewerView,
-  UserProfileView,
 } from "@/presentation/pages/employee";
+
+// Shared pages
+import { ProfilePage } from "@/presentation/pages/shared";
 
 import { BarChart3 } from "lucide-react";
 
@@ -89,10 +91,10 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "users",
+        path: "admin/users",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <UsersPage onBack={() => window.history.back()} />
+            <UsersListPage />
           </ProtectedRoute>
         ),
       },
@@ -116,10 +118,7 @@ export const router = createBrowserRouter([
         path: "profile",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
-            <UserProfileView
-              onBack={() => window.history.back()}
-              currentUser={undefined}
-            />
+            <ProfilePage onBack={() => window.history.back()} />
           </ProtectedRoute>
         ),
       },

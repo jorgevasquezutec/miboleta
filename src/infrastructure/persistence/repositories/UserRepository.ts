@@ -8,8 +8,35 @@ interface LoginResponse {
   // No incluimos token porque ahora se maneja en cookies HttpOnly
 }
 
-interface ApiResponse<T> {
-  data: T;
+// Tipos para paginación
+export interface PaginationMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+}
+
+export interface PaginationLinks {
+  first: string | null;
+  last: string | null;
+  prev: string | null;
+  next: string | null;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
+  links: PaginationLinks;
+}
+
+export interface GetUsersParams {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  status?: string;
+  tenant_id?: string;
 }
 
 /**
@@ -62,8 +89,29 @@ export class UserRepository implements IUserRepository {
 
   async findAll(): Promise<User[]> {
     try {
-      const response = await apiClient.get<ApiResponse<User[]>>('/users');
-      return response.data.data;
+      const response = await apiClient.get<User[]>('/users');
+      return response.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Get users with pagination
+   * Supports search, filtering by status and tenant
+   */
+  async getUsers(params?: GetUsersParams): Promise<PaginatedResponse<User>> {
+    try {
+      const response = await apiClient.get<PaginatedResponse<User>>('/users', {
+        params: {
+          page: params?.page,
+          per_page: params?.per_page,
+          search: params?.search,
+          status: params?.status,
+          tenant_id: params?.tenant_id,
+        }
+      });
+      return response.data;
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }
@@ -71,8 +119,8 @@ export class UserRepository implements IUserRepository {
 
   async findById(id: string): Promise<User | null> {
     try {
-      const response = await apiClient.get<ApiResponse<User>>(`/users/${id}`);
-      return response.data.data;
+      const response = await apiClient.get<User>(`/users/${id}`);
+      return response.data;
     } catch (error) {
       console.error('Find user by id error:', error);
       return null;
@@ -90,8 +138,8 @@ export class UserRepository implements IUserRepository {
 
   async create(data: CreateUserData): Promise<User> {
     try {
-      const response = await apiClient.post<ApiResponse<User>>('/users', data);
-      return response.data.data;
+      const response = await apiClient.post<{ user: User }>('/users', data);
+      return response.data.user;
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }
@@ -99,8 +147,8 @@ export class UserRepository implements IUserRepository {
 
   async update(id: string, data: UpdateUserData): Promise<User> {
     try {
-      const response = await apiClient.put<ApiResponse<User>>(`/users/${id}`, data);
-      return response.data.data;
+      const response = await apiClient.put<{ user: User }>(`/users/${id}`, data);
+      return response.data.user;
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }
