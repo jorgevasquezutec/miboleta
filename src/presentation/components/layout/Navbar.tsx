@@ -1,4 +1,4 @@
-import { Bell, Settings, LogOut, User, Building2 } from "lucide-react";
+import { Bell, Settings, LogOut, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/presentation/components/ui/avatar";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -10,12 +10,11 @@ import {
   DropdownMenuTrigger,
 } from "@/presentation/components/ui/dropdown-menu";
 import { Badge } from "@/presentation/components/ui/badge";
+import { TenantSwitcher } from "@/presentation/components/shared/TenantSwitcher";
 
 interface NavbarProps {
   userName: string;
   userRole: string;
-  companyName: string;
-  companyLogo?: string;
   notificationCount?: number;
   onLogout?: () => void;
   onSettings?: () => void;
@@ -25,38 +24,18 @@ interface NavbarProps {
 export function Navbar({
   userName,
   userRole,
-  companyName,
-  companyLogo,
   notificationCount = 0,
   onLogout,
   onSettings,
   onProfile,
 }: NavbarProps) {
-  // Mock branding colors
   const brandingPrimaryColor = "#2563EB";
-  const brandingSecondaryColor = "#1E40AF";
-  const brandingLogo = companyLogo;
 
   return (
     <nav className="bg-white border-b border-[rgba(0,0,0,0.1)] px-6 py-4">
       <div className="flex items-center justify-between">
-        {/* Logo and Company Name */}
-        <div className="flex items-center gap-3">
-          {brandingLogo ? (
-            <img src={brandingLogo} alt={companyName} className="h-10 object-contain" />
-          ) : (
-            <div 
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: brandingPrimaryColor }}
-            >
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <div>
-            <h1 style={{ color: brandingSecondaryColor }}>{companyName}</h1>
-            <p className="text-[#64748B]">Sistema de Gestión Documental</p>
-          </div>
-        </div>
+        {/* Tenant Switcher replaces Logo and Company Name */}
+        <TenantSwitcher />
 
         {/* Right Section */}
         <div className="flex items-center gap-4">
@@ -87,7 +66,7 @@ export function Navbar({
               <Button variant="ghost" className="gap-3 pl-2">
                 <Avatar>
                   <AvatarImage src="" />
-                  <AvatarFallback 
+                  <AvatarFallback
                     className="text-white"
                     style={{ backgroundColor: brandingPrimaryColor }}
                   >

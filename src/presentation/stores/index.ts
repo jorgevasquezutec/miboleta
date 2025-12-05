@@ -11,4 +11,4 @@ export { useUsersStore } from "./usersStore";
 export { useTenantsStore } from "./tenantsStore";
 
 // Re-export tipos para conveniencia
-export type { User, Tenant, Document, LoginResponse, ApiResponse, PaginatedResponse } from "../services/mockApi";
+export type { User, Tenant, Document, LoginResponse, ApiResponse, PaginatedResponse } from "@/infrastructure/http/api/mockApi";

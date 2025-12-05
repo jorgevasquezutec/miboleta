@@ -8,10 +8,11 @@ import { LoginView } from "@/presentation/pages/auth";
 // Admin pages
 import {
   DashboardPage as AdminDashboardPage,
-  TenantsPage,
   UsersListPage,
   SettingsPage,
 } from "@/presentation/pages/admin";
+import { TenantsListPage } from "@/presentation/pages/admin/TenantsListPage";
+import { TenantFormPage } from "@/presentation/pages/admin/TenantFormPage";
 
 // Employee pages
 import {
@@ -91,9 +92,9 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "admin/users",
+        path: "users",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute allowedRoles={["root"]}>
             <UsersListPage />
           </ProtectedRoute>
         ),
@@ -102,7 +103,23 @@ export const router = createBrowserRouter([
         path: "tenants",
         element: (
           <ProtectedRoute allowedRoles={["root"]}>
-            <TenantsPage onBack={() => window.history.back()} />
+            <TenantsListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "tenants/new",
+        element: (
+          <ProtectedRoute allowedRoles={["root"]}>
+            <TenantFormPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "tenants/:id",
+        element: (
+          <ProtectedRoute allowedRoles={["root"]}>
+            <TenantFormPage />
           </ProtectedRoute>
         ),
       },

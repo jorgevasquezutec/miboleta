@@ -92,7 +92,7 @@ El frontend original usaba **estado local** (`currentView`) en lugar de rutas de
 - Al recargar la página, pierdes el estado
 
 ✅ **Con routing (React Router)** — ya instalado:
-- URLs semánticas: `/admin/users`, `/documents/123`
+- URLs semánticas: `/users`, `/documents/123`
 - Enlaces compartibles
 - Navegación del navegador funciona
 - Estado se mantiene en la URL

@@ -11,7 +11,7 @@ export interface User {
   role: 'root' | 'admin' | 'client';
   roles?: string[]; // Array de roles del usuario
   status: 'active' | 'inactive' | 'suspended' | 'pending';
-  
+
   // Multi-tenancy
   tenants?: TenantAssociation[];
   primary_tenant?: TenantBasic | null;
@@ -33,6 +33,7 @@ export interface TenantAssociation {
   id: string;
   name: string;
   ruc: string;
+  logo_path?: string;
   is_primary: boolean;
 }
 

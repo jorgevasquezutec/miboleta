@@ -49,11 +49,11 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export function UsersListPage() {
   const navigate = useNavigate();
-  const { 
-    users, 
-    isLoading, 
+  const {
+    users,
+    isLoading,
     pagination,
-    fetchUsers, 
+    fetchUsers,
     deleteUser,
     goToPage,
     changePerPage,
@@ -61,7 +61,7 @@ export function UsersListPage() {
     setStatusFilter,
   } = useUsersStore();
   const { user: currentUser } = useAuthStore();
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilterState] = useState<string>("all");
   const debouncedSearch = useDebounce(searchTerm, 500);
@@ -69,7 +69,7 @@ export function UsersListPage() {
   // Initial load
   useEffect(() => {
     fetchUsers();
-    
+
     // Debug: Ver el ancho de la pantalla
     console.log('📏 Ancho de pantalla:', window.innerWidth, 'px');
     console.log('Breakpoints Tailwind:');
@@ -143,10 +143,10 @@ export function UsersListPage() {
   // Generate page numbers for pagination
   const getPageNumbers = () => {
     if (!pagination) return [];
-    
+
     const { current_page, last_page } = pagination;
     const pages: (number | string)[] = [];
-    
+
     if (last_page <= 7) {
       // Show all pages if 7 or fewer
       for (let i = 1; i <= last_page; i++) {
@@ -155,27 +155,27 @@ export function UsersListPage() {
     } else {
       // Always show first page
       pages.push(1);
-      
+
       if (current_page > 3) {
         pages.push('...');
       }
-      
+
       // Show pages around current page
       const start = Math.max(2, current_page - 1);
       const end = Math.min(last_page - 1, current_page + 1);
-      
+
       for (let i = start; i <= end; i++) {
         pages.push(i);
       }
-      
+
       if (current_page < last_page - 2) {
         pages.push('...');
       }
-      
+
       // Always show last page
       pages.push(last_page);
     }
-    
+
     return pages;
   };
 
@@ -191,7 +191,7 @@ export function UsersListPage() {
               </CardDescription>
             </div>
             {(currentUser?.role === "root" || currentUser?.role === "admin") && (
-              <Button onClick={() => navigate("/admin/users/new")}>
+              <Button onClick={() => navigate("/users/new")}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Nuevo Usuario
               </Button>
@@ -275,7 +275,7 @@ export function UsersListPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge 
+                            <Badge
                               style={getRoleBadgeStyle(user.role || "")}
                             >
                               {user.role}
@@ -313,7 +313,7 @@ export function UsersListPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge 
+                            <Badge
                               style={getStatusBadgeStyle(user.status || "active")}
                             >
                               {user.status || "active"}
@@ -324,33 +324,33 @@ export function UsersListPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => navigate(`/admin/users/${user.id}`)}
+                                onClick={() => navigate(`/users/${user.id}`)}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
                               {(currentUser?.role === "root" ||
                                 currentUser?.role === "admin") && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      navigate(`/admin/users/${user.id}/edit`)
-                                    }
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      handleDelete(user.id, user.full_name || user.name)
-                                    }
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </>
-                              )}
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() =>
+                                        navigate(`/users/${user.id}`)
+                                      }
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() =>
+                                        handleDelete(user.id, user.full_name || user.name)
+                                      }
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </>
+                                )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -372,8 +372,8 @@ export function UsersListPage() {
                       <span className="text-sm text-muted-foreground">
                         Resultados por página:
                       </span>
-                      <Select 
-                        value={pagination.per_page.toString()} 
+                      <Select
+                        value={pagination.per_page.toString()}
                         onValueChange={handlePerPageChange}
                       >
                         <SelectTrigger className="w-[80px]">
@@ -399,7 +399,7 @@ export function UsersListPage() {
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    
+
                     <div className="flex items-center gap-1">
                       {getPageNumbers().map((page, index) => (
                         typeof page === 'number' ? (

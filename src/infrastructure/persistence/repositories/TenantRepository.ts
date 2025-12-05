@@ -1,39 +1,138 @@
-import { ITenantRepository } from '@/core/domain/repositories';
 import { Tenant, CreateTenantData, UpdateTenantData } from '@/core/domain/entities';
-import { mockApi } from '@/infrastructure/http/api';
+import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
+
+// Tipos para paginación
+export interface PaginationMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+}
+
+export interface PaginationLinks {
+  first: string | null;
+  last: string | null;
+  prev: string | null;
+  next: string | null;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
+  links: PaginationLinks;
+}
+
+export interface GetTenantsParams {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  status?: string;
+}
 
 /**
- * Implementación del repositorio de tenants (empresas)
+ * Implementación del repositorio de tenants
+ * Conecta con la API de Laravel para gestión de organizaciones
  */
-export class TenantRepository implements ITenantRepository {
-  async findAll(): Promise<Tenant[]> {
-    const response = await mockApi.get<Tenant[]>('/tenants');
-    return response.data;
-  }
-
-  async findById(id: string): Promise<Tenant | null> {
+export class TenantRepository {
+  /**
+   * Obtener lista de tenants con paginación
+   */
+  async getAll(params?: GetTenantsParams): Promise<PaginatedResponse<Tenant>> {
     try {
-      const response = await mockApi.get<Tenant>(`/tenants/${id}`);
+      const response = await apiClient.get<PaginatedResponse<Tenant>>('/tenants', { params });
       return response.data;
     } catch (error) {
-      return null;
+      throw new Error(getErrorMessage(error));
     }
   }
 
+  /**
+   * Obtener tenant por ID
+   */
+  async getById(id: string): Promise<Tenant> {
+    try {
+      const response = await apiClient.get<{ data: Tenant }>(`/tenants/${id}`);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Crear nuevo tenant (solo root)
+   */
   async create(data: CreateTenantData): Promise<Tenant> {
-    const response = await mockApi.post<Tenant>('/tenants', data);
-    return response.data;
+    try {
+      const response = await apiClient.post<{ data: Tenant; message: string }>('/tenants', data);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
   }
 
+  /**
+   * Actualizar tenant existente
+   */
   async update(id: string, data: UpdateTenantData): Promise<Tenant> {
-    const response = await mockApi.put<Tenant>(`/tenants/${id}`, data);
-    return response.data;
+    try {
+      const response = await apiClient.put<{ data: Tenant; message: string }>(`/tenants/${id}`, data);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
   }
 
+  /**
+   * Eliminar tenant (soft delete, solo root)
+   */
   async delete(id: string): Promise<void> {
-    await mockApi.delete(`/tenants/${id}`);
+    try {
+      await apiClient.delete(`/tenants/${id}`);
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Obtener usuarios de un tenant
+   */
+  async getUsers(tenantId: string): Promise<any[]> {
+    try {
+      const response = await apiClient.get<{ data: any[] }>(`/tenants/${tenantId}/users`);
+      return response.data.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Agregar usuario a un tenant
+   */
+  async addUser(tenantId: string, userId: string, isPrimary: boolean = false): Promise<void> {
+    try {
+      await apiClient.post(`/tenants/${tenantId}/users`, {
+        user_id: userId,
+        is_primary: isPrimary,
+      });
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Remover usuario de un tenant
+   */
+  async removeUser(tenantId: string, userId: string): Promise<void> {
+    try {
+      await apiClient.delete(`/tenants/${tenantId}/users/${userId}`);
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
   }
 }
 
-// Singleton instance
+// Exportar instancia singleton
 export const tenantRepository = new TenantRepository();
+

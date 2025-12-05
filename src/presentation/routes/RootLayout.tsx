@@ -44,9 +44,8 @@ function Sidebar() {
             <button
               type="button"
               onClick={() => navigate("/admin")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                isActive("/admin") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/admin") ? "text-white" : "hover:bg-[#F1F5F9]"
+                }`}
               style={{
                 backgroundColor: isActive("/admin") ? primaryColor : undefined,
                 color: isActive("/admin") ? "#FFFFFF" : secondaryColor,
@@ -60,9 +59,8 @@ function Sidebar() {
             <button
               type="button"
               onClick={() => navigate("/tenants")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                isActive("/tenants") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/tenants") ? "text-white" : "hover:bg-[#F1F5F9]"
+                }`}
               style={{
                 backgroundColor: isActive("/tenants") ? primaryColor : undefined,
                 color: isActive("/tenants") ? "#FFFFFF" : secondaryColor,
@@ -75,13 +73,12 @@ function Sidebar() {
 
             <button
               type="button"
-              onClick={() => navigate("/admin/users")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                isActive("/admin/users") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
+              onClick={() => navigate("/users")}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/users") ? "text-white" : "hover:bg-[#F1F5F9]"
+                }`}
               style={{
-                backgroundColor: isActive("/admin/users") ? primaryColor : undefined,
-                color: isActive("/admin/users") ? "#FFFFFF" : secondaryColor,
+                backgroundColor: isActive("/users") ? primaryColor : undefined,
+                color: isActive("/users") ? "#FFFFFF" : secondaryColor,
               }}
               title="Usuarios"
             >
@@ -92,9 +89,8 @@ function Sidebar() {
             <button
               type="button"
               onClick={() => navigate("/settings")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
+                }`}
               style={{
                 backgroundColor: isActive("/settings") ? primaryColor : undefined,
                 color: isActive("/settings") ? "#FFFFFF" : secondaryColor,
@@ -110,9 +106,8 @@ function Sidebar() {
             <button
               type="button"
               onClick={() => navigate("/dashboard")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                isActive("/dashboard") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/dashboard") ? "text-white" : "hover:bg-[#F1F5F9]"
+                }`}
               style={{
                 backgroundColor: isActive("/dashboard") ? primaryColor : undefined,
                 color: isActive("/dashboard") ? "#FFFFFF" : secondaryColor,
@@ -126,9 +121,8 @@ function Sidebar() {
             <button
               type="button"
               onClick={() => navigate("/upload")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                isActive("/upload") ? "text-white" : "hover:bg-[#F1F5F9]"
-              }`}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/upload") ? "text-white" : "hover:bg-[#F1F5F9]"
+                }`}
               style={{
                 backgroundColor: isActive("/upload") ? primaryColor : undefined,
                 color: isActive("/upload") ? "#FFFFFF" : secondaryColor,
@@ -143,13 +137,12 @@ function Sidebar() {
               <>
                 <button
                   type="button"
-                  onClick={() => navigate("/admin/users")}
-                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                    isActive("/admin/users") ? "text-white" : "hover:bg-[#F1F5F9]"
-                  }`}
+                  onClick={() => navigate("/users")}
+                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/users") ? "text-white" : "hover:bg-[#F1F5F9]"
+                    }`}
                   style={{
-                    backgroundColor: isActive("/admin/users") ? primaryColor : undefined,
-                    color: isActive("/admin/users") ? "#FFFFFF" : secondaryColor,
+                    backgroundColor: isActive("/users") ? primaryColor : undefined,
+                    color: isActive("/users") ? "#FFFFFF" : secondaryColor,
                   }}
                   title="Usuarios"
                 >
@@ -160,9 +153,8 @@ function Sidebar() {
                 <button
                   type="button"
                   onClick={() => navigate("/reports")}
-                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                    isActive("/reports") ? "text-white" : "hover:bg-[#F1F5F9]"
-                  }`}
+                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/reports") ? "text-white" : "hover:bg-[#F1F5F9]"
+                    }`}
                   style={{
                     backgroundColor: isActive("/reports") ? primaryColor : undefined,
                     color: isActive("/reports") ? "#FFFFFF" : secondaryColor,
@@ -176,9 +168,8 @@ function Sidebar() {
                 <button
                   type="button"
                   onClick={() => navigate("/settings")}
-                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${
-                    isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
-                  }`}
+                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
+                    }`}
                   style={{
                     backgroundColor: isActive("/settings") ? primaryColor : undefined,
                     color: isActive("/settings") ? "#FFFFFF" : secondaryColor,
@@ -217,10 +208,9 @@ export function RootLayout() {
           user?.role === "root"
             ? "Administrador Plataforma"
             : user?.role === "admin"
-            ? "Administrador"
-            : "Cliente"
+              ? "Administrador"
+              : "Cliente"
         }
-        companyName="MiBoleta"
         notificationCount={3}
         onLogout={handleLogout}
         onSettings={() => navigate("/settings")}

@@ -1,118 +1,206 @@
-import { create } from "zustand";
-import { Tenant, CreateTenantData, UpdateTenantData } from "@/core/domain/entities";
-import { GetTenantsUseCase, CreateTenantUseCase, UpdateTenantUseCase } from "@/core/domain/use-cases/tenants";
-import { tenantRepository } from "@/infrastructure/persistence/repositories";
-
-// Instanciar use cases
-const getTenantsUseCase = new GetTenantsUseCase(tenantRepository);
-const createTenantUseCase = new CreateTenantUseCase(tenantRepository);
-const updateTenantUseCase = new UpdateTenantUseCase(tenantRepository);
+import { create } from 'zustand';
+import { Tenant, CreateTenantData, UpdateTenantData } from '@/core/domain/entities/Tenant';
+import {
+    tenantRepository,
+    PaginationMeta,
+    GetTenantsParams,
+} from '@/infrastructure/persistence/repositories/TenantRepository';
 
 interface TenantsState {
-  tenants: Tenant[];
-  currentTenant: Tenant | null;
-  isLoading: boolean;
-  error: string | null;
+    // State
+    tenants: Tenant[];
+    currentTenant: Tenant | null;
+    isLoading: boolean;
+    error: string | null;
+    pagination: PaginationMeta | null;
 
-  // Actions
-  fetchTenants: () => Promise<void>;
-  createTenant: (tenantData: CreateTenantData) => Promise<Tenant>;
-  updateTenant: (id: string, updates: UpdateTenantData) => Promise<Tenant>;
-  deleteTenant: (id: string) => Promise<void>;
-  setCurrentTenant: (tenant: Tenant | null) => void;
-  clearError: () => void;
+    // Filters
+    search: string;
+    statusFilter: string;
+
+    // Actions
+    fetchTenants: () => Promise<void>;
+    fetchTenantById: (id: string) => Promise<void>;
+    createTenant: (data: CreateTenantData) => Promise<Tenant | null>;
+    updateTenant: (id: string, data: UpdateTenantData) => Promise<Tenant | null>;
+    deleteTenant: (id: string) => Promise<boolean>;
+
+    // Pagination actions
+    goToPage: (page: number) => Promise<void>;
+    changePerPage: (perPage: number) => Promise<void>;
+
+    // Filter actions
+    setSearch: (search: string) => void;
+    setStatusFilter: (status: string) => void;
+
+    // Utility actions
+    clearError: () => void;
+    clearCurrentTenant: () => void;
 }
 
 export const useTenantsStore = create<TenantsState>((set, get) => ({
-  tenants: [],
-  currentTenant: null,
-  isLoading: false,
-  error: null,
+    // Initial state
+    tenants: [],
+    currentTenant: null,
+    isLoading: false,
+    error: null,
+    pagination: null,
+    search: '',
+    statusFilter: '',
 
-  fetchTenants: async () => {
-    set({ isLoading: true, error: null });
+    // Fetch all tenants with pagination and filters
+    fetchTenants: async () => {
+        set({ isLoading: true, error: null });
+        try {
+            const { pagination, search, statusFilter } = get();
 
-    try {
-      const tenants = await getTenantsUseCase.execute();
+            const params: GetTenantsParams = {
+                page: pagination?.current_page || 1,
+                per_page: pagination?.per_page || 10,
+            };
 
-      set({
-        tenants,
-        isLoading: false,
-      });
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : "Error al cargar empresas",
-        isLoading: false,
-      });
-    }
-  },
+            if (search) {
+                params.search = search;
+            }
 
-  createTenant: async (tenantData: CreateTenantData) => {
-    set({ isLoading: true, error: null });
+            if (statusFilter) {
+                params.status = statusFilter;
+            }
 
-    try {
-      const newTenant = await createTenantUseCase.execute(tenantData);
+            const response = await tenantRepository.getAll(params);
 
-      set((state) => ({
-        tenants: [...state.tenants, newTenant],
-        isLoading: false,
-      }));
+            set({
+                tenants: response.data,
+                pagination: response.meta,
+                isLoading: false,
+            });
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Error al cargar organizaciones',
+                isLoading: false,
+            });
+        }
+    },
 
-      return newTenant;
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : "Error al crear empresa",
-        isLoading: false,
-      });
-      throw error;
-    }
-  },
+    // Fetch single tenant by ID
+    fetchTenantById: async (id: string) => {
+        set({ isLoading: true, error: null });
+        try {
+            const tenant = await tenantRepository.getById(id);
+            set({
+                currentTenant: tenant,
+                isLoading: false,
+            });
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Error al cargar organización',
+                isLoading: false,
+            });
+        }
+    },
 
-  updateTenant: async (id: string, updates: Partial<Tenant>) => {
-    set({ isLoading: true, error: null });
+    // Create new tenant
+    createTenant: async (data: CreateTenantData) => {
+        set({ isLoading: true, error: null });
+        try {
+            const tenant = await tenantRepository.create(data);
+            set({ isLoading: false });
 
-    try {
-      const updatedTenant = await updateTenantUseCase.execute(id, updates);
+            // Refresh the list
+            await get().fetchTenants();
 
-      set((state) => ({
-        tenants: state.tenants.map((t) => (t.id === id ? updatedTenant : t)),
-        currentTenant: state.currentTenant?.id === id ? updatedTenant : state.currentTenant,
-        isLoading: false,
-      }));
+            return tenant;
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Error al crear organización',
+                isLoading: false,
+            });
+            return null;
+        }
+    },
 
-      return updatedTenant;
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : "Error al actualizar empresa",
-        isLoading: false,
-      });
-      throw error;
-    }
-  },
+    // Update existing tenant
+    updateTenant: async (id: string, data: UpdateTenantData) => {
+        set({ isLoading: true, error: null });
+        try {
+            const tenant = await tenantRepository.update(id, data);
 
-  deleteTenant: async (id: string) => {
-    set({ isLoading: true, error: null });
+            // Update in the list if present
+            set((state) => ({
+                tenants: state.tenants.map((t) => (t.id === id ? tenant : t)),
+                currentTenant: state.currentTenant?.id === id ? tenant : state.currentTenant,
+                isLoading: false,
+            }));
 
-    try {
-      await tenantRepository.delete(id);
+            return tenant;
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Error al actualizar organización',
+                isLoading: false,
+            });
+            return null;
+        }
+    },
 
-      set((state) => ({
-        tenants: state.tenants.filter((t) => t.id !== id),
-        currentTenant: state.currentTenant?.id === id ? null : state.currentTenant,
-        isLoading: false,
-      }));
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : "Error al eliminar empresa",
-        isLoading: false,
-      });
-      throw error;
-    }
-  },
+    // Delete tenant
+    deleteTenant: async (id: string) => {
+        set({ isLoading: true, error: null });
+        try {
+            await tenantRepository.delete(id);
 
-  setCurrentTenant: (tenant: Tenant | null) => {
-    set({ currentTenant: tenant });
-  },
+            // Remove from the list
+            set((state) => ({
+                tenants: state.tenants.filter((t) => t.id !== id),
+                isLoading: false,
+            }));
 
-  clearError: () => set({ error: null }),
+            return true;
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Error al eliminar organización',
+                isLoading: false,
+            });
+            return false;
+        }
+    },
+
+    // Pagination: Go to specific page
+    goToPage: async (page: number) => {
+        set((state) => ({
+            pagination: state.pagination
+                ? { ...state.pagination, current_page: page }
+                : null,
+        }));
+        await get().fetchTenants();
+    },
+
+    // Pagination: Change items per page
+    changePerPage: async (perPage: number) => {
+        set((state) => ({
+            pagination: state.pagination
+                ? { ...state.pagination, per_page: perPage, current_page: 1 }
+                : { current_page: 1, per_page: perPage, last_page: 1, total: 0, from: null, to: null },
+        }));
+        await get().fetchTenants();
+    },
+
+    // Set search filter
+    setSearch: (search: string) => {
+        set({ search });
+    },
+
+    // Set status filter
+    setStatusFilter: (status: string) => {
+        set({ statusFilter: status });
+    },
+
+    // Clear error
+    clearError: () => {
+        set({ error: null });
+    },
+
+    // Clear current tenant
+    clearCurrentTenant: () => {
+        set({ currentTenant: null });
+    },
 }));

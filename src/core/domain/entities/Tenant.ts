@@ -7,6 +7,7 @@ export interface Tenant {
   address?: string;
   phone?: string;
   logo_path?: string;
+  primaryColor?: string;
   status: 'active' | 'inactive' | 'suspended';
   createdAt?: Date;
   updatedAt?: Date;
