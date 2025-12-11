@@ -1,13 +1,12 @@
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/presentation/components/ui/alert-dialog';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/presentation/components/ui/dialog';
+import { Button } from '@/presentation/components/ui/button';
 
 interface ConfirmDialogProps {
     open: boolean;
@@ -36,22 +35,29 @@ export function ConfirmDialog({
     };
 
     return (
-        <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>{title}</AlertDialogTitle>
-                    <AlertDialogDescription>{description}</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>{cancelText}</AlertDialogCancel>
-                    <AlertDialogAction
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{description}</DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
+                        {cancelText}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant={variant === 'destructive' ? 'destructive' : 'default'}
                         onClick={handleConfirm}
-                        className={variant === 'destructive' ? 'bg-red-600 hover:bg-red-700' : ''}
                     >
                         {confirmText}
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

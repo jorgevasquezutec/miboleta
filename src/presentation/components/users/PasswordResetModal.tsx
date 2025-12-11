@@ -122,44 +122,44 @@ export function PasswordResetModal({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
+                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
                     {/* Action Selection */}
                     <RadioGroup value={action} onValueChange={(value: string) => {
                         setAction(value as ResetAction);
                         setErrors({});
                     }}>
                         {/* Option 1: Generate New Password */}
-                        <div className={`flex items-start space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${action === 'generate' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        <div className={`flex items-start space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${action === 'generate' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                             }`} onClick={() => setAction('generate')}>
                             <RadioGroupItem value="generate" id="generate" className="mt-1" />
                             <div className="flex-1">
-                                <Label htmlFor="generate" className="cursor-pointer flex items-center gap-2 font-semibold">
+                                <Label htmlFor="generate" className="cursor-pointer flex items-center gap-2 font-semibold text-sm">
                                     <Key className="h-4 w-4 text-blue-600" />
                                     Generar nueva contraseña
                                 </Label>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    Se generará automáticamente y se enviará por email al usuario
+                                <p className="text-xs text-gray-600 mt-1">
+                                    Se generará automáticamente y se enviará por email
                                 </p>
                             </div>
                         </div>
 
                         {/* Option 2: Set Manual Password */}
-                        <div className={`flex items-start space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${action === 'manual' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        <div className={`flex items-start space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${action === 'manual' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                             }`} onClick={() => setAction('manual')}>
                             <RadioGroupItem value="manual" id="manual" className="mt-1" />
                             <div className="flex-1">
-                                <Label htmlFor="manual" className="cursor-pointer flex items-center gap-2 font-semibold">
+                                <Label htmlFor="manual" className="cursor-pointer flex items-center gap-2 font-semibold text-sm">
                                     <Shield className="h-4 w-4 text-blue-600" />
                                     Establecer manualmente
                                 </Label>
-                                <p className="text-sm text-gray-600 mt-1 mb-3">
-                                    Define una contraseña específica para el usuario
+                                <p className="text-xs text-gray-600 mt-1">
+                                    Define una contraseña específica
                                 </p>
                                 {action === 'manual' && (
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 mt-2">
                                         <Input
                                             type="password"
-                                            placeholder="Nueva contraseña (mínimo 8 caracteres)"
+                                            placeholder="Mínimo 8 caracteres"
                                             value={manualPassword}
                                             onChange={(e) => {
                                                 setManualPassword(e.target.value);
@@ -168,7 +168,7 @@ export function PasswordResetModal({
                                             className={errors.password ? 'border-red-500' : ''}
                                         />
                                         {errors.password && (
-                                            <p className="text-sm text-red-500">{errors.password}</p>
+                                            <p className="text-xs text-red-500">{errors.password}</p>
                                         )}
                                     </div>
                                 )}
@@ -176,16 +176,16 @@ export function PasswordResetModal({
                         </div>
 
                         {/* Option 3: Force Change Only */}
-                        <div className={`flex items-start space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${action === 'force_change_only' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        <div className={`flex items-start space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${action === 'force_change_only' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                             }`} onClick={() => setAction('force_change_only')}>
                             <RadioGroupItem value="force_change_only" id="force_change_only" className="mt-1" />
                             <div className="flex-1">
-                                <Label htmlFor="force_change_only" className="cursor-pointer flex items-center gap-2 font-semibold">
+                                <Label htmlFor="force_change_only" className="cursor-pointer flex items-center gap-2 font-semibold text-sm">
                                     <AlertCircle className="h-4 w-4 text-orange-600" />
                                     Solo requerir cambio
                                 </Label>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    Mantener contraseña actual pero forzar cambio en próximo login
+                                <p className="text-xs text-gray-600 mt-1">
+                                    Mantener contraseña pero forzar cambio en próximo login
                                 </p>
                             </div>
                         </div>
@@ -193,31 +193,31 @@ export function PasswordResetModal({
 
                     {/* Require Password Change Checkbox */}
                     {(action === 'generate' || action === 'manual') && (
-                        <div className="flex items-start space-x-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                             <Checkbox
                                 id="must_change"
                                 checked={mustChangePassword}
                                 onCheckedChange={(checked: boolean) => setMustChangePassword(checked)}
                             />
                             <div className="flex-1">
-                                <Label htmlFor="must_change" className="cursor-pointer font-medium text-yellow-900">
-                                    Requerir cambio en próximo inicio de sesión
+                                <Label htmlFor="must_change" className="cursor-pointer font-medium text-yellow-900 text-sm">
+                                    Requerir cambio en próximo login
                                 </Label>
-                                <p className="text-sm text-yellow-700 mt-1">
-                                    El usuario deberá establecer una nueva contraseña al iniciar sesión
+                                <p className="text-xs text-yellow-700 mt-1">
+                                    El usuario deberá establecer una nueva contraseña
                                 </p>
                             </div>
                         </div>
                     )}
 
                     {/* Info Alert */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
                         <div className="flex items-start gap-2">
                             <Mail className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                            <p className="text-sm text-blue-800">
+                            <p className="text-xs text-blue-800">
                                 {action === 'force_change_only'
-                                    ? 'No se enviará ningún email al usuario'
-                                    : 'Se enviará un correo de notificación al usuario con las instrucciones correspondientes'}
+                                    ? 'No se enviará email al usuario'
+                                    : 'Se enviará notificación por email'}
                             </p>
                         </div>
                     </div>
@@ -225,6 +225,7 @@ export function PasswordResetModal({
 
                 <DialogFooter>
                     <Button
+                        type="button"
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                         disabled={isLoading}
@@ -232,9 +233,10 @@ export function PasswordResetModal({
                         Cancelar
                     </Button>
                     <Button
+                        type="button"
                         onClick={handleSubmit}
                         disabled={isLoading}
-                        className="bg-blue-600 hover:bg-blue-700"
+
                     >
                         {isLoading ? (
                             <>

@@ -84,7 +84,7 @@ function AlertDialogFooter({
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "flex flex-col gap-2 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}
@@ -124,6 +124,7 @@ function AlertDialogAction({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action>) {
   return (
     <AlertDialogPrimitive.Action
+      data-slot="alert-dialog-action"
       className={cn(buttonVariants(), className)}
       {...props}
     />

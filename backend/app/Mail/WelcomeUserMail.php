@@ -43,7 +43,7 @@ class WelcomeUserMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.welcome',
+            view: 'emails.welcome',
             with: [
                 'user' => $this->user,
                 'temporaryPassword' => $this->temporaryPassword,

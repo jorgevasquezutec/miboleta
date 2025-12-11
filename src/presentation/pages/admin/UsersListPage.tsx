@@ -191,7 +191,7 @@ export function UsersListPage() {
                 Administra los usuarios del sistema
               </CardDescription>
             </div>
-            {(currentUser?.role === "root" || currentUser?.role === "admin") && (
+            {currentUser?.role === "root" && (
               <Button onClick={() => navigate("/users/new")}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Nuevo Usuario
@@ -329,29 +329,28 @@ export function UsersListPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {(currentUser?.role === "root" ||
-                                currentUser?.role === "admin") && (
-                                  <>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() =>
-                                        navigate(`/users/${user.id}`)
-                                      }
-                                    >
-                                      <Pencil className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() =>
-                                        handleDelete(user.id, user.full_name || user.name)
-                                      }
-                                    >
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  </>
-                                )}
+                              {currentUser?.role === "root" && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      navigate(`/users/${user.id}/edit`)
+                                    }
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      handleDelete(user.id, user.full_name || user.name)
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

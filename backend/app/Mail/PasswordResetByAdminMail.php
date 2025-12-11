@@ -45,7 +45,7 @@ class PasswordResetByAdminMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.password-reset-admin',
+            view: 'emails.password-reset-admin',
             with: [
                 'user' => $this->user,
                 'newPassword' => $this->newPassword,

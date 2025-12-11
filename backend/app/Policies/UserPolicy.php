@@ -36,7 +36,7 @@ class UserPolicy
             $modelTenantIds = $model->tenants()->pluck('tenants.id');
             return $userTenantIds->intersect($modelTenantIds)->isNotEmpty();
         }
-        
+
         return false;
     }
 
@@ -45,8 +45,8 @@ class UserPolicy
      */
     public function create(User $user): bool
     {
-        // Root y Admin pueden crear usuarios
-        return $user->isRoot() || $user->isAdmin();
+        // Solo Root puede crear usuarios
+        return $user->isRoot();
     }
 
     /**
@@ -64,13 +64,6 @@ class UserPolicy
             return true;
         }
 
-        // Admin puede actualizar usuarios de su tenant
-        if ($user->isAdmin()) {
-            $userTenantIds = $user->tenants()->pluck('tenants.id');
-            $modelTenantIds = $model->tenants()->pluck('tenants.id');
-            return $userTenantIds->intersect($modelTenantIds)->isNotEmpty();
-        }
-        
         return false;
     }
 
@@ -84,19 +77,8 @@ class UserPolicy
             return false;
         }
 
-        // Root puede eliminar cualquier usuario
-        if ($user->isRoot()) {
-            return true;
-        }
-
-        // Admin puede eliminar usuarios de su tenant (excepto otros admins)
-        if ($user->isAdmin() && !$model->isAdmin() && !$model->isRoot()) {
-            $userTenantIds = $user->tenants()->pluck('tenants.id');
-            $modelTenantIds = $model->tenants()->pluck('tenants.id');
-            return $userTenantIds->intersect($modelTenantIds)->isNotEmpty();
-        }
-        
-        return false;
+        // Solo Root puede eliminar usuarios
+        return $user->isRoot();
     }
 
     /**

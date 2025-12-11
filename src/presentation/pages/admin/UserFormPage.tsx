@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { userRepository } from '@/infrastructure/persistence/repositories';
 import { useAuthStore } from '@/presentation/stores/authStore';
-import { useTenantsStore } from '@/presentation/stores/tenantsStore';
 import { Button } from '@/presentation/components/ui/button';
 import { Input } from '@/presentation/components/ui/input';
 import { Label } from '@/presentation/components/ui/label';
-import { Checkbox } from '@/presentation/components/ui/checkbox';
 import {
     Card,
     CardContent,
@@ -22,15 +20,16 @@ import {
     SelectValue,
 } from '@/presentation/components/ui/select';
 import { SupervisorSelector } from '@/presentation/components/users';
-import { ArrowLeft, Save, Loader2, UserPlus, UserCircle, Building2, Star, Mail } from 'lucide-react';
+import { TenantMultiSelector } from '@/presentation/components/shared/TenantMultiSelector';
+import { ArrowLeft, Save, Loader2, UserPlus, UserCircle, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { TenantAssociation } from '@/core/domain/entities/User';
 
 export function UserFormPage() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const isEditing = Boolean(id);
     const { user: currentUser } = useAuthStore();
-    const { tenants, fetchTenants } = useTenantsStore();
 
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -39,13 +38,12 @@ export function UserFormPage() {
     // Tenant selection state
     const [selectedTenantIds, setSelectedTenantIds] = useState<string[]>([]);
     const [primaryTenantId, setPrimaryTenantId] = useState<string | null>(null);
+    const [selectedTenants, setSelectedTenants] = useState<TenantAssociation[]>([]); // Para pasar al selector
 
     const [formData, setFormData] = useState({
         name: '',
         last_name: '',
         email: '',
-        password: '',
-        password_confirmation: '',
         document_type: 'dni',
         document_text: '',
         phone: '',
@@ -56,7 +54,6 @@ export function UserFormPage() {
 
     // Load user data if editing
     useEffect(() => {
-        fetchTenants(); // Load available tenants
         if (isEditing && id) {
             loadUser(id);
         }
@@ -71,8 +68,6 @@ export function UserFormPage() {
                     name: user.name || '',
                     last_name: user.last_name || '',
                     email: user.email || '',
-                    password: '',
-                    password_confirmation: '',
                     document_type: user.document_type || 'dni',
                     document_text: user.document_text || '',
                     phone: user.phone || '',
@@ -82,7 +77,12 @@ export function UserFormPage() {
                 });
                 // Load user's tenants
                 if (user.tenants && user.tenants.length > 0) {
+                    console.log('UserFormPage - Cargando tenants:', {
+                        tenants: user.tenants,
+                        ids: user.tenants.map(t => String(t.id))
+                    });
                     setSelectedTenantIds(user.tenants.map(t => String(t.id)));
+                    setSelectedTenants(user.tenants); // Guardar tenants completos
                     const primary = user.tenants.find(t => t.is_primary);
                     setPrimaryTenantId(primary ? String(primary.id) : String(user.tenants[0].id));
                 }
@@ -111,20 +111,10 @@ export function UserFormPage() {
             newErrors.email = 'Email inválido';
         }
 
-        // Password validation only when editing and password is provided
-        if (isEditing && formData.password) {
-            if (formData.password.length < 8) {
-                newErrors.password = 'La contraseña debe tener al menos 8 caracteres';
-            }
-            if (formData.password !== formData.password_confirmation) {
-                newErrors.password_confirmation = 'Las contraseñas no coinciden';
-            }
-        }
-
-        if (formData.document_text && formData.document_type === 'dni') {
-            if (formData.document_text.length !== 8) {
-                newErrors.document_text = 'El DNI debe tener 8 dígitos';
-            }
+        if (!formData.document_text.trim()) {
+            newErrors.document_text = 'El número de documento es requerido';
+        } else if (formData.document_type === 'dni' && formData.document_text.length !== 8) {
+            newErrors.document_text = 'El DNI debe tener 8 dígitos';
         }
 
         // Non-root users must have at least one tenant
@@ -153,6 +143,13 @@ export function UserFormPage() {
 
         setIsSaving(true);
         try {
+            // Mapeo de roles a role_id
+            const roleMap: Record<string, number> = {
+                'root': 1,
+                'admin': 2,
+                'client': 3,
+            };
+
             const dataToSend: any = {
                 name: formData.name,
                 last_name: formData.last_name,
@@ -160,20 +157,21 @@ export function UserFormPage() {
                 document_type: formData.document_type,
                 document_text: formData.document_text,
                 phone: formData.phone,
-                role: formData.role,
+                role_id: roleMap[formData.role], // Convertir role a role_id
                 status: formData.status,
                 immediate_supervisor_id: formData.immediate_supervisor_id,
             };
 
-            // Include tenant IDs for non-root users
+            // Include tenant ID (singular) for non-root users
             if (formData.role !== 'root') {
-                dataToSend.tenant_ids = selectedTenantIds;
-                dataToSend.primary_tenant_id = primaryTenantId || selectedTenantIds[0];
-            }
+                // Backend espera tenant_id (singular), enviar el primario
+                dataToSend.tenant_id = parseInt(primaryTenantId || selectedTenantIds[0]);
 
-            if (!isEditing || formData.password) {
-                dataToSend.password = formData.password;
-                dataToSend.password_confirmation = formData.password_confirmation;
+                // Si hay múltiples tenants, enviarlos también para el update
+                if (isEditing) {
+                    dataToSend.tenant_ids = selectedTenantIds.map(id => parseInt(id));
+                    dataToSend.primary_tenant_id = parseInt(primaryTenantId || selectedTenantIds[0]);
+                }
             }
 
             if (isEditing && id) {
@@ -308,7 +306,7 @@ export function UserFormPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="document_text">Número de Documento</Label>
+                                <Label htmlFor="document_text">Número de Documento *</Label>
                                 <Input
                                     id="document_text"
                                     value={formData.document_text}
@@ -333,71 +331,6 @@ export function UserFormPage() {
                         </div>
                     </CardContent>
                 </Card>
-
-                {/* Password - Only shown when editing */}
-                {isEditing ? (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Contraseña</CardTitle>
-                            <CardDescription>
-                                Deja en blanco para mantener la contraseña actual
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="password">Nueva Contraseña</Label>
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        value={formData.password}
-                                        onChange={(e) => handleChange('password', e.target.value)}
-                                        placeholder="••••••••"
-                                        className={errors.password ? 'border-red-500' : ''}
-                                    />
-                                    {errors.password && (
-                                        <p className="text-sm text-red-500">{errors.password}</p>
-                                    )}
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="password_confirmation">
-                                        Confirmar Contraseña
-                                    </Label>
-                                    <Input
-                                        id="password_confirmation"
-                                        type="password"
-                                        value={formData.password_confirmation}
-                                        onChange={(e) => handleChange('password_confirmation', e.target.value)}
-                                        placeholder="••••••••"
-                                        className={errors.password_confirmation ? 'border-red-500' : ''}
-                                    />
-                                    {errors.password_confirmation && (
-                                        <p className="text-sm text-red-500">{errors.password_confirmation}</p>
-                                    )}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    /* Info alert for new users about email credentials */
-                    <Card className="border-blue-200 bg-blue-50">
-                        <CardContent className="pt-6">
-                            <div className="flex items-start gap-4">
-                                <div className="p-3 bg-blue-100 rounded-full">
-                                    <Mail className="h-6 w-6 text-blue-600" />
-                                </div>
-                                <div>
-                                    <h4 className="font-semibold text-blue-900">Credenciales por Email</h4>
-                                    <p className="text-sm text-blue-700 mt-1">
-                                        El usuario recibirá un correo electrónico con una contraseña temporal.
-                                        Deberá cambiarla en su primer inicio de sesión.
-                                    </p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
 
                 {/* Role and Status */}
                 <Card>
@@ -478,77 +411,21 @@ export function UserFormPage() {
                                 Selecciona las organizaciones a las que pertenecerá el usuario (mínimo una)
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            {tenants.length === 0 ? (
-                                <p className="text-sm text-gray-500">No hay organizaciones disponibles</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {tenants.map((tenant) => {
-                                        const isSelected = selectedTenantIds.includes(String(tenant.id));
-                                        const isPrimary = primaryTenantId === String(tenant.id);
-
-                                        return (
-                                            <div
-                                                key={tenant.id}
-                                                className={`
-                                                    flex items-center justify-between p-3 rounded-lg border
-                                                    ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'}
-                                                `}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <Checkbox
-                                                        checked={isSelected}
-                                                        onCheckedChange={(checked: boolean) => {
-                                                            if (checked) {
-                                                                setSelectedTenantIds(prev => [...prev, String(tenant.id)]);
-                                                                if (selectedTenantIds.length === 0) {
-                                                                    setPrimaryTenantId(String(tenant.id));
-                                                                }
-                                                            } else {
-                                                                setSelectedTenantIds(prev => prev.filter(id => id !== String(tenant.id)));
-                                                                if (primaryTenantId === String(tenant.id)) {
-                                                                    const remaining = selectedTenantIds.filter(id => id !== String(tenant.id));
-                                                                    setPrimaryTenantId(remaining[0] || null);
-                                                                }
-                                                            }
-                                                            if (errors.tenants) {
-                                                                setErrors(prev => ({ ...prev, tenants: '' }));
-                                                            }
-                                                        }}
-                                                    />
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-medium">{tenant.name}</span>
-                                                            {isPrimary && isSelected && (
-                                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                                                    <Star className="h-3 w-3" />
-                                                                    Primaria
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-sm text-gray-500">RUC: {tenant.ruc}</p>
-                                                    </div>
-                                                </div>
-
-                                                {isSelected && selectedTenantIds.length > 1 && !isPrimary && (
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => setPrimaryTenantId(String(tenant.id))}
-                                                    >
-                                                        <Star className="h-3 w-3 mr-1" />
-                                                        Primaria
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                            {errors.tenants && (
-                                <p className="text-sm text-red-500">{errors.tenants}</p>
-                            )}
+                        <CardContent>
+                            <TenantMultiSelector
+                                selectedTenantIds={selectedTenantIds}
+                                onSelectionChange={(ids) => {
+                                    setSelectedTenantIds(ids);
+                                    if (errors.tenants) {
+                                        setErrors(prev => ({ ...prev, tenants: '' }));
+                                    }
+                                }}
+                                primaryTenantId={primaryTenantId}
+                                onPrimaryChange={setPrimaryTenantId}
+                                selectedTenants={selectedTenants}
+                                minSelections={1}
+                                error={errors.tenants}
+                            />
                         </CardContent>
                     </Card>
                 )}

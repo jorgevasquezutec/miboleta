@@ -176,7 +176,7 @@ export function UserDetailPage() {
         );
     };
 
-    const canEdit = currentUser?.role === 'root' || currentUser?.role === 'admin';
+    const canEdit = currentUser?.role === 'root';
 
     if (isLoading) {
         return (
@@ -359,7 +359,7 @@ export function UserDetailPage() {
                 onSetPrimary={handleSetPrimaryTenant}
                 onAddTenant={handleAddTenant}
                 onRemoveTenant={handleRemoveTenant}
-                canEdit={canEdit}
+                canEdit={false}
             />
 
             {/* Password Reset Modal */}

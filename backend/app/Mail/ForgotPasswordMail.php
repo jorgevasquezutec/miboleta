@@ -45,7 +45,7 @@ class ForgotPasswordMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.forgot-password',
+            view: 'emails.forgot-password',
             with: [
                 'user' => $this->user,
                 'resetUrl' => $this->resetUrl,

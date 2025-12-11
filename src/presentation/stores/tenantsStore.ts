@@ -14,6 +14,11 @@ interface TenantsState {
     error: string | null;
     pagination: PaginationMeta | null;
 
+    // Search state (para el selector)
+    searchResults: Tenant[];
+    isSearching: boolean;
+    searchPagination: PaginationMeta | null;
+
     // Filters
     search: string;
     statusFilter: string;
@@ -24,6 +29,11 @@ interface TenantsState {
     createTenant: (data: CreateTenantData) => Promise<Tenant | null>;
     updateTenant: (id: string, data: UpdateTenantData) => Promise<Tenant | null>;
     deleteTenant: (id: string) => Promise<boolean>;
+
+    // Search actions (para el selector multi-tenant)
+    searchTenants: (query: string, page?: number) => Promise<void>;
+    loadMoreSearchResults: () => Promise<void>;
+    clearSearchResults: () => void;
 
     // Pagination actions
     goToPage: (page: number) => Promise<void>;
@@ -45,6 +55,9 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
     isLoading: false,
     error: null,
     pagination: null,
+    searchResults: [],
+    isSearching: false,
+    searchPagination: null,
     search: '',
     statusFilter: '',
 
@@ -162,6 +175,51 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
             });
             return false;
         }
+    },
+
+    // Search tenants (para el selector multi-tenant)
+    searchTenants: async (query: string, page: number = 1) => {
+        set({ isSearching: true, error: null });
+        try {
+            const params: GetTenantsParams = {
+                page,
+                per_page: 20,
+                search: query,
+                status: 'active', // Solo mostrar activos
+            };
+
+            const response = await tenantRepository.getAll(params);
+
+            set({
+                searchResults: page === 1 ? response.data : [...get().searchResults, ...response.data],
+                searchPagination: response.meta,
+                isSearching: false,
+            });
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Error al buscar organizaciones',
+                isSearching: false,
+            });
+        }
+    },
+
+    // Load more search results (infinite scroll)
+    loadMoreSearchResults: async () => {
+        const { searchPagination } = get();
+        if (!searchPagination || searchPagination.current_page >= searchPagination.last_page) {
+            return;
+        }
+
+        const nextPage = searchPagination.current_page + 1;
+        await get().searchTenants(get().search, nextPage);
+    },
+
+    // Clear search results
+    clearSearchResults: () => {
+        set({
+            searchResults: [],
+            searchPagination: null,
+        });
     },
 
     // Pagination: Go to specific page
