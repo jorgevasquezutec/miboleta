@@ -287,11 +287,47 @@ class UserController extends Controller
         $user->update($validated);
         $user->load(['roles', 'tenants', 'immediateSupervisor']);
 
+        // Retornar usuario con formato completo (igual que /me)
         return response()->json([
             'message' => 'Usuario actualizado exitosamente',
-            'user' => $user,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'last_name' => $user->last_name,
+                'full_name' => $user->full_name,
+                'email' => $user->email,
+                'document_type' => $user->document_type,
+                'document_text' => $user->document_text,
+                'phone' => $user->phone,
+                'status' => $user->status,
+                'must_change_password' => $user->must_change_password,
+                'role' => $user->getCurrentRole(),
+                'roles' => $user->getCurrentRoles(),
+                'tenants' => $user->tenants->map(function ($tenant) {
+                    return [
+                        'id' => $tenant->id,
+                        'name' => $tenant->name,
+                        'ruc' => $tenant->ruc,
+                        'logo_url' => $tenant->logo_url,
+                        'is_primary' => $tenant->pivot->is_primary,
+                    ];
+                }),
+                'primary_tenant' => $user->primaryTenant() ? [
+                    'id' => $user->primaryTenant()->id,
+                    'name' => $user->primaryTenant()->name,
+                    'ruc' => $user->primaryTenant()->ruc,
+                ] : null,
+                'immediate_supervisor' => $user->immediateSupervisor ? [
+                    'id' => $user->immediateSupervisor->id,
+                    'full_name' => $user->immediateSupervisor->full_name,
+                    'email' => $user->immediateSupervisor->email,
+                ] : null,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+            ],
         ]);
     }
+
 
     /**
      * @OA\Delete(
