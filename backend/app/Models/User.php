@@ -111,10 +111,10 @@ class User extends Authenticatable
     /**
      * Documentos del usuario
      */
-    // public function documents(): HasMany
-    // {
-    //     return $this->hasMany(Document::class);
-    // }
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
 
     /**
      * Solicitudes de vacaciones del usuario

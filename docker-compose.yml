@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -16,6 +14,7 @@ services:
       - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
     depends_on:
       - db
+      - redis
     networks:
       - miboleta_network
 
@@ -54,6 +53,57 @@ services:
     networks:
       - miboleta_network
 
+  # Redis para queues y cache
+  redis:
+    image: redis:7-alpine
+    container_name: miboleta_redis
+    # restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - miboleta_network
+
+  # Laravel Horizon - Queue Worker
+  horizon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: miboleta_horizon
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan horizon
+    volumes:
+      - ./backend:/var/www/html
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    depends_on:
+      - app
+      - redis
+    networks:
+      - miboleta_network
+
+  # Laravel Reverb - WebSocket Server
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: miboleta_reverb
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./backend:/var/www/html
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    depends_on:
+      - app
+      - redis
+    networks:
+      - miboleta_network
+
   adminer:
     image: adminer:latest
     command: [ "php", "-d", "memory_limit=4G", "-d", "upload_max_filesize=10G", "-d", "post_max_size=10G", "-S", "[::]:8080", "-t", "/var/www/html" ]
@@ -69,6 +119,8 @@ services:
 
 volumes:
   mysql_data:
+    driver: local
+  redis_data:
     driver: local
 
 networks:

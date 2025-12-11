@@ -58,10 +58,9 @@ export function UsersListPage() {
     deleteUser,
     goToPage,
     changePerPage,
-    setSearch: setSearchInStore,
-    setStatusFilter,
   } = useUsersStore();
   const { user: currentUser } = useAuthStore();
+
 
   const [searchTerm, setSearchTerm] = useState("");
   const [localStatusFilter, setLocalStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -79,10 +78,13 @@ export function UsersListPage() {
       return;
     }
 
-    // On subsequent renders (when filters change), update store and fetch
-    setSearchInStore(debouncedSearch);
-    setStatusFilter(localStatusFilter === "all" ? "" : localStatusFilter);
-    fetchUsers();
+    // On subsequent renders (when filters change), call fetchUsers with both params
+    const statusValue = localStatusFilter === "all" ? "" : localStatusFilter;
+    fetchUsers({
+      search: debouncedSearch,
+      status: statusValue,
+      page: 1 // Reset to page 1 when filters change
+    });
   }, [debouncedSearch, localStatusFilter]);
 
   const handleDelete = (id: string, userName: string) => {
@@ -103,17 +105,14 @@ export function UsersListPage() {
   };
 
   const handleStatusFilterChange = (value: string) => {
+    // Just update local state, the useEffect will handle the fetch
     setLocalStatusFilter(value as "all" | "active" | "inactive");
-    if (value === "all") {
-      setStatusFilter("");
-    } else {
-      setStatusFilter(value);
-    }
   };
 
   const handlePerPageChange = (value: string) => {
     changePerPage(parseInt(value));
   };
+
 
   const getRoleBadgeStyle = (role: string) => {
     switch (role) {

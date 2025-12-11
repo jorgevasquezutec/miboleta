@@ -5,6 +5,10 @@ use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\TenantController;
+use App\Http\Controllers\Api\DocumentTypeController;
+use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\DocumentBatchController;
+use App\Http\Controllers\Api\DocumentSignatureController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -54,4 +58,31 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/users', [TenantController::class, 'addUser']);
         Route::delete('/users/{userId}', [TenantController::class, 'removeUser']);
     });
+
+    // ============ MÓDULO 4: DOCUMENTOS ============
+
+    // Document Types (solo lectura)
+    Route::get('/document-types', [DocumentTypeController::class, 'index']);
+    Route::get('/document-types/{id}', [DocumentTypeController::class, 'show']);
+
+    // Documents
+    Route::get('/documents', [DocumentController::class, 'index']);
+    Route::get('/documents/orphans', [DocumentController::class, 'orphans']);
+    Route::get('/documents/{id}', [DocumentController::class, 'show']);
+    Route::get('/documents/{id}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::post('/documents/{id}/assign', [DocumentController::class, 'assignOrphan']);
+    Route::delete('/documents/{id}', [DocumentController::class, 'destroy']);
+
+    // Document Batches (Cargas masivas)
+    Route::get('/document-batches', [DocumentBatchController::class, 'index']);
+    Route::get('/document-batches/{id}', [DocumentBatchController::class, 'show']);
+    Route::post('/document-batches/upload', [DocumentBatchController::class, 'upload']);
+    Route::post('/document-batches/preview', [DocumentBatchController::class, 'previewZip']);
+
+    // Document Signature (Firma digital con 2FA)
+    Route::get('/signature/terms', [DocumentSignatureController::class, 'checkTerms']);
+    Route::post('/signature/terms/accept', [DocumentSignatureController::class, 'acceptTerms']);
+    Route::get('/documents/{id}/signature-status', [DocumentSignatureController::class, 'status']);
+    Route::post('/documents/{id}/request-code', [DocumentSignatureController::class, 'requestCode']);
+    Route::post('/documents/{id}/sign', [DocumentSignatureController::class, 'verifyAndSign']);
 });

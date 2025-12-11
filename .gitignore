@@ -42,7 +42,7 @@ coverage/
 # Laravel backend
 /backend/vendor/
 /backend/node_modules/
-/backend/.env
+# /backend/.env
 /backend/.env.backup
 /backend/.phpunit.result.cache
 /backend/storage/*.key

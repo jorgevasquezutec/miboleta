@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
 **Última actualización:** 2025-12-11  
-**Estado general del proyecto:** ~78% completado ⭐ ACTUALIZADO
+**Estado general del proyecto:** ~78% completado
 
 **✅ Completado:**
 - Módulo 0 (Base de Datos) ✅ 100%
@@ -13,14 +13,21 @@
 - Módulo 2 (Multi-Tenancy Backend + TenantSwitcher) ✅ 100%
   - Backend: TenantController completo
   - Frontend: TenantSwitcher con logo_url y tema oscuro ✅
-- Módulo 3 (Gestión de Usuarios) ✅ 100% ⭐ ACTUALIZADO
-  - Backend: UserController completo con CRUD + supervisores
+- Módulo 3 (Gestión de Usuarios) ✅ 100%
+  - Backend: UserController completo con CRUD + supervisores + búsqueda corregida
   - Frontend: usersStore, UsersListPage, UsersPage, UserDetailPage, UserFormPage
   - Componentes: SupervisorSelector, SupervisorBadge, SubordinatesList, UserTenantsManager
   - Permisos: Solo ROOT puede crear/editar/eliminar usuarios ✅
   - ConfirmDialog reemplazando confirm() nativos ✅
-**📋 Siguiente:** Iniciar Módulo 4 (Documentos) - Sistema de gestión documental
-**📋 Pendiente:** Módulos 4-8
+  
+**🚧 En Progreso:**
+- Módulo 4 (Documentos) ⏳ 0% - **INICIANDO**
+  - Plan completo en: `docs/DOCUMENTS_MODULE.md`
+  - Duración estimada: 14-16 días
+
+**📋 Siguiente Paso:** Fase 0 - Infraestructura (Docker Redis + Horizon + Reverb)
+**📋 Pendiente:** Módulos 5-8
+
 
 ---
 

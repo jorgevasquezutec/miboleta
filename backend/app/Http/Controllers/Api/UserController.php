@@ -64,8 +64,8 @@ class UserController extends Controller
             });
         }
 
-        // Filtro por estado
-        if ($request->has('status')) {
+        // Filtro por estado (solo si tiene valor)
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 

@@ -26,6 +26,8 @@ RUN apk add --no-cache \
     libzip-dev \
     icu-dev \
     oniguruma-dev \
+    linux-headers \
+    $PHPIZE_DEPS \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
     pdo \
@@ -33,7 +35,11 @@ RUN apk add --no-cache \
     zip \
     gd \
     intl \
-    mbstring
+    mbstring \
+    pcntl \
+    && pecl install redis \
+    && docker-php-ext-enable redis
+
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
