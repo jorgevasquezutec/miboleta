@@ -8,6 +8,20 @@ export interface UploadResponse {
 }
 
 /**
+ * Get CSRF token from cookies
+ */
+function getCsrfToken(): string | null {
+    const name = 'XSRF-TOKEN';
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+        const token = parts.pop()?.split(';').shift();
+        return token ? decodeURIComponent(token) : null;
+    }
+    return null;
+}
+
+/**
  * Upload a tenant logo to the server
  * @param file - The image file to upload
  * @returns Promise with the upload response containing the URL
@@ -16,6 +30,9 @@ export async function uploadTenantLogo(file: File): Promise<string> {
     const formData = new FormData();
     formData.append('logo', file);
 
+    // Get CSRF token from cookies
+    const csrfToken = getCsrfToken();
+
     try {
         const response = await apiClient.post<UploadResponse>(
             '/upload/tenant-logo',
@@ -23,6 +40,7 @@ export async function uploadTenantLogo(file: File): Promise<string> {
             {
                 headers: {
                     'Content-Type': 'multipart/form-data',
+                    ...(csrfToken && { 'X-XSRF-TOKEN': csrfToken }),
                 },
             }
         );

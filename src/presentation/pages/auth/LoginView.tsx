@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Building2, Mail, Lock, Loader2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { useAuth } from "@/presentation/hooks/useAuth";
+import { useAuthStore } from "@/presentation/stores/authStore";
 import { toast } from "sonner";
 
 export default function LoginView() {
@@ -19,6 +20,15 @@ export default function LoginView() {
 
     try {
       await login(email, password);
+
+      // Check if user needs to change password
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser?.must_change_password) {
+        toast.info("Por favor, establece una nueva contraseña");
+        navigate("/force-change-password");
+        return;
+      }
+
       toast.success("¡Bienvenido!");
       navigate("/");
     } catch (error) {
@@ -39,7 +49,7 @@ export default function LoginView() {
   const tenantName = "MiBoleta";
 
   return (
-    <div 
+    <div
       className="min-h-screen bg-gradient-to-br flex items-center justify-center p-4"
       style={{
         background: `linear-gradient(to bottom right, ${gradientFrom}, ${gradientTo})`,
@@ -49,8 +59,8 @@ export default function LoginView() {
         {/* Logo and Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl shadow-lg mb-4">
-            <Building2 
-              className="w-10 h-10" 
+            <Building2
+              className="w-10 h-10"
               style={{ color: primaryColor }}
             />
           </div>
@@ -86,7 +96,15 @@ export default function LoginView() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Contraseña</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="password">Contraseña</Label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#64748B]" />
                   <Input
@@ -105,7 +123,7 @@ export default function LoginView() {
               <Button
                 type="submit"
                 className="w-full h-11 text-white"
-                style={{ 
+                style={{
                   backgroundColor: primaryColor,
                 }}
                 disabled={isLoading}

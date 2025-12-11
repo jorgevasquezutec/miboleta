@@ -33,6 +33,8 @@ class User extends Authenticatable
         'immediate_supervisor_id',
         'status',
         'last_login_at',
+        'must_change_password',
+        'password_changed_at',
     ];
 
     /**
@@ -56,6 +58,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'last_login_at' => 'datetime',
+            'password_changed_at' => 'datetime',
+            'must_change_password' => 'boolean',
             'deleted_at' => 'datetime',
         ];
     }

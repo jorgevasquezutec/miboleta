@@ -12,6 +12,9 @@ export interface User {
   roles?: string[]; // Array de roles del usuario
   status: 'active' | 'inactive' | 'suspended' | 'pending';
 
+  // Password management
+  must_change_password?: boolean;
+
   // Multi-tenancy
   tenants?: TenantAssociation[];
   primary_tenant?: TenantBasic | null;

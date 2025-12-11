@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUsersStore } from "@/presentation/stores/usersStore";
+import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -63,36 +64,36 @@ export function UsersListPage() {
   const { user: currentUser } = useAuthStore();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilterState] = useState<string>("all");
+  const [localStatusFilter, setLocalStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
   const debouncedSearch = useDebounce(searchTerm, 500);
+  const isFirstRender = useRef(true);
 
-  // Initial load
+  // Single useEffect that handles initial load and filter changes
   useEffect(() => {
-    fetchUsers();
-
-    // Debug: Ver el ancho de la pantalla
-    console.log('📏 Ancho de pantalla:', window.innerWidth, 'px');
-    console.log('Breakpoints Tailwind:');
-    console.log('- sm: 640px');
-    console.log('- md: 768px (Documento y Tenants)');
-    console.log('- lg: 1024px (Email)');
-    console.log('- xl: 1280px (Supervisor)');
-  }, []);
-
-  // Handle search changes
-  useEffect(() => {
-    if (debouncedSearch !== undefined) {
-      setSearchInStore(debouncedSearch);
-    }
-  }, [debouncedSearch]);
-
-  const handleDelete = async (id: string, userName: string) => {
-    if (!window.confirm(`¿Estás seguro de eliminar a ${userName}?`)) {
+    // On first render, just load data
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      fetchUsers();
       return;
     }
 
+    // On subsequent renders (when filters change), update store and fetch
+    setSearchInStore(debouncedSearch);
+    setStatusFilter(localStatusFilter === "all" ? "" : localStatusFilter);
+    fetchUsers();
+  }, [debouncedSearch, localStatusFilter]);
+
+  const handleDelete = (id: string, userName: string) => {
+    setUserToDelete({ id, name: userName });
+    setIsConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
     try {
-      await deleteUser(id);
+      await deleteUser(userToDelete.id);
       toast.success("Usuario eliminado exitosamente");
       // Reload current page
       await fetchUsers();
@@ -102,7 +103,7 @@ export function UsersListPage() {
   };
 
   const handleStatusFilterChange = (value: string) => {
-    setStatusFilterState(value);
+    setLocalStatusFilter(value as "all" | "active" | "inactive");
     if (value === "all") {
       setStatusFilter("");
     } else {
@@ -210,7 +211,7 @@ export function UsersListPage() {
                 className="pl-10 h-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+            <Select value={localStatusFilter} onValueChange={handleStatusFilterChange}>
               <SelectTrigger className="w-full sm:w-[30%] h-10">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
@@ -218,7 +219,7 @@ export function UsersListPage() {
                 <SelectItem value="all">Todos los estados</SelectItem>
                 <SelectItem value="active">Activo</SelectItem>
                 <SelectItem value="inactive">Inactivo</SelectItem>
-                <SelectItem value="suspended">Suspendido</SelectItem>
+                {/* <SelectItem value="suspended">Suspendido</SelectItem> */}
               </SelectContent>
             </Select>
           </div>
@@ -232,7 +233,7 @@ export function UsersListPage() {
           ) : users.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">
-                {searchTerm || statusFilter !== "all"
+                {searchTerm || localStatusFilter !== "all"
                   ? "No se encontraron usuarios"
                   : "No hay usuarios registrados"}
               </p>
@@ -435,6 +436,17 @@ export function UsersListPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={isConfirmOpen}
+        onOpenChange={setIsConfirmOpen}
+        title="Eliminar Usuario"
+        description={userToDelete ? `¿Estás seguro de eliminar a ${userToDelete.name}?` : ''}
+        onConfirm={confirmDelete}
+        confirmText="Eliminar"
+        variant="destructive"
+      />
     </div>
   );
 }

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
+
 
 class Tenant extends Model
 {
@@ -27,6 +29,30 @@ class Tenant extends Model
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    /**
+     * Attributes to append to model's array form
+     */
+    protected $appends = ['logo_url'];
+
+    /**
+     * Get the full URL for the logo
+     */
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (!$this->logo_path) {
+            return null;
+        }
+
+        // Si ya es una URL completa (http/https), retornarla tal cual
+        if (filter_var($this->logo_path, FILTER_VALIDATE_URL)) {
+            return $this->logo_path;
+        }
+
+        // Si es un path de storage, convertirlo a URL absoluta con dominio
+        return url(Storage::url($this->logo_path));
+    }
+
 
     /**
      * Usuarios que pertenecen a este tenant

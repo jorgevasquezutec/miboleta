@@ -103,6 +103,7 @@ class AuthController extends Controller
                 'document_text' => $user->document_text,
                 'phone' => $user->phone,
                 'status' => $user->status,
+                'must_change_password' => $user->must_change_password,
                 'role' => $user->getCurrentRole(),
                 'roles' => $user->getCurrentRoles(),
                 'tenants' => $user->tenants->map(function ($tenant) {
@@ -122,26 +123,26 @@ class AuthController extends Controller
                 'updated_at' => $user->updated_at,
             ],
         ])->cookie(
-            'access_token',
-            $accessToken,
-            60, // 1 hora en minutos
-            '/',
-            null,
-            false, // secure - false en desarrollo, true en producción
-            true, // httpOnly
-            false,
-            'Lax'
-        )->cookie(
-            'refresh_token',
-            $refreshToken->token,
-            60 * 24 * 30, // 30 días en minutos
-            '/',
-            null,
-            false, // secure - false en desarrollo, true en producción
-            true, // httpOnly
-            false,
-            'Strict'
-        );
+                'access_token',
+                $accessToken,
+                60, // 1 hora en minutos
+                '/',
+                null,
+                false, // secure - false en desarrollo, true en producción
+                true, // httpOnly
+                false,
+                'Lax'
+            )->cookie(
+                'refresh_token',
+                $refreshToken->token,
+                60 * 24 * 30, // 30 días en minutos
+                '/',
+                null,
+                false, // secure - false en desarrollo, true en producción
+                true, // httpOnly
+                false,
+                'Strict'
+            );
     }
 
     /**
@@ -205,6 +206,7 @@ class AuthController extends Controller
                 'document_text' => $user->document_text,
                 'phone' => $user->phone,
                 'status' => $user->status,
+                'must_change_password' => $user->must_change_password,
                 'role' => $user->getCurrentRole(),
                 'roles' => $user->getCurrentRoles(),
                 'tenants' => $user->tenants->map(function ($tenant) {
@@ -222,16 +224,16 @@ class AuthController extends Controller
                 ] : null,
             ],
         ])->cookie(
-            'access_token',
-            $accessToken,
-            60, // 1 hora
-            '/',
-            null,
-            false, // secure - false en desarrollo
-            true,
-            false,
-            'Lax'
-        );
+                'access_token',
+                $accessToken,
+                60, // 1 hora
+                '/',
+                null,
+                false, // secure - false en desarrollo
+                true,
+                false,
+                'Lax'
+            );
     }
 
     /**
@@ -272,6 +274,7 @@ class AuthController extends Controller
             'document_text' => $user->document_text,
             'phone' => $user->phone,
             'status' => $user->status,
+            'must_change_password' => $user->must_change_password,
             'role' => $user->getCurrentRole(),
             'roles' => $user->getCurrentRoles(),
             'tenants' => $user->tenants->map(function ($tenant) {
@@ -325,26 +328,26 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Sesión cerrada correctamente',
         ])->cookie(
-            'access_token',
-            '',
-            -1, // Expirar inmediatamente
-            '/',
-            null,
-            false, // secure - false en desarrollo
-            true,
-            false,
-            'Lax'
-        )->cookie(
-            'refresh_token',
-            '',
-            -1, // Expirar inmediatamente
-            '/',
-            null,
-            false, // secure - false en desarrollo
-            true,
-            false,
-            'Strict'
-        );
+                'access_token',
+                '',
+                -1, // Expirar inmediatamente
+                '/',
+                null,
+                false, // secure - false en desarrollo
+                true,
+                false,
+                'Lax'
+            )->cookie(
+                'refresh_token',
+                '',
+                -1, // Expirar inmediatamente
+                '/',
+                null,
+                false, // secure - false en desarrollo
+                true,
+                false,
+                'Strict'
+            );
     }
 }
 

@@ -35,7 +35,8 @@ class FileUploadController extends Controller
 
             return response()->json([
                 'success' => true,
-                'url' => $url,
+                'url' => $path, // Return path for database storage (accessor will convert to URL)
+                'full_url' => $url, // Full URL for preview if needed
                 'path' => $path,
                 'message' => 'Logo uploaded successfully'
             ], 200);

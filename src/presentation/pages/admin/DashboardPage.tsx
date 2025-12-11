@@ -3,13 +3,13 @@ import {
   Users,
   CheckCircle,
   Clock,
-  TrendingUp,
+  // TrendingUp,
   Upload,
   Settings,
   FileBarChart,
 } from "lucide-react";
 import { StatsCard } from "@/presentation/components/common";
-import { DocumentCard } from "@/presentation/components/features/documents";
+// import { DocumentCard } from "@/presentation/components/features/documents";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import {

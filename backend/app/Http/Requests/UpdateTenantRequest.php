@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Tenant;
 use Illuminate\Validation\Rule;
 
 class UpdateTenantRequest extends CustomFormRequest
@@ -11,12 +12,17 @@ class UpdateTenantRequest extends CustomFormRequest
      */
     public function authorize(): bool
     {
-        $tenant = $this->route('tenant');
+        $tenantId = $this->route('tenant');
         $user = $this->user();
 
         // Root puede actualizar cualquier tenant
+        if ($user && $user->isRoot()) {
+            return true;
+        }
+
         // Admin solo puede actualizar sus tenants
-        return $user && ($user->isRoot() || $tenant->hasUser($user));
+        $tenant = Tenant::find($tenantId);
+        return $user && $tenant && $tenant->hasUser($user);
     }
 
     /**
@@ -26,7 +32,8 @@ class UpdateTenantRequest extends CustomFormRequest
      */
     public function rules(): array
     {
-        $tenantId = $this->route('tenant')->id;
+        // Get tenant ID from route parameter (it's a string, not a model)
+        $tenantId = $this->route('tenant');
 
         return [
             'name' => 'sometimes|required|string|max:255',

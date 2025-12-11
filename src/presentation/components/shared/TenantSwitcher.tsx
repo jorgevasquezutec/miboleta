@@ -38,10 +38,10 @@ export function TenantSwitcher() {
                     <img
                         src={currentTenant.logo_path}
                         alt={tenantName}
-                        className="h-9 w-9 rounded-md object-cover flex-shrink-0"
+                        className="h-10 w-10 rounded-md object-cover flex-shrink-0"
                     />
                 ) : (
-                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-100 flex-shrink-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 flex-shrink-0">
                         <Building2 className="h-5 w-5 text-blue-600" />
                     </div>
                 )}

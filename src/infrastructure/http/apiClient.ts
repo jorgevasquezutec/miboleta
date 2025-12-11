@@ -34,12 +34,35 @@ const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Interceptor de Request - Agregar tenant header y logging
+/**
+ * Get CSRF token from cookies
+ */
+function getCsrfToken(): string | null {
+  const name = 'XSRF-TOKEN';
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const token = parts.pop()?.split(';').shift();
+    return token ? decodeURIComponent(token) : null;
+  }
+  return null;
+}
+
+// Interceptor de Request - Agregar tenant header, CSRF token y logging
 apiClient.interceptors.request.use(
   (config) => {
     console.log(`🔵 [API Request] ${config.method?.toUpperCase()} ${config.url}`);
     console.log('   withCredentials:', config.withCredentials);
     console.log('   Cookies:', document.cookie ? 'Present (but HttpOnly not visible)' : 'None visible');
+
+    // Agregar CSRF token si está disponible
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      config.headers['X-XSRF-TOKEN'] = csrfToken;
+      console.log('   X-XSRF-TOKEN:', csrfToken.substring(0, 20) + '...');
+    } else {
+      console.warn('   ⚠️ No CSRF token found in cookies');
+    }
 
     // Obtener tenant actual del localStorage
     const authStorage = localStorage.getItem('auth-storage');
@@ -181,7 +204,7 @@ export const getErrorMessage = (error: unknown): string => {
     if (error.response?.data?.message) {
       return error.response.data.message;
     }
-    
+
     // Error de validación Laravel
     if (error.response?.data?.errors) {
       const errors = error.response.data.errors;
@@ -190,15 +213,31 @@ export const getErrorMessage = (error: unknown): string => {
         return firstError[0] as string;
       }
     }
-    
+
     // Error genérico de Axios
     return error.message;
   }
-  
+
   // Error genérico
   if (error instanceof Error) {
     return error.message;
   }
-  
+
   return 'An unexpected error occurred';
+};
+
+/**
+ * Initialize CSRF protection by fetching CSRF cookie from Laravel
+ * This should be called once when the app starts
+ */
+export const initializeCsrf = async (): Promise<void> => {
+  try {
+    const baseUrl = API_BASE_URL.replace('/api', '');
+    await axios.get(`${baseUrl}/sanctum/csrf-cookie`, {
+      withCredentials: true,
+    });
+    console.log('✅ [CSRF] Cookie initialized successfully');
+  } catch (error) {
+    console.error('❌ [CSRF] Failed to initialize cookie:', error);
+  }
 };

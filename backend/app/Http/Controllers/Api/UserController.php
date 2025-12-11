@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\WelcomeUserMail;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -55,9 +58,9 @@ class UserController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('document_text', 'like', "%{$search}%");
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('document_text', 'like', "%{$search}%");
             });
         }
 
@@ -121,16 +124,15 @@ class UserController extends Controller
      *     path="/api/users",
      *     tags={"Usuarios"},
      *     summary="Crear usuario",
-     *     description="Crea un nuevo usuario y lo asigna al tenant actual",
+     *     description="Crea un nuevo usuario con contraseña aleatoria y envía email de bienvenida",
      *     security={{"sanctum":{}}},
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"name","email","password"},
+     *             required={"name","email","role_id","tenant_id"},
      *             @OA\Property(property="name", type="string", example="Juan"),
      *             @OA\Property(property="last_name", type="string", example="Pérez"),
      *             @OA\Property(property="email", type="string", example="juan@example.com"),
-     *             @OA\Property(property="password", type="string", example="password123"),
      *             @OA\Property(property="document_type", type="string", example="DNI"),
      *             @OA\Property(property="document_text", type="string", example="12345678"),
      *             @OA\Property(property="phone", type="string", example="987654321"),
@@ -149,8 +151,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'last_name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8',
-            'document_type' => 'nullable|string|in:DNI,RUC,CE,Pasaporte',
+            'document_type' => 'nullable|string|in:dni,ruc,ce,passport',
             'document_text' => 'nullable|string|unique:users,document_text',
             'phone' => 'nullable|string|max:20',
             'immediate_supervisor_id' => 'nullable|exists:users,id',
@@ -158,17 +159,21 @@ class UserController extends Controller
             'tenant_id' => 'required|exists:tenants,id',
         ]);
 
+        // Generar contraseña aleatoria
+        $temporaryPassword = Str::random(12);
+
         // Crear usuario
         $user = User::create([
             'name' => $validated['name'],
             'last_name' => $validated['last_name'] ?? null,
             'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
+            'password' => Hash::make($temporaryPassword),
             'document_type' => $validated['document_type'] ?? null,
             'document_text' => $validated['document_text'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'immediate_supervisor_id' => $validated['immediate_supervisor_id'] ?? null,
             'status' => 'active',
+            'must_change_password' => true, // Forzar cambio en primer login
         ]);
 
         // Asignar rol
@@ -182,11 +187,15 @@ class UserController extends Controller
             'is_primary' => true,
         ]);
 
+        // Enviar email de bienvenida con credenciales
+        Mail::to($user->email)->send(new WelcomeUserMail($user, $temporaryPassword));
+
         $user->load(['roles', 'tenants', 'immediateSupervisor']);
 
         return response()->json([
-            'message' => 'Usuario creado exitosamente',
+            'message' => 'Usuario creado exitosamente. Se ha enviado un correo con las credenciales.',
             'user' => $user,
+            'email_sent' => true,
         ], 201);
     }
 

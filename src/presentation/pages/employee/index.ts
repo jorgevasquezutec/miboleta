@@ -2,4 +2,3 @@
 export { default as DashboardPage } from './DashboardPage';
 export { default as DocumentUploadView } from './DocumentUploadView';
 export { default as DocumentViewerView } from './DocumentViewerView';
-export { default as UserProfileView } from './UserProfileView';

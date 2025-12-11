@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
 import { useAuthStore } from '@/presentation/stores/authStore';
+import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 import { Tenant } from '@/core/domain/entities/Tenant';
 import { Button } from '@/presentation/components/ui/button';
 import { CheckCircle2, SquareX } from 'lucide-react';
@@ -66,34 +67,35 @@ export function TenantsListPage() {
     const { user: currentUser } = useAuthStore();
 
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilterState] = useState<string>('all');
+    const [localStatusFilter, setLocalStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [tenantToDelete, setTenantToDelete] = useState<{ id: string; name: string } | null>(null);
     const debouncedSearch = useDebounce(searchTerm, 500);
+    const isFirstRender = useRef(true);
 
-    // Initial load
+    // Single useEffect that handles initial load and filter changes
     useEffect(() => {
-        fetchTenants();
-    }, []);
-
-    // Handle search changes
-    useEffect(() => {
-        if (debouncedSearch !== undefined) {
-            setSearchInStore(debouncedSearch);
+        // On first render, just load data
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
             fetchTenants();
-        }
-    }, [debouncedSearch]);
-
-    // Handle status filter changes
-    useEffect(() => {
-        setStatusFilter(statusFilter === 'all' ? '' : statusFilter);
-        fetchTenants();
-    }, [statusFilter]);
-
-    const handleDelete = async (id: string, tenantName: string) => {
-        if (!window.confirm(`¿Estás seguro de eliminar el tenant "${tenantName}"?`)) {
             return;
         }
 
-        const success = await deleteTenant(id);
+        // On subsequent renders (when filters change), update and fetch
+        setSearchInStore(debouncedSearch);
+        setStatusFilter(localStatusFilter === 'all' ? '' : localStatusFilter);
+        fetchTenants();
+    }, [debouncedSearch, localStatusFilter]);
+
+    const handleDelete = (id: string, tenantName: string) => {
+        setTenantToDelete({ id, name: tenantName });
+        setIsConfirmOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!tenantToDelete) return;
+        const success = await deleteTenant(tenantToDelete.id);
         if (success) {
             await fetchTenants();
         }
@@ -103,13 +105,13 @@ export function TenantsListPage() {
         const variants = {
             active: 'bg-green-100 text-green-800',
             inactive: 'bg-gray-100 text-gray-800',
-            suspended: 'bg-red-100 text-red-800',
+            // suspended: 'bg-red-100 text-red-800',
         };
 
         const labels = {
             active: 'Activo',
             inactive: 'Inactivo',
-            suspended: 'Suspendido',
+            // suspended: 'Suspendido',
         };
 
         return (
@@ -194,7 +196,7 @@ export function TenantsListPage() {
                         </div>
 
                         {/* Status Filter */}
-                        <Select value={statusFilter} onValueChange={setStatusFilterState}>
+                        <Select value={localStatusFilter} onValueChange={setLocalStatusFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Filtrar por estado" />
                             </SelectTrigger>
@@ -202,7 +204,7 @@ export function TenantsListPage() {
                                 <SelectItem value="all">Todos los estados</SelectItem>
                                 <SelectItem value="active">Activo</SelectItem>
                                 <SelectItem value="inactive">Inactivo</SelectItem>
-                                <SelectItem value="suspended">Suspendido</SelectItem>
+                                {/* <SelectItem value="suspended">Suspendido</SelectItem> */}
                             </SelectContent>
                         </Select>
                     </div>
@@ -253,9 +255,9 @@ export function TenantsListPage() {
                                     tenants.map((tenant: Tenant) => (
                                         <TableRow key={tenant.id}>
                                             <TableCell>
-                                                {tenant.logo_path ? (
+                                                {tenant.logo_url ? (
                                                     <img
-                                                        src={tenant.logo_path}
+                                                        src={tenant.logo_url}
                                                         alt={tenant.name}
                                                         className="h-10 w-10 rounded object-cover"
                                                     />
@@ -378,6 +380,17 @@ export function TenantsListPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Confirm Delete Dialog */}
+            <ConfirmDialog
+                open={isConfirmOpen}
+                onOpenChange={setIsConfirmOpen}
+                title="Eliminar Tenant"
+                description={tenantToDelete ? `¿Estás seguro de eliminar el tenant "${tenantToDelete.name}"?` : ''}
+                onConfirm={confirmDelete}
+                confirmText="Eliminar"
+                variant="destructive"
+            />
         </div>
     );
 }

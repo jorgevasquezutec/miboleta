@@ -43,6 +43,15 @@ export function TenantFormPage() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+
+    // Clear currentTenant when creating new tenant
+    useEffect(() => {
+        if (!isEditing) {
+            // Clear any previous tenant data from store
+            useTenantsStore.getState().clearCurrentTenant();
+        }
+    }, [isEditing]);
 
     // Load tenant data if editing
     useEffect(() => {
@@ -55,9 +64,10 @@ export function TenantFormPage() {
         await fetchTenantById(tenantId);
     };
 
-    // Update form when currentTenant changes
+    // Update form when currentTenant changes (only when editing)
     useEffect(() => {
-        if (currentTenant) {
+        // Compare IDs as strings to handle number vs string mismatch
+        if (isEditing && currentTenant && String(currentTenant.id) === String(id)) {
             setFormData({
                 name: currentTenant.name,
                 ruc: currentTenant.ruc,
@@ -67,11 +77,10 @@ export function TenantFormPage() {
                 logo_path: currentTenant.logo_path || '',
                 status: currentTenant.status,
             });
-        } else if (isEditing && id) {
-            toast.error('Tenant no encontrado');
-            navigate('/tenants');
+            // Set preview URL from backend-generated logo_url
+            setLogoPreviewUrl(currentTenant.logo_url || null);
         }
-    }, [currentTenant, isEditing, id, navigate]);
+    }, [currentTenant, isEditing, id]);
 
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
@@ -133,12 +142,18 @@ export function TenantFormPage() {
             return;
         }
 
+        // Create object URL for immediate preview
+        const previewUrl = URL.createObjectURL(file);
+        setLogoPreviewUrl(previewUrl);
+
         setIsUploading(true);
         try {
-            const url = await uploadTenantLogo(file);
-            setFormData(prev => ({ ...prev, logo_path: url }));
+            const path = await uploadTenantLogo(file);
+            setFormData(prev => ({ ...prev, logo_path: path }));
             toast.success('Logo subido exitosamente');
         } catch (error: any) {
+            // If upload fails, clear the preview
+            setLogoPreviewUrl(null);
             toast.error(error.message || 'Error al subir el logo');
         } finally {
             setIsUploading(false);
@@ -174,6 +189,7 @@ export function TenantFormPage() {
 
     const handleRemoveLogo = () => {
         setFormData(prev => ({ ...prev, logo_path: '' }));
+        setLogoPreviewUrl(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
@@ -221,30 +237,36 @@ export function TenantFormPage() {
                     <CardContent>
                         <div className="space-y-4">
                             {/* Current Logo Preview */}
-                            {formData.logo_path && (
+                            {(logoPreviewUrl || formData.logo_path) && (
                                 <div className="flex items-center gap-4 p-4 border rounded-lg bg-gray-50">
-                                    <img
-                                        src={formData.logo_path}
-                                        alt="Logo actual"
-                                        className="h-20 w-20 rounded object-cover border-2 border-gray-200"
-                                        onError={(e) => {
-                                            e.currentTarget.style.display = 'none';
-                                        }}
-                                    />
-                                    <div className="flex-1">
-                                        <p className="font-medium text-sm">Logo actual</p>
-                                        <p className="text-xs text-gray-500 truncate max-w-md">
-                                            {formData.logo_path}
+                                    {logoPreviewUrl ? (
+                                        <img
+                                            src={logoPreviewUrl}
+                                            alt="Logo actual"
+                                            className="h-20 w-20 rounded-lg object-cover border-2 border-gray-200 shadow-sm"
+                                            onError={() => setLogoPreviewUrl(null)}
+                                        />
+                                    ) : (
+                                        <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-blue-100 border-2 border-gray-200">
+                                            <Building2 className="h-10 w-10 text-blue-600" />
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm text-gray-900">Logo actual</p>
+                                        <p className="text-xs text-gray-500 truncate">
+                                            {formData.logo_path.split('/').pop() || 'Archivo de imagen'}
                                         </p>
                                     </div>
                                     <Button
                                         type="button"
-                                        variant="ghost"
+                                        variant="outline"
                                         size="sm"
                                         onClick={handleRemoveLogo}
                                         disabled={isUploading}
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                                     >
-                                        <X className="h-4 w-4" />
+                                        <X className="h-4 w-4 mr-1" />
+                                        Eliminar
                                     </Button>
                                 </div>
                             )}
@@ -252,8 +274,8 @@ export function TenantFormPage() {
                             {/* Upload Area */}
                             <div
                                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isDragging
-                                        ? 'border-blue-500 bg-blue-50'
-                                        : 'border-gray-300 hover:border-gray-400'
+                                    ? 'border-blue-500 bg-blue-50'
+                                    : 'border-gray-300 hover:border-gray-400'
                                     } ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
                                 onDragOver={handleDragOver}
                                 onDragLeave={handleDragLeave}

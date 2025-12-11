@@ -4,6 +4,9 @@ import { RootLayout } from "./RootLayout";
 
 // Auth pages
 import { LoginView } from "@/presentation/pages/auth";
+import ForceChangePasswordPage from "@/presentation/pages/auth/ForceChangePasswordPage";
+import ForgotPasswordPage from "@/presentation/pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "@/presentation/pages/auth/ResetPasswordPage";
 
 // Admin pages
 import {
@@ -13,6 +16,8 @@ import {
 } from "@/presentation/pages/admin";
 import { TenantsListPage } from "@/presentation/pages/admin/TenantsListPage";
 import { TenantFormPage } from "@/presentation/pages/admin/TenantFormPage";
+import { UserDetailPage } from "@/presentation/pages/admin/UserDetailPage";
+import { UserFormPage } from "@/presentation/pages/admin/UserFormPage";
 
 // Employee pages
 import {
@@ -50,6 +55,18 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginView />,
+  },
+  {
+    path: "/forgot-password",
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPasswordPage />,
+  },
+  {
+    path: "/force-change-password",
+    element: <ForceChangePasswordPage />,
   },
   {
     path: "/",
@@ -94,8 +111,32 @@ export const router = createBrowserRouter([
       {
         path: "users",
         element: (
-          <ProtectedRoute allowedRoles={["root"]}>
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
             <UsersListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "users/new",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <UserFormPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "users/:id",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <UserDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "users/:id/edit",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <UserFormPage />
           </ProtectedRoute>
         ),
       },

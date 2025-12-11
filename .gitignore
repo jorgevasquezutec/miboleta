@@ -54,4 +54,4 @@ coverage/
 
 # Docker volumes
 /docker/mysql/
-/docs
+# /docs
