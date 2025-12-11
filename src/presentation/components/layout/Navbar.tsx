@@ -91,10 +91,10 @@ export function Navbar({
                 <User className="w-4 h-4 mr-2" />
                 Perfil
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onSettings}>
+              {/* <DropdownMenuItem onClick={onSettings}>
                 <Settings className="w-4 h-4 mr-2" />
                 Configuración
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onLogout} className="text-[#EF4444]">
                 <LogOut className="w-4 h-4 mr-2" />

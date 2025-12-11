@@ -1,22 +1,25 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-10  
-**Estado general del proyecto:** ~72% completado ⭐ ACTUALIZADO
+**Última actualización:** 2025-12-11  
+**Estado general del proyecto:** ~78% completado ⭐ ACTUALIZADO
 
 **✅ Completado:**
 - Módulo 0 (Base de Datos) ✅ 100%
 - Módulo 1 (Autenticación Backend + Frontend + Seguridad HttpOnly Cookies) ✅ 100%
-- Módulo 1.5 (Sistema de Gestión de Contraseñas) ✅ 100% ⭐ NUEVO
-  - Backend: PasswordController, Mails, Email Templates
+- Módulo 1.5 (Sistema de Gestión de Contraseñas) ✅ 100%
+  - Backend: PasswordController, Mails, Email Templates (HTML completos)
   - Frontend: ForceChangePasswordPage, ForgotPasswordPage, ResetPasswordPage, PasswordResetModal
-  - Documentación: PASSWORD_SYSTEM.md
-- Módulo 2 (Multi-Tenancy Backend + TenantSwitcher) ✅ 95%
+  - Emails: welcome.blade.php, forgot-password.blade.php, password-reset-admin.blade.php (HTML view)
+- Módulo 2 (Multi-Tenancy Backend + TenantSwitcher) ✅ 100%
   - Backend: TenantController completo
-  - Frontend: TenantSwitcher con logos y tema oscuro ✅
-- Módulo 3 (Gestión de Usuarios) ✅ 95%
+  - Frontend: TenantSwitcher con logo_url y tema oscuro ✅
+- Módulo 3 (Gestión de Usuarios) ✅ 100% ⭐ ACTUALIZADO
   - Backend: UserController completo con CRUD + supervisores
-  - Frontend: usersStore, UsersListPage, UsersPage con paginación avanzada
-**📋 Siguiente:** Completar componentes especializados de Módulo 3 o iniciar Módulo 4
+  - Frontend: usersStore, UsersListPage, UsersPage, UserDetailPage, UserFormPage
+  - Componentes: SupervisorSelector, SupervisorBadge, SubordinatesList, UserTenantsManager
+  - Permisos: Solo ROOT puede crear/editar/eliminar usuarios ✅
+  - ConfirmDialog reemplazando confirm() nativos ✅
+**📋 Siguiente:** Iniciar Módulo 4 (Documentos) - Sistema de gestión documental
 **📋 Pendiente:** Módulos 4-8
 
 ---

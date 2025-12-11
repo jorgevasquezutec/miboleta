@@ -111,6 +111,7 @@ class AuthController extends Controller
                         'id' => $tenant->id,
                         'name' => $tenant->name,
                         'ruc' => $tenant->ruc,
+                        'logo_url' => $tenant->logo_url,
                         'is_primary' => $tenant->pivot->is_primary,
                     ];
                 }),
@@ -214,6 +215,7 @@ class AuthController extends Controller
                         'id' => $tenant->id,
                         'name' => $tenant->name,
                         'ruc' => $tenant->ruc,
+                        'logo_url' => $tenant->logo_url,
                         'is_primary' => $tenant->pivot->is_primary,
                     ];
                 }),
@@ -282,6 +284,7 @@ class AuthController extends Controller
                     'id' => $tenant->id,
                     'name' => $tenant->name,
                     'ruc' => $tenant->ruc,
+                    'logo_url' => $tenant->logo_url,
                     'is_primary' => $tenant->pivot->is_primary,
                 ];
             }),

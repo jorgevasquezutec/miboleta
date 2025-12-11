@@ -164,14 +164,14 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      {
-        path: "settings",
-        element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <SettingsPage onBack={() => window.history.back()} />
-          </ProtectedRoute>
-        ),
-      },
+      // {
+      //   path: "settings",
+      //   element: (
+      //     <ProtectedRoute allowedRoles={["root", "admin"]}>
+      //       <SettingsPage onBack={() => window.history.back()} />
+      //     </ProtectedRoute>
+      //   ),
+      // },
       {
         path: "profile",
         element: (

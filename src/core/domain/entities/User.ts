@@ -36,7 +36,7 @@ export interface TenantAssociation {
   id: string;
   name: string;
   ruc: string;
-  logo_path?: string;
+  logo_url?: string;
   is_primary: boolean;
 }
 

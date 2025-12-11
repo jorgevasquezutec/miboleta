@@ -34,9 +34,9 @@ export function TenantSwitcher() {
 
         return (
             <div className="flex items-center gap-2">
-                {currentTenant?.logo_path ? (
+                {currentTenant?.logo_url ? (
                     <img
-                        src={currentTenant.logo_path}
+                        src={currentTenant.logo_url}
                         alt={tenantName}
                         className="h-10 w-10 rounded-md object-cover flex-shrink-0"
                     />
@@ -65,9 +65,9 @@ export function TenantSwitcher() {
                     className="w-[200px] justify-between px-2 h-9 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent data-[state=open]:!bg-transparent"
                 >
                     <div className="flex items-center gap-2 min-w-0">
-                        {currentTenant?.logo_path ? (
+                        {currentTenant?.logo_url ? (
                             <img
-                                src={currentTenant.logo_path}
+                                src={currentTenant.logo_url}
                                 alt={currentTenant.name}
                                 className="h-6 w-6 rounded-md object-cover flex-shrink-0"
                             />
@@ -111,9 +111,9 @@ export function TenantSwitcher() {
                         >
                             <div className="flex items-center justify-between w-full gap-2">
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    {tenant.logo_path ? (
+                                    {tenant.logo_url ? (
                                         <img
-                                            src={tenant.logo_path}
+                                            src={tenant.logo_url}
                                             alt={tenant.name}
                                             className="h-5 w-5 rounded object-cover flex-shrink-0"
                                         />

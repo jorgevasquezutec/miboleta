@@ -86,7 +86,7 @@ function Sidebar() {
               {isExpanded && <span>Usuarios</span>}
             </button>
 
-            <button
+            {/* <button
               type="button"
               onClick={() => navigate("/settings")}
               className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
@@ -99,7 +99,7 @@ function Sidebar() {
             >
               <Settings className="w-5 h-5" />
               {isExpanded && <span>Configuración</span>}
-            </button>
+            </button> */}
           </>
         ) : (
           <>
@@ -165,7 +165,7 @@ function Sidebar() {
                   {isExpanded && <span>Reportes</span>}
                 </button>
 
-                <button
+                {/* <button
                   type="button"
                   onClick={() => navigate("/settings")}
                   className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
@@ -178,7 +178,7 @@ function Sidebar() {
                 >
                   <Settings className="w-5 h-5" />
                   {isExpanded && <span>Configuración</span>}
-                </button>
+                </button> */}
               </>
             )}
           </>
