@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
-import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search } from "lucide-react";
-import { DocumentCard } from "@/presentation/components/features/documents";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
@@ -12,101 +12,120 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/presentation/components/ui/select";
-import { useTablePagination } from "@/presentation/hooks/useTablePagination";
+import { useDocumentsStore } from "@/presentation/stores";
+import { Document } from "@/core/domain/entities/Document";
 
 interface EmployeeDashboardViewProps {
-  onViewDocument: (id: string) => void;
+  onViewDocument?: (id: number) => void;
 }
 
-type DocumentStatus = "signed" | "pending" | "expired";
-type DocumentCategory = "payslip" | "contract" | "certificate";
-
-// Generar más documentos mock para demostrar la paginación
-const generateMockDocuments = () => {
-  const baseDocuments = [
-    { title: "Boleta de Pago", category: "payslip" as DocumentCategory },
-    { title: "Contrato de Trabajo", category: "contract" as DocumentCategory },
-    { title: "Certificado Laboral", category: "certificate" as DocumentCategory },
-    { title: "Anexo de Contrato", category: "contract" as DocumentCategory },
-    { title: "Certificado de Capacitación", category: "certificate" as DocumentCategory },
-  ];
-
-  const statuses: DocumentStatus[] = ["signed", "pending", "expired"];
-  const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-  const documents = [];
-  for (let i = 0; i < 45; i++) {
-    const baseDoc = baseDocuments[i % baseDocuments.length];
-    const status = statuses[i % statuses.length];
-    const month = months[i % months.length];
-
-    documents.push({
-      id: `doc-${i + 1}`,
-      title: `${baseDoc.title} - ${month} 2025`,
-      category: baseDoc.category,
-      status,
-      date: `${(i % 28) + 1} ${month.slice(0, 3)} 2025`,
-    });
-  }
-
-  return documents;
-};
-
-const mockDocuments = generateMockDocuments();
-
 export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewProps) {
-  // Estado para búsqueda y filtros
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">("all");
-  const [categoryFilter, setCategoryFilter] = useState<DocumentCategory | "all">("all");
-
-  // Filtrar documentos basados en búsqueda y filtros
-  const filteredDocuments = useMemo(() => {
-    return mockDocuments.filter((doc) => {
-      // Filtro de búsqueda
-      const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase());
-
-      // Filtro de estado
-      const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
-
-      // Filtro de categoría
-      const matchesCategory = categoryFilter === "all" || doc.category === categoryFilter;
-
-      return matchesSearch && matchesStatus && matchesCategory;
-    });
-  }, [searchTerm, statusFilter, categoryFilter]);
-
-  // Hook de paginación
+  const navigate = useNavigate();
   const {
-    paginatedData,
-    currentPage,
-    pageSize,
+    documents,
+    documentTypes,
+    fetchDocuments,
+    fetchDocumentTypes,
+    isLoading,
+    error,
+    total,
     totalPages,
-    totalItems,
-    setCurrentPage,
-    setPageSize,
-  } = useTablePagination({
-    data: filteredDocuments,
-    initialPageSize: 6,
-    mode: "client",
-  });
+  } = useDocumentsStore();
 
-  // Estadísticas basadas en todos los documentos (no filtrados)
-  const pendingDocs = mockDocuments.filter((d) => d.status === "pending");
-  const signedDocs = mockDocuments.filter((d) => d.status === "signed");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    fetchDocumentTypes();
+  }, [fetchDocumentTypes]);
+
+  useEffect(() => {
+    fetchDocuments({
+      page: currentPage,
+      perPage: 10,
+      search: searchTerm || undefined,
+      status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
+      docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
+      myDocuments: true, // Always show only my documents
+    });
+  }, [currentPage, statusFilter, typeFilter, fetchDocuments]);
+
+  const handleSearch = () => {
+    setCurrentPage(1);
+    fetchDocuments({
+      page: 1,
+      perPage: 10,
+      search: searchTerm || undefined,
+      status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
+      docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
+      myDocuments: true, // Always show only my documents
+    });
+  };
+
+  const handleViewDocument = (id: number) => {
+    if (onViewDocument) {
+      onViewDocument(id);
+    } else {
+      navigate(`/viewer?id=${id}`);
+    }
+  };
+
+  const handleDownload = (id: number) => {
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
+    window.open(`${baseUrl}/documents/${id}/download`, '_blank');
+  };
+
+  // Estadísticas
+  const pendingCount = documents.filter(d => d.status === "pending").length;
+  const signedCount = documents.filter(d => d.status === "signed").length;
+
+  const getStatusBadge = (status: Document['status']) => {
+    const statusConfig = {
+      pending: { label: "Pendiente", className: "bg-yellow-500 text-white" },
+      signed: { label: "Firmado", className: "bg-green-500 text-white" },
+      orphan: { label: "Huérfano", className: "bg-orange-500 text-white" },
+      expired: { label: "Expirado", className: "bg-red-500 text-white" },
+    };
+    const config = statusConfig[status] || statusConfig.pending;
+    return <Badge className={config.className}>{config.label}</Badge>;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-PE', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h3 className="mb-2">Error al cargar documentos</h3>
+            <p className="text-[#64748B]">{error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1>Mis Documentos</h1>
+        <h1 className="text-2xl font-bold">Mis Documentos</h1>
         <p className="text-[#64748B]">
           Gestiona y visualiza todos tus documentos laborales
         </p>
       </div>
 
       {/* Alerts for Pending Documents */}
-      {pendingDocs.length > 0 && (
+      {pendingCount > 0 && (
         <Card className="border-[#F59E0B] bg-orange-50">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
@@ -114,13 +133,14 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                 <Bell className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1">
-                <h3 className="text-[#1E40AF] mb-2">Documentos Pendientes de Firma</h3>
+                <h3 className="text-[#1E40AF] mb-2 font-semibold">Documentos Pendientes de Firma</h3>
                 <p className="text-[#64748B] mb-3">
-                  Tienes {pendingDocs.length} documento(s) pendiente(s) que requieren tu firma.
+                  Tienes {pendingCount} documento(s) pendiente(s) que requieren tu firma.
                 </p>
                 <Button
                   size="sm"
                   className="bg-[#F59E0B] hover:bg-[#D97706] text-white"
+                  onClick={() => setStatusFilter("pending")}
                 >
                   Ver Documentos Pendientes
                 </Button>
@@ -137,7 +157,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[#64748B] mb-1">Total Documentos</p>
-                <h2>{mockDocuments.length}</h2>
+                <h2 className="text-2xl font-bold">{total}</h2>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <FileText className="w-6 h-6 text-[#2563EB]" />
@@ -151,7 +171,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[#64748B] mb-1">Firmados</p>
-                <h2>{signedDocs.length}</h2>
+                <h2 className="text-2xl font-bold">{signedCount}</h2>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-[#10B981]" />
@@ -165,7 +185,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[#64748B] mb-1">Pendientes</p>
-                <h2>{pendingDocs.length}</h2>
+                <h2 className="text-2xl font-bold">{pendingCount}</h2>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                 <Clock className="w-6 h-6 text-[#F59E0B]" />
@@ -186,9 +206,10 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                 className="h-11 pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
             </div>
-            <Select value={statusFilter} onValueChange={(value: string) => setStatusFilter(value as DocumentStatus | "all")}>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full md:w-48 h-11">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
@@ -199,43 +220,48 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                 <SelectItem value="expired">Vencidos</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={categoryFilter} onValueChange={(value: string) => setCategoryFilter(value as DocumentCategory | "all")}>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="w-full md:w-48 h-11">
-                <SelectValue placeholder="Categoría" />
+                <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas las categorías</SelectItem>
-                <SelectItem value="payslip">Boletas de Pago</SelectItem>
-                <SelectItem value="contract">Contratos</SelectItem>
-                <SelectItem value="certificate">Certificados</SelectItem>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {documentTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id.toString()}>
+                    {type.displayName}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <Button onClick={handleSearch} className="h-11">
+              <Search className="w-4 h-4 mr-2" />
+              Buscar
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Documents Grid */}
+      {/* Documents List */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Todos los Documentos</CardTitle>
+              <CardTitle>Mis Documentos</CardTitle>
               <p className="text-sm text-[#64748B] mt-1">
-                {totalItems === 0 ? (
-                  "No se encontraron documentos"
-                ) : (
-                  `Mostrando ${paginatedData.length} de ${totalItems} documento${totalItems !== 1 ? "s" : ""}`
-                )}
+                {documents.length === 0
+                  ? "No se encontraron documentos"
+                  : `Mostrando ${documents.length} de ${total} documentos`}
               </p>
             </div>
-            <Button variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
-              Descargar Todos
-            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {totalItems === 0 ? (
+          {isLoading ? (
+            <div className="py-12 text-center">
+              <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mx-auto mb-4" />
+              <p className="text-[#64748B]">Cargando documentos...</p>
+            </div>
+          ) : documents.length === 0 ? (
             <div className="py-12 text-center">
               <FileText className="w-16 h-16 text-[#64748B] mx-auto mb-4" />
               <p className="text-[#64748B] mb-2">No se encontraron documentos</p>
@@ -245,140 +271,94 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4">
-                {paginatedData.map((doc) => (
-                  <DocumentCard
-                    key={doc.id}
-                    {...doc}
-                    onView={() => onViewDocument(doc.id)}
-                    onDownload={() => console.log("Download", doc.id)}
-                    onSign={
-                      doc.status === "pending"
-                        ? () => onViewDocument(doc.id)
-                        : undefined
-                    }
-                  />
+              <div className="space-y-4">
+                {documents.map((doc) => (
+                  <Card key={doc.id} className="hover:shadow-md transition-shadow duration-200">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-4">
+                        {/* Icon */}
+                        <div className="w-12 h-12 bg-[#F1F5F9] rounded-lg flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-6 h-6 text-[#2563EB]" />
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="font-semibold truncate">
+                              {doc.documentType?.displayName || "Documento"}
+                            </h3>
+                            {getStatusBadge(doc.status)}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-[#64748B]">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              {doc.period}
+                            </span>
+                            <span>{formatDate(doc.createdAt)}</span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewDocument(doc.id)}
+                          >
+                            Ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownload(doc.id)}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                          {doc.status === "pending" && doc.documentType?.requiresSignature && (
+                            <Button
+                              size="sm"
+                              className="bg-[#2563EB] hover:bg-[#1E40AF]"
+                              onClick={() => handleViewDocument(doc.id)}
+                            >
+                              Firmar
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
 
-              {/* Paginación */}
-              {totalPages > 1 && (
-                <div className="mt-6 pt-6 border-t">
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    {/* Selector de tamaño de página */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-[#64748B]">Documentos por página:</span>
-                      <Select
-                        value={pageSize.toString()}
-                        onValueChange={(value: string) => setPageSize(parseInt(value))}
-                      >
-                        <SelectTrigger className="h-9 w-[70px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="6">6</SelectItem>
-                          <SelectItem value="12">12</SelectItem>
-                          <SelectItem value="24">24</SelectItem>
-                          <SelectItem value="48">48</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Controles de paginación */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(1)}
-                        disabled={currentPage === 1}
-                      >
-                        Primera
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(currentPage - 1)}
-                        disabled={currentPage === 1}
-                      >
-                        Anterior
-                      </Button>
-                      <span className="text-sm text-[#64748B] px-2">
-                        Página {currentPage} de {totalPages}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                      >
-                        Siguiente
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                      >
-                        Última
-                      </Button>
-                    </div>
-                  </div>
+              {/* Pagination */}
+              <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                <div className="text-sm text-[#64748B]">
+                  Mostrando página {currentPage} de {totalPages || 1} ({total} documentos)
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="px-3 py-1 text-sm">
+                    {currentPage}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= (totalPages || 1)}
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
             </>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Recent Activity Timeline */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Actividad Reciente</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex gap-4">
-              <div className="flex flex-col items-center">
-                <div className="w-8 h-8 bg-[#10B981] rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-4 h-4 text-white" />
-                </div>
-                <div className="w-0.5 h-12 bg-[#F1F5F9]"></div>
-              </div>
-              <div className="flex-1 pb-4">
-                <p>Firmaste el documento "Boleta de Pago - Junio 2025"</p>
-                <p className="text-[#64748B]">Hace 2 días</p>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <div className="flex flex-col items-center">
-                <div className="w-8 h-8 bg-[#3B82F6] rounded-full flex items-center justify-center">
-                  <Download className="w-4 h-4 text-white" />
-                </div>
-                <div className="w-0.5 h-12 bg-[#F1F5F9]"></div>
-              </div>
-              <div className="flex-1 pb-4">
-                <p>Descargaste "Certificado Laboral"</p>
-                <p className="text-[#64748B]">Hace 5 días</p>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <div className="flex flex-col items-center">
-                <div className="w-8 h-8 bg-[#10B981] rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <div className="flex-1">
-                <p>Firmaste "Boleta de Pago - Mayo 2025"</p>
-                <p className="text-[#64748B]">Hace 1 mes</p>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

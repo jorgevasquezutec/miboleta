@@ -62,14 +62,14 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button
+          {/* <Button
             variant="outline"
             className="gap-2"
             onClick={() => onNavigate("reports")}
           >
             <FileBarChart className="w-4 h-4" />
             Reportes
-          </Button>
+          </Button> */}
           <Button
             className="gap-2 bg-[#2563EB] hover:bg-[#1E40AF]"
             onClick={() => onNavigate("upload")}

@@ -2,3 +2,5 @@
 export * from './User';
 export * from './Tenant';
 export * from './Document';
+export * from './DocumentType';
+export * from './DocumentBatch';

@@ -11,6 +11,7 @@ import {
   Settings,
   BarChart3,
   Menu,
+  FileStack,
 } from "lucide-react";
 
 function Sidebar() {
@@ -101,88 +102,101 @@ function Sidebar() {
               {isExpanded && <span>Configuración</span>}
             </button> */}
           </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => navigate("/dashboard")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/dashboard") ? "text-white" : "hover:bg-[#F1F5F9]"
-                }`}
-              style={{
-                backgroundColor: isActive("/dashboard") ? primaryColor : undefined,
-                color: isActive("/dashboard") ? "#FFFFFF" : secondaryColor,
-              }}
-              title="Dashboard"
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              {isExpanded && <span>Dashboard</span>}
-            </button>
+        ) : user?.role === "admin" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => navigate("/dashboard")}
+                className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/dashboard") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                style={{
+                  backgroundColor: isActive("/dashboard") ? primaryColor : undefined,
+                  color: isActive("/dashboard") ? "#FFFFFF" : secondaryColor,
+                }}
+                title="Dashboard"
+              >
+                <LayoutDashboard className="w-5 h-5" />
+                {isExpanded && <span>Dashboard</span>}
+              </button>
 
-            <button
-              type="button"
-              onClick={() => navigate("/upload")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/upload") ? "text-white" : "hover:bg-[#F1F5F9]"
-                }`}
-              style={{
-                backgroundColor: isActive("/upload") ? primaryColor : undefined,
-                color: isActive("/upload") ? "#FFFFFF" : secondaryColor,
-              }}
-              title="Cargar Documentos"
-            >
-              <FileText className="w-5 h-5" />
-              {isExpanded && <span>Cargar Documentos</span>}
-            </button>
+              <button
+                type="button"
+                onClick={() => navigate("/upload")}
+                className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/upload") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                style={{
+                  backgroundColor: isActive("/upload") ? primaryColor : undefined,
+                  color: isActive("/upload") ? "#FFFFFF" : secondaryColor,
+                }}
+                title="Cargar Documentos"
+              >
+                <FileText className="w-5 h-5" />
+                {isExpanded && <span>Cargar Documentos</span>}
+              </button>
 
-            {user?.role === "admin" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => navigate("/users")}
-                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/users") ? "text-white" : "hover:bg-[#F1F5F9]"
-                    }`}
-                  style={{
-                    backgroundColor: isActive("/users") ? primaryColor : undefined,
-                    color: isActive("/users") ? "#FFFFFF" : secondaryColor,
-                  }}
-                  title="Usuarios"
-                >
-                  <Users className="w-5 h-5" />
-                  {isExpanded && <span>Usuarios</span>}
-                </button>
+              <button
+                type="button"
+                onClick={() => navigate("/users")}
+                className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/users") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                style={{
+                  backgroundColor: isActive("/users") ? primaryColor : undefined,
+                  color: isActive("/users") ? "#FFFFFF" : secondaryColor,
+                }}
+                title="Usuarios"
+              >
+                <Users className="w-5 h-5" />
+                {isExpanded && <span>Usuarios</span>}
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => navigate("/reports")}
-                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/reports") ? "text-white" : "hover:bg-[#F1F5F9]"
-                    }`}
-                  style={{
-                    backgroundColor: isActive("/reports") ? primaryColor : undefined,
-                    color: isActive("/reports") ? "#FFFFFF" : secondaryColor,
-                  }}
-                  title="Reportes"
-                >
-                  <BarChart3 className="w-5 h-5" />
-                  {isExpanded && <span>Reportes</span>}
-                </button>
+              <button
+                type="button"
+                onClick={() => navigate("/batches")}
+                className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/batches") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                style={{
+                  backgroundColor: isActive("/batches") ? primaryColor : undefined,
+                  color: isActive("/batches") ? "#FFFFFF" : secondaryColor,
+                }}
+                title="Lotes de Carga"
+              >
+                <FileStack className="w-5 h-5" />
+                {isExpanded && <span>Lotes de Carga</span>}
+              </button>
 
-                {/* <button
-                  type="button"
-                  onClick={() => navigate("/settings")}
-                  className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/settings") ? "text-white" : "hover:bg-[#F1F5F9]"
-                    }`}
-                  style={{
-                    backgroundColor: isActive("/settings") ? primaryColor : undefined,
-                    color: isActive("/settings") ? "#FFFFFF" : secondaryColor,
-                  }}
-                  title="Configuración"
-                >
-                  <Settings className="w-5 h-5" />
-                  {isExpanded && <span>Configuración</span>}
-                </button> */}
-              </>
-            )}
-          </>
-        )}
+              <button
+                type="button"
+                onClick={() => navigate("/documents")}
+                className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/documents") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                style={{
+                  backgroundColor: isActive("/documents") ? primaryColor : undefined,
+                  color: isActive("/documents") ? "#FFFFFF" : secondaryColor,
+                }}
+                title="Documentos"
+              >
+                <FileText className="w-5 h-5" />
+                {isExpanded && <span>Documentos</span>}
+              </button>
+            </>
+        ) : user?.role === "client" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => navigate("/dashboard")}
+                className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/dashboard") ? "text-white" : "hover:bg-[#F1F5F9]"
+                  }`}
+                style={{
+                  backgroundColor: isActive("/dashboard") ? primaryColor : undefined,
+                  color: isActive("/dashboard") ? "#FFFFFF" : secondaryColor,
+                }}
+                title="Mis Documentos"
+              >
+                <FileText className="w-5 h-5" />
+                {isExpanded && <span>Mis Documentos</span>}
+              </button>
+            </>
+        ) : null}
       </nav>
     </aside>
   );
@@ -198,7 +212,7 @@ export function RootLayout() {
     navigate("/login");
   };
 
-  const showSidebar = (user?.role === "root" || user?.role === "admin") && location.pathname !== "/viewer";
+  const showSidebar = user?.role === "root" || user?.role === "admin" || user?.role === "client";
 
   return (
     <div className="min-h-screen bg-[#F1F5F9]">
@@ -220,7 +234,7 @@ export function RootLayout() {
       <div className="flex">
         {showSidebar && <Sidebar />}
 
-        <main className={`flex-1 ${location.pathname === "/viewer" ? "" : "p-8"}`}>
+        <main className="flex-1 p-8">
           <Outlet />
         </main>
       </div>

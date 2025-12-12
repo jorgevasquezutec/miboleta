@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-11  
-**Estado general del proyecto:** ~78% completado
+**Última actualización:** 2025-12-12  
+**Estado general del proyecto:** ~88% completado
 
 **✅ Completado:**
 - Módulo 0 (Base de Datos) ✅ 100%
@@ -21,11 +21,23 @@
   - ConfirmDialog reemplazando confirm() nativos ✅
   
 **🚧 En Progreso:**
-- Módulo 4 (Documentos) ⏳ 0% - **INICIANDO**
-  - Plan completo en: `docs/DOCUMENTS_MODULE.md`
-  - Duración estimada: 14-16 días
+- Módulo 4 (Documentos) ⏳ 85% - **EN PROGRESO**
+  - ✅ Backend: DocumentController, DocumentBatchController, DocumentTypeController
+  - ✅ Backend: DocumentSignatureController (firma digital 2FA)
+  - ✅ Backend: Carga masiva ZIP, procesamiento de documentos
+  - ✅ Backend: Filtro por rango de fechas (documentos y lotes)
+  - ✅ Backend: Preview de PDF con Content-Disposition inline
+  - ✅ Backend: Parámetro my_documents para vista personal
+  - ✅ Frontend: DocumentsListPage con filtros avanzados + DateRangePicker
+  - ✅ Frontend: BatchesListPage con DateRangePicker + BatchDetailPage
+  - ✅ Frontend: DocumentViewerView con react-pdf (PDFViewer component)
+  - ✅ Frontend: EmployeeDashboardView (Mis Documentos) con datos reales
+  - ✅ Frontend: Navegación consistente (navigate vs window.open)
+  - ✅ Frontend: Sidebar visible en todas las páginas
+  - ⏳ PENDIENTE: Firma digital en frontend (modal 2FA)
+  - ⏳ PENDIENTE: Documentos huérfanos (asignación)
 
-**📋 Siguiente Paso:** Fase 0 - Infraestructura (Docker Redis + Horizon + Reverb)
+**📋 Siguiente Paso:** Implementar firma digital con modal 2FA
 **📋 Pendiente:** Módulos 5-8
 
 
@@ -1201,15 +1213,15 @@
   - pending (amarillo), signed (verde), expired (rojo), orphan (gris)
 
 ### ✅ Criterios de Completitud
-- [ ] Carga masiva de ZIP funciona
-- [ ] Estructura de carpetas se crea automáticamente
-- [ ] Jobs procesan documentos en background
-- [ ] Documentos huérfanos se detectan correctamente
-- [ ] Firma digital guarda IP, timestamp y geolocalización
-- [ ] Empleados reciben email de documento nuevo
-- [ ] Visor PDF funciona en frontend
-- [ ] Dashboard de procesamiento actualiza en tiempo real
-- [ ] Auditoría registra todas las acciones
+- [x] Carga masiva de ZIP funciona ✅
+- [x] Estructura de carpetas se crea automáticamente ✅
+- [x] Jobs procesan documentos en background ✅
+- [x] Documentos huérfanos se detectan correctamente ✅
+- [ ] Firma digital guarda IP, timestamp y geolocalización (Backend listo, frontend pendiente)
+- [ ] Empleados reciben email de documento nuevo (Pendiente)
+- [x] Visor PDF funciona en frontend ✅ (react-pdf con navegación y zoom)
+- [ ] Dashboard de procesamiento actualiza en tiempo real (Pendiente WebSockets)
+- [ ] Auditoría registra todas las acciones (Parcial)
 
 ---
 

@@ -18,6 +18,9 @@ import { TenantsListPage } from "@/presentation/pages/admin/TenantsListPage";
 import { TenantFormPage } from "@/presentation/pages/admin/TenantFormPage";
 import { UserDetailPage } from "@/presentation/pages/admin/UserDetailPage";
 import { UserFormPage } from "@/presentation/pages/admin/UserFormPage";
+import { BatchesListPage } from "@/presentation/pages/admin/BatchesListPage";
+import { BatchDetailPage } from "@/presentation/pages/admin/BatchDetailPage";
+import { DocumentsListPage } from "@/presentation/pages/admin/DocumentsListPage";
 
 // Employee pages
 import {
@@ -87,8 +90,8 @@ export const router = createBrowserRouter([
       {
         path: "dashboard",
         element: (
-          <ProtectedRoute allowedRoles={["client", "admin"]}>
-            <EmployeeDashboardPage onViewDocument={(id) => window.location.href = `/viewer?id=${id}`} />
+          <ProtectedRoute allowedRoles={["client", "admin", "root"]}>
+            <EmployeeDashboardPage />
           </ProtectedRoute>
         ),
       },
@@ -180,20 +183,44 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      // {
+      //   path: "reports",
+      //   element: (
+      //     <ProtectedRoute allowedRoles={["admin"]}>
+      //       <div className="space-y-6">
+      //         <h1>Reportes y Análisis</h1>
+      //         <div className="bg-white rounded-lg p-12 text-center border border-[rgba(0,0,0,0.1)]">
+      //           <BarChart3 className="w-16 h-16 text-[#64748B] mx-auto mb-4" />
+      //           <h2 className="text-[#1E40AF] mb-2">Módulo de Reportes</h2>
+      //           <p className="text-[#64748B]">
+      //             Aquí se mostrarán los reportes detallados y análisis de la plataforma
+      //           </p>
+      //         </div>
+      //       </div>
+      //     </ProtectedRoute>
+      //   ),
+      // },
       {
-        path: "reports",
+        path: "batches",
         element: (
           <ProtectedRoute allowedRoles={["admin"]}>
-            <div className="space-y-6">
-              <h1>Reportes y Análisis</h1>
-              <div className="bg-white rounded-lg p-12 text-center border border-[rgba(0,0,0,0.1)]">
-                <BarChart3 className="w-16 h-16 text-[#64748B] mx-auto mb-4" />
-                <h2 className="text-[#1E40AF] mb-2">Módulo de Reportes</h2>
-                <p className="text-[#64748B]">
-                  Aquí se mostrarán los reportes detallados y análisis de la plataforma
-                </p>
-              </div>
-            </div>
+            <BatchesListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "batches/:id",
+        element: (
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <BatchDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "documents",
+        element: (
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <DocumentsListPage />
           </ProtectedRoute>
         ),
       },

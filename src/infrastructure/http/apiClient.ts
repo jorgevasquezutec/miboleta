@@ -2,7 +2,6 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 
 // Configuración base de la API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost/api';
-console.log('API Base URL:', API_BASE_URL);
 // Crear instancia de Axios
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -51,17 +50,10 @@ function getCsrfToken(): string | null {
 // Interceptor de Request - Agregar tenant header, CSRF token y logging
 apiClient.interceptors.request.use(
   (config) => {
-    console.log(`🔵 [API Request] ${config.method?.toUpperCase()} ${config.url}`);
-    console.log('   withCredentials:', config.withCredentials);
-    console.log('   Cookies:', document.cookie ? 'Present (but HttpOnly not visible)' : 'None visible');
-
     // Agregar CSRF token si está disponible
     const csrfToken = getCsrfToken();
     if (csrfToken) {
       config.headers['X-XSRF-TOKEN'] = csrfToken;
-      console.log('   X-XSRF-TOKEN:', csrfToken.substring(0, 20) + '...');
-    } else {
-      console.warn('   ⚠️ No CSRF token found in cookies');
     }
 
     // Obtener tenant actual del localStorage
@@ -74,7 +66,6 @@ apiClient.interceptors.request.use(
         // Agregar X-Tenant-ID header si hay tenant seleccionado
         if (currentTenantId) {
           config.headers['X-Tenant-ID'] = currentTenantId;
-          console.log('   X-Tenant-ID:', currentTenantId);
         }
       } catch (error) {
         console.error('Error parsing auth storage:', error);
@@ -92,7 +83,6 @@ apiClient.interceptors.request.use(
 // Interceptor de Response - Manejar errores y refresh token
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`✅ [API Response] ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
     return response;
   },
   async (error: AxiosError) => {
@@ -101,19 +91,14 @@ apiClient.interceptors.response.use(
     // Manejo de errores HTTP
     if (error.response) {
       const status = error.response.status;
-      console.log(`❌ [API Error] ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url} - ${status}`);
 
       // Error 401: Token expirado o inválido
       if (status === 401 && originalRequest && !originalRequest._retry) {
-        console.log('🔄 [401 Detected] Token might be expired, attempting refresh...');
-
         // Si ya estamos intentando refrescar, agregar request a la cola
         if (isRefreshing) {
-          console.log('⏳ [Queueing] Already refreshing, adding to queue...');
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject });
           }).then(() => {
-            console.log('🔁 [Retry from Queue] Retrying original request');
             return apiClient(originalRequest);
           }).catch(err => {
             return Promise.reject(err);
@@ -124,7 +109,6 @@ apiClient.interceptors.response.use(
         isRefreshing = true;
 
         try {
-          console.log('🔑 [Refreshing Token] Calling /refresh endpoint...');
           // Intentar refrescar el token
           const refreshResponse = await axios.post(
             `${API_BASE_URL}/refresh`,
@@ -132,13 +116,10 @@ apiClient.interceptors.response.use(
             { withCredentials: true }
           );
 
-          console.log('✅ [Token Refreshed] New token received:', refreshResponse.status);
-
           // Token refrescado exitosamente
           isRefreshing = false;
           processQueue(null);
 
-          console.log('🔁 [Retrying] Original request after refresh');
           // Reintentar el request original
           return apiClient(originalRequest);
         } catch (refreshError) {
@@ -148,7 +129,6 @@ apiClient.interceptors.response.use(
           isRefreshing = false;
           processQueue(new Error('Token refresh failed'), null);
 
-          console.error('🚪 [Redirecting] Sending to login page');
           localStorage.removeItem('auth-storage');
 
           // Solo redirigir si no estamos ya en login
@@ -236,7 +216,6 @@ export const initializeCsrf = async (): Promise<void> => {
     await axios.get(`${baseUrl}/sanctum/csrf-cookie`, {
       withCredentials: true,
     });
-    console.log('✅ [CSRF] Cookie initialized successfully');
   } catch (error) {
     console.error('❌ [CSRF] Failed to initialize cookie:', error);
   }

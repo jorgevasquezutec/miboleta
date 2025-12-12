@@ -41,6 +41,15 @@ class DocumentBatchController extends Controller
             $query->where('type_id', $request->type_id);
         }
 
+        // Filtro por rango de fechas
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
         $perPage = $request->get('per_page', 15);
         $batches = $query->paginate($perPage);
 

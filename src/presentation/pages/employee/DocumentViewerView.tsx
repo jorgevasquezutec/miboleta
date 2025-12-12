@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { ArrowLeft, Download, Share2, FileText, CheckCircle, Info } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { ArrowLeft, Download, FileText, CheckCircle, Info, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { Checkbox } from "@/presentation/components/ui/checkbox";
@@ -7,20 +8,37 @@ import { Badge } from "@/presentation/components/ui/badge";
 import { Separator } from "@/presentation/components/ui/separator";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { toast } from "sonner";
+import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
+import { Document } from "@/core/domain/entities/Document";
+import { PDFViewer } from "@/presentation/components/PDFViewer";
 
 interface DocumentViewerViewProps {
   onBack: () => void;
 }
 
 export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
+  const [searchParams] = useSearchParams();
+  const documentId = searchParams.get("id");
+
+  const { user } = useAuthStore();
+  const { currentDocument, fetchDocumentById, isLoading, error } = useDocumentsStore();
+
   const [hasRead, setHasRead] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = 3;
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (documentId) {
+      fetchDocumentById(parseInt(documentId));
+      // Build PDF preview URL (inline display, not download)
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
+      setPdfUrl(`${baseUrl}/documents/${documentId}/preview`);
+    }
+  }, [documentId, fetchDocumentById]);
 
   const handleSign = () => {
     setIsSigning(true);
-    // Simulate signing process
+    // TODO: Implement real signing
     setTimeout(() => {
       setIsSigning(false);
       toast.success("¡Documento firmado exitosamente!");
@@ -29,246 +47,242 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
   };
 
   const handleDownload = () => {
-    toast.info("Descargando documento...");
-    // Simulate download
-    setTimeout(() => {
-      toast.success("Documento descargado exitosamente");
-    }, 1000);
+    if (documentId) {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
+      window.open(`${baseUrl}/documents/${documentId}/download`, '_blank');
+      toast.success("Descargando documento...");
+    }
   };
 
-  const handleShare = () => {
-    toast.info("Compartiendo documento...");
-    // Simulate share
-    setTimeout(() => {
-      toast.success("Enlace copiado al portapapeles");
-    }, 800);
+  const getStatusBadge = (status: Document['status']) => {
+    const statusConfig = {
+      pending: { label: "Pendiente", className: "bg-yellow-500 text-white" },
+      signed: { label: "Firmado", className: "bg-green-500 text-white" },
+      orphan: { label: "Huérfano", className: "bg-orange-500 text-white" },
+      expired: { label: "Expirado", className: "bg-red-500 text-white" },
+    };
+    const config = statusConfig[status] || statusConfig.pending;
+    return <Badge className={config.className}>{config.label}</Badge>;
   };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-PE', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-[#2563EB] mx-auto mb-4" />
+          <p className="text-[#64748B]">Cargando documento...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !currentDocument) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h3 className="mb-2">Error al cargar documento</h3>
+            <p className="text-[#64748B] mb-4">{error || "No se encontró el documento"}</p>
+            <Button onClick={onBack}>Volver</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9]">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-6 py-4">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={onBack}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h2>Contrato de Trabajo - 2025</h2>
-                <Badge className="bg-[#F59E0B] text-white">Pendiente Firma</Badge>
-              </div>
-              <p className="text-[#64748B]">Enviado el 10 Jun 2025</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-semibold">{currentDocument.documentType?.displayName || "Documento"}</h1>
+              {getStatusBadge(currentDocument.status)}
             </div>
+            <p className="text-sm text-[#64748B]">
+              {currentDocument.period} • Subido el {formatDate(currentDocument.createdAt)}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2" onClick={handleDownload}>
-              <Download className="w-4 h-4" />
-              Descargar
-            </Button>
-            <Button variant="outline" className="gap-2" onClick={handleShare}>
-              <Share2 className="w-4 h-4" />
-              Compartir
-            </Button>
-          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleDownload}>
+            <Download className="w-4 h-4" />
+            Descargar
+          </Button>
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Document Viewer */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardContent className="p-0">
-                {/* PDF Viewer Placeholder */}
-                <div className="bg-white aspect-[8.5/11] flex items-center justify-center border-b border-[rgba(0,0,0,0.1)]">
-                  <div className="text-center p-12">
-                    <FileText className="w-24 h-24 text-[#64748B] mx-auto mb-4" />
-                    <h3 className="text-[#1E40AF] mb-2">Vista Previa del Documento</h3>
-                    <p className="text-[#64748B]">
-                      Aquí se mostraría el contenido del PDF
-                    </p>
-                    <div className="mt-8 space-y-4 max-w-2xl mx-auto text-left">
-                      <div className="p-6 bg-[#F1F5F9] rounded-lg">
-                        <h4 className="mb-4">CONTRATO DE TRABAJO</h4>
-                        <p className="text-[#64748B] mb-4">
-                          Entre la empresa MiBoleta S.A.C., en adelante "EL
-                          EMPLEADOR", y el Sr./Sra. [NOMBRE DEL EMPLEADO], en adelante
-                          "EL TRABAJADOR", se acuerda celebrar el presente Contrato de
-                          Trabajo, sujeto a las siguientes cláusulas:
-                        </p>
-                        <h4 className="mb-2">PRIMERA: OBJETO DEL CONTRATO</h4>
-                        <p className="text-[#64748B] mb-4">
-                          EL EMPLEADOR contrata los servicios de EL TRABAJADOR para
-                          desempeñar el cargo de [CARGO], en el área de [ÁREA].
-                        </p>
-                        <h4 className="mb-2">SEGUNDA: PLAZO</h4>
-                        <p className="text-[#64748B] mb-4">
-                          El presente contrato tiene una duración indeterminada,
-                          iniciando el [FECHA DE INICIO].
-                        </p>
-                        <h4 className="mb-2">TERCERA: REMUNERACIÓN</h4>
-                        <p className="text-[#64748B]">
-                          EL EMPLEADOR se obliga a pagar mensualmente a EL TRABAJADOR
-                          la suma de S/ [MONTO] (Soles).
-                        </p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Document Viewer */}
+        <div className="lg:col-span-2">
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              {/* PDF Viewer */}
+              <div className="w-full h-[calc(100vh-200px)] min-h-[400px] max-h-[700px]">
+                {pdfUrl ? (
+                  <PDFViewer
+                    url={pdfUrl}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full bg-gray-100">
+                    <div className="text-center">
+                      <FileText className="w-16 h-16 text-[#64748B] mx-auto mb-4" />
+                      <p className="text-[#64748B]">No se puede mostrar el documento</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Side Panel */}
+        <div className="space-y-6">
+          {/* Document Info */}
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <div>
+                <h3 className="mb-4">Información del Documento</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Tipo:</span>
+                    <span>{currentDocument.documentType?.displayName || "-"}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Período:</span>
+                    <span>{currentDocument.period}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Estado:</span>
+                    {getStatusBadge(currentDocument.status)}
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Fecha subida:</span>
+                    <span>{formatDate(currentDocument.createdAt)}</span>
+                  </div>
+                  {currentDocument.user && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between">
+                        <span className="text-[#64748B]">Usuario:</span>
+                        <span>{currentDocument.user.name} {currentDocument.user.lastName}</span>
                       </div>
+                    </>
+                  )}
+                  {currentDocument.signedAt && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between">
+                        <span className="text-[#64748B]">Firmado:</span>
+                        <span className="text-green-600">{formatDate(currentDocument.signedAt)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Signature Section - Only show if pending, requires signature, AND user is the owner */}
+          {currentDocument.status === 'pending' &&
+            currentDocument.documentType?.requiresSignature &&
+            currentDocument.userId === (user?.id ? parseInt(user.id) : null) && (
+              <Card className="border-[#2563EB]">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-[#2563EB]" />
+                    </div>
+                    <div>
+                      <h3 className="text-[#1E40AF]">Firma Digital</h3>
+                      <p className="text-[#64748B]">
+                        Requerida para continuar
+                      </p>
                     </div>
                   </div>
-                </div>
 
-                {/* Document Controls */}
-                <div className="p-4 bg-white flex items-center justify-center gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  >
-                    Página Anterior
-                  </Button>
-                  <span className="text-[#64748B]">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    Página Siguiente
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  <Alert>
+                    <Info className="w-4 h-4" />
+                    <AlertDescription>
+                      Por favor lee el documento completo antes de firmar. Tu firma
+                      tendrá validez legal.
+                    </AlertDescription>
+                  </Alert>
 
-          {/* Signature Panel */}
-          <div className="space-y-6">
-            {/* Document Info */}
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <div>
-                  <h3 className="mb-4">Información del Documento</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">Tipo:</span>
-                      <span>Contrato</span>
+                  <div className="space-y-4 pt-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="read-confirm"
+                        checked={hasRead}
+                        onCheckedChange={(checked: boolean | "indeterminate") => setHasRead(checked === true)}
+                      />
+                      <label htmlFor="read-confirm" className="cursor-pointer flex-1">
+                        <p className="text-sm">
+                          He leído y acepto los términos del presente documento.
+                          Entiendo que esta firma digital tiene el mismo valor legal
+                          que una firma manuscrita.
+                        </p>
+                      </label>
                     </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">Fecha envío:</span>
-                      <span>10 Jun 2025</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">Vencimiento:</span>
-                      <span className="text-[#F59E0B]">20 Jun 2025</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">Páginas:</span>
-                      <span>3</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">Tamaño:</span>
-                      <span>245 KB</span>
-                    </div>
+
+                    <Button
+                      className="w-full h-12 bg-[#2563EB] hover:bg-[#1E40AF]"
+                      disabled={!hasRead || isSigning}
+                      onClick={handleSign}
+                    >
+                      {isSigning ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                          Firmando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-5 h-5 mr-2" />
+                          Firmar Documento
+                        </>
+                      )}
+                    </Button>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Signature Section */}
-            <Card className="border-[#2563EB]">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-[#2563EB]" />
+          {/* Signed Info */}
+          {currentDocument.status === 'signed' && (
+            <Card className="border-green-500">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
                   </div>
                   <div>
-                    <h3 className="text-[#1E40AF]">Firma Digital</h3>
+                    <h3 className="text-green-700">Documento Firmado</h3>
                     <p className="text-[#64748B]">
-                      Requerida para continuar
+                      {currentDocument.signedAt
+                        ? `Firmado el ${formatDate(currentDocument.signedAt)}`
+                        : "Este documento ya ha sido firmado"}
                     </p>
                   </div>
                 </div>
-
-                <Alert>
-                  <Info className="w-4 h-4" />
-                  <AlertDescription>
-                    Por favor lee el documento completo antes de firmar. Tu firma
-                    tendrá validez legal.
-                  </AlertDescription>
-                </Alert>
-
-                <div className="space-y-4 pt-4">
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="read-confirm"
-                      checked={hasRead}
-                      onCheckedChange={(checked: boolean | "indeterminate") => setHasRead(checked === true)}
-                    />
-                    <label htmlFor="read-confirm" className="cursor-pointer flex-1">
-                      <p>
-                        He leído y acepto los términos del presente documento.
-                        Entiendo que esta firma digital tiene el mismo valor legal
-                        que una firma manuscrita.
-                      </p>
-                    </label>
-                  </div>
-
-                  <Button
-                    className="w-full h-12 bg-[#2563EB] hover:bg-[#1E40AF]"
-                    disabled={!hasRead || isSigning}
-                    onClick={handleSign}
-                  >
-                    {isSigning ? (
-                      "Firmando..."
-                    ) : (
-                      <>
-                        <CheckCircle className="w-5 h-5 mr-2" />
-                        Firmar Documento
-                      </>
-                    )}
-                  </Button>
-
-                  <p className="text-center text-[#64748B]">
-                    Al firmar, se generará un certificado digital con tu información
-                    y timestamp.
-                  </p>
-                </div>
               </CardContent>
             </Card>
-
-            {/* Signature Details */}
-            <Card>
-              <CardContent className="p-6">
-                <h4 className="mb-3">Detalles de la Firma</h4>
-                <div className="space-y-2 text-[#64748B]">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="w-4 h-4 mt-0.5 text-[#10B981]" />
-                    <span>Firma digital certificada</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="w-4 h-4 mt-0.5 text-[#10B981]" />
-                    <span>Timestamp automático</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="w-4 h-4 mt-0.5 text-[#10B981]" />
-                    <span>Geolocalización incluida</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="w-4 h-4 mt-0.5 text-[#10B981]" />
-                    <span>Certificado de validez</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          )}
         </div>
       </div>
     </div>

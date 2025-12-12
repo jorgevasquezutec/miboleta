@@ -70,6 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/documents/orphans', [DocumentController::class, 'orphans']);
     Route::get('/documents/{id}', [DocumentController::class, 'show']);
     Route::get('/documents/{id}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::get('/documents/{id}/preview', [DocumentController::class, 'preview'])->name('documents.preview');
     Route::post('/documents/{id}/assign', [DocumentController::class, 'assignOrphan']);
     Route::delete('/documents/{id}', [DocumentController::class, 'destroy']);
 

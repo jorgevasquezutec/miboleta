@@ -26,8 +26,12 @@ class DocumentController extends Controller
         $query = Document::with(['documentType', 'user:id,name,last_name,document_text', 'batch:id,period,original_filename'])
             ->orderBy('created_at', 'desc');
 
-        // Filtrar según rol
-        if ($role === 'client') {
+        // Si se solicita "my_documents", solo mostrar documentos del usuario logueado (sin importar rol)
+        if ($request->boolean('my_documents')) {
+            $query->where('user_id', $user->id);
+        }
+        // Filtrar según rol (solo si no es my_documents)
+        elseif ($role === 'client') {
             $query->where('user_id', $user->id);
         } else {
             // Admin ve documentos de su tenant, Root ve todos
@@ -59,6 +63,15 @@ class DocumentController extends Controller
                             ->orWhere('last_name', 'like', "%{$search}%");
                     });
             });
+        }
+
+        // Filtro por rango de fechas
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
         }
 
         $perPage = $request->get('per_page', 15);
@@ -119,6 +132,33 @@ class DocumentController extends Controller
 
         return response()->download($fullPath, $document->original_name, [
             'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    /**
+     * Preview un documento (inline, sin descargar)
+     */
+    public function preview(int $id): BinaryFileResponse|JsonResponse
+    {
+        $user = Auth::user();
+        $role = $user->getCurrentRole();
+
+        $document = Document::findOrFail($id);
+
+        // Verificar acceso
+        if ($role === 'client' && $document->user_id !== $user->id) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        if (!$document->fileExists()) {
+            return response()->json(['error' => 'Archivo no encontrado'], 404);
+        }
+
+        $fullPath = Storage::disk('documents')->path($document->file_path);
+
+        return response()->file($fullPath, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $document->original_name . '"',
         ]);
     }
 

@@ -15,6 +15,12 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
     {
         parent::boot();
 
+        // Desactivar autenticación en desarrollo
+        Horizon::auth(function ($request) {
+            return app()->environment('local') ||
+                   Gate::check('viewHorizon', [$request->user()]);
+        });
+
         // Horizon::routeSmsNotificationsTo('15556667777');
         // Horizon::routeMailNotificationsTo('example@example.com');
         // Horizon::routeSlackNotificationsTo('slack-webhook-url', '#channel');
@@ -28,6 +34,12 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
     protected function gate(): void
     {
         Gate::define('viewHorizon', function ($user = null) {
+            // Permitir acceso en desarrollo
+            if (app()->environment('local')) {
+                return true;
+            }
+
+            // En producción, solo permitir a estos emails
             return in_array(optional($user)->email, [
                 //
             ]);
