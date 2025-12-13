@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\UserCreationException;
+use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateTenantSettingsRequest;
 use App\Http\Requests\UpdateUserRequest;
-use App\Mail\WelcomeUserMail;
+use App\Http\Resources\UserResource;
+use App\Http\Resources\UserSummaryResource;
 use App\Models\User;
+use App\Services\UserService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -22,6 +23,11 @@ use Illuminate\Support\Facades\Log;
  */
 class UserController extends Controller
 {
+    public function __construct(
+        protected UserService $userService
+    ) {
+    }
+
     /**
      * @OA\Get(
      *     path="/api/users",
@@ -156,90 +162,23 @@ class UserController extends Controller
      */
     public function store(StoreUserRequest $request)
     {
-        $validated = $request->validated();
+        try {
+            $user = $this->userService->createUser(
+                $request->validated(),
+                $request->user()
+            );
 
-        // Generar contraseña aleatoria
-        $temporaryPassword = Str::random(12);
+            return (new UserResource($user))
+                ->additional([
+                    'message' => 'Usuario creado exitosamente. Se ha enviado un correo con las credenciales.',
+                    'email_sent' => true,
+                ])
+                ->response()
+                ->setStatusCode(201);
 
-        // Crear usuario
-        $user = User::create([
-            'name' => $validated['name'],
-            'last_name' => $validated['last_name'] ?? null,
-            'email' => $validated['email'],
-            'password' => Hash::make($temporaryPassword),
-            'document_type' => $validated['document_type'] ?? null,
-            'document_text' => $validated['document_text'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'immediate_supervisor_id' => $validated['immediate_supervisor_id'] ?? null,
-            'status' => 'active',
-            'must_change_password' => true, // Forzar cambio en primer login
-        ]);
-
-        // Asignar rol
-        $user->roles()->attach($validated['role_id'], [
-            'granted_by' => $request->user()->id,
-            'granted_at' => now(),
-        ]);
-
-        // Asignar a tenant
-        $user->tenants()->attach($validated['tenant_id'], [
-            'is_primary' => true,
-        ]);
-
-        // Enviar email de bienvenida con credenciales
-        Mail::to($user->email)->send(new WelcomeUserMail($user, $temporaryPassword));
-
-        // Asignar documentos huérfanos si tiene document_text
-        if (!empty($validated['document_text'])) {
-            $this->assignOrphanDocuments($user, $validated['document_text'], $validated['tenant_id']);
-        }
-
-        $user->load(['roles', 'tenants', 'immediateSupervisor']);
-
-        return response()->json([
-            'message' => 'Usuario creado exitosamente. Se ha enviado un correo con las credenciales.',
-            'user' => $user,
-            'email_sent' => true,
-        ], 201);
-    }
-
-    /**
-     * Asignar documentos huérfanos al usuario basado en su document_text
-     */
-    private function assignOrphanDocuments(User $user, string $documentText, int $tenantId): void
-    {
-        // Buscar documentos huérfanos que coincidan con el document_text del usuario
-        $orphanDocuments = \App\Models\Document::where('employee_document_number', $documentText)
-            ->where('tenant_id', $tenantId)
-            ->where('status', 'orphan')
-            ->get();
-
-        if ($orphanDocuments->count() > 0) {
-            Log::info('[UserController] Assigning orphan documents', [
-                'user_id' => $user->id,
-                'document_text' => $documentText,
-                'tenant_id' => $tenantId,
-                'orphan_count' => $orphanDocuments->count(),
-            ]);
-
-            foreach ($orphanDocuments as $document) {
-                $document->user_id = $user->id;
-
-                // Cambiar status según si requiere firma o no
-                if ($document->requires_signature) {
-                    $document->status = 'pending';
-                } else {
-                    $document->status = 'active';
-                }
-
-                $document->save();
-
-                Log::info('[UserController] Orphan document assigned', [
-                    'document_id' => $document->id,
-                    'user_id' => $user->id,
-                    'new_status' => $document->status,
-                ]);
-            }
+        } catch (UserCreationException $e) {
+            Log::error('[UserController] User creation failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => $e->getMessage()], 400);
         }
     }
 
@@ -260,41 +199,11 @@ class UserController extends Controller
 
         // Verificar acceso
         $currentUser = $request->user();
-        if (!$currentUser->isRoot() && !$currentUser->tenants->pluck('id')->intersect($user->tenants->pluck('id'))->count()) {
+        if (!$this->userService->canAccessUser($currentUser, $user)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
-        return response()->json([
-            'id' => $user->id,
-            'name' => $user->name,
-            'last_name' => $user->last_name,
-            'full_name' => $user->full_name,
-            'email' => $user->email,
-            'document_type' => $user->document_type,
-            'document_text' => $user->document_text,
-            'phone' => $user->phone,
-            'status' => $user->status,
-            'roles' => $user->getCurrentRoles(),
-            'tenants' => $user->tenants->map(fn($t) => [
-                'id' => $t->id,
-                'name' => $t->name,
-                'ruc' => $t->ruc,
-                'is_primary' => $t->pivot->is_primary,
-            ]),
-            'immediate_supervisor' => $user->immediateSupervisor ? [
-                'id' => $user->immediateSupervisor->id,
-                'full_name' => $user->immediateSupervisor->full_name,
-                'email' => $user->immediateSupervisor->email,
-            ] : null,
-            'subordinates' => $user->subordinates->map(fn($s) => [
-                'id' => $s->id,
-                'full_name' => $s->full_name,
-                'email' => $s->email,
-            ]),
-            'created_at' => $user->created_at,
-            'updated_at' => $user->updated_at,
-            'last_login_at' => $user->last_login_at,
-        ]);
+        return new UserResource($user);
     }
 
     /**
@@ -312,69 +221,11 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $validated = $request->validated();
+        $updatedUser = $this->userService->updateUser($user, $request->validated());
 
-        if (isset($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
-        }
-
-        // Guardar el document_text anterior para comparar
-        $oldDocumentText = $user->document_text;
-
-        $user->update($validated);
-
-        // Si se actualizó el document_text, asignar documentos huérfanos
-        if (isset($validated['document_text']) && $validated['document_text'] !== $oldDocumentText) {
-            // Obtener tenant principal para buscar documentos
-            $primaryTenant = $user->tenants()->wherePivot('is_primary', true)->first();
-            if ($primaryTenant) {
-                $this->assignOrphanDocuments($user, $validated['document_text'], $primaryTenant->id);
-            }
-        }
-
-        $user->load(['roles', 'tenants', 'immediateSupervisor']);
-
-        // Retornar usuario con formato completo (igual que /me)
-        return response()->json([
-            'message' => 'Usuario actualizado exitosamente',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'last_name' => $user->last_name,
-                'full_name' => $user->full_name,
-                'email' => $user->email,
-                'document_type' => $user->document_type,
-                'document_text' => $user->document_text,
-                'phone' => $user->phone,
-                'status' => $user->status,
-                'must_change_password' => $user->must_change_password,
-                'role' => $user->getCurrentRole(),
-                'roles' => $user->getCurrentRoles(),
-                'tenants' => $user->tenants->map(function ($tenant) {
-                    return [
-                        'id' => $tenant->id,
-                        'name' => $tenant->name,
-                        'ruc' => $tenant->ruc,
-                        'logo_url' => $tenant->logo_url,
-                        'is_primary' => $tenant->pivot->is_primary,
-                    ];
-                }),
-                'primary_tenant' => $user->primaryTenant() ? [
-                    'id' => $user->primaryTenant()->id,
-                    'name' => $user->primaryTenant()->name,
-                    'ruc' => $user->primaryTenant()->ruc,
-                ] : null,
-                'immediate_supervisor' => $user->immediateSupervisor ? [
-                    'id' => $user->immediateSupervisor->id,
-                    'full_name' => $user->immediateSupervisor->full_name,
-                    'email' => $user->immediateSupervisor->email,
-                ] : null,
-                'created_at' => $user->created_at,
-                'updated_at' => $user->updated_at,
-            ],
-        ]);
+        return (new UserResource($updatedUser))
+            ->additional(['message' => 'Usuario actualizado exitosamente']);
     }
-
 
     /**
      * @OA\Delete(
@@ -390,8 +241,6 @@ class UserController extends Controller
     public function destroy($id)
     {
         $user = User::findOrFail($id);
-
-        // Soft delete
         $user->delete();
 
         return response()->json([
@@ -413,13 +262,7 @@ class UserController extends Controller
     {
         $user = User::with('subordinates')->findOrFail($id);
 
-        return response()->json($user->subordinates->map(fn($s) => [
-            'id' => $s->id,
-            'full_name' => $s->full_name,
-            'email' => $s->email,
-            'phone' => $s->phone,
-            'status' => $s->status,
-        ]));
+        return UserSummaryResource::collection($user->subordinates);
     }
 
     /**
@@ -440,27 +283,17 @@ class UserController extends Controller
     public function assignSupervisor(UpdateTenantSettingsRequest $request, $id)
     {
         $validated = $request->validated();
-
         $user = User::findOrFail($id);
 
-        // Validar que no se cree un ciclo
-        if ($validated['supervisor_id']) {
-            $supervisor = User::find($validated['supervisor_id']);
+        try {
+            $updatedUser = $this->userService->assignSupervisor($user, $validated['supervisor_id']);
 
-            // No puede ser subordinado de su propio subordinado
-            if ($supervisor->immediateSupervisor && $supervisor->immediateSupervisor->id === $user->id) {
-                return response()->json([
-                    'message' => 'No se puede crear un ciclo de supervisión',
-                ], 422);
-            }
+            return response()->json([
+                'message' => 'Supervisor asignado exitosamente',
+                'user' => new UserResource($updatedUser),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        $user->immediate_supervisor_id = $validated['supervisor_id'];
-        $user->save();
-
-        return response()->json([
-            'message' => 'Supervisor asignado exitosamente',
-            'user' => $user->load('immediateSupervisor'),
-        ]);
     }
 }
