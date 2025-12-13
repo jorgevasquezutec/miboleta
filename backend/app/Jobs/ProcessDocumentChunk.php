@@ -2,9 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Events\BatchCompleted;
 use App\Events\BatchProgress;
-use App\Events\NewDocumentAvailable;
 use App\Models\Document;
 use App\Models\DocumentBatch;
 use App\Models\User;
@@ -32,8 +30,7 @@ class ProcessDocumentChunk implements ShouldQueue
     public function __construct(
         public DocumentBatch $batch,
         public string $zipPath,
-        public array $files,
-        public bool $isLastChunk = false
+        public array $files
     ) {
     }
 
@@ -166,45 +163,7 @@ class ProcessDocumentChunk implements ShouldQueue
             ($isOrphan ? 'HUÉRFANO' : 'ASIGNADO'));
     }
 
-    /**
-     * Finalizar el batch y enviar notificaciones si es necesario
-     */
-    private function finalizeBatch(): void
-    {
-        $this->batch->markAsCompleted();
-
-        // Broadcast evento de completado
-        broadcast(new BatchCompleted($this->batch->fresh()));
-
-        // Limpiar archivo ZIP temporal
-        try {
-            Storage::disk('local')->delete($this->zipPath);
-        } catch (\Exception $e) {
-            Log::warning("ProcessDocumentChunk: No se pudo eliminar archivo temporal: {$this->zipPath}");
-        }
-
-        // Si se debe notificar a empleados, disparar job de notificaciones
-        if ($this->batch->notify_employees) {
-            SendBatchNotifications::dispatch($this->batch)->onQueue('notifications');
-        }
-
-        // Broadcast eventos individuales a cada usuario con documento nuevo
-        $documents = Document::where('batch_id', $this->batch->id)
-            ->where('status', '!=', 'orphan')
-            ->whereNotNull('user_id')
-            ->with('documentType')
-            ->get();
-
-        foreach ($documents as $document) {
-            broadcast(new NewDocumentAvailable($document));
-        }
-
-        Log::info("ProcessDocumentChunk: Batch {$this->batch->id} completado - " .
-            "Éxito: {$this->batch->success_count}, " .
-            "Reemplazados: {$this->batch->replaced_count}, " .
-            "Huérfanos: {$this->batch->orphan_count}, " .
-            "Errores: {$this->batch->error_count}");
-    }
+    // finalizeBatch() method removed - now handled by BatchCompletedCallback
 
     /**
      * Handle a job failure.

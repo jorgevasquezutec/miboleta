@@ -95,8 +95,7 @@ class ProcessZipFile implements ShouldQueue
                 $jobs[] = new ProcessDocumentChunk(
                     $this->batch,
                     $this->zipPath,
-                    $chunk,
-                    $chunkIndex === count($chunks) - 1 // Es el último chunk?
+                    $chunk
                 );
             }
 

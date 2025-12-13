@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -214,7 +215,7 @@ class UserController extends Controller
             ->get();
 
         if ($orphanDocuments->count() > 0) {
-            \Log::info('[UserController] Assigning orphan documents', [
+            Log::info('[UserController] Assigning orphan documents', [
                 'user_id' => $user->id,
                 'document_text' => $documentText,
                 'tenant_id' => $tenantId,
@@ -233,7 +234,7 @@ class UserController extends Controller
 
                 $document->save();
 
-                \Log::info('[UserController] Orphan document assigned', [
+                Log::info('[UserController] Orphan document assigned', [
                     'document_id' => $document->id,
                     'user_id' => $user->id,
                     'new_status' => $document->status,
