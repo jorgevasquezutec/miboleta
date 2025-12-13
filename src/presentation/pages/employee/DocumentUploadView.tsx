@@ -195,7 +195,9 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#2563EB] text-white rounded-full flex items-center justify-center text-sm">1</span>
+                <span className={`w-6 h-6 ${selectedFile ? 'bg-green-500' : 'bg-[#2563EB]'} text-white rounded-full flex items-center justify-center text-sm`}>
+                  {selectedFile ? '✓' : '1'}
+                </span>
                 Seleccionar Archivo ZIP
               </CardTitle>
             </CardHeader>
@@ -247,190 +249,207 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
             </CardContent>
           </Card>
 
-          {/* ZIP Preview Results */}
-          {zipPreview && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="w-6 h-6 bg-[#2563EB] text-white rounded-full flex items-center justify-center text-sm">2</span>
-                  Resultado del Análisis
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Summary */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-[#F1F5F9] rounded-lg text-center">
-                    <p className="text-2xl font-bold text-[#1E40AF]">{zipPreview.totalFiles}</p>
-                    <p className="text-sm text-[#64748B]">Total archivos</p>
-                  </div>
-                  <div className="p-4 bg-green-50 rounded-lg text-center">
-                    <p className="text-2xl font-bold text-green-600">{zipPreview.validPdfs}</p>
-                    <p className="text-sm text-[#64748B]">PDFs válidos</p>
-                  </div>
-                  <div className="p-4 bg-orange-50 rounded-lg text-center">
-                    <p className="text-2xl font-bold text-orange-600">{zipPreview.invalidNames.length}</p>
-                    <p className="text-sm text-[#64748B]">Nombres inválidos</p>
-                  </div>
-                  <div className="p-4 bg-red-50 rounded-lg text-center">
-                    <p className="text-2xl font-bold text-red-600">{zipPreview.invalidFormats.length}</p>
-                    <p className="text-sm text-[#64748B]">Formatos inválidos</p>
-                  </div>
-                </div>
-
-                {/* Errors/Warnings */}
-                {(zipPreview.invalidNames.length > 0 || zipPreview.invalidFormats.length > 0) && (
-                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="w-5 h-5 text-orange-600" />
-                      <span className="font-medium text-orange-700">Archivos con problemas</span>
+          {/* Step 2: ZIP Preview Results - Always visible */}
+          <Card className={!zipPreview ? 'opacity-60' : ''}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className={`w-6 h-6 ${zipPreview ? 'bg-green-500' : 'bg-[#94A3B8]'} text-white rounded-full flex items-center justify-center text-sm`}>
+                  {zipPreview ? '✓' : '2'}
+                </span>
+                Resultado del Análisis
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {zipPreview ? (
+                <>
+                  {/* Summary */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-[#F1F5F9] rounded-lg text-center">
+                      <p className="text-2xl font-bold text-[#1E40AF]">{zipPreview.totalFiles}</p>
+                      <p className="text-sm text-[#64748B]">Total archivos</p>
                     </div>
-                    <ul className="text-sm text-orange-700 space-y-1 max-h-32 overflow-y-auto">
-                      {zipPreview.invalidFormats.map((item, i) => (
-                        <li key={`format-${i}`}>• {item.file}: {item.reason}</li>
-                      ))}
-                      {zipPreview.invalidNames.map((item, i) => (
-                        <li key={`name-${i}`}>• {item.file}: {item.reason}</li>
-                      ))}
-                    </ul>
+                    <div className="p-4 bg-green-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-green-600">{zipPreview.validPdfs}</p>
+                      <p className="text-sm text-[#64748B]">PDFs válidos</p>
+                    </div>
+                    <div className="p-4 bg-orange-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-orange-600">{zipPreview.invalidNames.length}</p>
+                      <p className="text-sm text-[#64748B]">Nombres inválidos</p>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-red-600">{zipPreview.invalidFormats.length}</p>
+                      <p className="text-sm text-[#64748B]">Formatos inválidos</p>
+                    </div>
                   </div>
-                )}
 
-                {/* Valid files table */}
-                {zipPreview.files.length > 0 && (
-                  <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Archivo</TableHead>
-                          <TableHead>Nro. Documento</TableHead>
-                          <TableHead>Tamaño</TableHead>
-                          <TableHead>Estado</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {zipPreview.files.slice(0, 20).map((file, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="font-mono text-sm">{file.name}</TableCell>
-                            <TableCell>{file.documentNumber || "-"}</TableCell>
-                            <TableCell className="text-[#64748B]">{formatFileSize(file.size)}</TableCell>
-                            <TableCell>
-                              {file.valid ? (
-                                <Badge className="bg-green-500">Válido</Badge>
-                              ) : (
-                                <Badge variant="destructive">{file.reason}</Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {zipPreview.files.length > 20 && (
-                      <div className="p-2 text-center text-sm text-[#64748B] bg-[#F1F5F9]">
-                        Mostrando 20 de {zipPreview.files.length} archivos
+                  {/* Errors/Warnings */}
+                  {(zipPreview.invalidNames.length > 0 || zipPreview.invalidFormats.length > 0) && (
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="w-5 h-5 text-orange-600" />
+                        <span className="font-medium text-orange-700">Archivos con problemas</span>
                       </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                      <ul className="text-sm text-orange-700 space-y-1 max-h-32 overflow-y-auto">
+                        {zipPreview.invalidFormats.map((item, i) => (
+                          <li key={`format-${i}`}>• {item.file}: {item.reason}</li>
+                        ))}
+                        {zipPreview.invalidNames.map((item, i) => (
+                          <li key={`name-${i}`}>• {item.file}: {item.reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
-          {/* Step 3: Configuration */}
-          {zipPreview && zipPreview.validPdfs > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="w-6 h-6 bg-[#2563EB] text-white rounded-full flex items-center justify-center text-sm">3</span>
-                  Configuración de Carga
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="docType">Tipo de Documento *</Label>
-                    <Select value={typeId} onValueChange={setTypeId}>
-                      <SelectTrigger id="docType">
-                        <SelectValue placeholder="Seleccionar tipo..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {typesLoading ? (
-                          <SelectItem value="loading" disabled>Cargando...</SelectItem>
-                        ) : (
-                          documentTypes.map((type) => (
-                            <SelectItem key={type.id} value={type.id.toString()}>
-                              {type.displayName}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Valid files table */}
+                  {zipPreview.files.length > 0 && (
+                    <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Archivo</TableHead>
+                            <TableHead>Nro. Documento</TableHead>
+                            <TableHead>Tamaño</TableHead>
+                            <TableHead>Estado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {zipPreview.files.slice(0, 20).map((file, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-mono text-sm">{file.name}</TableCell>
+                              <TableCell>{file.documentNumber || "-"}</TableCell>
+                              <TableCell className="text-[#64748B]">{formatFileSize(file.size)}</TableCell>
+                              <TableCell>
+                                {file.valid ? (
+                                  <Badge className="bg-green-500">Válido</Badge>
+                                ) : (
+                                  <Badge variant="destructive">{file.reason}</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      {zipPreview.files.length > 20 && (
+                        <div className="p-2 text-center text-sm text-[#64748B] bg-[#F1F5F9]">
+                          Mostrando 20 de {zipPreview.files.length} archivos
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Empty state for Step 2 */
+                <div className="p-8 text-center border-2 border-dashed border-[#E2E8F0] rounded-lg">
+                  <FileArchive className="w-12 h-12 text-[#94A3B8] mx-auto mb-4" />
+                  <p className="text-[#64748B]">
+                    Sube un archivo ZIP para ver el análisis de los documentos aquí
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="period">Período *</Label>
-                    <MonthYearPicker
-                      value={period}
-                      onChange={setPeriod}
-                      placeholder="Seleccionar período..."
-                    />
-                  </div>
+          {/* Step 3: Configuration - Always visible */}
+          <Card className={!zipPreview || zipPreview.validPdfs === 0 ? 'opacity-60' : ''}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className={`w-6 h-6 ${zipPreview && zipPreview.validPdfs > 0 && typeId && period ? 'bg-green-500' : 'bg-[#94A3B8]'} text-white rounded-full flex items-center justify-center text-sm`}>
+                  {zipPreview && zipPreview.validPdfs > 0 && typeId && period ? '✓' : '3'}
+                </span>
+                Configuración de Carga
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="docType">Tipo de Documento *</Label>
+                  <Select value={typeId} onValueChange={setTypeId} disabled={!zipPreview || zipPreview.validPdfs === 0}>
+                    <SelectTrigger id="docType">
+                      <SelectValue placeholder="Seleccionar tipo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {typesLoading ? (
+                        <SelectItem value="loading" disabled>Cargando...</SelectItem>
+                      ) : (
+                        documentTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.id.toString()}>
+                            {type.displayName}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="space-y-4 p-4 bg-[#F1F5F9] rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      id="notify"
-                      checked={notifyEmployees}
-                      onCheckedChange={(checked: boolean | "indeterminate") => setNotifyEmployees(checked === true)}
-                    />
-                    <label htmlFor="notify" className="cursor-pointer">
-                      <p className="font-medium">Notificar a empleados</p>
-                      <p className="text-sm text-[#64748B]">
-                        Los empleados recibirán un email cuando sus documentos estén disponibles
-                      </p>
-                    </label>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="period">Período *</Label>
+                  <MonthYearPicker
+                    value={period}
+                    onChange={setPeriod}
+                    placeholder="Seleccionar período..."
+                    disabled={!zipPreview || zipPreview.validPdfs === 0}
+                  />
+                </div>
+              </div>
 
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      id="signature"
-                      checked={requiresSignature}
-                      onCheckedChange={(checked: boolean | "indeterminate") => setRequiresSignature(checked === true)}
-                    />
-                    <label htmlFor="signature" className="cursor-pointer">
-                      <p className="font-medium">Requiere firma digital</p>
-                      <p className="text-sm text-[#64748B]">
-                        Los empleados deberán firmar el documento con verificación 2FA
-                      </p>
-                    </label>
-                  </div>
+              <div className="space-y-4 p-4 bg-[#F1F5F9] rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="notify"
+                    checked={notifyEmployees}
+                    onCheckedChange={(checked: boolean | "indeterminate") => setNotifyEmployees(checked === true)}
+                    disabled={!zipPreview || zipPreview.validPdfs === 0}
+                  />
+                  <label htmlFor="notify" className="cursor-pointer">
+                    <p className="font-medium">Notificar a empleados</p>
+                    <p className="text-sm text-[#64748B]">
+                      Los empleados recibirán un email cuando sus documentos estén disponibles
+                    </p>
+                  </label>
                 </div>
 
-                <div className="flex justify-end gap-4">
-                  <Button variant="outline" onClick={resetForm}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleUpload}
-                    disabled={!canUpload || isLoading}
-                    className="bg-[#2563EB] hover:bg-[#1E40AF]"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Subiendo...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Subir {zipPreview.validPdfs} documentos
-                      </>
-                    )}
-                  </Button>
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="signature"
+                    checked={requiresSignature}
+                    onCheckedChange={(checked: boolean | "indeterminate") => setRequiresSignature(checked === true)}
+                    disabled={!zipPreview || zipPreview.validPdfs === 0}
+                  />
+                  <label htmlFor="signature" className="cursor-pointer">
+                    <p className="font-medium">Requiere firma digital</p>
+                    <p className="text-sm text-[#64748B]">
+                      Los empleados deberán firmar el documento con verificación 2FA
+                    </p>
+                  </label>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+
+              <div className="flex justify-end gap-4">
+                <Button variant="outline" onClick={resetForm}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleUpload}
+                  disabled={!canUpload || isLoading}
+                  className="bg-[#2563EB] hover:bg-[#1E40AF]"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Subiendo...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      {zipPreview && zipPreview.validPdfs > 0
+                        ? `Subir ${zipPreview.validPdfs} documentos`
+                        : 'Subir documentos'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>
