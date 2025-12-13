@@ -8,15 +8,10 @@ use App\Http\Requests\ChangePasswordRequest;
 use App\Http\Requests\ForceChangePasswordRequest;
 use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\ResetPasswordRequest;
-use App\Mail\ForgotPasswordMail;
-use App\Mail\PasswordResetByAdminMail;
+use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\PasswordService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 
 /**
  * @OA\Tag(
@@ -26,6 +21,11 @@ use Illuminate\Support\Str;
  */
 class PasswordController extends Controller
 {
+    public function __construct(
+        protected PasswordService $passwordService
+    ) {
+    }
+
     /**
      * Solicitar recuperación de contraseña (forgot password)
      * POST /api/password/forgot
@@ -34,29 +34,8 @@ class PasswordController extends Controller
     {
         $validated = $request->validated();
 
-        $user = User::where('email', $validated['email'])->first();
-
-        // Siempre responder éxito para no revelar si el email existe
-        if (!$user) {
-            return response()->json([
-                'message' => 'Si el correo existe, recibirás un enlace de recuperación.',
-            ]);
-        }
-
-        // Generar token
-        $token = Str::random(64);
-
-        // Guardar o actualizar token
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $user->email],
-            [
-                'token' => Hash::make($token),
-                'created_at' => now(),
-            ]
-        );
-
-        // Enviar email
-        Mail::to($user->email)->send(new ForgotPasswordMail($user, $token));
+        // Always respond success for security (don't reveal if email exists)
+        $this->passwordService->requestPasswordReset($validated['email']);
 
         return response()->json([
             'message' => 'Si el correo existe, recibirás un enlace de recuperación.',
@@ -71,52 +50,18 @@ class PasswordController extends Controller
     {
         $validated = $request->validated();
 
-        // Buscar token
-        $record = DB::table('password_reset_tokens')
-            ->where('email', $validated['email'])
-            ->first();
+        $result = $this->passwordService->resetPasswordWithToken(
+            $validated['email'],
+            $validated['token'],
+            $validated['password']
+        );
 
-        if (!$record) {
-            return response()->json([
-                'message' => 'Token inválido o expirado.',
-            ], 422);
+        if (!$result['success']) {
+            $statusCode = str_contains($result['message'], 'no encontrado') ? 404 : 422;
+            return response()->json(['message' => $result['message']], $statusCode);
         }
 
-        // Verificar token
-        if (!Hash::check($validated['token'], $record->token)) {
-            return response()->json([
-                'message' => 'Token inválido o expirado.',
-            ], 422);
-        }
-
-        // Verificar expiración (60 minutos)
-        if (now()->diffInMinutes($record->created_at) > 60) {
-            DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
-            return response()->json([
-                'message' => 'El enlace de recuperación ha expirado. Solicita uno nuevo.',
-            ], 422);
-        }
-
-        // Actualizar contraseña
-        $user = User::where('email', $validated['email'])->first();
-        if (!$user) {
-            return response()->json([
-                'message' => 'Usuario no encontrado.',
-            ], 404);
-        }
-
-        $user->update([
-            'password' => Hash::make($validated['password']),
-            'must_change_password' => false,
-            'password_changed_at' => now(),
-        ]);
-
-        // Eliminar token usado
-        DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
-
-        return response()->json([
-            'message' => 'Contraseña actualizada correctamente.',
-        ]);
+        return response()->json(['message' => $result['message']]);
     }
 
     /**
@@ -127,24 +72,17 @@ class PasswordController extends Controller
     {
         $validated = $request->validated();
 
-        $user = $request->user();
+        $result = $this->passwordService->changePassword(
+            $request->user(),
+            $validated['current_password'],
+            $validated['password']
+        );
 
-        // Verificar contraseña actual
-        if (!Hash::check($validated['current_password'], $user->password)) {
-            return response()->json([
-                'message' => 'La contraseña actual es incorrecta.',
-            ], 422);
+        if (!$result['success']) {
+            return response()->json(['message' => $result['message']], 422);
         }
 
-        $user->update([
-            'password' => Hash::make($validated['password']),
-            'must_change_password' => false,
-            'password_changed_at' => now(),
-        ]);
-
-        return response()->json([
-            'message' => 'Contraseña actualizada correctamente.',
-        ]);
+        return response()->json(['message' => $result['message']]);
     }
 
     /**
@@ -155,23 +93,18 @@ class PasswordController extends Controller
     {
         $validated = $request->validated();
 
-        $user = $request->user();
+        $result = $this->passwordService->forceChangePassword(
+            $request->user(),
+            $validated['password']
+        );
 
-        if (!$user->must_change_password) {
-            return response()->json([
-                'message' => 'No es necesario cambiar la contraseña.',
-            ], 400);
+        if (!$result['success']) {
+            return response()->json(['message' => $result['message']], 400);
         }
 
-        $user->update([
-            'password' => Hash::make($validated['password']),
-            'must_change_password' => false,
-            'password_changed_at' => now(),
-        ]);
-
         return response()->json([
-            'message' => 'Contraseña establecida correctamente.',
-            'user' => $user->fresh()->load(['roles', 'tenants']),
+            'message' => $result['message'],
+            'user' => new UserResource($result['user']),
         ]);
     }
 
@@ -182,52 +115,18 @@ class PasswordController extends Controller
     public function adminResetPassword(AdminResetPasswordRequest $request, string $userId): JsonResponse
     {
         $validated = $request->validated();
-
         $user = User::findOrFail($userId);
-        $newPassword = null;
-        $mustChangePassword = $validated['must_change_password'] ?? false;
 
-        switch ($validated['action']) {
-            case 'generate':
-                // Generar contraseña aleatoria
-                $newPassword = Str::random(12);
-                $user->update([
-                    'password' => Hash::make($newPassword),
-                    'must_change_password' => $mustChangePassword,
-                    'password_changed_at' => now(),
-                ]);
-                break;
-
-            case 'manual':
-                // Usar contraseña proporcionada
-                $newPassword = $validated['password'];
-                $user->update([
-                    'password' => Hash::make($newPassword),
-                    'must_change_password' => $mustChangePassword,
-                    'password_changed_at' => now(),
-                ]);
-                break;
-
-            case 'force_change_only':
-                // Solo marcar para forzar cambio
-                $user->update([
-                    'must_change_password' => true,
-                ]);
-                break;
-        }
-
-        // Enviar email de notificación
-        if ($validated['action'] !== 'force_change_only') {
-            Mail::to($user->email)->send(new PasswordResetByAdminMail(
-                $user,
-                $newPassword,
-                $mustChangePassword
-            ));
-        }
+        $result = $this->passwordService->adminResetPassword(
+            $user,
+            $validated['action'],
+            $validated['password'] ?? null,
+            $validated['must_change_password'] ?? false
+        );
 
         return response()->json([
             'message' => 'Contraseña del usuario actualizada correctamente.',
-            'email_sent' => $validated['action'] !== 'force_change_only',
+            'email_sent' => $result['email_sent'],
         ]);
     }
 }
