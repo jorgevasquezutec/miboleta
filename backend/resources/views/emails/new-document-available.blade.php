@@ -1,9 +1,7 @@
 @extends('emails.layouts.base')
 
 @section('title', 'Nuevo Documento Disponible')
-
 @section('header_title', 'Nuevo Documento Disponible')
-
 @section('header_subtitle', 'Tienes un documento pendiente de revisar')
 
 @section('content')
@@ -51,25 +49,17 @@
     </div>
 
     @if($document->requires_signature)
-        {{-- Alert Box --}}
-        <div
-            style="background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 0 8px 8px 0; padding: 16px; margin-bottom: 30px;">
-            <p style="color: #92400E; font-size: 14px; margin: 0; line-height: 1.5;">
-                <strong>⚠️ Acción requerida:</strong> Este documento requiere tu firma digital.
-                Por favor, ingresa al portal para revisar y firmar el documento.
-            </p>
-        </div>
+        @include('emails.components.alert-warning', [
+            'icon' => '⚠️',
+            'message' => '<strong>Acción requerida:</strong> Este documento requiere tu firma digital. Por favor, ingresa al portal para revisar y firmar el documento.'
+        ])
     @endif
+    @include('emails.components.button', [
+        'url' => config('app.frontend_url', 'http://localhost:5173') . '/documents',
+        'text' => 'Ver Documento'
+    ])
 
-    {{-- CTA Button --}}
-    <div style="text-align: center; margin: 30px 0;">
-        <a href="{{ config('app.frontend_url', 'http://localhost:5173') }}/documents"
-            style="display: inline-block; background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); color: #FFFFFF; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">
-            Ver Documento
-        </a>
-    </div>
-
-    <p style="color: #94A3B8; font-size: 14px; margin: 0; text-align: center;">
-        Si tienes dudas, contacta al área de Recursos Humanos.
-    </p>
+        <p style="color: #94A3B8; font-size: 14px; margin: 0; text-align: center;">
+            Si tienes dudas, contacta al área de Recursos Humanos.
+        </p>
 @endsection

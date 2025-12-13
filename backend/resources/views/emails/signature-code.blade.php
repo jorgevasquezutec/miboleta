@@ -1,9 +1,7 @@
 @extends('emails.layouts.base')
 
 @section('title', 'Código de Verificación')
-
 @section('header_title', 'Código de Verificación')
-
 @section('header_subtitle', 'Para firmar tu documento')
 
 @section('content')
@@ -51,15 +49,11 @@
         </ul>
     </div>
 
-    {{-- Security Notice --}}
-    <div style="background: #FEF2F2; border-left: 4px solid #EF4444; border-radius: 0 8px 8px 0; padding: 16px;">
-        <p style="color: #991B1B; font-size: 14px; margin: 0; line-height: 1.5;">
-            <strong>🛡️ Seguridad:</strong> Si no solicitaste este código, ignora este mensaje y contacta inmediatamente a
-            Recursos Humanos.
+    @include('emails.components.alert-danger', [
+        'icon' => '🛡️',
+        'message' => '<strong>Seguridad:</strong> Si no solicitaste este código, ignora este mensaje y contacta inmediatamente a Recursos Humanos.'
+    ])
+        <p style="color: #94A3B8; font-size: 13px; margin: 20px 0 0 0; text-align: center;">
+            Tu firma digital tiene validez legal según la Ley de Firmas Digitales.
         </p>
-    </div>
-
-    <p style="color: #94A3B8; font-size: 13px; margin: 30px 0 0 0; text-align: center;">
-        Tu firma digital tiene validez legal según la Ley de Firmas Digitales.
-    </p>
 @endsection
