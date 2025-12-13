@@ -19,7 +19,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/presentation/components/ui/select';
-import { SupervisorSelector } from '@/presentation/components/users';
+import { SupervisorSelector } from '@/presentation/components/features/users';
 import { TenantMultiSelector } from '@/presentation/components/shared/TenantMultiSelector';
 import { ArrowLeft, Save, Loader2, UserPlus, UserCircle, Building2 } from 'lucide-react';
 import { toast } from 'sonner';

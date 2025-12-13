@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { toast } from "sonner";
 import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
 import { PDFViewer } from "@/presentation/components/shared/PDFViewer";
-import { DocumentSignatureModal } from "@/presentation/components/shared/DocumentSignatureModal";
+import { DocumentSignatureModal } from "@/presentation/components/features/documents/DocumentSignatureModal";
 import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
 
 interface DocumentViewerViewProps {

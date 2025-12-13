@@ -18,7 +18,7 @@ import {
     SubordinatesList,
     UserTenantsManager,
     PasswordResetModal,
-} from '@/presentation/components/users';
+} from '@/presentation/components/features/users';
 import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 import {
     ArrowLeft,
