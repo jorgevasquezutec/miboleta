@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-12  
-**Estado general del proyecto:** ~99% completado
+**Última actualización:** 2025-12-13  
+**Estado general del proyecto:** ~99% completado (Módulos 0-4 + Arquitectura)
 
 **✅ Completado:**
 - Módulo 0 (Base de Datos) ✅ 100%
@@ -100,14 +100,33 @@
   - ✅ Clientes solo acceden a sus propios documentos
   - ✅ Storage privado (`storage/app/documents/` NO en public)
 
-**📋 Módulo 4 - COMPLETADO AL 100%** ✅
+- **Módulo 4+ (Arquitectura Backend) ✅ 100%** - **NUEVO**
+  - ✅ **Service Layer Completo:**
+    - UserService - gestión de usuarios, roles, tenants
+    - PasswordService - gestión de contraseñas
+    - DocumentService - operaciones de documentos
+    - DocumentBatchService - lotes de carga
+    - SignatureService - firma digital
+    - TenantService - gestión de organizaciones
+    - AuthService - autenticación y tokens
+    - ProfileService - perfil de usuario
+  - ✅ **API Resources:**
+    - UserResource, UserSummaryResource
+    - TenantResource, RoleResource
+    - DocumentResource, DocumentTypeResource, DocumentBatchResource
+  - ✅ **Custom Exceptions:**
+    - UserCreationException
+    - DocumentNotFoundException
+    - UnauthorizedAccessException
+  - ✅ **Global Exception Handler** configurado en bootstrap/app.php
+  - ✅ **Todos los controllers refactorizados** (8 controllers)
+  - ✅ **Principios SOLID aplicados**
+
+**📋 Módulo 4+ (Arquitectura) - COMPLETADO AL 100%** ✅
 **📋 Siguiente Paso:** Comenzar Módulo 5 (Vacaciones) o Módulo 6 (Notificaciones)
 **📋 Pendiente:** Módulos 5-8
 
 
----
-
-## 📚 ÍNDICE DE MÓDULOS
 
 1. [🗄️ Módulo 0: Base de Datos](#️-módulo-0-base-de-datos)
 2. [🔐 Módulo 1: Autenticación y Autorización](#-módulo-1-autenticación-y-autorización)
