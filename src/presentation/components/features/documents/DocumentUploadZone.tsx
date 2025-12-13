@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Upload, X, FileText, CheckCircle } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Progress } from "@/presentation/components/ui/progress";
+import { formatFileSize } from "@/presentation/utils";
 
 interface UploadedFile {
   id: string;
@@ -60,7 +61,7 @@ export function DocumentUploadZone({ onFilesSelected }: DocumentUploadZoneProps)
     setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     // Simulate upload progress
-    newFiles.forEach((file, index) => {
+    newFiles.forEach((file) => {
       let progress = 0;
       const interval = setInterval(() => {
         progress += 10;
@@ -68,10 +69,10 @@ export function DocumentUploadZone({ onFilesSelected }: DocumentUploadZoneProps)
           prev.map((f) =>
             f.id === file.id
               ? {
-                  ...f,
-                  progress,
-                  status: progress === 100 ? "completed" : "uploading",
-                }
+                ...f,
+                progress,
+                status: progress === 100 ? "completed" : "uploading",
+              }
               : f
           )
         );
@@ -86,13 +87,7 @@ export function DocumentUploadZone({ onFilesSelected }: DocumentUploadZoneProps)
     }
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
-  };
+
 
   const removeFile = (id: string) => {
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
@@ -107,10 +102,9 @@ export function DocumentUploadZone({ onFilesSelected }: DocumentUploadZoneProps)
         onDrop={handleDrop}
         className={`
           border-2 border-dashed rounded-lg p-12 text-center transition-colors
-          ${
-            isDragging
-              ? "border-[#2563EB] bg-blue-50"
-              : "border-[rgba(0,0,0,0.1)] hover:border-[#2563EB]"
+          ${isDragging
+            ? "border-[#2563EB] bg-blue-50"
+            : "border-[rgba(0,0,0,0.1)] hover:border-[#2563EB]"
           }
         `}
       >
@@ -135,7 +129,7 @@ export function DocumentUploadZone({ onFilesSelected }: DocumentUploadZoneProps)
               accept=".pdf,.doc,.docx"
               aria-label="Seleccionar archivos para subir"
             />
-            <Button 
+            <Button
               className="bg-[#2563EB] hover:bg-[#1E40AF]"
               onClick={() => document.getElementById('file-upload')?.click()}
               type="button"
