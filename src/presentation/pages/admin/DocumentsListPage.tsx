@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Search, Filter, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Search, Filter, Eye, Trash2 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { Button } from "@/presentation/components/ui/button";
@@ -23,10 +23,18 @@ import {
 } from "@/presentation/components/ui/table";
 import { DateRangePicker } from "@/presentation/components/ui/date-range-picker";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
+import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
+import { usePagination, useTableFilters } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { useAuthStore } from "@/presentation/stores";
 import { getDocumentStatusBadgeInline } from "@/presentation/utils";
+
+interface DocumentFilters {
+    search?: string;
+    status?: Document['status'] | 'all';
+    docTypeId?: number;
+}
 
 export function DocumentsListPage() {
     const navigate = useNavigate();
@@ -42,51 +50,65 @@ export function DocumentsListPage() {
     } = useDocumentsStore();
 
     const [documentTypes, setDocumentTypes] = useState<any[]>([]);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [typeFilter, setTypeFilter] = useState<string>("all");
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-    const [currentPage, setCurrentPage] = useState(1);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
+
+    // Use pagination hook
+    const pagination = usePagination({
+        initialPage: 1,
+        initialPerPage: 5,
+    });
+
+    // Use filters hook
+    const { filters, setFilter, resetFilters: resetFiltersState } = useTableFilters<DocumentFilters>({
+        initialFilters: {
+            search: '',
+            status: 'all',
+            docTypeId: undefined,
+        },
+    });
+
+    // Sync pagination state with store
+    useEffect(() => {
+        pagination.setTotal(total);
+        pagination.setTotalPages(totalPages);
+    }, [total, totalPages]);
 
     useEffect(() => {
         const fetchTypes = async () => {
             await fetchDocumentTypes();
-            // Document types are now in the store
         };
         fetchTypes();
     }, [fetchDocumentTypes]);
 
+    // Fetch documents when pagination or filters change
     useEffect(() => {
         fetchDocuments({
-            page: currentPage,
-            perPage: 20,
-            search: searchTerm || undefined,
-            status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
-            docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
+            page: pagination.currentPage,
+            perPage: pagination.perPage,
+            search: filters.search || undefined,
+            status: filters.status !== "all" ? (filters.status as Document['status']) : undefined,
+            docTypeId: filters.docTypeId || undefined,
             dateFrom: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
             dateTo: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
         });
-    }, [currentPage, statusFilter, typeFilter, dateRange, fetchDocuments]);
+    }, [pagination.currentPage, pagination.perPage, filters, dateRange, fetchDocuments]);
 
     const handleSearch = () => {
-        setCurrentPage(1); // Reset to page 1 when searching
-        // Trigger fetch by updating currentPage or directly calling
-        fetchDocuments({
-            page: 1,
-            perPage: 20,
-            search: searchTerm || undefined,
-            status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
-            docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
-            dateFrom: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-            dateTo: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
-        });
+        pagination.setPage(1); // Reset to page 1 when searching
+    };
+
+    const handleResetFilters = () => {
+        resetFiltersState();
+        setDateRange(undefined);
+        pagination.setPage(1);
     };
 
     const handleDeleteClick = (id: number) => {
         setDocumentToDelete(id);
         setDeleteDialogOpen(true);
+
     };
 
     const handleDeleteConfirm = async () => {
@@ -95,11 +117,11 @@ export function DocumentsListPage() {
                 await deleteDocument(documentToDelete);
                 // Refetch current page
                 fetchDocuments({
-                    page: currentPage,
-                    perPage: 20,
-                    search: searchTerm || undefined,
-                    status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
-                    docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
+                    page: pagination.currentPage,
+                    perPage: pagination.perPage,
+                    search: filters.search || undefined,
+                    status: filters.status !== "all" ? (filters.status as Document['status']) : undefined,
+                    docTypeId: filters.docTypeId || undefined,
                     dateFrom: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
                     dateTo: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
                 });
@@ -135,8 +157,8 @@ export function DocumentsListPage() {
                             <div className="flex gap-2">
                                 <Input
                                     placeholder="Busca por Nombre, Apellido, Documento o identidad"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    value={filters.search || ''}
+                                    onChange={(e) => setFilter('search', e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                                 />
                                 <Button onClick={handleSearch} disabled={isLoading}>
@@ -148,7 +170,7 @@ export function DocumentsListPage() {
                         {/* Document Type Filter */}
                         <div>
                             <label className="text-sm font-medium mb-2 block">Tipo de documento</label>
-                            <Select value={typeFilter} onValueChange={setTypeFilter}>
+                            <Select value={filters.docTypeId?.toString() || "all"} onValueChange={(value) => setFilter('docTypeId', value === "all" ? undefined : parseInt(value))}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
@@ -166,7 +188,7 @@ export function DocumentsListPage() {
                         {/* Status Filter */}
                         <div>
                             <label className="text-sm font-medium mb-2 block">Estado</label>
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <Select value={filters.status || "all"} onValueChange={(value) => setFilter('status', value as Document['status'] | 'all')}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
@@ -194,12 +216,7 @@ export function DocumentsListPage() {
                     <div className="flex justify-end mt-4">
                         <Button
                             variant="outline"
-                            onClick={() => {
-                                setSearchTerm("");
-                                setStatusFilter("all");
-                                setTypeFilter("all");
-                                setDateRange(undefined);
-                            }}
+                            onClick={handleResetFilters}
                         >
                             <Filter className="w-4 h-4 mr-2" />
                             Limpiar filtros
@@ -296,30 +313,16 @@ export function DocumentsListPage() {
                             </Table>
 
                             {/* Pagination */}
-                            <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                                <div className="text-sm text-[#64748B]">
-                                    Mostrando página {currentPage} de {totalPages || 1} ({total || 0} documentos total)
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={currentPage <= 1}
-                                        onClick={() => setCurrentPage(currentPage - 1)}
-                                    >
-                                        <ChevronLeft className="w-4 h-4" />
-                                    </Button>
-                                    <span className="px-3 py-1 text-sm">{currentPage}</span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={currentPage >= (totalPages || 1)}
-                                        onClick={() => setCurrentPage(currentPage + 1)}
-                                    >
-                                        <ChevronRight className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </div>
+                            <PaginationControls
+                                currentPage={pagination.currentPage}
+                                totalPages={pagination.totalPages}
+                                total={pagination.total}
+                                perPage={pagination.perPage}
+                                onPageChange={pagination.setPage}
+                                onPerPageChange={pagination.setPerPage}
+                                disabled={isLoading}
+                                className="mt-4 pt-4 border-t"
+                            />
                         </>
                     )}
                 </CardContent>

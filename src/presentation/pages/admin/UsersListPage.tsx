@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUsersStore } from "@/presentation/stores/usersStore";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
+import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -28,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/presentation/components/ui/select";
-import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { UserPlus, Search, Eye, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 // Debounce helper
@@ -109,8 +110,12 @@ export function UsersListPage() {
     setLocalStatusFilter(value as "all" | "active" | "inactive");
   };
 
-  const handlePerPageChange = (value: string) => {
-    changePerPage(parseInt(value));
+  const handlePageChange = (page: number) => {
+    goToPage(page);
+  };
+
+  const handlePerPageChange = (perPage: number) => {
+    changePerPage(perPage);
   };
 
 
@@ -138,45 +143,6 @@ export function UsersListPage() {
       default:
         return { backgroundColor: "#6b7280", color: "white", borderColor: "transparent" };
     }
-  };
-
-  // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    if (!pagination) return [];
-
-    const { current_page, last_page } = pagination;
-    const pages: (number | string)[] = [];
-
-    if (last_page <= 7) {
-      // Show all pages if 7 or fewer
-      for (let i = 1; i <= last_page; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Always show first page
-      pages.push(1);
-
-      if (current_page > 3) {
-        pages.push('...');
-      }
-
-      // Show pages around current page
-      const start = Math.max(2, current_page - 1);
-      const end = Math.min(last_page - 1, current_page + 1);
-
-      for (let i = start; i <= end; i++) {
-        pages.push(i);
-      }
-
-      if (current_page < last_page - 2) {
-        pages.push('...');
-      }
-
-      // Always show last page
-      pages.push(last_page);
-    }
-
-    return pages;
   };
 
   return (
@@ -361,74 +327,17 @@ export function UsersListPage() {
 
               {/* Pagination Controls */}
               {pagination && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
-                  {/* Results info and per page selector */}
-                  <div className="flex flex-col sm:flex-row items-center gap-4">
-                    <div className="text-sm text-muted-foreground">
-                      Mostrando {pagination.from || 0} - {pagination.to || 0} de {pagination.total} usuarios
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Resultados por página:
-                      </span>
-                      <Select
-                        value={pagination.per_page.toString()}
-                        onValueChange={handlePerPageChange}
-                      >
-                        <SelectTrigger className="w-[80px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="25">25</SelectItem>
-                          <SelectItem value="50">50</SelectItem>
-                          <SelectItem value="100">100</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Page navigation */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => goToPage(pagination.current_page - 1)}
-                      disabled={pagination.current_page === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-
-                    <div className="flex items-center gap-1">
-                      {getPageNumbers().map((page, index) => (
-                        typeof page === 'number' ? (
-                          <Button
-                            key={index}
-                            variant={page === pagination.current_page ? "default" : "outline"}
-                            size="icon"
-                            onClick={() => goToPage(page)}
-                            className="w-10"
-                          >
-                            {page}
-                          </Button>
-                        ) : (
-                          <span key={index} className="px-2 text-muted-foreground">
-                            {page}
-                          </span>
-                        )
-                      ))}
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => goToPage(pagination.current_page + 1)}
-                      disabled={pagination.current_page === pagination.last_page}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                <PaginationControls
+                  currentPage={pagination.current_page}
+                  totalPages={pagination.last_page}
+                  total={pagination.total}
+                  perPage={pagination.per_page}
+                  onPageChange={handlePageChange}
+                  onPerPageChange={handlePerPageChange}
+                  disabled={isLoading}
+                  perPageOptions={[10, 25, 50, 100]}
+                  className="pt-4 border-t"
+                />
               )}
             </>
           )}

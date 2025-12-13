@@ -3,7 +3,6 @@ import { useTenantSearch } from '@/presentation/hooks/useTenantSearch';
 import { Tenant } from '@/core/domain/entities/Tenant';
 import { TenantAssociation } from '@/core/domain/entities/User';
 import { Button } from '@/presentation/components/ui/button';
-import { Input } from '@/presentation/components/ui/input';
 import { Badge } from '@/presentation/components/ui/badge';
 import { Checkbox } from '@/presentation/components/ui/checkbox';
 import { ScrollArea } from '@/presentation/components/ui/scroll-area';
@@ -190,7 +189,7 @@ export function TenantMultiSelector({
     selectedTenantsInfoLength: selectedTenantsInfo.length,
     cacheKeys: Array.from(tenantsCache.keys()),
     cacheKeysTypes: Array.from(tenantsCache.keys()).map(k => typeof k),
-    selectedTenantsIds: selectedTenants.map(t => ({id: t.id, type: typeof t.id}))
+    selectedTenantsIds: selectedTenants.map(t => ({ id: t.id, type: typeof t.id }))
   });
 
   return (

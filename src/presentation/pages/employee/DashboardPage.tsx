@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/presentation/components/ui/select";
+import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
@@ -36,6 +37,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
 
   useEffect(() => {
     fetchDocumentTypes();
@@ -44,19 +46,19 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   useEffect(() => {
     fetchDocuments({
       page: currentPage,
-      perPage: 10,
+      perPage: perPage,
       search: searchTerm || undefined,
       status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
       docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
       myDocuments: true, // Always show only my documents
     });
-  }, [currentPage, statusFilter, typeFilter, fetchDocuments]);
+  }, [currentPage, perPage, statusFilter, typeFilter, fetchDocuments]);
 
   const handleSearch = () => {
     setCurrentPage(1);
     fetchDocuments({
       page: 1,
-      perPage: 10,
+      perPage: perPage,
       search: searchTerm || undefined,
       status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
       docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
@@ -75,6 +77,15 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   const handleDownload = (id: number) => {
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
     window.open(`${baseUrl}/documents/${id}/download`, '_blank');
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePerPageChange = (newPerPage: number) => {
+    setPerPage(newPerPage);
+    setCurrentPage(1);
   };
 
   // Estadísticas
@@ -312,32 +323,16 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
               </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between mt-6 pt-6 border-t">
-                <div className="text-sm text-[#64748B]">
-                  Mostrando página {currentPage} de {totalPages || 1} ({total} documentos)
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="px-3 py-1 text-sm">
-                    {currentPage}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= (totalPages || 1)}
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages || 1}
+                total={total}
+                perPage={perPage}
+                onPageChange={handlePageChange}
+                onPerPageChange={handlePerPageChange}
+                disabled={isLoading}
+                className="mt-6 pt-6 border-t"
+              />
             </>
           )}
         </CardContent>

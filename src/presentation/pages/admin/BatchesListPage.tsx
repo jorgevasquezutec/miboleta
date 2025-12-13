@@ -6,8 +6,6 @@ import {
     FileStack,
     Eye,
     RefreshCw,
-    ChevronLeft,
-    ChevronRight,
     X,
 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
@@ -28,6 +26,7 @@ import {
     SelectValue,
 } from "@/presentation/components/ui/select";
 import { DateRangePicker } from "@/presentation/components/ui/date-range-picker";
+import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useDocumentsStore } from "@/presentation/stores";
 import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
 import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
@@ -39,16 +38,17 @@ export function BatchesListPage() {
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [currentPage, setCurrentPage] = useState(1);
+    const [perPage, setPerPage] = useState(10);
 
     useEffect(() => {
         loadBatches();
-    }, [statusFilter, dateRange, currentPage]);
+    }, [statusFilter, dateRange, currentPage, perPage]);
 
     const loadBatches = () => {
         fetchBatches({
             status: statusFilter !== "all" ? statusFilter : undefined,
             page: currentPage,
-            perPage: 10,
+            perPage: perPage,
             dateFrom: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
             dateTo: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
         });
@@ -57,6 +57,15 @@ export function BatchesListPage() {
     const clearFilters = () => {
         setStatusFilter("all");
         setDateRange(undefined);
+        setCurrentPage(1);
+    };
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
+    const handlePerPageChange = (newPerPage: number) => {
+        setPerPage(newPerPage);
         setCurrentPage(1);
     };
 
@@ -131,88 +140,74 @@ export function BatchesListPage() {
                         </div>
                     ) : (
                         <>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>ID</TableHead>
-                                        <TableHead>Tipo</TableHead>
-                                        <TableHead>Período</TableHead>
-                                        <TableHead>Archivo</TableHead>
-                                        <TableHead>Progreso</TableHead>
-                                        <TableHead>Estado</TableHead>
-                                        <TableHead>Fecha</TableHead>
-                                        <TableHead>Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {batches.map((batch: DocumentBatch) => (
-                                        <TableRow key={batch.id}>
-                                            <TableCell className="font-mono">#{batch.id}</TableCell>
-                                            <TableCell>{batch.documentType?.displayName || "-"}</TableCell>
-                                            <TableCell>{batch.period}</TableCell>
-                                            <TableCell className="max-w-[200px] truncate" title={batch.originalFilename}>
-                                                {batch.originalFilename}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-20 h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-[#2563EB] transition-all"
-                                                            style={{ width: `${batch.progressPercentage || 0}%` }}
-                                                        />
-                                                    </div>
-                                                    <span className="text-sm text-[#64748B]">
-                                                        {batch.processedFiles}/{batch.totalFiles}
-                                                    </span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>{getBatchStatusBadge(batch.status)}</TableCell>
-                                            <TableCell className="text-[#64748B] text-sm">
-                                                {formatDateTime(batch.createdAt)}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => navigate(`/batches/${batch.id}`)}
-                                                >
-                                                    <Eye className="w-4 h-4 mr-1" />
-                                                    Ver
-                                                </Button>
-                                            </TableCell>
+                            <div className="w-full overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="whitespace-nowrap">ID</TableHead>
+                                            <TableHead className="whitespace-nowrap">Tipo / Progreso</TableHead>
+                                            <TableHead className="whitespace-nowrap">Período</TableHead>
+                                            <TableHead className="whitespace-nowrap">Estado</TableHead>
+                                            <TableHead className="whitespace-nowrap">Fecha</TableHead>
+                                            <TableHead className="whitespace-nowrap text-center">Acciones</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {batches.map((batch: DocumentBatch) => (
+                                            <TableRow key={batch.id}>
+                                                <TableCell className="font-mono whitespace-nowrap">#{batch.id}</TableCell>
+                                                <TableCell>
+                                                    <div>
+                                                        <div className="font-medium whitespace-nowrap">{batch.documentType?.displayName || "-"}</div>
+                                                        <div className="text-xs text-[#64748B] truncate max-w-[180px]" title={batch.originalFilename}>
+                                                            {batch.originalFilename}
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <div className="w-20 h-2 bg-[#E2E8F0] rounded-full overflow-hidden flex-shrink-0">
+                                                                <div
+                                                                    className="h-full bg-[#2563EB] transition-all rounded-full"
+                                                                    style={{ width: `${batch.progressPercentage || 0}%` }}
+                                                                />
+                                                            </div>
+                                                            <span className="text-xs text-[#64748B]">
+                                                                {batch.processedFiles}/{batch.totalFiles}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="whitespace-nowrap">{batch.period}</TableCell>
+                                                <TableCell className="whitespace-nowrap">{getBatchStatusBadge(batch.status)}</TableCell>
+                                                <TableCell className="text-[#64748B] text-sm whitespace-nowrap">
+                                                    {formatDateTime(batch.createdAt)}
+                                                </TableCell>
+                                                <TableCell className="whitespace-nowrap text-center">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => navigate(`/batches/${batch.id}`)}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-1" />
+                                                        Ver
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
 
                             {/* Pagination */}
                             {batchesMeta && (
-                                <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                                    <div className="text-sm text-[#64748B]">
-                                        Mostrando página {batchesMeta.currentPage} de {batchesMeta.lastPage} ({batchesMeta.total} lotes)
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={currentPage <= 1}
-                                            onClick={() => setCurrentPage(currentPage - 1)}
-                                        >
-                                            <ChevronLeft className="w-4 h-4" />
-                                        </Button>
-                                        <span className="px-3 py-1 text-sm">
-                                            {currentPage}
-                                        </span>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={currentPage >= batchesMeta.lastPage}
-                                            onClick={() => setCurrentPage(currentPage + 1)}
-                                        >
-                                            <ChevronRight className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                </div>
+                                <PaginationControls
+                                    currentPage={currentPage}
+                                    totalPages={batchesMeta.lastPage || 1}
+                                    total={batchesMeta.total}
+                                    perPage={perPage}
+                                    onPageChange={handlePageChange}
+                                    onPerPageChange={handlePerPageChange}
+                                    disabled={batchesLoading}
+                                    className="mt-4 pt-4 border-t"
+                                />
                             )}
                         </>
                     )}

@@ -44,13 +44,18 @@ export class DocumentRepository implements IDocumentRepository {
     if (filters?.dateTo) params.append('date_to', filters.dateTo);
     if (filters?.myDocuments) params.append('my_documents', 'true');
 
-    const response = await apiClient.get<{ data: Document[]; meta: PaginatedDocuments['meta'] }>(
+    const response = await apiClient.get<{ data: Document[]; meta: any }>(
       `/documents?${params.toString()}`
     );
 
     return {
       data: response.data.data.map((doc) => this.mapDocument(doc)),
-      meta: response.data.meta,
+      meta: {
+        currentPage: response.data.meta.current_page,
+        lastPage: response.data.meta.last_page,
+        perPage: response.data.meta.per_page,
+        total: response.data.meta.total,
+      },
     };
   }
 
@@ -65,13 +70,18 @@ export class DocumentRepository implements IDocumentRepository {
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.perPage) params.append('per_page', filters.perPage.toString());
 
-    const response = await apiClient.get<{ data: Document[]; meta: PaginatedDocuments['meta'] }>(
+    const response = await apiClient.get<{ data: Document[]; meta: any }>(
       `/documents/orphans?${params.toString()}`
     );
 
     return {
       data: response.data.data.map((doc) => this.mapDocument(doc)),
-      meta: response.data.meta,
+      meta: {
+        currentPage: response.data.meta.current_page,
+        lastPage: response.data.meta.last_page,
+        perPage: response.data.meta.per_page,
+        total: response.data.meta.total,
+      },
     };
   }
 

@@ -31,7 +31,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/presentation/components/ui/select';
-import { Building2, Search, Eye, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Building2, Search, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { PaginationControls } from '@/presentation/components/shared/PaginationControls';
 import { StatsCard } from '@/presentation/components/common';
 
 // Debounce helper
@@ -196,7 +197,7 @@ export function TenantsListPage() {
                         </div>
 
                         {/* Status Filter */}
-                        <Select value={localStatusFilter} onValueChange={setLocalStatusFilter}>
+                        <Select value={localStatusFilter} onValueChange={(value) => setLocalStatusFilter(value as 'all' | 'active' | 'inactive')}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Filtrar por estado" />
                             </SelectTrigger>
@@ -315,68 +316,17 @@ export function TenantsListPage() {
 
                     {/* Pagination */}
                     {pagination && pagination.total > 0 && (
-                        <div className="flex items-center justify-between px-6 py-4 border-t">
-                            <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-500">
-                                    Mostrando {pagination.from} a {pagination.to} de {pagination.total} organizaciones
-                                </p>
-                                <Select
-                                    value={pagination.per_page.toString()}
-                                    onValueChange={(value: string) => changePerPage(parseInt(value))}
-                                >
-                                    <SelectTrigger className="w-[100px]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="10">10</SelectItem>
-                                        <SelectItem value="25">25</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => goToPage(pagination.current_page - 1)}
-                                    disabled={pagination.current_page === 1 || isLoading}
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                    Anterior
-                                </Button>
-
-                                <div className="flex items-center gap-1">
-                                    {Array.from({ length: Math.min(5, pagination.last_page) }, (_, i) => {
-                                        const page = i + 1;
-                                        return (
-                                            <Button
-                                                key={page}
-                                                variant={pagination.current_page === page ? 'default' : 'outline'}
-                                                size="sm"
-                                                onClick={() => goToPage(page)}
-                                                disabled={isLoading}
-                                                className="w-10"
-                                            >
-                                                {page}
-                                            </Button>
-                                        );
-                                    })}
-                                    {pagination.last_page > 5 && <span className="px-2">...</span>}
-                                </div>
-
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => goToPage(pagination.current_page + 1)}
-                                    disabled={pagination.current_page === pagination.last_page || isLoading}
-                                >
-                                    Siguiente
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
+                        <PaginationControls
+                            currentPage={pagination.current_page}
+                            totalPages={pagination.last_page}
+                            total={pagination.total}
+                            perPage={pagination.per_page}
+                            onPageChange={goToPage}
+                            onPerPageChange={changePerPage}
+                            disabled={isLoading}
+                            perPageOptions={[10, 25, 50, 100]}
+                            className="px-6 py-4 border-t"
+                        />
                     )}
                 </CardContent>
             </Card>
