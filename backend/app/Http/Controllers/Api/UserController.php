@@ -13,6 +13,12 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
+/**
+ * @OA\Tag(
+ *     name="Usuarios",
+ *     description="Gestión de usuarios del sistema"
+ * )
+ */
 class UserController extends Controller
 {
     /**

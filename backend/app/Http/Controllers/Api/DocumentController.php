@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
+/**
+ * @OA\Tag(
+ *     name="Documentos",
+ *     description="Gestión de documentos (listado, descarga, asignación)"
+ * )
+ */
 class DocumentController extends Controller
 {
     /**

@@ -11,6 +11,12 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
+/**
+ * @OA\Tag(
+ *     name="Autenticación",
+ *     description="Endpoints para autenticación de usuarios (login, logout, refresh token)"
+ * )
+ */
 class AuthController extends Controller
 {
     /**

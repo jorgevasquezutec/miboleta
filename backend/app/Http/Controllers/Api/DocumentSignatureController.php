@@ -12,6 +12,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 
+/**
+ * @OA\Tag(
+ *     name="Firma de Documentos",
+ *     description="Gestión de firma digital de documentos"
+ * )
+ */
 class DocumentSignatureController extends Controller
 {
     /**

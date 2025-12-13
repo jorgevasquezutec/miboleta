@@ -8,6 +8,12 @@ use App\Http\Requests\UploadTenantLogoRequest;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
+/**
+ * @OA\Tag(
+ *     name="Archivos",
+ *     description="Gestión de carga y eliminación de archivos"
+ * )
+ */
 class FileUploadController extends Controller
 {
     /**

@@ -18,6 +18,12 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
+/**
+ * @OA\Tag(
+ *     name="Contraseñas",
+ *     description="Gestión de contraseñas (recuperación, cambio, reset)"
+ * )
+ */
 class PasswordController extends Controller
 {
     /**

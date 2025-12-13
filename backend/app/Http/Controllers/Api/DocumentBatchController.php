@@ -11,6 +11,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * @OA\Tag(
+ *     name="Lotes de Documentos",
+ *     description="Gestión de lotes de carga masiva de documentos"
+ * )
+ */
 class DocumentBatchController extends Controller
 {
     /**

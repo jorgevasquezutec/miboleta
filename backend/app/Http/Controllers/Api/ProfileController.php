@@ -9,6 +9,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * @OA\Tag(
+ *     name="Perfil",
+ *     description="Gestión del perfil del usuario autenticado"
+ * )
+ */
 class ProfileController extends Controller
 {
     /**

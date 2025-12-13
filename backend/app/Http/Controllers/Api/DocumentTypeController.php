@@ -7,6 +7,12 @@ use App\Models\DocumentType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * @OA\Tag(
+ *     name="Tipos de Documento",
+ *     description="Catálogo de tipos de documentos disponibles"
+ * )
+ */
 class DocumentTypeController extends Controller
 {
     /**
