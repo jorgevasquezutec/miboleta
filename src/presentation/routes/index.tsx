@@ -32,7 +32,6 @@ import {
 // Shared pages
 import { ProfilePage } from "@/presentation/pages/shared";
 
-import { BarChart3 } from "lucide-react";
 
 // Helper component for role-based redirect
 function RootRedirect() {

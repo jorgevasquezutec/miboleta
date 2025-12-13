@@ -1,4 +1,4 @@
-import { Bell, Settings, LogOut, User } from "lucide-react";
+import { Bell, Settings, LogOut, User, Menu } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/presentation/components/ui/avatar";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -20,6 +20,8 @@ interface NavbarProps {
   onLogout?: () => void;
   onSettings?: () => void;
   onProfile?: () => void;
+  onToggleSidebar?: () => void;
+  showSidebar?: boolean;
 }
 
 export function Navbar({
@@ -30,14 +32,30 @@ export function Navbar({
   onLogout,
   onSettings,
   onProfile,
+  onToggleSidebar,
+  showSidebar = true,
 }: NavbarProps) {
   const brandingPrimaryColor = "#2563EB";
 
   return (
     <nav className="bg-white border-b border-[rgba(0,0,0,0.1)] px-6 py-4">
       <div className="flex items-center justify-between">
-        {/* Tenant Switcher replaces Logo and Company Name */}
-        <TenantSwitcher />
+        <div className="flex items-center gap-4">
+          {/* Sidebar Toggle Button */}
+          {showSidebar && onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="p-2 -ml-2 rounded-lg hover:bg-[#F1F5F9] transition-colors"
+              title="Toggle sidebar"
+            >
+              <Menu className="w-5 h-5" style={{ color: brandingPrimaryColor }} />
+            </button>
+          )}
+
+          {/* Tenant Switcher */}
+          <TenantSwitcher />
+        </div>
 
         {/* Right Section */}
         <div className="flex items-center gap-4">

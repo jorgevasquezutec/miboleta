@@ -4,21 +4,21 @@ import { Navbar } from "@/presentation/components/layout";
 import { Toaster } from "@/presentation/components/ui/sonner";
 import { useState } from "react";
 import {
-  LayoutDashboard,
-  FileText,
   Users,
+  FileText,
   Building2,
-  Settings,
-  BarChart3,
-  Menu,
+  LayoutDashboard,
   FileStack,
 } from "lucide-react";
 
-function Sidebar() {
+interface SidebarProps {
+  isExpanded: boolean;
+}
+
+function Sidebar({ isExpanded }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
-  const [isExpanded, setIsExpanded] = useState(true);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -27,19 +27,7 @@ function Sidebar() {
 
   return (
     <aside className={`${isExpanded ? 'w-64' : 'w-16'} bg-white border-r border-[rgba(0,0,0,0.1)] min-h-[calc(100vh-73px)] transition-all duration-300`}>
-      {/* Toggle Button */}
-      <div className="p-2 border-b border-[rgba(0,0,0,0.1)]">
-        <button
-          type="button"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full flex items-center justify-center px-2 py-2 rounded-lg hover:bg-[#F1F5F9] transition-colors"
-          title={isExpanded ? "Contraer sidebar" : "Expandir sidebar"}
-        >
-          <Menu className="w-5 h-5" style={{ color: secondaryColor }} />
-        </button>
-      </div>
-
-      <nav className={`${isExpanded ? 'p-4' : 'p-2'} space-y-2`}>
+      <nav className={`${isExpanded ? 'p-4' : 'p-2'} pt-4 space-y-2`}>
         {user?.role === "root" ? (
           <>
             <button
@@ -206,10 +194,15 @@ export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
+  };
+
+  const handleToggleSidebar = () => {
+    setIsSidebarExpanded(!isSidebarExpanded);
   };
 
   const showSidebar = user?.role === "root" || user?.role === "admin" || user?.role === "client";
@@ -230,10 +223,12 @@ export function RootLayout() {
         onLogout={handleLogout}
         onSettings={() => navigate("/settings")}
         onProfile={() => navigate("/profile")}
+        onToggleSidebar={handleToggleSidebar}
+        showSidebar={showSidebar}
       />
 
       <div className="flex">
-        {showSidebar && <Sidebar />}
+        {showSidebar && <Sidebar isExpanded={isSidebarExpanded} />}
 
         <main className="flex-1 p-8">
           <Outlet />

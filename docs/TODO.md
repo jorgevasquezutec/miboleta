@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
 **Última actualización:** 2025-12-12  
-**Estado general del proyecto:** ~98% completado
+**Estado general del proyecto:** ~99% completado
 
 **✅ Completado:**
 - Módulo 0 (Base de Datos) ✅ 100%
@@ -10,6 +10,13 @@
   - Backend: PasswordController, Mails, Email Templates (HTML completos)
   - Frontend: ForceChangePasswordPage, ForgotPasswordPage, ResetPasswordPage, PasswordResetModal
   - Emails: welcome.blade.php, forgot-password.blade.php, password-reset-admin.blade.php (HTML view)
+  - **Sistema de Foto de Perfil (100%)** ✅
+    - Migración avatar_url en users table
+    - ProfileController con endpoints de upload/delete
+    - Accessor getAvatarUrlAttribute() (genera URL completa como logo_url)
+    - ProfilePage con drag & drop upload
+    - Avatar en Navbar con fallback a iniciales
+    - Cache-busting automático para recargas
 - Módulo 2 (Multi-Tenancy Backend + TenantSwitcher) ✅ 100%
   - Backend: TenantController completo
   - Frontend: TenantSwitcher con logo_url, tema oscuro y reload automático ✅
@@ -19,11 +26,18 @@
   - Frontend: usersStore, UsersListPage, UsersPage, UserDetailPage, UserFormPage
   - Componentes: SupervisorSelector, SupervisorBadge, SubordinatesList, UserTenantsManager
   - Permisos: Solo ROOT puede crear/editar/eliminar usuarios ✅
-  - ConfirmDialog reemplazando confirm() nativos ✅
+  - **ConfirmDialog en todas las acciones** ✅
+    - UsersPage: ConfirmDialog para eliminar usuarios
+    - DocumentsListPage: ConfirmDialog para eliminar documentos
+    - ZERO confirm() o alert() nativos en toda la aplicación
 - Módulo 4 (Documentos) ✅ 100% - **COMPLETADO**
   
   **Backend (100% completado):**
   - ✅ DocumentController con filtros avanzados (status, tipo, periodo, búsqueda, fechas)
+  - ✅ **Archivos protegidos** - Solo accesibles vía endpoints autenticados
+  - ✅ Storage en `storage/app/documents/` (NO público, NO acceso directo)
+  - ✅ Endpoints `/preview` y `/download` con validación de permisos
+  - ✅ Clientes solo ven sus propios documentos
   - ✅ Filtrado por tenant_id en todos los endpoints (my_documents, client, admin)
   - ✅ DocumentBatchController con procesamiento asíncrono de ZIP
   - ✅ DocumentTypeController para gestión de tipos
@@ -37,6 +51,7 @@
   
   **Frontend - Admin (100% completado):**
   - ✅ DocumentsListPage con filtros avanzados + DateRangePicker
+  - ✅ ConfirmDialog para eliminar documentos (NO confirm() nativo)
   - ✅ BatchesListPage con DateRangePicker + filtro de estado
   - ✅ BatchDetailPage con detalles completos del lote
   - ✅ DocumentUploadView para carga masiva de ZIP
@@ -77,6 +92,13 @@
   - ✅ Documentos cambian de 'orphan' a 'pending' (si requiere firma) o 'active'
   - ✅ Filtrado por tenant_id para asignación correcta
   - ✅ Logs detallados de asignaciones automáticas
+  
+  **Seguridad de Documentos (100% completado):**
+  - ✅ Archivos NO accesibles directamente por URL
+  - ✅ Solo sirven vía endpoints autenticados con Sanctum
+  - ✅ Validación de permisos antes de servir archivos
+  - ✅ Clientes solo acceden a sus propios documentos
+  - ✅ Storage privado (`storage/app/documents/` NO en public)
 
 **📋 Módulo 4 - COMPLETADO AL 100%** ✅
 **📋 Siguiente Paso:** Comenzar Módulo 5 (Vacaciones) o Módulo 6 (Notificaciones)
