@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AssignTenantsRequest;
 use App\Http\Requests\StoreTenantRequest;
 use App\Http\Requests\UpdateTenantRequest;
+use App\Http\Resources\TenantResource;
 use App\Models\Tenant;
-use App\Models\User;
+use App\Services\TenantService;
 use Illuminate\Http\Request;
 
 /**
@@ -18,6 +20,11 @@ use Illuminate\Http\Request;
  */
 class TenantController extends Controller
 {
+    public function __construct(
+        protected TenantService $tenantService
+    ) {
+    }
+
     /**
      * @OA\Get(
      *     path="/api/tenants",
@@ -59,51 +66,16 @@ class TenantController extends Controller
      */
     public function index(Request $request)
     {
-        $user = $request->user();
+        $filters = [
+            'search' => $request->search,
+            'status' => $request->status,
+            'per_page' => $request->get('per_page', 10),
+        ];
 
-        $query = Tenant::query();
-
-        // Scope: Root ve todos, admin solo sus tenants
-        if (!$user->isRoot()) {
-            $tenantIds = $user->tenants->pluck('id');
-            $query->whereIn('id', $tenantIds);
-        }
-
-        // Búsqueda
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('ruc', 'like', "%{$search}%")
-                    ->orWhere('business_name', 'like', "%{$search}%");
-            });
-        }
-
-        // Filtro por estado
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        $perPage = $request->get('per_page', 10);
-        $tenants = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $tenants = $this->tenantService->getTenants($request->user(), $filters);
 
         return response()->json([
-            'data' => $tenants->map(function ($tenant) {
-                return [
-                    'id' => $tenant->id,
-                    'name' => $tenant->name,
-                    'ruc' => $tenant->ruc,
-                    'business_name' => $tenant->business_name,
-                    'address' => $tenant->address,
-                    'phone' => $tenant->phone,
-                    'logo_path' => $tenant->logo_path,
-                    'logo_url' => $tenant->logo_url,
-                    'status' => $tenant->status,
-                    'users_count' => $tenant->users()->count(),
-                    'created_at' => $tenant->created_at,
-                    'updated_at' => $tenant->updated_at,
-                ];
-            }),
+            'data' => $tenants->map(fn($t) => $this->tenantService->transformTenantForList($t)),
             'meta' => [
                 'current_page' => $tenants->currentPage(),
                 'last_page' => $tenants->lastPage(),
@@ -152,33 +124,11 @@ class TenantController extends Controller
      */
     public function store(StoreTenantRequest $request)
     {
-        $validated = $request->validated();
-
-        $tenant = Tenant::create([
-            'name' => $validated['name'],
-            'ruc' => $validated['ruc'],
-            'business_name' => $validated['business_name'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'logo_path' => $validated['logo_path'] ?? null,
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        $tenant = $this->tenantService->createTenant($request->validated());
 
         return response()->json([
             'message' => 'Tenant creado exitosamente',
-            'data' => [
-                'id' => $tenant->id,
-                'name' => $tenant->name,
-                'ruc' => $tenant->ruc,
-                'business_name' => $tenant->business_name,
-                'address' => $tenant->address,
-                'phone' => $tenant->phone,
-                'logo_path' => $tenant->logo_path,
-                'logo_url' => $tenant->logo_url,
-                'status' => $tenant->status,
-                'created_at' => $tenant->created_at,
-                'updated_at' => $tenant->updated_at,
-            ]
+            'data' => new TenantResource($tenant)
         ], 201);
     }
 
@@ -205,32 +155,15 @@ class TenantController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $user = $request->user();
-        $tenant = Tenant::findOrFail($id);
+        try {
+            $tenant = $this->tenantService->getTenant($id, $request->user());
 
-        // Verificar acceso: root o usuario del tenant
-        if (!$user->isRoot() && !$tenant->hasUser($user)) {
             return response()->json([
-                'message' => 'No autorizado para ver este tenant'
-            ], 403);
+                'data' => $this->tenantService->transformTenantForList($tenant)
+            ]);
+        } catch (UnauthorizedAccessException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
         }
-
-        return response()->json([
-            'data' => [
-                'id' => $tenant->id,
-                'name' => $tenant->name,
-                'ruc' => $tenant->ruc,
-                'business_name' => $tenant->business_name,
-                'address' => $tenant->address,
-                'phone' => $tenant->phone,
-                'logo_path' => $tenant->logo_path,
-                'logo_url' => $tenant->logo_url,
-                'status' => $tenant->status,
-                'users_count' => $tenant->users()->count(),
-                'created_at' => $tenant->created_at,
-                'updated_at' => $tenant->updated_at,
-            ]
-        ]);
     }
 
     /**
@@ -269,25 +202,11 @@ class TenantController extends Controller
     public function update(UpdateTenantRequest $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
-        $validated = $request->validated();
-
-        $tenant->update($validated);
+        $updatedTenant = $this->tenantService->updateTenant($tenant, $request->validated());
 
         return response()->json([
             'message' => 'Tenant actualizado exitosamente',
-            'data' => [
-                'id' => $tenant->id,
-                'name' => $tenant->name,
-                'ruc' => $tenant->ruc,
-                'business_name' => $tenant->business_name,
-                'address' => $tenant->address,
-                'phone' => $tenant->phone,
-                'logo_path' => $tenant->logo_path,
-                'logo_url' => $tenant->logo_url,
-                'status' => $tenant->status,
-                'created_at' => $tenant->created_at,
-                'updated_at' => $tenant->updated_at,
-            ]
+            'data' => new TenantResource($updatedTenant)
         ]);
     }
 
@@ -314,19 +233,15 @@ class TenantController extends Controller
      */
     public function destroy(Request $request, $id)
     {
-        // Solo root puede eliminar tenants
-        if (!$request->user()->isRoot()) {
+        try {
+            $this->tenantService->deleteTenant($id, $request->user());
+
             return response()->json([
-                'message' => 'No autorizado. Solo el administrador de plataforma puede eliminar tenants.'
-            ], 403);
+                'message' => 'Tenant eliminado exitosamente'
+            ]);
+        } catch (UnauthorizedAccessException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
         }
-
-        $tenant = Tenant::findOrFail($id);
-        $tenant->delete();
-
-        return response()->json([
-            'message' => 'Tenant eliminado exitosamente'
-        ]);
     }
 
     /**
@@ -350,36 +265,15 @@ class TenantController extends Controller
      */
     public function users(Request $request, $id)
     {
-        $user = $request->user();
-        $tenant = Tenant::findOrFail($id);
+        try {
+            $users = $this->tenantService->getTenantUsers($id, $request->user());
 
-        // Verificar acceso
-        if (!$user->isRoot() && !$tenant->hasUser($user)) {
             return response()->json([
-                'message' => 'No autorizado para ver usuarios de este tenant'
-            ], 403);
+                'data' => $users->map(fn($u) => $this->tenantService->transformUserForTenant($u))
+            ]);
+        } catch (UnauthorizedAccessException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
         }
-
-        $users = $tenant->users()->with('roles')->get();
-
-        return response()->json([
-            'data' => $users->map(function ($u) {
-                return [
-                    'id' => $u->id,
-                    'name' => $u->name,
-                    'last_name' => $u->last_name,
-                    'full_name' => $u->full_name,
-                    'email' => $u->email,
-                    'document_type' => $u->document_type,
-                    'document_text' => $u->document_text,
-                    'phone' => $u->phone,
-                    'status' => $u->status,
-                    'role' => $u->getCurrentRole(),
-                    'is_primary' => $u->pivot->is_primary ?? false,
-                    'created_at' => $u->created_at,
-                ];
-            })
-        ]);
     }
 
     /**
@@ -412,24 +306,18 @@ class TenantController extends Controller
     public function addUser(AssignTenantsRequest $request, $id)
     {
         $validated = $request->validated();
-        $tenant = Tenant::findOrFail($id);
 
-        $userToAdd = User::findOrFail($validated['user_id']);
+        $result = $this->tenantService->addUserToTenant(
+            $id,
+            $validated['user_id'],
+            $validated['is_primary'] ?? false
+        );
 
-        // Verificar si ya está asignado
-        if ($tenant->hasUser($userToAdd)) {
-            return response()->json([
-                'message' => 'El usuario ya está asignado a este tenant'
-            ], 422);
+        if (!$result['success']) {
+            return response()->json(['message' => $result['message']], 422);
         }
 
-        $tenant->users()->attach($userToAdd->id, [
-            'is_primary' => $validated['is_primary'] ?? false,
-        ]);
-
-        return response()->json([
-            'message' => 'Usuario agregado al tenant exitosamente'
-        ]);
+        return response()->json(['message' => $result['message']]);
     }
 
     /**
@@ -459,37 +347,16 @@ class TenantController extends Controller
      */
     public function removeUser(Request $request, $id, $userId)
     {
-        $currentUser = $request->user();
-        $tenant = Tenant::findOrFail($id);
+        try {
+            $result = $this->tenantService->removeUserFromTenant($id, $userId, $request->user());
 
-        // Verificar acceso: root o admin del tenant
-        if (!$currentUser->isRoot() && !$tenant->hasUser($currentUser)) {
-            return response()->json([
-                'message' => 'No autorizado para gestionar usuarios de este tenant'
-            ], 403);
+            if (!$result['success']) {
+                return response()->json(['message' => $result['message']], 422);
+            }
+
+            return response()->json(['message' => $result['message']]);
+        } catch (UnauthorizedAccessException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
         }
-
-        $userToRemove = User::findOrFail($userId);
-
-        // Verificar que el usuario esté asignado
-        if (!$tenant->hasUser($userToRemove)) {
-            return response()->json([
-                'message' => 'El usuario no está asignado a este tenant'
-            ], 422);
-        }
-
-        // No permitir remover si es el tenant primario
-        $pivot = $tenant->users()->where('users.id', $userId)->first()->pivot;
-        if ($pivot->is_primary) {
-            return response()->json([
-                'message' => 'No se puede remover el tenant primario del usuario. Asigna otro tenant como primario primero.'
-            ], 422);
-        }
-
-        $tenant->users()->detach($userId);
-
-        return response()->json([
-            'message' => 'Usuario removido del tenant exitosamente'
-        ]);
     }
 }
