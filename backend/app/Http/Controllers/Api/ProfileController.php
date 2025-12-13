@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Requests\UploadAvatarRequest;
+use App\Http\Resources\UserResource;
+use App\Services\ProfileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * @OA\Tag(
@@ -17,42 +18,19 @@ use Illuminate\Support\Facades\Storage;
  */
 class ProfileController extends Controller
 {
+    public function __construct(
+        protected ProfileService $profileService
+    ) {
+    }
+
     /**
      * Get current user profile
      */
     public function show(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $user->load(['roles', 'tenants', 'immediateSupervisor']);
-
-        return response()->json([
-            'id' => $user->id,
-            'name' => $user->name,
-            'last_name' => $user->last_name,
-            'full_name' => $user->full_name,
-            'email' => $user->email,
-            'avatar_url' => $user->avatar_url,
-            'document_type' => $user->document_type,
-            'document_text' => $user->document_text,
-            'phone' => $user->phone,
-            'status' => $user->status,
-            'role' => $user->getCurrentRole(),
-            'roles' => $user->getCurrentRoles(),
-            'tenants' => $user->tenants->map(fn($t) => [
-                'id' => $t->id,
-                'name' => $t->name,
-                'ruc' => $t->ruc,
-                'logo_url' => $t->logo_url,
-                'is_primary' => $t->pivot->is_primary,
-            ]),
-            'immediate_supervisor' => $user->immediateSupervisor ? [
-                'id' => $user->immediateSupervisor->id,
-                'full_name' => $user->immediateSupervisor->full_name,
-                'email' => $user->immediateSupervisor->email,
-            ] : null,
-            'created_at' => $user->created_at,
-            'updated_at' => $user->updated_at,
-        ]);
+        return response()->json(
+            $this->profileService->getProfile($request->user())
+        );
     }
 
     /**
@@ -60,16 +38,14 @@ class ProfileController extends Controller
      */
     public function update(UpdateProfileRequest $request): JsonResponse
     {
-        $user = $request->user();
-
-        $validated = $request->validated();
-
-        $user->update($validated);
-        $user->load(['roles', 'tenants']);
+        $user = $this->profileService->updateProfile(
+            $request->user(),
+            $request->validated()
+        );
 
         return response()->json([
             'message' => 'Perfil actualizado exitosamente',
-            'user' => $user,
+            'user' => new UserResource($user),
         ]);
     }
 
@@ -78,29 +54,14 @@ class ProfileController extends Controller
      */
     public function uploadAvatar(UploadAvatarRequest $request): JsonResponse
     {
-        $validated = $request->validated();
-
-        $user = $request->user();
-
-        // Delete old avatar if exists
-        if (!empty($user->attributes['avatar_url'])) {
-            Storage::disk('public')->delete($user->attributes['avatar_url']);
-        }
-
-        // Store new avatar
-        $file = $request->file('avatar');
-        $filename = 'avatar_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-        $path = $file->storeAs('avatars', $filename, 'public');
-
-        // Update user avatar_url with just the path (accessor will generate full URL)
-        $user->update(['avatar_url' => $path]);
-
-        // Reload to get accessor value
-        $user->refresh();
+        $avatarUrl = $this->profileService->uploadAvatar(
+            $request->user(),
+            $request->file('avatar')
+        );
 
         return response()->json([
             'message' => 'Foto de perfil actualizada exitosamente',
-            'avatar_url' => $user->avatar_url, // This will be the full URL from accessor
+            'avatar_url' => $avatarUrl,
         ]);
     }
 
@@ -109,12 +70,7 @@ class ProfileController extends Controller
      */
     public function deleteAvatar(Request $request): JsonResponse
     {
-        $user = $request->user();
-
-        if (!empty($user->attributes['avatar_url'])) {
-            Storage::disk('public')->delete($user->attributes['avatar_url']);
-            $user->update(['avatar_url' => null]);
-        }
+        $this->profileService->deleteAvatar($request->user());
 
         return response()->json([
             'message' => 'Foto de perfil eliminada exitosamente',

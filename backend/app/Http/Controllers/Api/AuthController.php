@@ -4,12 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
-use App\Models\RefreshToken;
-use App\Models\User;
+use App\Services\AuthService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use Carbon\Carbon;
 
 /**
  * @OA\Tag(
@@ -19,6 +16,11 @@ use Carbon\Carbon;
  */
 class AuthController extends Controller
 {
+    public function __construct(
+        protected AuthService $authService
+    ) {
+    }
+
     /**
      * @OA\Post(
      *     path="/api/login",
@@ -68,87 +70,24 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        $user = User::where('email', $validated['email'])->first();
+        $result = $this->authService->attemptLogin(
+            $validated['email'],
+            $validated['password'],
+            $request->ip(),
+            $request->userAgent()
+        );
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (!$result) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 
-        // Eliminar tokens anteriores del usuario
-        $user->tokens()->delete();
-
-        // Crear access token (duración: 1 hora)
-        $accessToken = $user->createToken('access_token', ['*'], now()->addHour())->plainTextToken;
-
-        // Crear refresh token en BD (duración: 30 días)
-        $refreshToken = RefreshToken::generate(
-            $user,
-            $request->ip(),
-            $request->userAgent()
-        );
-
-        // Actualizar último login
-        $user->update(['last_login_at' => Carbon::now()]);
-
-        // Cargar relaciones
-        $user->load(['roles', 'tenants']);
-
-        // Crear respuesta con cookies HttpOnly
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'last_name' => $user->last_name,
-                'full_name' => $user->full_name,
-                'email' => $user->email,
-                'avatar_url' => $user->avatar_url,
-                'document_type' => $user->document_type,
-                'document_text' => $user->document_text,
-                'phone' => $user->phone,
-                'status' => $user->status,
-                'must_change_password' => $user->must_change_password,
-                'role' => $user->getCurrentRole(),
-                'roles' => $user->getCurrentRoles(),
-                'tenants' => $user->tenants->map(function ($tenant) {
-                    return [
-                        'id' => $tenant->id,
-                        'name' => $tenant->name,
-                        'ruc' => $tenant->ruc,
-                        'logo_url' => $tenant->logo_url,
-                        'is_primary' => $tenant->pivot->is_primary,
-                    ];
-                }),
-                'primary_tenant' => $user->primaryTenant() ? [
-                    'id' => $user->primaryTenant()->id,
-                    'name' => $user->primaryTenant()->name,
-                    'ruc' => $user->primaryTenant()->ruc,
-                ] : null,
-                'created_at' => $user->created_at,
-                'updated_at' => $user->updated_at,
-            ],
-        ])->cookie(
-                'access_token',
-                $accessToken,
-                60, // 1 hora en minutos
-                '/',
-                null,
-                false, // secure - false en desarrollo, true en producción
-                true, // httpOnly
-                false,
-                'Lax'
-            )->cookie(
-                'refresh_token',
-                $refreshToken->token,
-                60 * 24 * 30, // 30 días en minutos
-                '/',
-                null,
-                false, // secure - false en desarrollo, true en producción
-                true, // httpOnly
-                false,
-                'Strict'
-            );
+            'user' => $this->authService->transformAuthUser($result['user']),
+        ])
+            ->cookie($this->authService->createAccessTokenCookie($result['access_token']))
+            ->cookie($this->authService->createRefreshTokenCookie($result['refresh_token']->token));
     }
 
     /**
@@ -177,71 +116,17 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Buscar refresh token en BD
-        $refreshToken = RefreshToken::where('token', $refreshTokenValue)->first();
+        $result = $this->authService->refreshAccessToken($refreshTokenValue);
 
-        if (!$refreshToken || !$refreshToken->isValid()) {
+        if (!$result) {
             return response()->json([
                 'message' => 'Refresh token inválido o expirado',
             ], 401);
         }
 
-        // Actualizar último uso
-        $refreshToken->updateLastUsed();
-
-        // Obtener usuario
-        $user = $refreshToken->user;
-
-        // Eliminar access tokens anteriores
-        $user->tokens()->delete();
-
-        // Crear nuevo access token (1 hora)
-        $accessToken = $user->createToken('access_token', ['*'], now()->addHour())->plainTextToken;
-
-        // Cargar relaciones
-        $user->load(['roles', 'tenants']);
-
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'last_name' => $user->last_name,
-                'full_name' => $user->full_name,
-                'email' => $user->email,
-                'avatar_url' => $user->avatar_url,
-                'document_type' => $user->document_type,
-                'document_text' => $user->document_text,
-                'phone' => $user->phone,
-                'status' => $user->status,
-                'must_change_password' => $user->must_change_password,
-                'role' => $user->getCurrentRole(),
-                'roles' => $user->getCurrentRoles(),
-                'tenants' => $user->tenants->map(function ($tenant) {
-                    return [
-                        'id' => $tenant->id,
-                        'name' => $tenant->name,
-                        'ruc' => $tenant->ruc,
-                        'logo_url' => $tenant->logo_url,
-                        'is_primary' => $tenant->pivot->is_primary,
-                    ];
-                }),
-                'primary_tenant' => $user->primaryTenant() ? [
-                    'id' => $user->primaryTenant()->id,
-                    'name' => $user->primaryTenant()->name,
-                    'ruc' => $user->primaryTenant()->ruc,
-                ] : null,
-            ],
-        ])->cookie(
-                'access_token',
-                $accessToken,
-                60, // 1 hora
-                '/',
-                null,
-                false, // secure - false en desarrollo
-                true,
-                false,
-                'Lax'
-            );
+            'user' => $this->authService->transformAuthUser($result['user']),
+        ])->cookie($this->authService->createAccessTokenCookie($result['access_token']));
     }
 
     /**
@@ -272,37 +157,7 @@ class AuthController extends Controller
         $user = $request->user();
         $user->load(['roles', 'tenants']);
 
-        return response()->json([
-            'id' => $user->id,
-            'name' => $user->name,
-            'last_name' => $user->last_name,
-            'full_name' => $user->full_name,
-            'email' => $user->email,
-            'avatar_url' => $user->avatar_url,
-            'document_type' => $user->document_type,
-            'document_text' => $user->document_text,
-            'phone' => $user->phone,
-            'status' => $user->status,
-            'must_change_password' => $user->must_change_password,
-            'role' => $user->getCurrentRole(),
-            'roles' => $user->getCurrentRoles(),
-            'tenants' => $user->tenants->map(function ($tenant) {
-                return [
-                    'id' => $tenant->id,
-                    'name' => $tenant->name,
-                    'ruc' => $tenant->ruc,
-                    'logo_url' => $tenant->logo_url,
-                    'is_primary' => $tenant->pivot->is_primary,
-                ];
-            }),
-            'primary_tenant' => $user->primaryTenant() ? [
-                'id' => $user->primaryTenant()->id,
-                'name' => $user->primaryTenant()->name,
-                'ruc' => $user->primaryTenant()->ruc,
-            ] : null,
-            'created_at' => $user->created_at,
-            'updated_at' => $user->updated_at,
-        ]);
+        return response()->json($this->authService->transformAuthUser($user));
     }
 
     /**
@@ -327,37 +182,12 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
-        $user = $request->user();
-
-        // Eliminar todos los access tokens
-        $user->tokens()->delete();
-
-        // Revocar todos los refresh tokens
-        RefreshToken::revokeAllForUser($user->id);
+        $this->authService->logout($request->user());
 
         return response()->json([
             'message' => 'Sesión cerrada correctamente',
-        ])->cookie(
-                'access_token',
-                '',
-                -1, // Expirar inmediatamente
-                '/',
-                null,
-                false, // secure - false en desarrollo
-                true,
-                false,
-                'Lax'
-            )->cookie(
-                'refresh_token',
-                '',
-                -1, // Expirar inmediatamente
-                '/',
-                null,
-                false, // secure - false en desarrollo
-                true,
-                false,
-                'Strict'
-            );
+        ])
+            ->cookie($this->authService->createExpiredCookie('access_token'))
+            ->cookie($this->authService->createExpiredCookie('refresh_token'));
     }
 }
-
