@@ -50,10 +50,21 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<{ batchId: number } | null>(null);
 
-  // Load document types on mount
+  // Reset form and load document types on mount
   useEffect(() => {
+    // Reset all form state when component mounts
+    setSelectedFile(null);
+    setTypeId("");
+    setPeriod("");
+    setNotifyEmployees(false);
+    setRequiresSignature(false);
+    setUploadSuccess(null);
+    clearZipPreview();
+    clearError();
+
+    // Load document types
     fetchDocumentTypes();
-  }, [fetchDocumentTypes]);
+  }, [fetchDocumentTypes, clearZipPreview, clearError]);
 
 
 
