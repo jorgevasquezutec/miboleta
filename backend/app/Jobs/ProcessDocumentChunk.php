@@ -39,8 +39,6 @@ class ProcessDocumentChunk implements ShouldQueue
      */
     public function handle(): void
     {
-        Log::info("ProcessDocumentChunk: Procesando " . count($this->files) . " archivos para batch {$this->batch->id}");
-
         $zip = new ZipArchive();
         $fullPath = Storage::disk('local')->path($this->zipPath);
 
@@ -157,10 +155,6 @@ class ProcessDocumentChunk implements ShouldQueue
             replaced: $isReplacement,
             orphan: $isOrphan
         );
-
-        Log::info("ProcessDocumentChunk: Procesado {$file['filename']} - " .
-            ($isReplacement ? 'REEMPLAZADO' : 'NUEVO') . ' - ' .
-            ($isOrphan ? 'HUÉRFANO' : 'ASIGNADO'));
     }
 
     // finalizeBatch() method removed - now handled by BatchCompletedCallback

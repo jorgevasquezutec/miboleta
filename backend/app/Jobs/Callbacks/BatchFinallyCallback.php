@@ -18,7 +18,6 @@ class BatchFinallyCallback
         // Limpiar archivo ZIP temporal
         try {
             Storage::disk('local')->delete($this->zipPath);
-            Log::info("BatchFinallyCallback: Archivo temporal eliminado: {$this->zipPath}");
         } catch (\Exception $e) {
             Log::warning("BatchFinallyCallback: No se pudo eliminar archivo temporal: {$this->zipPath}");
         }

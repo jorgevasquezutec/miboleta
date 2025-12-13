@@ -19,8 +19,6 @@ class BatchCompletedCallback
 
     public function __invoke(Batch $laravelBatch): void
     {
-        Log::info("BatchCompletedCallback: Laravel Batch {$laravelBatch->id} completado");
-
         // Marcar como completado
         $this->batch->markAsCompleted();
 

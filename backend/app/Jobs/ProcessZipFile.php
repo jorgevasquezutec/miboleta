@@ -34,8 +34,6 @@ class ProcessZipFile implements ShouldQueue
      */
     public function handle(): void
     {
-        Log::info("ProcessZipFile: Iniciando procesamiento del batch {$this->batch->id}");
-
         $this->batch->markAsStarted();
 
         try {
@@ -112,8 +110,6 @@ class ProcessZipFile implements ShouldQueue
 
             // Guardar el ID del batch de Laravel
             $this->batch->update(['laravel_batch_id' => $laravelBatch->id]);
-
-            Log::info("ProcessZipFile: Laravel Batch {$laravelBatch->id} despachado con " . count($jobs) . " jobs");
 
         } catch (\Exception $e) {
             Log::error("ProcessZipFile: Error procesando batch {$this->batch->id}: {$e->getMessage()}");
