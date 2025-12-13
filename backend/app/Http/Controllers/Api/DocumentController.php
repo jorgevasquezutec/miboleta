@@ -29,9 +29,90 @@ class DocumentController extends Controller
     }
 
     /**
-     * Lista los documentos según el rol del usuario
-     * - Root/Admin: todos los documentos del tenant
-     * - Client: solo sus documentos
+     * @OA\Get(
+     *     path="/api/documents",
+     *     tags={"Documentos"},
+     *     summary="Listar documentos",
+     *     description="Lista documentos según rol: Root/Admin ven todos del tenant, Client solo los suyos",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="X-Tenant-Id",
+     *         in="header",
+     *         description="ID del tenant",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="my_documents",
+     *         in="query",
+     *         description="Si true, retorna solo documentos del usuario autenticado",
+     *         required=false,
+     *         @OA\Schema(type="boolean")
+     *     ),
+     *     @OA\Parameter(
+     *         name="status",
+     *         in="query",
+     *         description="Filtrar por estado",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"pending", "signed", "orphan", "active"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="doc_type_id",
+     *         in="query",
+     *         description="Filtrar por tipo de documento",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="period",
+     *         in="query",
+     *         description="Filtrar por periodo (ej: 2024-01)",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Búsqueda por nombre de usuario o documento",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="date_from",
+     *         in="query",
+     *         description="Fecha desde (YYYY-MM-DD)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="date_to",
+     *         in="query",
+     *         description="Fecha hasta (YYYY-MM-DD)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="per_page",
+     *         in="query",
+     *         description="Resultados por página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=15)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de documentos",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Document")),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="current_page", type="integer"),
+     *                 @OA\Property(property="last_page", type="integer"),
+     *                 @OA\Property(property="per_page", type="integer"),
+     *                 @OA\Property(property="total", type="integer")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
      */
     public function index(Request $request): JsonResponse
     {
@@ -63,7 +144,29 @@ class DocumentController extends Controller
     }
 
     /**
-     * Muestra un documento específico
+     * @OA\Get(
+     *     path="/api/documents/{id}",
+     *     tags={"Documentos"},
+     *     summary="Obtener documento",
+     *     description="Obtiene los detalles de un documento específico",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del documento",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Detalles del documento",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Document")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="No autorizado"),
+     *     @OA\Response(response=404, description="Documento no encontrado")
+     * )
      */
     public function show(int $id): JsonResponse
     {
@@ -78,7 +181,27 @@ class DocumentController extends Controller
     }
 
     /**
-     * Descarga un documento
+     * @OA\Get(
+     *     path="/api/documents/{id}/download",
+     *     tags={"Documentos"},
+     *     summary="Descargar documento",
+     *     description="Descarga el archivo PDF del documento",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del documento",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Archivo PDF",
+     *         @OA\MediaType(mediaType="application/pdf")
+     *     ),
+     *     @OA\Response(response=403, description="No autorizado"),
+     *     @OA\Response(response=404, description="Documento no encontrado")
+     * )
      */
     public function download(int $id): BinaryFileResponse|JsonResponse
     {
@@ -96,7 +219,27 @@ class DocumentController extends Controller
     }
 
     /**
-     * Preview un documento (inline, sin descargar)
+     * @OA\Get(
+     *     path="/api/documents/{id}/preview",
+     *     tags={"Documentos"},
+     *     summary="Preview de documento",
+     *     description="Muestra el PDF inline en el navegador (sin descargar)",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del documento",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Archivo PDF inline",
+     *         @OA\MediaType(mediaType="application/pdf")
+     *     ),
+     *     @OA\Response(response=403, description="No autorizado"),
+     *     @OA\Response(response=404, description="Documento no encontrado")
+     * )
      */
     public function preview(int $id): BinaryFileResponse|JsonResponse
     {
@@ -115,7 +258,36 @@ class DocumentController extends Controller
     }
 
     /**
-     * Lista documentos huérfanos (solo admin/root)
+     * @OA\Get(
+     *     path="/api/documents/orphans",
+     *     tags={"Documentos"},
+     *     summary="Listar documentos huérfanos",
+     *     description="Lista documentos sin usuario asignado (solo admin/root)",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="X-Tenant-Id",
+     *         in="header",
+     *         description="ID del tenant",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="per_page",
+     *         in="query",
+     *         description="Resultados por página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=15)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de documentos huérfanos",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Document")),
+     *             @OA\Property(property="meta", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="No autorizado (solo admin/root)")
+     * )
      */
     public function orphans(Request $request): JsonResponse
     {
@@ -145,7 +317,37 @@ class DocumentController extends Controller
     }
 
     /**
-     * Asigna un documento huérfano a un usuario
+     * @OA\Post(
+     *     path="/api/documents/{id}/assign",
+     *     tags={"Documentos"},
+     *     summary="Asignar documento huérfano",
+     *     description="Asigna un documento huérfano a un usuario",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del documento",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"user_id"},
+     *             @OA\Property(property="user_id", type="string", description="ID del usuario")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Documento asignado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Documento asignado correctamente"),
+     *             @OA\Property(property="data", ref="#/components/schemas/Document")
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Documento no es huérfano"),
+     *     @OA\Response(response=404, description="Documento o usuario no encontrado")
+     * )
      */
     public function assignOrphan(AssignOrphanRequest $request, int $id): JsonResponse
     {
@@ -166,7 +368,29 @@ class DocumentController extends Controller
     }
 
     /**
-     * Elimina un documento (soft delete)
+     * @OA\Delete(
+     *     path="/api/documents/{id}",
+     *     tags={"Documentos"},
+     *     summary="Eliminar documento",
+     *     description="Elimina un documento (soft delete)",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del documento",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Documento eliminado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Documento eliminado correctamente")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="No autorizado"),
+     *     @OA\Response(response=404, description="Documento no encontrado")
+     * )
      */
     public function destroy(int $id): JsonResponse
     {

@@ -17,10 +17,42 @@ use Illuminate\Support\Str;
 class FileUploadController extends Controller
 {
     /**
-     * Upload tenant logo
-     *
-     * @param UploadTenantLogoRequest $request
-     * @return \Illuminate\Http\JsonResponse
+     * @OA\Post(
+     *     path="/api/upload/tenant-logo",
+     *     tags={"Archivos"},
+     *     summary="Subir logo de tenant",
+     *     description="Sube una imagen para usar como logo de una organización",
+     *     security={{"sanctum":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"logo"},
+     *                 @OA\Property(property="logo", type="string", format="binary", description="Imagen (jpg, png, svg, max 2MB)")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Logo subido exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="url", type="string", example="tenants/logos/abc123.png"),
+     *             @OA\Property(property="full_url", type="string", example="http://localhost/storage/tenants/logos/abc123.png"),
+     *             @OA\Property(property="path", type="string", example="tenants/logos/abc123.png"),
+     *             @OA\Property(property="message", type="string", example="Logo uploaded successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Archivo inválido"
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Error al subir el archivo"
+     *     )
+     * )
      */
     public function uploadTenantLogo(UploadTenantLogoRequest $request)
     {
@@ -55,10 +87,36 @@ class FileUploadController extends Controller
     }
 
     /**
-     * Delete uploaded file
-     *
-     * @param DeleteFileRequest $request
-     * @return \Illuminate\Http\JsonResponse
+     * @OA\Delete(
+     *     path="/api/upload/file",
+     *     tags={"Archivos"},
+     *     summary="Eliminar archivo",
+     *     description="Elimina un archivo previamente subido",
+     *     security={{"sanctum":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"path"},
+     *             @OA\Property(property="path", type="string", example="tenants/logos/abc123.png", description="Ruta del archivo a eliminar")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Archivo eliminado exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="File deleted successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Archivo no encontrado"
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Error al eliminar el archivo"
+     *     )
+     * )
      */
     public function deleteFile(DeleteFileRequest $request)
     {
