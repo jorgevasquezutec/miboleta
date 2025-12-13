@@ -23,6 +23,7 @@ import {
     TableRow,
 } from "@/presentation/components/ui/table";
 import { useDocumentsStore } from "@/presentation/stores";
+import { getBatchStatusBadge, getDocumentStatusBadgeInline, formatDateTime } from "@/presentation/utils";
 
 export function BatchDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -58,61 +59,6 @@ export function BatchDetailPage() {
         );
     }
 
-    const formatDate = (dateStr: string | null) => {
-        if (!dateStr) return "-";
-        return new Date(dateStr).toLocaleString("es-PE", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
-
-    const getStatusBadge = (status: string) => {
-        const config = {
-            pending: {
-                label: "Pendiente",
-                bgColor: "#eab308",
-                icon: <Clock className="w-3 h-3" />
-            },
-            processing: {
-                label: "Procesando",
-                bgColor: "#3b82f6",
-                icon: <RefreshCw className="w-3 h-3 animate-spin" />
-            },
-            completed: {
-                label: "Completado",
-                bgColor: "#22c55e",
-                icon: <CheckCircle className="w-3 h-3" />
-            },
-            failed: {
-                label: "Fallido",
-                bgColor: "#ef4444",
-                icon: <XCircle className="w-3 h-3" />
-            },
-            partial: {
-                label: "Parcial",
-                bgColor: "#f97316",
-                icon: <AlertTriangle className="w-3 h-3" />
-            },
-        };
-
-        const item = config[status as keyof typeof config] || config.pending;
-        return (
-            <span
-                style={{
-                    backgroundColor: item.bgColor,
-                    color: 'white'
-                }}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
-            >
-                {item.icon}
-                {item.label}
-            </span>
-        );
-    };
-
     const progressPercentage = currentBatch.progressPercentage || 0;
     const summary = currentBatch.documentsSummary;
 
@@ -130,7 +76,7 @@ export function BatchDetailPage() {
                     </h1>
                     <p className="text-[#64748B]">{currentBatch.originalFilename}</p>
                 </div>
-                {getStatusBadge(currentBatch.status)}
+                {getBatchStatusBadge(currentBatch.status)}
             </div>
 
             {/* Progress Bar */}
@@ -223,15 +169,15 @@ export function BatchDetailPage() {
                         </div>
                         <div className="flex justify-between py-2 border-b">
                             <span className="text-[#64748B]">Fecha de carga</span>
-                            <span className="font-medium">{formatDate(currentBatch.createdAt)}</span>
+                            <span className="font-medium">{formatDateTime(currentBatch.createdAt)}</span>
                         </div>
                         <div className="flex justify-between py-2 border-b">
                             <span className="text-[#64748B]">Iniciado</span>
-                            <span className="font-medium">{formatDate(currentBatch.startedAt)}</span>
+                            <span className="font-medium">{formatDateTime(currentBatch.startedAt)}</span>
                         </div>
                         <div className="flex justify-between py-2 border-b">
                             <span className="text-[#64748B]">Completado</span>
-                            <span className="font-medium">{formatDate(currentBatch.completedAt)}</span>
+                            <span className="font-medium">{formatDateTime(currentBatch.completedAt)}</span>
                         </div>
                         <div className="flex justify-between py-2 border-b">
                             <span className="text-[#64748B]">Notificar empleados</span>
@@ -335,16 +281,7 @@ export function BatchDetailPage() {
                             <TableBody>
                                 {documents
                                     .filter(d => d.batchId === currentBatch.id)
-                                    .map((doc) => {
-                                        const statusColors = {
-                                            pending: { bg: "#eab308", label: "Pendiente" },
-                                            signed: { bg: "#22c55e", label: "Firmado" },
-                                            orphan: { bg: "#f97316", label: "Huérfano" },
-                                            expired: { bg: "#ef4444", label: "Expirado" },
-                                        };
-                                        const statusInfo = statusColors[doc.status as keyof typeof statusColors] || statusColors.pending;
-
-                                        return (
+                                    .map((doc) => (
                                             <TableRow key={doc.id}>
                                                 <TableCell>
                                                     <div>
@@ -357,12 +294,7 @@ export function BatchDetailPage() {
                                                     {doc.originalName}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <span
-                                                        style={{ backgroundColor: statusInfo.bg, color: 'white' }}
-                                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
-                                                    >
-                                                        {statusInfo.label}
-                                                    </span>
+                                                    {getDocumentStatusBadgeInline(doc.status)}
                                                 </TableCell>
                                                 <TableCell className="text-sm text-[#64748B]">
                                                     {new Date(doc.createdAt).toLocaleDateString('es-PE')}
@@ -377,8 +309,7 @@ export function BatchDetailPage() {
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
-                                        );
-                                    })}
+                                    ))}
                             </TableBody>
                         </Table>
                     </CardContent>

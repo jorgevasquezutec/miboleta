@@ -22,16 +22,17 @@ import {
     TableRow,
 } from "@/presentation/components/ui/table";
 import { DateRangePicker } from "@/presentation/components/ui/date-range-picker";
+import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { useAuthStore } from "@/presentation/stores";
+import { getDocumentStatusBadgeInline } from "@/presentation/utils";
 
 export function DocumentsListPage() {
     const navigate = useNavigate();
     const { user } = useAuthStore();
     const {
         documents,
-        documentTypes,
         fetchDocuments,
         fetchDocumentTypes,
         deleteDocument,
@@ -40,15 +41,22 @@ export function DocumentsListPage() {
         totalPages,
     } = useDocumentsStore();
 
+    const [documentTypes, setDocumentTypes] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [typeFilter, setTypeFilter] = useState<string>("all");
-    const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [currentPage, setCurrentPage] = useState(1);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
 
     useEffect(() => {
-        fetchDocumentTypes();
-    }, []);
+        const fetchTypes = async () => {
+            await fetchDocumentTypes();
+            // Document types are now in the store
+        };
+        fetchTypes();
+    }, [fetchDocumentTypes]);
 
     useEffect(() => {
         fetchDocuments({
@@ -76,10 +84,15 @@ export function DocumentsListPage() {
         });
     };
 
-    const handleDelete = async (id: number) => {
-        if (confirm("¿Estás seguro de que deseas eliminar este documento?")) {
+    const handleDeleteClick = (id: number) => {
+        setDocumentToDelete(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (documentToDelete) {
             try {
-                await deleteDocument(id);
+                await deleteDocument(documentToDelete);
                 // Refetch current page
                 fetchDocuments({
                     page: currentPage,
@@ -92,27 +105,11 @@ export function DocumentsListPage() {
                 });
             } catch (error) {
                 console.error("Error deleting document:", error);
+            } finally {
+                setDeleteDialogOpen(false);
+                setDocumentToDelete(null);
             }
         }
-    };
-
-    const getStatusBadge = (status: string) => {
-        const statusColors = {
-            pending: { bg: "#eab308", label: "Pendiente" },
-            signed: { bg: "#22c55e", label: "Firmado" },
-            orphan: { bg: "#f97316", label: "Huérfano" },
-            expired: { bg: "#ef4444", label: "Expirado" },
-        };
-        const statusInfo = statusColors[status as keyof typeof statusColors] || statusColors.pending;
-
-        return (
-            <span
-                style={{ backgroundColor: statusInfo.bg, color: "white" }}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
-            >
-                {statusInfo.label}
-            </span>
-        );
     };
 
     return (
@@ -175,8 +172,9 @@ export function DocumentsListPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">Todos</SelectItem>
-                                    <SelectItem value="pending">Pendiente</SelectItem>
+                                    <SelectItem value="pending">Pendiente Firma</SelectItem>
                                     <SelectItem value="signed">Firmado</SelectItem>
+                                    <SelectItem value="active">Disponible</SelectItem>
                                     <SelectItem value="orphan">Huérfano</SelectItem>
                                     <SelectItem value="expired">Expirado</SelectItem>
                                 </SelectContent>
@@ -269,7 +267,7 @@ export function DocumentsListPage() {
                                                     minute: '2-digit'
                                                 })}
                                             </TableCell>
-                                            <TableCell>{getStatusBadge(doc.status)}</TableCell>
+                                            <TableCell>{getDocumentStatusBadgeInline(doc.status)}</TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <Button
@@ -284,7 +282,7 @@ export function DocumentsListPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            onClick={() => handleDelete(doc.id)}
+                                                            onClick={() => handleDeleteClick(doc.id)}
                                                             title="Eliminar documento"
                                                         >
                                                             <Trash2 className="w-4 h-4 text-red-600" />
@@ -326,6 +324,16 @@ export function DocumentsListPage() {
                     )}
                 </CardContent>
             </Card>
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                onConfirm={handleDeleteConfirm}
+                title="Eliminar Documento"
+                description="¿Estás seguro de que deseas eliminar este documento? Esta acción no se puede deshacer."
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+            />
         </div>
     );
 }

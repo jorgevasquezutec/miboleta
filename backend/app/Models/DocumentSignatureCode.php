@@ -32,7 +32,7 @@ class DocumentSignatureCode extends Model
     public const CODE_LENGTH = 6;
     public const EXPIRY_MINUTES = 5;
     public const MAX_ATTEMPTS = 3;
-    public const COOLDOWN_SECONDS = 60;
+    public const COOLDOWN_SECONDS = 30;
 
     /**
      * Get the document

@@ -4,7 +4,6 @@ import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search, Loader2
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
-import { Badge } from "@/presentation/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -14,6 +13,7 @@ import {
 } from "@/presentation/components/ui/select";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
+import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
 
 interface EmployeeDashboardViewProps {
   onViewDocument?: (id: number) => void;
@@ -80,25 +80,6 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   // Estadísticas
   const pendingCount = documents.filter(d => d.status === "pending").length;
   const signedCount = documents.filter(d => d.status === "signed").length;
-
-  const getStatusBadge = (status: Document['status']) => {
-    const statusConfig = {
-      pending: { label: "Pendiente", className: "bg-yellow-500 text-white" },
-      signed: { label: "Firmado", className: "bg-green-500 text-white" },
-      orphan: { label: "Huérfano", className: "bg-orange-500 text-white" },
-      expired: { label: "Expirado", className: "bg-red-500 text-white" },
-    };
-    const config = statusConfig[status] || statusConfig.pending;
-    return <Badge className={config.className}>{config.label}</Badge>;
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
 
   if (error) {
     return (
@@ -287,7 +268,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                             <h3 className="font-semibold truncate">
                               {doc.documentType?.displayName || "Documento"}
                             </h3>
-                            {getStatusBadge(doc.status)}
+                            {getDocumentStatusBadge(doc.status)}
                           </div>
                           <div className="flex items-center gap-4 text-sm text-[#64748B]">
                             <span className="flex items-center gap-1">
@@ -314,7 +295,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                           >
                             <Download className="w-4 h-4" />
                           </Button>
-                          {doc.status === "pending" && doc.documentType?.requiresSignature && (
+                          {doc.status === "pending" && (doc.requiresSignature || doc.documentType?.requiresSignature) && (
                             <Button
                               size="sm"
                               className="bg-[#2563EB] hover:bg-[#1E40AF]"

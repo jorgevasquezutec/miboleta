@@ -15,6 +15,8 @@ interface AuthState {
   me: () => Promise<void>;
   switchTenant: (tenantId: string) => void;
   updateProfile: (updates: Partial<User>) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<string>;
+  deleteAvatar: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -92,9 +94,9 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const user = await userRepository.me();
-          
+
           // Actualizar tenant actual si el usuario cambió
-          const currentTenant = 
+          const currentTenant =
             user.tenants?.find(t => t.is_primary) ||
             user.tenants?.[0] ||
             null;
@@ -143,6 +145,63 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           set({
             error: error instanceof Error ? error.message : "Error al actualizar perfil",
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      uploadAvatar: async (file: File) => {
+        const { user } = get();
+        if (!user) throw new Error("No user logged in");
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const formData = new FormData();
+          formData.append('avatar', file);
+
+          const apiClient = (await import('@/infrastructure/http/apiClient')).default;
+          const response = await apiClient.post('/profile/avatar', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          // Update user with new avatar_url
+          set({
+            user: { ...user, avatar_url: response.data.avatar_url },
+            isLoading: false,
+          });
+
+          return response.data.avatar_url;
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : "Error al subir avatar",
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      deleteAvatar: async () => {
+        const { user } = get();
+        if (!user) throw new Error("No user logged in");
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const apiClient = (await import('@/infrastructure/http/apiClient')).default;
+          await apiClient.delete('/profile/avatar');
+
+          // Update user without avatar_url
+          set({
+            user: { ...user, avatar_url: undefined },
+            isLoading: false,
+          });
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : "Error al eliminar avatar",
             isLoading: false,
           });
           throw error;

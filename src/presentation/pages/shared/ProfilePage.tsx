@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { ArrowLeft, User as UserIcon, Mail, Phone, FileText, Building2, Shield, Calendar, Save, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, User as UserIcon, Mail, Phone, FileText, Building2, Shield, Calendar, Save, Loader2, Upload, Trash2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
@@ -14,13 +14,16 @@ interface ProfilePageProps {
 }
 
 export function ProfilePage({ onBack }: ProfilePageProps) {
-  const { user, me, updateProfile, isLoading } = useAuthStore();
+  const { user, me, updateProfile, uploadAvatar, deleteAvatar, isLoading } = useAuthStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [avatarTimestamp, setAvatarTimestamp] = useState(Date.now());
 
   // Cargar datos del usuario al montar el componente
   useEffect(() => {
@@ -41,8 +44,54 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
       setName(user.name || "");
       setLastName(user.last_name || "");
       setPhone(user.phone || "");
+      // Update timestamp when avatar changes
+      setAvatarTimestamp(Date.now());
     }
-  }, [user]);
+  }, [user, user?.avatar_url]);
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error("Por favor selecciona una imagen");
+      return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("La imagen no puede superar 2MB");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      await uploadAvatar(file);
+      toast.success("Foto de perfil actualizada correctamente");
+    } catch (error) {
+      toast.error("Error al subir la foto");
+      console.error(error);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    setUploading(true);
+    try {
+      await deleteAvatar();
+      toast.success("Foto de perfil eliminada");
+    } catch (error) {
+      toast.error("Error al eliminar la foto");
+      console.error(error);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!name.trim()) {
@@ -136,7 +185,10 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
             {/* Avatar */}
             <div className="flex flex-col items-center gap-4">
               <Avatar className="w-24 h-24">
-                <AvatarImage src="" />
+                <AvatarImage
+                  src={user.avatar_url ? `${user.avatar_url}?t=${avatarTimestamp}` : ""}
+                  key={user.avatar_url || 'no-avatar'}
+                />
                 <AvatarFallback className="bg-[#2563EB] text-white text-2xl">
                   {(user.full_name || user.name || user.email || "U")
                     .split(" ")
@@ -146,6 +198,42 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
                     .slice(0, 2)}
                 </AvatarFallback>
               </Avatar>
+
+              {/* Avatar Upload Controls */}
+              <div className="flex flex-col gap-2 w-full">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={uploading || isLoading}
+                />
+
+                <Button
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || isLoading}
+                  className="w-full bg-[#2563EB] hover:bg-[#1E40AF]"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploading ? "Subiendo..." : "Cambiar Foto"}
+                </Button>
+
+                {user.avatar_url && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleDeleteAvatar}
+                    disabled={uploading || isLoading}
+                    className="w-full"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Eliminar
+                  </Button>
+                )}
+              </div>
+
               <div className="text-center">
                 <h3 className="font-semibold text-[#1E293B]">{user.full_name || user.name}</h3>
                 <p className="text-sm text-[#64748B]">{user.email}</p>

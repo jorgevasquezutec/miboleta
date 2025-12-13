@@ -12,7 +12,7 @@ export interface Document {
   filePath: string;
   fileSize: number;
   originalName: string;
-  status: 'pending' | 'signed' | 'orphan' | 'expired';
+  status: 'pending' | 'signed' | 'active' | 'orphan' | 'expired';
   uploadedBy: number;
   requiresSignature: boolean;
   signature: SignatureData | null;
@@ -56,8 +56,9 @@ export interface DocumentBatchSummary {
 
 // Status helpers
 export const documentStatusLabels: Record<Document['status'], string> = {
-  pending: 'Pendiente',
+  pending: 'Pendiente Firma',
   signed: 'Firmado',
+  active: 'Disponible',
   orphan: 'Huérfano',
   expired: 'Expirado',
 };
@@ -65,6 +66,7 @@ export const documentStatusLabels: Record<Document['status'], string> = {
 export const documentStatusColors: Record<Document['status'], string> = {
   pending: 'warning',
   signed: 'success',
+  active: 'info',
   orphan: 'secondary',
   expired: 'destructive',
 };

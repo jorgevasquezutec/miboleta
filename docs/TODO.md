@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
 **Última actualización:** 2025-12-12  
-**Estado general del proyecto:** ~88% completado
+**Estado general del proyecto:** ~98% completado
 
 **✅ Completado:**
 - Módulo 0 (Base de Datos) ✅ 100%
@@ -12,32 +12,74 @@
   - Emails: welcome.blade.php, forgot-password.blade.php, password-reset-admin.blade.php (HTML view)
 - Módulo 2 (Multi-Tenancy Backend + TenantSwitcher) ✅ 100%
   - Backend: TenantController completo
-  - Frontend: TenantSwitcher con logo_url y tema oscuro ✅
+  - Frontend: TenantSwitcher con logo_url, tema oscuro y reload automático ✅
+  - Filtrado automático por tenant en toda la plataforma ✅
 - Módulo 3 (Gestión de Usuarios) ✅ 100%
   - Backend: UserController completo con CRUD + supervisores + búsqueda corregida
   - Frontend: usersStore, UsersListPage, UsersPage, UserDetailPage, UserFormPage
   - Componentes: SupervisorSelector, SupervisorBadge, SubordinatesList, UserTenantsManager
   - Permisos: Solo ROOT puede crear/editar/eliminar usuarios ✅
   - ConfirmDialog reemplazando confirm() nativos ✅
+- Módulo 4 (Documentos) ✅ 100% - **COMPLETADO**
   
-**🚧 En Progreso:**
-- Módulo 4 (Documentos) ⏳ 85% - **EN PROGRESO**
-  - ✅ Backend: DocumentController, DocumentBatchController, DocumentTypeController
-  - ✅ Backend: DocumentSignatureController (firma digital 2FA)
-  - ✅ Backend: Carga masiva ZIP, procesamiento de documentos
-  - ✅ Backend: Filtro por rango de fechas (documentos y lotes)
-  - ✅ Backend: Preview de PDF con Content-Disposition inline
-  - ✅ Backend: Parámetro my_documents para vista personal
-  - ✅ Frontend: DocumentsListPage con filtros avanzados + DateRangePicker
-  - ✅ Frontend: BatchesListPage con DateRangePicker + BatchDetailPage
-  - ✅ Frontend: DocumentViewerView con react-pdf (PDFViewer component)
-  - ✅ Frontend: EmployeeDashboardView (Mis Documentos) con datos reales
-  - ✅ Frontend: Navegación consistente (navigate vs window.open)
-  - ✅ Frontend: Sidebar visible en todas las páginas
-  - ⏳ PENDIENTE: Firma digital en frontend (modal 2FA)
-  - ⏳ PENDIENTE: Documentos huérfanos (asignación)
+  **Backend (100% completado):**
+  - ✅ DocumentController con filtros avanzados (status, tipo, periodo, búsqueda, fechas)
+  - ✅ Filtrado por tenant_id en todos los endpoints (my_documents, client, admin)
+  - ✅ DocumentBatchController con procesamiento asíncrono de ZIP
+  - ✅ DocumentTypeController para gestión de tipos
+  - ✅ DocumentSignatureController (firma digital con 2FA)
+  - ✅ Sistema de cooldown (30 segundos) para solicitudes de código
+  - ✅ Límite de 3 intentos por código de verificación
+  - ✅ Parámetro `my_documents` para vista personal del usuario
+  - ✅ Filtro por rango de fechas en documentos y lotes
+  - ✅ Preview de PDF con Content-Disposition: inline
+  - ✅ Procesamiento de batches con Jobs y colas
+  
+  **Frontend - Admin (100% completado):**
+  - ✅ DocumentsListPage con filtros avanzados + DateRangePicker
+  - ✅ BatchesListPage con DateRangePicker + filtro de estado
+  - ✅ BatchDetailPage con detalles completos del lote
+  - ✅ DocumentUploadView para carga masiva de ZIP
+  - ✅ Sidebar con "Mis Documentos" como primer item (en vez de Dashboard)
+  - ✅ Navegación completa (Usuarios, Lotes, Documentos)
+  
+  **Frontend - Employee/Client (100% completado):**
+  - ✅ EmployeeDashboardView (Mis Documentos) con datos reales del API
+  - ✅ Filtrado correcto por tenant en documentos personales
+  - ✅ Botón "Firmar" visible solo para documentos pending + requiresSignature
+  - ✅ DocumentViewerView con react-pdf (navegación, zoom, rotación)
+  - ✅ PDFViewer component (fix ArrayBuffer detached error)
+  - ✅ Badge de estado con colores inline (fix visibilidad)
+  - ✅ Paginación visible siempre (estilo consistente)
+  - ✅ Sidebar exclusivo para cliente (solo "Mis Documentos")
+  - ✅ Navegación consistente (navigate vs window.open)
+  - ✅ Filtros de búsqueda, estado y tipo de documento
+  
+  **Firma Digital 2FA (100% completado):**
+  - ✅ DocumentSignatureModal con diseño compacto y responsive
+  - ✅ Flujo completo: Términos → Solicitar código → Verificar → Éxito
+  - ✅ Sistema de 3 intentos con mensajes de "Te quedan X intentos"
+  - ✅ Cooldown con countdown visible (30 segundos)
+  - ✅ Manejo de errores con toast (no cierra el modal)
+  - ✅ Auto-limpieza del código después de intento fallido
+  - ✅ Integración completa en DocumentViewerView
+  - ✅ OTP Input de 6 dígitos con timer de expiración
+  
+  **Sistema Multi-Tenant (100% completado):**
+  - ✅ TenantSwitcher con reload automático al cambiar empresa
+  - ✅ Header X-Tenant-Id actualizado correctamente
+  - ✅ Filtrado de documentos por user_id + tenant_id
+  - ✅ Cada usuario ve solo sus documentos de la empresa actual
+  
+  **Documentos Huérfanos (100% completado):**
+  - ✅ Auto-asignación cuando se crea usuario con document_text
+  - ✅ Auto-asignación cuando se actualiza document_text de usuario
+  - ✅ Documentos cambian de 'orphan' a 'pending' (si requiere firma) o 'active'
+  - ✅ Filtrado por tenant_id para asignación correcta
+  - ✅ Logs detallados de asignaciones automáticas
 
-**📋 Siguiente Paso:** Implementar firma digital con modal 2FA
+**📋 Módulo 4 - COMPLETADO AL 100%** ✅
+**📋 Siguiente Paso:** Comenzar Módulo 5 (Vacaciones) o Módulo 6 (Notificaciones)
 **📋 Pendiente:** Módulos 5-8
 
 

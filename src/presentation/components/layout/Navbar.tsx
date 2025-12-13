@@ -15,6 +15,7 @@ import { TenantSwitcher } from "@/presentation/components/shared/TenantSwitcher"
 interface NavbarProps {
   userName: string;
   userRole: string;
+  avatarUrl?: string;
   notificationCount?: number;
   onLogout?: () => void;
   onSettings?: () => void;
@@ -24,6 +25,7 @@ interface NavbarProps {
 export function Navbar({
   userName,
   userRole,
+  avatarUrl,
   notificationCount = 0,
   onLogout,
   onSettings,
@@ -65,7 +67,7 @@ export function Navbar({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-3 pl-2">
                 <Avatar>
-                  <AvatarImage src="" />
+                  <AvatarImage src={avatarUrl || ""} />
                   <AvatarFallback
                     className="text-white"
                     style={{ backgroundColor: brandingPrimaryColor }}

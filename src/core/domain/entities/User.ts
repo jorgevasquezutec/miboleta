@@ -19,12 +19,13 @@ export interface User {
   tenants?: TenantAssociation[];
   primary_tenant?: TenantBasic | null;
 
-  // Supervisor
+  //Supervisor
   immediate_supervisor?: SupervisorBasic | null;
   immediate_supervisor_id?: string | null;
 
   // Metadata
   avatar?: string;
+  avatar_url?: string;
   createdAt?: Date;
   updatedAt?: Date;
   created_at?: string;

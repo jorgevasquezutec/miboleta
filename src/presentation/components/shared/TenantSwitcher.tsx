@@ -20,7 +20,11 @@ export function TenantSwitcher() {
             switchTenant(tenantId);
             const newTenant = user?.tenants?.find(t => t.id === tenantId);
             if (newTenant) {
-                toast.success(`Cambiado a ${newTenant.name}`);
+                toast.success(`Cambiando a ${newTenant.name}...`);
+                // Reload page to refresh all data with new tenant context
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
             }
         } catch (error) {
             toast.error("Error al cambiar de tenant");

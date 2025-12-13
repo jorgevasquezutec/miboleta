@@ -70,13 +70,13 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
             <FileBarChart className="w-4 h-4" />
             Reportes
           </Button> */}
-          <Button
+          {/* <Button
             className="gap-2 bg-[#2563EB] hover:bg-[#1E40AF]"
             onClick={() => onNavigate("upload")}
           >
             <Upload className="w-4 h-4" />
             Cargar Documentos
-          </Button>
+          </Button> */}
         </div>
       </div>
 

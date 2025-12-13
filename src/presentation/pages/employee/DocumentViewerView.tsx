@@ -3,14 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import { ArrowLeft, Download, FileText, CheckCircle, Info, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
-import { Checkbox } from "@/presentation/components/ui/checkbox";
-import { Badge } from "@/presentation/components/ui/badge";
 import { Separator } from "@/presentation/components/ui/separator";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { toast } from "sonner";
 import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
-import { Document } from "@/core/domain/entities/Document";
-import { PDFViewer } from "@/presentation/components/PDFViewer";
+import { PDFViewer } from "@/presentation/components/shared/PDFViewer";
+import { DocumentSignatureModal } from "@/presentation/components/shared/DocumentSignatureModal";
+import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
 
 interface DocumentViewerViewProps {
   onBack: () => void;
@@ -21,10 +20,19 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
   const documentId = searchParams.get("id");
 
   const { user } = useAuthStore();
-  const { currentDocument, fetchDocumentById, isLoading, error } = useDocumentsStore();
+  const {
+    currentDocument,
+    fetchDocumentById,
+    isLoading,
+    error,
+    signatureTermsAccepted,
+    checkSignatureTerms,
+    acceptSignatureTerms,
+    requestSignatureCode,
+    signDocument,
+  } = useDocumentsStore();
 
-  const [hasRead, setHasRead] = useState(false);
-  const [isSigning, setIsSigning] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,14 +44,29 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
     }
   }, [documentId, fetchDocumentById]);
 
+  // Check if user has accepted signature terms
+  useEffect(() => {
+    checkSignatureTerms();
+  }, [checkSignatureTerms]);
+
+  // Log signature terms state for debugging
+  useEffect(() => {
+    console.log('[DocumentViewerView] signatureTermsAccepted:', signatureTermsAccepted);
+  }, [signatureTermsAccepted]);
+
   const handleSign = () => {
-    setIsSigning(true);
-    // TODO: Implement real signing
-    setTimeout(() => {
-      setIsSigning(false);
-      toast.success("¡Documento firmado exitosamente!");
-      onBack();
-    }, 1500);
+    console.log('[DocumentViewerView] Opening signature modal');
+    console.log('[DocumentViewerView] signatureTermsAccepted:', signatureTermsAccepted);
+    console.log('[DocumentViewerView] requiresTermsAcceptance will be:', !signatureTermsAccepted);
+    setShowSignatureModal(true);
+  };
+
+  const handleSignatureSuccess = async () => {
+    toast.success("¡Documento firmado exitosamente!");
+    // Refresh document to get updated status
+    if (documentId) {
+      await fetchDocumentById(parseInt(documentId));
+    }
   };
 
   const handleDownload = () => {
@@ -52,25 +75,6 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
       window.open(`${baseUrl}/documents/${documentId}/download`, '_blank');
       toast.success("Descargando documento...");
     }
-  };
-
-  const getStatusBadge = (status: Document['status']) => {
-    const statusConfig = {
-      pending: { label: "Pendiente", className: "bg-yellow-500 text-white" },
-      signed: { label: "Firmado", className: "bg-green-500 text-white" },
-      orphan: { label: "Huérfano", className: "bg-orange-500 text-white" },
-      expired: { label: "Expirado", className: "bg-red-500 text-white" },
-    };
-    const config = statusConfig[status] || statusConfig.pending;
-    return <Badge className={config.className}>{config.label}</Badge>;
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
   };
 
   if (isLoading) {
@@ -84,14 +88,18 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
     );
   }
 
-  if (error || !currentDocument) {
+  if (!currentDocument) {
+    // Show error only when document is null (not loaded)
+    if (error) {
+      toast.error(error);
+    }
     return (
       <div className="flex items-center justify-center h-96">
         <Card className="max-w-md">
           <CardContent className="p-6 text-center">
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h3 className="mb-2">Error al cargar documento</h3>
-            <p className="text-[#64748B] mb-4">{error || "No se encontró el documento"}</p>
+            <h3 className="mb-2">Documento no encontrado</h3>
+            <p className="text-[#64748B] mb-4">{error || "No se pudo cargar el documento"}</p>
             <Button onClick={onBack}>Volver</Button>
           </CardContent>
         </Card>
@@ -110,7 +118,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-semibold">{currentDocument.documentType?.displayName || "Documento"}</h1>
-              {getStatusBadge(currentDocument.status)}
+              {getDocumentStatusBadge(currentDocument.status)}
             </div>
             <p className="text-sm text-[#64748B]">
               {currentDocument.period} • Subido el {formatDate(currentDocument.createdAt)}
@@ -169,7 +177,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
                   <Separator />
                   <div className="flex justify-between">
                     <span className="text-[#64748B]">Estado:</span>
-                    {getStatusBadge(currentDocument.status)}
+                    {getDocumentStatusBadge(currentDocument.status)}
                   </div>
                   <Separator />
                   <div className="flex justify-between">
@@ -201,7 +209,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
 
           {/* Signature Section - Only show if pending, requires signature, AND user is the owner */}
           {currentDocument.status === 'pending' &&
-            currentDocument.documentType?.requiresSignature &&
+            currentDocument.requiresSignature &&
             currentDocument.userId === (user?.id ? parseInt(user.id) : null) && (
               <Card className="border-[#2563EB]">
                 <CardContent className="p-6 space-y-4">
@@ -225,40 +233,13 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
                     </AlertDescription>
                   </Alert>
 
-                  <div className="space-y-4 pt-4">
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        id="read-confirm"
-                        checked={hasRead}
-                        onCheckedChange={(checked: boolean | "indeterminate") => setHasRead(checked === true)}
-                      />
-                      <label htmlFor="read-confirm" className="cursor-pointer flex-1">
-                        <p className="text-sm">
-                          He leído y acepto los términos del presente documento.
-                          Entiendo que esta firma digital tiene el mismo valor legal
-                          que una firma manuscrita.
-                        </p>
-                      </label>
-                    </div>
-
-                    <Button
-                      className="w-full h-12 bg-[#2563EB] hover:bg-[#1E40AF]"
-                      disabled={!hasRead || isSigning}
-                      onClick={handleSign}
-                    >
-                      {isSigning ? (
-                        <>
-                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          Firmando...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-5 h-5 mr-2" />
-                          Firmar Documento
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                  <Button
+                    className="w-full h-12 bg-[#2563EB] hover:bg-[#1E40AF] mt-4"
+                    onClick={handleSign}
+                  >
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Firmar Documento
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -285,6 +266,22 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
           )}
         </div>
       </div>
+
+      {/* Signature Modal */}
+      {currentDocument && (
+        <DocumentSignatureModal
+          isOpen={showSignatureModal}
+          onClose={() => setShowSignatureModal(false)}
+          onSuccess={handleSignatureSuccess}
+          documentId={parseInt(documentId || "0")}
+          documentType={currentDocument.documentType?.displayName || "Documento"}
+          period={currentDocument.period}
+          requiresTermsAcceptance={!signatureTermsAccepted}
+          onRequestCode={requestSignatureCode}
+          onVerifyCode={signDocument}
+          onAcceptTerms={acceptSignatureTerms}
+        />
+      )}
     </div>
   );
 }

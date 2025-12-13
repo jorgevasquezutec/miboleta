@@ -26,6 +26,7 @@ class User extends Authenticatable
         'name',
         'last_name',
         'email',
+        'avatar_url',
         'password',
         'document_type',
         'document_text',
@@ -35,6 +36,7 @@ class User extends Authenticatable
         'last_login_at',
         'must_change_password',
         'password_changed_at',
+        'signature_terms_accepted_at',
     ];
 
     /**
@@ -61,7 +63,34 @@ class User extends Authenticatable
             'password_changed_at' => 'datetime',
             'must_change_password' => 'boolean',
             'deleted_at' => 'datetime',
+            'signature_terms_accepted_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Attributes to append to model's array form
+     */
+    protected $appends = ['full_name'];
+
+    /**
+     * Get the full URL for the avatar
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        // Obtener el valor del atributo original
+        $avatarPath = $this->attributes['avatar_url'] ?? null;
+
+        if (!$avatarPath) {
+            return null;
+        }
+
+        // Si ya es una URL completa (http/https), retornarla tal cual
+        if (filter_var($avatarPath, FILTER_VALIDATE_URL)) {
+            return $avatarPath;
+        }
+
+        // Si es un path de storage, convertirlo a URL absoluta con dominio
+        return url(\Illuminate\Support\Facades\Storage::url($avatarPath));
     }
 
     /**

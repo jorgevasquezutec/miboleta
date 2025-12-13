@@ -190,6 +190,11 @@ class UserController extends Controller
         // Enviar email de bienvenida con credenciales
         Mail::to($user->email)->send(new WelcomeUserMail($user, $temporaryPassword));
 
+        // Asignar documentos huérfanos si tiene document_text
+        if (!empty($validated['document_text'])) {
+            $this->assignOrphanDocuments($user, $validated['document_text'], $validated['tenant_id']);
+        }
+
         $user->load(['roles', 'tenants', 'immediateSupervisor']);
 
         return response()->json([
@@ -197,6 +202,46 @@ class UserController extends Controller
             'user' => $user,
             'email_sent' => true,
         ], 201);
+    }
+
+    /**
+     * Asignar documentos huérfanos al usuario basado en su document_text
+     */
+    private function assignOrphanDocuments(User $user, string $documentText, int $tenantId): void
+    {
+        // Buscar documentos huérfanos que coincidan con el document_text del usuario
+        $orphanDocuments = \App\Models\Document::where('employee_document_number', $documentText)
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'orphan')
+            ->get();
+
+        if ($orphanDocuments->count() > 0) {
+            \Log::info('[UserController] Assigning orphan documents', [
+                'user_id' => $user->id,
+                'document_text' => $documentText,
+                'tenant_id' => $tenantId,
+                'orphan_count' => $orphanDocuments->count(),
+            ]);
+
+            foreach ($orphanDocuments as $document) {
+                $document->user_id = $user->id;
+
+                // Cambiar status según si requiere firma o no
+                if ($document->requires_signature) {
+                    $document->status = 'pending';
+                } else {
+                    $document->status = 'active';
+                }
+
+                $document->save();
+
+                \Log::info('[UserController] Orphan document assigned', [
+                    'document_id' => $document->id,
+                    'user_id' => $user->id,
+                    'new_status' => $document->status,
+                ]);
+            }
+        }
     }
 
     /**
@@ -284,7 +329,20 @@ class UserController extends Controller
             $validated['password'] = Hash::make($validated['password']);
         }
 
+        // Guardar el document_text anterior para comparar
+        $oldDocumentText = $user->document_text;
+
         $user->update($validated);
+
+        // Si se actualizó el document_text, asignar documentos huérfanos
+        if (isset($validated['document_text']) && $validated['document_text'] !== $oldDocumentText) {
+            // Obtener tenant principal para buscar documentos
+            $primaryTenant = $user->tenants()->wherePivot('is_primary', true)->first();
+            if ($primaryTenant) {
+                $this->assignOrphanDocuments($user, $validated['document_text'], $primaryTenant->id);
+            }
+        }
+
         $user->load(['roles', 'tenants', 'immediateSupervisor']);
 
         // Retornar usuario con formato completo (igual que /me)

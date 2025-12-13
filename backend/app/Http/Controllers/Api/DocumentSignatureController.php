@@ -33,7 +33,10 @@ class DocumentSignatureController extends Controller
     {
         $user = Auth::user();
 
+        \Log::info('[DocumentSignatureController] acceptTerms called for user:', ['user_id' => $user->id]);
+
         if ($user->signature_terms_accepted_at) {
+            \Log::info('[DocumentSignatureController] User already accepted terms at:', ['accepted_at' => $user->signature_terms_accepted_at]);
             return response()->json([
                 'message' => 'Ya has aceptado los términos previamente',
                 'accepted_at' => $user->signature_terms_accepted_at,
@@ -43,6 +46,8 @@ class DocumentSignatureController extends Controller
         $user->update([
             'signature_terms_accepted_at' => now(),
         ]);
+
+        \Log::info('[DocumentSignatureController] Terms accepted successfully. Updated signature_terms_accepted_at to:', ['accepted_at' => $user->signature_terms_accepted_at]);
 
         return response()->json([
             'message' => 'Términos aceptados correctamente',
@@ -57,8 +62,15 @@ class DocumentSignatureController extends Controller
     {
         $user = Auth::user();
 
+        \Log::info('[DocumentSignatureController] requestCode called', [
+            'user_id' => $user->id,
+            'document_id' => $documentId,
+            'signature_terms_accepted_at' => $user->signature_terms_accepted_at,
+        ]);
+
         // Verificar que haya aceptado términos
         if (!$user->signature_terms_accepted_at) {
+            \Log::warning('[DocumentSignatureController] User has not accepted terms', ['user_id' => $user->id]);
             return response()->json([
                 'error' => 'Debes aceptar los términos y condiciones antes de firmar',
                 'requires_terms' => true,

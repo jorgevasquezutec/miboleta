@@ -29,10 +29,24 @@ class DocumentController extends Controller
         // Si se solicita "my_documents", solo mostrar documentos del usuario logueado (sin importar rol)
         if ($request->boolean('my_documents')) {
             $query->where('user_id', $user->id);
+
+            // También filtrar por tenant si el usuario no es root
+            if ($role !== 'root') {
+                $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;
+                if ($tenantId) {
+                    $query->where('tenant_id', $tenantId);
+                }
+            }
         }
         // Filtrar según rol (solo si no es my_documents)
         elseif ($role === 'client') {
             $query->where('user_id', $user->id);
+
+            // También filtrar por tenant para clientes
+            $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;
+            if ($tenantId) {
+                $query->where('tenant_id', $tenantId);
+            }
         } else {
             // Admin ve documentos de su tenant, Root ve todos
             $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;

@@ -348,20 +348,27 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
 
   checkSignatureTerms: async () => {
     try {
+      console.log('[documentsStore] Checking signature terms...');
       const result = await documentRepository.checkSignatureTerms();
+      console.log('[documentsStore] Signature terms result:', result);
       set({ signatureTermsAccepted: result.accepted });
+      console.log('[documentsStore] signatureTermsAccepted set to:', result.accepted);
     } catch (error) {
-      console.error("Error checking signature terms:", error);
+      console.error("[documentsStore] Error checking signature terms:", error);
     }
   },
 
   acceptSignatureTerms: async () => {
+    console.log('[documentsStore] Accepting signature terms...');
     set({ signatureLoading: true, error: null });
 
     try {
       await documentRepository.acceptSignatureTerms();
+      console.log('[documentsStore] Signature terms accepted successfully');
       set({ signatureTermsAccepted: true, signatureLoading: false });
+      console.log('[documentsStore] signatureTermsAccepted set to: true');
     } catch (error) {
+      console.error('[documentsStore] Error accepting signature terms:', error);
       set({
         error: error instanceof Error ? error.message : "Error al aceptar términos",
         signatureLoading: false,

@@ -5,10 +5,6 @@ import { format } from "date-fns";
 import {
     FileStack,
     Eye,
-    CheckCircle,
-    Clock,
-    AlertTriangle,
-    XCircle,
     RefreshCw,
     ChevronLeft,
     ChevronRight,
@@ -34,6 +30,7 @@ import {
 import { DateRangePicker } from "@/presentation/components/ui/date-range-picker";
 import { useDocumentsStore } from "@/presentation/stores";
 import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
+import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
 
 export function BatchesListPage() {
     const navigate = useNavigate();
@@ -61,61 +58,6 @@ export function BatchesListPage() {
         setStatusFilter("all");
         setDateRange(undefined);
         setCurrentPage(1);
-    };
-
-    const formatDate = (dateStr: string | null) => {
-        if (!dateStr) return "-";
-        return new Date(dateStr).toLocaleString("es-PE", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
-
-    const getStatusBadge = (status: string) => {
-        const config = {
-            pending: {
-                label: "Pendiente",
-                bgColor: "#eab308",
-                icon: <Clock className="w-3 h-3" />
-            },
-            processing: {
-                label: "Procesando",
-                bgColor: "#3b82f6",
-                icon: <RefreshCw className="w-3 h-3 animate-spin" />
-            },
-            completed: {
-                label: "Completado",
-                bgColor: "#22c55e",
-                icon: <CheckCircle className="w-3 h-3" />
-            },
-            failed: {
-                label: "Fallido",
-                bgColor: "#ef4444",
-                icon: <XCircle className="w-3 h-3" />
-            },
-            partial: {
-                label: "Parcial",
-                bgColor: "#f97316",
-                icon: <AlertTriangle className="w-3 h-3" />
-            },
-        };
-
-        const item = config[status as keyof typeof config] || config.pending;
-        return (
-            <span
-                style={{
-                    backgroundColor: item.bgColor,
-                    color: 'white'
-                }}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
-            >
-                {item.icon}
-                {item.label}
-            </span>
-        );
     };
 
     return (
@@ -224,9 +166,9 @@ export function BatchesListPage() {
                                                     </span>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{getStatusBadge(batch.status)}</TableCell>
+                                            <TableCell>{getBatchStatusBadge(batch.status)}</TableCell>
                                             <TableCell className="text-[#64748B] text-sm">
-                                                {formatDate(batch.createdAt)}
+                                                {formatDateTime(batch.createdAt)}
                                             </TableCell>
                                             <TableCell>
                                                 <Button

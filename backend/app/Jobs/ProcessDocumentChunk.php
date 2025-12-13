@@ -119,13 +119,14 @@ class ProcessDocumentChunk implements ShouldQueue
 
             if ($isReplacement) {
                 // Actualizar documento existente
+                $status = $isOrphan ? 'orphan' : ($this->batch->requires_signature ? 'pending' : 'active');
                 $existingDocument->update([
                     'batch_id' => $this->batch->id,
                     'user_id' => $user?->id,
                     'file_path' => $storagePath,
                     'file_size' => $file['size'],
                     'original_name' => $file['filename'],
-                    'status' => $isOrphan ? 'orphan' : 'pending',
+                    'status' => $status,
                     'requires_signature' => $this->batch->requires_signature,
                     'signature' => null,
                     'signed_at' => null,
@@ -135,6 +136,7 @@ class ProcessDocumentChunk implements ShouldQueue
                 ]);
             } else {
                 // Crear nuevo documento
+                $status = $isOrphan ? 'orphan' : ($this->batch->requires_signature ? 'pending' : 'active');
                 Document::create([
                     'tenant_id' => $this->batch->tenant_id,
                     'user_id' => $user?->id,
@@ -145,7 +147,7 @@ class ProcessDocumentChunk implements ShouldQueue
                     'file_path' => $storagePath,
                     'file_size' => $file['size'],
                     'original_name' => $file['filename'],
-                    'status' => $isOrphan ? 'orphan' : 'pending',
+                    'status' => $status,
                     'uploaded_by' => $this->batch->uploaded_by,
                     'requires_signature' => $this->batch->requires_signature,
                     'expires_at' => now()->addDays(30), // Expira en 30 días
