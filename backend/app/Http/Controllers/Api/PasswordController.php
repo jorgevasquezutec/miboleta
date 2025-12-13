@@ -3,6 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminResetPasswordRequest;
+use App\Http\Requests\ChangePasswordRequest;
+use App\Http\Requests\ForceChangePasswordRequest;
+use App\Http\Requests\ForgotPasswordRequest;
+use App\Http\Requests\ResetPasswordRequest;
 use App\Mail\ForgotPasswordMail;
 use App\Mail\PasswordResetByAdminMail;
 use App\Models\User;
@@ -12,7 +17,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rules\Password;
 
 class PasswordController extends Controller
 {
@@ -20,13 +24,11 @@ class PasswordController extends Controller
      * Solicitar recuperación de contraseña (forgot password)
      * POST /api/password/forgot
      */
-    public function forgotPassword(Request $request): JsonResponse
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email',
-        ]);
+        $validated = $request->validated();
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $validated['email'])->first();
 
         // Siempre responder éxito para no revelar si el email existe
         if (!$user) {
@@ -59,17 +61,13 @@ class PasswordController extends Controller
      * Restablecer contraseña con token
      * POST /api/password/reset
      */
-    public function resetPassword(Request $request): JsonResponse
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email',
-            'token' => 'required|string',
-            'password' => ['required', 'confirmed', Password::min(8)],
-        ]);
+        $validated = $request->validated();
 
         // Buscar token
         $record = DB::table('password_reset_tokens')
-            ->where('email', $request->email)
+            ->where('email', $validated['email'])
             ->first();
 
         if (!$record) {
@@ -79,7 +77,7 @@ class PasswordController extends Controller
         }
 
         // Verificar token
-        if (!Hash::check($request->token, $record->token)) {
+        if (!Hash::check($validated['token'], $record->token)) {
             return response()->json([
                 'message' => 'Token inválido o expirado.',
             ], 422);
@@ -87,14 +85,14 @@ class PasswordController extends Controller
 
         // Verificar expiración (60 minutos)
         if (now()->diffInMinutes($record->created_at) > 60) {
-            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+            DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
             return response()->json([
                 'message' => 'El enlace de recuperación ha expirado. Solicita uno nuevo.',
             ], 422);
         }
 
         // Actualizar contraseña
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $validated['email'])->first();
         if (!$user) {
             return response()->json([
                 'message' => 'Usuario no encontrado.',
@@ -102,13 +100,13 @@ class PasswordController extends Controller
         }
 
         $user->update([
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($validated['password']),
             'must_change_password' => false,
             'password_changed_at' => now(),
         ]);
 
         // Eliminar token usado
-        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+        DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
 
         return response()->json([
             'message' => 'Contraseña actualizada correctamente.',
@@ -119,24 +117,21 @@ class PasswordController extends Controller
      * Cambiar contraseña (usuario autenticado)
      * POST /api/password/change
      */
-    public function changePassword(Request $request): JsonResponse
+    public function changePassword(ChangePasswordRequest $request): JsonResponse
     {
-        $request->validate([
-            'current_password' => 'required|string',
-            'password' => ['required', 'confirmed', Password::min(8)],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 
         // Verificar contraseña actual
-        if (!Hash::check($request->current_password, $user->password)) {
+        if (!Hash::check($validated['current_password'], $user->password)) {
             return response()->json([
                 'message' => 'La contraseña actual es incorrecta.',
             ], 422);
         }
 
         $user->update([
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($validated['password']),
             'must_change_password' => false,
             'password_changed_at' => now(),
         ]);
@@ -150,11 +145,9 @@ class PasswordController extends Controller
      * Forzar cambio de contraseña (primer login)
      * POST /api/password/force-change
      */
-    public function forceChangePassword(Request $request): JsonResponse
+    public function forceChangePassword(ForceChangePasswordRequest $request): JsonResponse
     {
-        $request->validate([
-            'password' => ['required', 'confirmed', Password::min(8)],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 
@@ -165,7 +158,7 @@ class PasswordController extends Controller
         }
 
         $user->update([
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($validated['password']),
             'must_change_password' => false,
             'password_changed_at' => now(),
         ]);
@@ -180,19 +173,15 @@ class PasswordController extends Controller
      * Reset de contraseña por admin
      * POST /api/users/{userId}/reset-password
      */
-    public function adminResetPassword(Request $request, string $userId): JsonResponse
+    public function adminResetPassword(AdminResetPasswordRequest $request, string $userId): JsonResponse
     {
-        $request->validate([
-            'action' => 'required|in:generate,manual,force_change_only',
-            'password' => 'required_if:action,manual|nullable|string|min:8',
-            'must_change_password' => 'boolean',
-        ]);
+        $validated = $request->validated();
 
         $user = User::findOrFail($userId);
         $newPassword = null;
-        $mustChangePassword = $request->input('must_change_password', false);
+        $mustChangePassword = $validated['must_change_password'] ?? false;
 
-        switch ($request->action) {
+        switch ($validated['action']) {
             case 'generate':
                 // Generar contraseña aleatoria
                 $newPassword = Str::random(12);
@@ -205,7 +194,7 @@ class PasswordController extends Controller
 
             case 'manual':
                 // Usar contraseña proporcionada
-                $newPassword = $request->password;
+                $newPassword = $validated['password'];
                 $user->update([
                     'password' => Hash::make($newPassword),
                     'must_change_password' => $mustChangePassword,
@@ -222,7 +211,7 @@ class PasswordController extends Controller
         }
 
         // Enviar email de notificación
-        if ($request->action !== 'force_change_only') {
+        if ($validated['action'] !== 'force_change_only') {
             Mail::to($user->email)->send(new PasswordResetByAdminMail(
                 $user,
                 $newPassword,
@@ -232,7 +221,7 @@ class PasswordController extends Controller
 
         return response()->json([
             'message' => 'Contraseña del usuario actualizada correctamente.',
-            'email_sent' => $request->action !== 'force_change_only',
+            'email_sent' => $validated['action'] !== 'force_change_only',
         ]);
     }
 }

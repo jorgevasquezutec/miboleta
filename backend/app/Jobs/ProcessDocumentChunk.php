@@ -8,6 +8,7 @@ use App\Events\NewDocumentAvailable;
 use App\Models\Document;
 use App\Models\DocumentBatch;
 use App\Models\User;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -20,7 +21,7 @@ use ZipArchive;
 
 class ProcessDocumentChunk implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
     public int $tries = 3;
     public int $timeout = 300; // 5 minutos
@@ -65,10 +66,8 @@ class ProcessDocumentChunk implements ShouldQueue
         // Broadcast progreso del batch
         broadcast(new BatchProgress($this->batch->fresh()));
 
-        // Si es el último chunk, finalizar el batch
-        if ($this->isLastChunk) {
-            $this->finalizeBatch();
-        }
+        // Laravel Batches maneja automáticamente la finalización
+        // cuando todos los jobs están completados (callback 'then')
     }
 
     /**
@@ -214,9 +213,6 @@ class ProcessDocumentChunk implements ShouldQueue
     {
         Log::error("ProcessDocumentChunk: Job fallido para batch {$this->batch->id}: {$exception->getMessage()}");
 
-        // Si es el último chunk, marcar batch como fallido
-        if ($this->isLastChunk) {
-            $this->batch->markAsFailed($exception->getMessage());
-        }
+        // Laravel Batches 'catch' callback maneja el mark as failed
     }
 }

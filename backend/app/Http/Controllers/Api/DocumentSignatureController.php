@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\VerifySignatureCodeRequest;
 use App\Mail\SignatureCodeMail;
 use App\Models\Document;
 use App\Models\DocumentSignatureCode;
@@ -130,11 +131,9 @@ class DocumentSignatureController extends Controller
     /**
      * Verificar código y firmar documento
      */
-    public function verifyAndSign(Request $request, int $documentId): JsonResponse
+    public function verifyAndSign(VerifySignatureCodeRequest $request, int $documentId): JsonResponse
     {
-        $request->validate([
-            'code' => 'required|string|size:6',
-        ]);
+        $validated = $request->validated();
 
         $user = Auth::user();
 
@@ -190,7 +189,7 @@ class DocumentSignatureController extends Controller
         }
 
         // Verificar código
-        if (!$signatureCode->verifyCode($request->code)) {
+        if (!$signatureCode->verifyCode($validated['code'])) {
             $signatureCode->incrementAttempts();
 
             $remainingAttempts = DocumentSignatureCode::MAX_ATTEMPTS - $signatureCode->attempts;

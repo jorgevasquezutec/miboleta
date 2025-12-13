@@ -30,6 +30,7 @@ class DocumentBatch extends Model
         'status',
         'started_at',
         'completed_at',
+        'laravel_batch_id',
     ];
 
     protected $casts = [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AssignOrphanRequest;
 use App\Models\Document;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -216,18 +217,9 @@ class DocumentController extends Controller
     /**
      * Asigna un documento huérfano a un usuario
      */
-    public function assignOrphan(Request $request, int $id): JsonResponse
+    public function assignOrphan(AssignOrphanRequest $request, int $id): JsonResponse
     {
-        $user = Auth::user();
-        $role = $user->getCurrentRole();
-
-        if ($role === 'client') {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-        ]);
+        $validated = $request->validated();
 
         $document = Document::findOrFail($id);
 
@@ -235,7 +227,7 @@ class DocumentController extends Controller
             return response()->json(['error' => 'El documento no es huérfano'], 400);
         }
 
-        $targetUser = User::findOrFail($request->user_id);
+        $targetUser = User::findOrFail($validated['user_id']);
         $document->assignToUser($targetUser);
 
         return response()->json([

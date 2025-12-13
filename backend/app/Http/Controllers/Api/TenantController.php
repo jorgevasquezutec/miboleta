@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AssignTenantsRequest;
 use App\Http\Requests\StoreTenantRequest;
 use App\Http\Requests\UpdateTenantRequest;
 use App\Models\Tenant;
@@ -408,22 +409,10 @@ class TenantController extends Controller
      *     )
      * )
      */
-    public function addUser(Request $request, $id)
+    public function addUser(AssignTenantsRequest $request, $id)
     {
-        $currentUser = $request->user();
+        $validated = $request->validated();
         $tenant = Tenant::findOrFail($id);
-
-        // Verificar acceso: root o admin del tenant
-        if (!$currentUser->isRoot() && !$tenant->hasUser($currentUser)) {
-            return response()->json([
-                'message' => 'No autorizado para gestionar usuarios de este tenant'
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'is_primary' => 'nullable|boolean',
-        ]);
 
         $userToAdd = User::findOrFail($validated['user_id']);
 

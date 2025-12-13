@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="url(#grad)"/>
+
+  <!-- Document icon -->
+  <path d="M 30 25 L 60 25 L 70 35 L 70 75 L 30 75 Z" fill="white" stroke="white" stroke-width="2"/>
+  <path d="M 60 25 L 60 35 L 70 35" fill="none" stroke="#3b82f6" stroke-width="2"/>
+
+  <!-- Lines representing text -->
+  <line x1="38" y1="45" x2="62" y2="45" stroke="#3b82f6" stroke-width="2"/>
+  <line x1="38" y1="52" x2="62" y2="52" stroke="#3b82f6" stroke-width="2"/>
+  <line x1="38" y1="59" x2="55" y2="59" stroke="#3b82f6" stroke-width="2"/>
+</svg>

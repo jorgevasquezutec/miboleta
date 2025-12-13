@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ReprocessChunkRequest;
+use App\Http\Requests\UploadZipBatchRequest;
 use App\Jobs\ProcessZipFile;
 use App\Models\DocumentBatch;
 use Illuminate\Http\JsonResponse;
@@ -145,22 +147,10 @@ class DocumentBatchController extends Controller
      * Sube un archivo ZIP para procesamiento
      * (El procesamiento real se hará en un Job separado)
      */
-    public function upload(Request $request): JsonResponse
+    public function upload(UploadZipBatchRequest $request): JsonResponse
     {
+        $validated = $request->validated();
         $user = Auth::user();
-        $role = $user->getCurrentRole();
-
-        if ($role === 'client') {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        $request->validate([
-            'file' => 'required|file|mimes:zip|max:102400', // 100MB max
-            'type_id' => 'required|exists:document_types,id',
-            'period' => 'required|regex:/^\d{4}-\d{2}$/', // YYYY-MM
-            'notify_employees' => 'boolean',
-            'requires_signature' => 'boolean',
-        ]);
 
         $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;
 
@@ -176,11 +166,11 @@ class DocumentBatchController extends Controller
         $batch = DocumentBatch::create([
             'tenant_id' => $tenantId,
             'uploaded_by' => $user->id,
-            'type_id' => $request->type_id,
-            'period' => $request->period,
+            'type_id' => $validated['type_id'],
+            'period' => $validated['period'],
             'original_filename' => $file->getClientOriginalName(),
-            'notify_employees' => $request->boolean('notify_employees', false),
-            'requires_signature' => $request->boolean('requires_signature', false),
+            'notify_employees' => $validated['notify_employees'] ?? false,
+            'requires_signature' => $validated['requires_signature'] ?? false,
             'status' => 'pending',
         ]);
 
@@ -199,18 +189,9 @@ class DocumentBatchController extends Controller
     /**
      * Vista previa del contenido de un ZIP antes de procesar
      */
-    public function previewZip(Request $request): JsonResponse
+    public function previewZip(ReprocessChunkRequest $request): JsonResponse
     {
-        $user = Auth::user();
-        $role = $user->getCurrentRole();
-
-        if ($role === 'client') {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        $request->validate([
-            'file' => 'required|file|mimes:zip|max:102400',
-        ]);
+        $validated = $request->validated();
 
         $file = $request->file('file');
         $zip = new \ZipArchive();

@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Http\Requests\DeleteFileRequest;
+use App\Http\Requests\UploadTenantLogoRequest;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -11,15 +12,13 @@ class FileUploadController extends Controller
 {
     /**
      * Upload tenant logo
-     * 
-     * @param Request $request
+     *
+     * @param UploadTenantLogoRequest $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function uploadTenantLogo(Request $request)
+    public function uploadTenantLogo(UploadTenantLogoRequest $request)
     {
-        $request->validate([
-            'logo' => 'required|image|mimes:jpeg,jpg,png,gif,webp|max:2048', // Max 2MB
-        ]);
+        $validated = $request->validated();
 
         try {
             $file = $request->file('logo');
@@ -51,18 +50,16 @@ class FileUploadController extends Controller
 
     /**
      * Delete uploaded file
-     * 
-     * @param Request $request
+     *
+     * @param DeleteFileRequest $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function deleteFile(Request $request)
+    public function deleteFile(DeleteFileRequest $request)
     {
-        $request->validate([
-            'path' => 'required|string',
-        ]);
+        $validated = $request->validated();
 
         try {
-            $path = $request->input('path');
+            $path = $validated['path'];
 
             // Remove /storage/ prefix if present
             $path = str_replace('/storage/', '', $path);

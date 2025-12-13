@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   FileStack,
 } from "lucide-react";
+import { USER_ROLE_DISPLAY_LABELS, NAV_LABELS, ROUTES } from "@/shared/constants";
 
 interface SidebarProps {
   isExpanded: boolean;
@@ -47,17 +48,17 @@ function Sidebar({ isExpanded }: SidebarProps) {
 
             <button
               type="button"
-              onClick={() => navigate("/tenants")}
-              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/tenants") ? "text-white" : "hover:bg-[#F1F5F9]"
+              onClick={() => navigate(ROUTES.TENANTS)}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive(ROUTES.TENANTS) ? "text-white" : "hover:bg-[#F1F5F9]"
                 }`}
               style={{
-                backgroundColor: isActive("/tenants") ? primaryColor : undefined,
-                color: isActive("/tenants") ? "#FFFFFF" : secondaryColor,
+                backgroundColor: isActive(ROUTES.TENANTS) ? primaryColor : undefined,
+                color: isActive(ROUTES.TENANTS) ? "#FFFFFF" : secondaryColor,
               }}
-              title="Empresas"
+              title={NAV_LABELS.TENANTS}
             >
               <Building2 className="w-5 h-5" />
-              {isExpanded && <span>Empresas</span>}
+              {isExpanded && <span>{NAV_LABELS.TENANTS}</span>}
             </button>
 
             <button
@@ -92,6 +93,21 @@ function Sidebar({ isExpanded }: SidebarProps) {
           </>
         ) : user?.role === "admin" ? (
           <>
+            <button
+              type="button"
+              onClick={() => navigate("/admin")}
+              className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} gap-3 ${isExpanded ? 'px-4' : 'px-2'} py-3 rounded-lg transition-colors ${isActive("/admin") ? "text-white" : "hover:bg-[#F1F5F9]"
+                }`}
+              style={{
+                backgroundColor: isActive("/admin") ? primaryColor : undefined,
+                color: isActive("/admin") ? "#FFFFFF" : secondaryColor,
+              }}
+              title="Dashboard"
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              {isExpanded && <span>Dashboard</span>}
+            </button>
+
             <button
               type="button"
               onClick={() => navigate("/dashboard")}
@@ -212,17 +228,13 @@ export function RootLayout() {
       <Navbar
         userName={user?.name || "Usuario"}
         userRole={
-          user?.role === "root"
-            ? "Administrador Plataforma"
-            : user?.role === "admin"
-              ? "Administrador"
-              : "Cliente"
+          user?.role ? USER_ROLE_DISPLAY_LABELS[user.role] : "Cliente"
         }
         avatarUrl={user?.avatar_url}
         notificationCount={3}
         onLogout={handleLogout}
-        onSettings={() => navigate("/settings")}
-        onProfile={() => navigate("/profile")}
+        onSettings={() => navigate(ROUTES.SETTINGS)}
+        onProfile={() => navigate(ROUTES.PROFILE)}
         onToggleSidebar={handleToggleSidebar}
         showSidebar={showSidebar}
       />

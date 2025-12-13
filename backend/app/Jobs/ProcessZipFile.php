@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use ZipArchive;
@@ -88,22 +89,37 @@ class ProcessZipFile implements ShouldQueue
 
             // Procesar en chunks de 50
             $chunks = array_chunk($validFiles, 50);
+            $jobs = [];
 
             foreach ($chunks as $chunkIndex => $chunk) {
-                ProcessDocumentChunk::dispatch(
+                $jobs[] = new ProcessDocumentChunk(
                     $this->batch,
                     $this->zipPath,
                     $chunk,
                     $chunkIndex === count($chunks) - 1 // Es el último chunk?
-                )->onQueue('documents');
+                );
             }
 
             $zip->close();
 
+            // ⭐ Usar Laravel Batches nativo con callbacks invocables
+            $laravelBatch = Bus::batch($jobs)
+                ->name("Batch #{$this->batch->id} - {$this->batch->period}")
+                ->then(new \App\Jobs\Callbacks\BatchCompletedCallback($this->batch))
+                ->catch(new \App\Jobs\Callbacks\BatchFailedCallback($this->batch))
+                ->finally(new \App\Jobs\Callbacks\BatchFinallyCallback($this->zipPath))
+                ->onQueue('documents')
+                ->dispatch();
+
+            // Guardar el ID del batch de Laravel
+            $this->batch->update(['laravel_batch_id' => $laravelBatch->id]);
+
+            Log::info("ProcessZipFile: Laravel Batch {$laravelBatch->id} despachado con " . count($jobs) . " jobs");
+
         } catch (\Exception $e) {
             Log::error("ProcessZipFile: Error procesando batch {$this->batch->id}: {$e->getMessage()}");
             $this->batch->markAsFailed($e->getMessage());
-            $this->cleanup();
+            $this->cleanup(); // Keep cleanup here for initial setup failures before batch dispatch
             throw $e;
         }
     }

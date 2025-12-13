@@ -112,12 +112,12 @@ return [
     */
 
     'trim' => [
-        'recent' => 60,
-        'pending' => 60,
-        'completed' => 60,
-        'recent_failed' => 10080,
-        'failed' => 10080,
-        'monitored' => 10080,
+        'recent' => 1440,        // 24 horas (en vez de 60 minutos)
+        'pending' => 1440,       // 24 horas 
+        'completed' => 1440,     // 24 horas (antes era 60 minutos) ✅
+        'recent_failed' => 10080, // 7 días
+        'failed' => 10080,        // 7 días
+        'monitored' => 10080,     // 7 días
     ],
 
     /*

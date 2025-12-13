@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class AssignTenantsRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        // Solo root y admin pueden asignar usuarios a tenants
+        return $this->user() && \in_array($this->user()->getCurrentRole(), ['root', 'admin'], true);
+    }
+
+    public function rules(): array
+    {
+        return [
+            'user_id' => 'required|exists:users,id',
+            'is_primary' => 'nullable|boolean',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'user_id.required' => 'El usuario es requerido',
+            'user_id.exists' => 'El usuario seleccionado no existe',
+            'is_primary.boolean' => 'El campo debe ser verdadero o falso',
+        ];
+    }
+}

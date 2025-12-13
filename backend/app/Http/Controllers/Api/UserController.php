@@ -3,13 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreUserRequest;
+use App\Http\Requests\UpdateTenantSettingsRequest;
+use App\Http\Requests\UpdateUserRequest;
 use App\Mail\WelcomeUserMail;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -145,19 +147,9 @@ class UserController extends Controller
      *     @OA\Response(response=422, description="Validación fallida")
      * )
      */
-    public function store(Request $request)
+    public function store(StoreUserRequest $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'last_name' => 'nullable|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'document_type' => 'nullable|string|in:dni,ruc,ce,passport',
-            'document_text' => 'nullable|string|unique:users,document_text',
-            'phone' => 'nullable|string|max:20',
-            'immediate_supervisor_id' => 'nullable|exists:users,id',
-            'role_id' => 'required|exists:roles,id',
-            'tenant_id' => 'required|exists:tenants,id',
-        ]);
+        $validated = $request->validated();
 
         // Generar contraseña aleatoria
         $temporaryPassword = Str::random(12);
@@ -309,21 +301,11 @@ class UserController extends Controller
      *     @OA\Response(response=404, description="Usuario no encontrado")
      * )
      */
-    public function update(Request $request, $id)
+    public function update(UpdateUserRequest $request, $id)
     {
         $user = User::findOrFail($id);
 
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'last_name' => 'nullable|string|max:255',
-            'email' => ['sometimes', 'required', 'email', Rule::unique('users')->ignore($user->id)],
-            'password' => 'nullable|string|min:8',
-            'document_type' => 'nullable|string|in:DNI,RUC,CE,Pasaporte',
-            'document_text' => ['nullable', 'string', Rule::unique('users')->ignore($user->id)],
-            'phone' => 'nullable|string|max:20',
-            'immediate_supervisor_id' => 'nullable|exists:users,id',
-            'status' => 'sometimes|string|in:active,inactive,suspended',
-        ]);
+        $validated = $request->validated();
 
         if (isset($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
@@ -448,11 +430,9 @@ class UserController extends Controller
      *     @OA\Response(response=200, description="Supervisor asignado")
      * )
      */
-    public function assignSupervisor(Request $request, $id)
+    public function assignSupervisor(UpdateTenantSettingsRequest $request, $id)
     {
-        $validated = $request->validate([
-            'supervisor_id' => 'nullable|exists:users,id',
-        ]);
+        $validated = $request->validated();
 
         $user = User::findOrFail($id);
 
