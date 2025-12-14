@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\DocumentTypeController;
 use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\DocumentBatchController;
 use App\Http\Controllers\Api\DocumentSignatureController;
+use App\Http\Controllers\Api\VacationRequestController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -93,4 +94,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/documents/{id}/signature-status', [DocumentSignatureController::class, 'status']);
     Route::post('/documents/{id}/request-code', [DocumentSignatureController::class, 'requestCode']);
     Route::post('/documents/{id}/sign', [DocumentSignatureController::class, 'verifyAndSign']);
+
+    // ============ MÓDULO 5: VACACIONES ============
+
+    // Vacation Requests - Rutas especiales primero (antes de {id})
+    Route::get('/vacation-requests/pending-approval', [VacationRequestController::class, 'pendingApprovals']);
+    Route::get('/vacation-requests/pending-confirmation', [VacationRequestController::class, 'pendingConfirmations']);
+    Route::get('/vacation-requests/my-team', [VacationRequestController::class, 'myTeam']);
+
+    // Vacation Requests - CRUD
+    Route::get('/vacation-requests', [VacationRequestController::class, 'index']);
+    Route::post('/vacation-requests', [VacationRequestController::class, 'store']);
+    Route::get('/vacation-requests/{id}', [VacationRequestController::class, 'show']);
+    Route::delete('/vacation-requests/{id}', [VacationRequestController::class, 'destroy']);
+
+    // Vacation Requests - Acciones de supervisor
+    Route::put('/vacation-requests/{id}/approve', [VacationRequestController::class, 'approve']);
+    Route::put('/vacation-requests/{id}/reject', [VacationRequestController::class, 'reject']);
+    Route::put('/vacation-requests/{id}/mark-taken', [VacationRequestController::class, 'markTaken']);
+    Route::put('/vacation-requests/{id}/mark-not-taken', [VacationRequestController::class, 'markNotTaken']);
 });
