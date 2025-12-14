@@ -223,33 +223,77 @@ src/
 **Estimación:** 6-8 días
 
 ```
-Funcionalidades:
-- Solicitud de vacaciones por empleado
-- Aprobación por jefe inmediato (supervisor)
-- Control de vacaciones tomadas/no tomadas
-- Cálculo de días disponibles
-- Calendario de vacaciones del equipo
-- Notificaciones email
+FLUJO DE VACACIONES:
+┌─────────────────────────────────────────────────────────────────┐
+│  Empleado          Supervisor              Sistema              │
+│     │                  │                      │                 │
+│     │──Solicita───────►│                      │                 │
+│     │                  │                      │                 │
+│     │◄──Aprueba/Rechaza│                      │                 │
+│     │                  │                      │                 │
+│     │  [Toma vacaciones]                      │                 │
+│     │                  │                      │                 │
+│     │                  │──Marca "Tomadas"────►│                 │
+│     │                  │  o "No Tomadas"      │                 │
+│     │                  │                      │                 │
+│     │                  │◄──Reportes───────────│                 │
+└─────────────────────────────────────────────────────────────────┘
+
+REGLAS DE NEGOCIO:
+- El SUPERVISOR es quien marca si las vacaciones fueron tomadas o no
+- Al aprobar, was_taken = NULL (pendiente de confirmación)
+- Después de la fecha de fin, el supervisor confirma:
+  • "Tomadas" → was_taken = TRUE
+  • "No Tomadas" → was_taken = FALSE (canceló, emergencia, etc.)
+- Admin puede ver reporte de vacaciones pendientes de confirmar
+
+ESTADOS:
+- pending    → Esperando aprobación del supervisor
+- approved   → Aprobada, pendiente de tomar
+- rejected   → Rechazada por supervisor
+- taken      → Confirmada como tomada (was_taken = TRUE)
+- not_taken  → Confirmada como NO tomada (was_taken = FALSE)
+- cancelled  → Cancelada por el empleado antes de tomarla
 
 Endpoints a crear:
-POST   /api/vacation-requests
-GET    /api/vacation-requests
-GET    /api/vacation-requests/{id}
-PUT    /api/vacation-requests/{id}/approve
-PUT    /api/vacation-requests/{id}/reject
-PUT    /api/vacation-requests/{id}/mark-taken
-GET    /api/vacation-requests/pending-approval
-GET    /api/vacation-requests/not-taken
+POST   /api/vacation-requests                    # Crear solicitud
+GET    /api/vacation-requests                    # Listar (scope por rol)
+GET    /api/vacation-requests/{id}               # Ver detalle
+PUT    /api/vacation-requests/{id}/approve       # Aprobar (supervisor)
+PUT    /api/vacation-requests/{id}/reject        # Rechazar (supervisor)
+PUT    /api/vacation-requests/{id}/mark-taken    # Marcar tomada (supervisor)
+PUT    /api/vacation-requests/{id}/mark-not-taken # Marcar NO tomada (supervisor)
+DELETE /api/vacation-requests/{id}               # Cancelar (empleado, solo si pending)
+GET    /api/vacation-requests/pending-approval   # Pendientes de aprobar (supervisor)
+GET    /api/vacation-requests/pending-confirmation # Pendientes de confirmar (supervisor)
+GET    /api/vacation-requests/my-team            # Vacaciones de mi equipo
 
-Modelos nuevos:
-- VacationRequest (user_id, tenant_id, start_date, end_date, 
-                   days_requested, status, approved_by, was_taken)
+Modelo VacationRequest:
+- id
+- user_id (FK)           # Empleado que solicita
+- tenant_id (FK)
+- start_date             # Fecha inicio
+- end_date               # Fecha fin
+- days_requested         # Días solicitados (decimal, permite 0.5)
+- reason                 # Motivo (opcional)
+- status                 # pending, approved, rejected, cancelled
+- approved_by (FK)       # Supervisor que aprobó
+- approved_at
+- rejected_by (FK)
+- rejected_at
+- rejection_reason
+- was_taken (boolean|null)  # NULL=pendiente, TRUE=tomada, FALSE=no tomada
+- confirmed_by (FK)      # Supervisor que confirmó
+- confirmed_at
+- timestamps
 
 Páginas frontend:
-- VacationRequestsListPage (empleado)
-- VacationRequestFormPage
-- VacationApprovalsPage (supervisor)
-- VacationNotTakenPage (admin)
+- VacationRequestsListPage.tsx    # Mis solicitudes (empleado)
+- VacationRequestFormPage.tsx     # Nueva solicitud
+- VacationApprovalsPage.tsx       # Aprobar solicitudes (supervisor)
+- VacationConfirmationPage.tsx    # Confirmar tomadas/no tomadas (supervisor)
+- VacationCalendarPage.tsx        # Calendario del equipo
+- VacationReportsPage.tsx         # Reportes (admin)
 ```
 
 ### Módulo 6: Notificaciones en Tiempo Real 🔜
