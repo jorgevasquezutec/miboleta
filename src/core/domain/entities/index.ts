@@ -4,3 +4,4 @@ export * from './Tenant';
 export * from './Document';
 export * from './DocumentType';
 export * from './DocumentBatch';
+export * from './VacationRequest';
