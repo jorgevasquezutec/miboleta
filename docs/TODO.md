@@ -1,6 +1,6 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-15 13:40  
+**Última actualización:** 2025-12-15 18:45  
 **Estado general del proyecto:** ~99% completado
 
 ---
@@ -47,6 +47,7 @@
 - Gráfico de documentos por mes (BarChart)
 - Distribución por tipo (PieChart)
 - Actividad reciente
+- **Filtro de fechas** con DateRangePicker (últimos 30 días por defecto)
 
 #### Auditoría:
 - Logging automático de acciones (login, logout, firma, vacaciones)
@@ -55,10 +56,30 @@
 #### Exportación a Excel (.xlsx):
 - Usuarios, Documentos, Lotes, Vacaciones, Auditoría, Organizaciones
 - Formato Excel nativo con estilos (headers azules)
+- **Exports respetan filtros activos de la página**
 
 ---
 
-## 🔧 Optimización Realizada (2025-12-15)
+## 🔧 Optimizaciones Realizadas (2025-12-15)
+
+### Persistencia de Filtros en URL ✅ (NUEVO)
+Hook reutilizable `useUrlFilters` implementado en todas las páginas con tablas:
+
+| Página | Filtros en URL |
+|--------|----------------|
+| ✅ UsersListPage | search, status, tenant_id, page |
+| ✅ TenantsListPage | search, status, page |
+| ✅ BatchesListPage | status, date_from, date_to, page, per_page |
+| ✅ VacationHistoryPage | status, year, search, page, per_page |
+| ✅ DocumentsListPage | search, status, doc_type_id, date_from, date_to, page, per_page |
+| ✅ AuditLogsPage | search, action, category, tenant_id, page, per_page |
+| ✅ VacationRequestsListPage | status, page, per_page |
+
+**Beneficios:**
+- URLs compartibles con filtros aplicados
+- Navegación back/forward respeta filtros
+- Debounce en campos de búsqueda
+- Reset automático a página 1 al cambiar filtros
 
 ### Arquitectura Frontend Simplificada:
 - ❌ Eliminada capa de use-cases (innecesaria, lógica está en backend)
@@ -78,15 +99,9 @@ src/
 │   ├── stores/             # Estado global (Zustand)
 │   ├── components/         # UI (shadcn/ui + custom)
 │   ├── pages/              # Páginas
-│   └── hooks/              # Hooks personalizados
+│   └── hooks/              # Hooks personalizados (useUrlFilters, etc.)
 └── shared/                 # Utils, config
 ```
-
-### Archivos Limpiados:
-- `src/core/domain/use-cases/` (eliminado)
-- `src/core/domain/repositories/` (eliminado)
-- `src/infrastructure/http/api/` (mocks eliminados)
-- Carpetas vacías eliminadas
 
 ---
 
@@ -120,6 +135,7 @@ Deployment:
 - [ ] Tests unitarios/feature
 
 ### Frontend
+- [x] ~~Persistencia de filtros en URL~~ ✅ Completado
 - [ ] PWA (service worker)
 - [ ] Dark mode
 - [ ] Lazy loading de rutas
@@ -141,6 +157,8 @@ Deployment:
 - ✅ **Relación approver** - Corregida a `approvedByUser`
 - ✅ **Dashboard stats** - Cambiado "Visualizados" por "Activos"
 - ✅ **Traducción estados** - Todos los estados capitalizados correctamente
+- ✅ **Filtros no aplicaban** - Corregido uso de setFilters atómico
+- ✅ **Export sin filtros** - Backend actualizado para aceptar filtros search
 
 ---
 
@@ -152,4 +170,4 @@ Deployment:
 
 ---
 
-*Última actualización: 2025-12-15 13:40*
+*Última actualización: 2025-12-15 18:45*
