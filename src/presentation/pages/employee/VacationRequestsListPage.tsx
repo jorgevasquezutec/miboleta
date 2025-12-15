@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/presentation/components/ui/badge";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
+import { useUrlFilters } from "@/presentation/hooks";
 import { VacationStatus } from "@/core/domain/entities";
 import { formatDate } from "@/presentation/utils";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
@@ -38,20 +39,39 @@ export function VacationRequestsListPage() {
         error,
         total,
         totalPages,
-        page,
-        perPage,
-        statusFilter,
-        setStatusFilter,
-        setPage,
-        setPerPage,
     } = useVacationsStore();
+
+    // URL-synced filters
+    const { filters, setFilters } = useUrlFilters({
+        defaultValues: {
+            status: 'all',
+            page: 1,
+            per_page: 10,
+        }
+    });
 
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
     const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
 
     useEffect(() => {
-        fetchVacationRequests();
-    }, [fetchVacationRequests, page, perPage, statusFilter]);
+        fetchVacationRequests({
+            status: filters.status !== 'all' ? (filters.status as VacationStatus) : undefined,
+            page: filters.page,
+            perPage: filters.per_page,
+        });
+    }, [fetchVacationRequests, filters.page, filters.per_page, filters.status]);
+
+    const handleStatusChange = (value: string) => {
+        setFilters({ status: value, page: 1 });
+    };
+
+    const handlePageChange = (page: number) => {
+        setFilters({ page });
+    };
+
+    const handlePerPageChange = (perPage: number) => {
+        setFilters({ per_page: perPage, page: 1 });
+    };
 
     const handleNewRequest = () => {
         navigate("/vacations/new");
@@ -205,8 +225,8 @@ export function VacationRequestsListPage() {
                             <span className="text-sm font-medium text-gray-700">Filtrar por:</span>
                         </div>
                         <Select
-                            value={statusFilter}
-                            onValueChange={(value) => setStatusFilter(value as VacationStatus | "all")}
+                            value={filters.status}
+                            onValueChange={handleStatusChange}
                         >
                             <SelectTrigger className="w-[180px]">
                                 <SelectValue placeholder="Estado" />
@@ -318,12 +338,12 @@ export function VacationRequestsListPage() {
                     {vacationRequests.length > 0 && (
                         <div className="mt-6">
                             <PaginationControls
-                                currentPage={page}
+                                currentPage={filters.page}
                                 totalPages={totalPages}
-                                perPage={perPage}
+                                perPage={filters.per_page}
                                 total={total}
-                                onPageChange={setPage}
-                                onPerPageChange={setPerPage}
+                                onPageChange={handlePageChange}
+                                onPerPageChange={handlePerPageChange}
                             />
                         </div>
                     )}
