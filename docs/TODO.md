@@ -74,6 +74,7 @@ Hook reutilizable `useUrlFilters` implementado en todas las páginas con tablas:
 | ✅ DocumentsListPage | search, status, doc_type_id, date_from, date_to, page, per_page |
 | ✅ AuditLogsPage | search, action, category, tenant_id, page, per_page |
 | ✅ VacationRequestsListPage | status, page, per_page |
+| ✅ TeamVacationsPage | tab (pending/confirm/history/calendar) |
 
 **Beneficios:**
 - URLs compartibles con filtros aplicados

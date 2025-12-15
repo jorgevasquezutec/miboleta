@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
 import { PDFViewer } from "@/presentation/components/shared/PDFViewer";
 import { DocumentSignatureModal } from "@/presentation/components/features/documents/DocumentSignatureModal";
-import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
+import { getDocumentStatusBadge, formatDate, formatDateTime } from "@/presentation/utils";
 
 interface DocumentViewerViewProps {
   onBack?: () => void;
@@ -191,7 +191,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
                   <Separator />
                   <div className="flex justify-between">
                     <span className="text-[#64748B]">Fecha subida:</span>
-                    <span>{formatDate(currentDocument.createdAt)}</span>
+                    <span>{formatDateTime(currentDocument.createdAt)}</span>
                   </div>
                   {currentDocument.user && (
                     <>
