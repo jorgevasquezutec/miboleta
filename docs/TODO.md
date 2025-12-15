@@ -136,11 +136,11 @@ Deployment:
 
 ### Frontend
 - [x] ~~Persistencia de filtros en URL~~ ✅ Completado
+- [x] ~~Calendario visual de vacaciones~~ ✅ Completado (VacationCalendar en TeamVacationsPage)
 - [ ] PWA (service worker)
 - [ ] Dark mode
 - [ ] Lazy loading de rutas
 - [ ] Tests con Vitest
-- [ ] Calendario visual de vacaciones
 
 ### DevOps
 - [ ] Docker para producción
