@@ -261,8 +261,8 @@ export function AdminDashboardView() {
         )}
       </div>
 
-      {/* Vacation Stats Row (if there are vacations) */}
-      {vacationStats && vacationStats.total > 0 && (
+      {/* Vacation Stats Row */}
+      {vacationStats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card className="col-span-full md:col-span-4">
             <CardHeader className="pb-2">
