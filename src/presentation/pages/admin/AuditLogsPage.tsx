@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
     FileText,
     RefreshCw,
@@ -37,6 +37,7 @@ import {
 } from "@/presentation/components/ui/select";
 import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { useAuthStore } from "@/presentation/stores/authStore";
+import { useUrlFilters } from "@/presentation/hooks";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
@@ -114,44 +115,72 @@ export function AuditLogsPage() {
     const { currentTenant, user } = useAuthStore();
     const isRoot = user?.role === 'root';
 
-    // State for root users to select a tenant
-    const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+    // URL-synced filters
+    const { filters, setFilters, resetFilters } = useUrlFilters({
+        defaultValues: {
+            search: '',
+            action: 'all',
+            category: 'all',
+            tenant_id: '',
+            page: 1,
+            per_page: 20,
+        }
+    });
+
+    // Local state for search input (debounce)
+    const [searchInput, setSearchInput] = useState(filters.search);
     const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+    const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
     // Get tenant ID - for root use selected, for admin use currentTenant
     const tenantId = isRoot
-        ? (selectedTenantId ? Number(selectedTenantId) : undefined)
+        ? (filters.tenant_id ? Number(filters.tenant_id) : undefined)
         : (currentTenant?.id ? Number(currentTenant.id) : undefined);
 
     // State
     const [logs, setLogs] = useState<AuditLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const [totalItems, setTotalItems] = useState(0);
     const [isExporting, setIsExporting] = useState(false);
-    const [perPage, setPerPage] = useState(20);
 
-    // Filters
-    const [searchTerm, setSearchTerm] = useState("");
-    const [actionFilter, setActionFilter] = useState<string>("");
-    const [categoryFilter, setCategoryFilter] = useState<string>("");
+    // Debounce search
+    useEffect(() => {
+        if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current);
+        }
+        debounceTimer.current = setTimeout(() => {
+            if (searchInput !== filters.search) {
+                setFilters({ search: searchInput, page: 1 });
+            }
+        }, 500);
+        return () => {
+            if (debounceTimer.current) {
+                clearTimeout(debounceTimer.current);
+            }
+        };
+    }, [searchInput, filters.search, setFilters]);
+
+    // Sync search input with URL on mount
+    useEffect(() => {
+        setSearchInput(filters.search);
+    }, []);
 
     // Fetch logs
     const fetchLogs = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const filters: ReportFilters = {
+            const reportFilters: ReportFilters = {
                 tenant_id: tenantId,
-                page: currentPage,
-                per_page: perPage,
-                search: searchTerm || undefined,
-                action: actionFilter && actionFilter !== 'all' ? actionFilter : undefined,
+                page: filters.page,
+                per_page: filters.per_page,
+                search: filters.search || undefined,
+                action: filters.action && filters.action !== 'all' ? filters.action : undefined,
             };
 
-            const response = await reportsRepository.getAuditLogs(filters);
+            const response = await reportsRepository.getAuditLogs(reportFilters);
             setLogs(response.data);
             setTotalPages(response.meta.last_page);
             setTotalItems(response.meta.total);
@@ -160,16 +189,32 @@ export function AuditLogsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [tenantId, currentPage, perPage, searchTerm, actionFilter]);
+    }, [tenantId, filters.page, filters.per_page, filters.search, filters.action]);
 
     useEffect(() => {
         fetchLogs();
     }, [fetchLogs]);
 
-    // Reset page when filters change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, actionFilter, categoryFilter, selectedTenantId]);
+    const handleTenantChange = (id: string | null) => {
+        setFilters({ tenant_id: id || '', page: 1 });
+        if (!id) setSelectedTenant(null);
+    };
+
+    const handleActionChange = (value: string) => {
+        setFilters({ action: value, page: 1 });
+    };
+
+    const handleCategoryChange = (value: string) => {
+        setFilters({ category: value, page: 1 });
+    };
+
+    const handlePageChange = (page: number) => {
+        setFilters({ page });
+    };
+
+    const handlePerPageChange = (perPage: number) => {
+        setFilters({ per_page: perPage, page: 1 });
+    };
 
     // Export
     const handleExport = async () => {
@@ -177,7 +222,8 @@ export function AuditLogsPage() {
         try {
             const blob = await reportsRepository.exportAudit({
                 tenant_id: tenantId,
-                action: actionFilter && actionFilter !== 'all' ? actionFilter : undefined,
+                search: filters.search || undefined,
+                action: filters.action && filters.action !== 'all' ? filters.action : undefined,
             });
             const filename = `auditoria_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
@@ -190,13 +236,12 @@ export function AuditLogsPage() {
 
     // Clear filters
     const clearFilters = () => {
-        setSearchTerm("");
-        setActionFilter("all");
-        setCategoryFilter("all");
-        setCurrentPage(1);
+        setSearchInput('');
+        setSelectedTenant(null);
+        resetFilters();
     };
 
-    const hasFilters = searchTerm || (actionFilter && actionFilter !== 'all') || (categoryFilter && categoryFilter !== 'all');
+    const hasFilters = filters.search || (filters.action && filters.action !== 'all') || (filters.category && filters.category !== 'all') || filters.tenant_id;
 
     return (
         <div className="space-y-6">
@@ -251,11 +296,8 @@ export function AuditLogsPage() {
                         {isRoot && (
                             <div>
                                 <TenantAutocompleteSelector
-                                    value={selectedTenantId}
-                                    onChange={(id) => {
-                                        setSelectedTenantId(id);
-                                        if (!id) setSelectedTenant(null);
-                                    }}
+                                    value={filters.tenant_id || null}
+                                    onChange={handleTenantChange}
                                     selectedTenant={selectedTenant}
                                     placeholder="Todas las organizaciones"
                                 />
@@ -268,13 +310,13 @@ export function AuditLogsPage() {
                             <Input
                                 placeholder="Buscar por usuario..."
                                 className="pl-9"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
                             />
                         </div>
 
                         {/* Category Filter */}
-                        <Select value={categoryFilter || "all"} onValueChange={setCategoryFilter}>
+                        <Select value={filters.category} onValueChange={handleCategoryChange}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Todas las categorías" />
                             </SelectTrigger>
@@ -288,7 +330,7 @@ export function AuditLogsPage() {
                         </Select>
 
                         {/* Action Filter */}
-                        <Select value={actionFilter || "all"} onValueChange={setActionFilter}>
+                        <Select value={filters.action} onValueChange={handleActionChange}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Todas las acciones" />
                             </SelectTrigger>
@@ -318,7 +360,7 @@ export function AuditLogsPage() {
             {/* Results Summary */}
             <div className="text-sm text-gray-500">
                 {totalItems > 0 ? (
-                    <>Mostrando {((currentPage - 1) * 20) + 1} - {Math.min(currentPage * 20, totalItems)} de {totalItems} registros</>
+                    <>Mostrando {((filters.page - 1) * filters.per_page) + 1} - {Math.min(filters.page * filters.per_page, totalItems)} de {totalItems} registros</>
                 ) : (
                     <>No hay registros</>
                 )}
@@ -403,15 +445,12 @@ export function AuditLogsPage() {
             {/* Pagination */}
             {totalPages > 0 && (
                 <PaginationControls
-                    currentPage={currentPage}
+                    currentPage={filters.page}
                     totalPages={totalPages}
                     total={totalItems}
-                    perPage={perPage}
-                    onPageChange={setCurrentPage}
-                    onPerPageChange={(newPerPage) => {
-                        setPerPage(newPerPage);
-                        setCurrentPage(1);
-                    }}
+                    perPage={filters.per_page}
+                    onPageChange={handlePageChange}
+                    onPerPageChange={handlePerPageChange}
                     disabled={isLoading}
                     showPerPageSelector={true}
                 />
