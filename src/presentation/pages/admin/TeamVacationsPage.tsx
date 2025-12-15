@@ -17,6 +17,7 @@ import { Badge } from "@/presentation/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/presentation/components/ui/tabs";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
+import { useUrlFilters } from "@/presentation/hooks";
 import { VacationRequestCard } from "@/presentation/components/features/vacations/VacationRequestCard";
 import { VacationRejectModal } from "@/presentation/components/features/vacations/VacationRejectModal";
 import { VacationCalendar } from "@/presentation/components/features/vacations/VacationCalendar";
@@ -56,7 +57,13 @@ export function TeamVacationsPage() {
 
     const { currentTenant } = useAuthStore();
 
-    const [activeTab, setActiveTab] = useState("pending");
+    // URL-synced tab
+    const { filters, setFilters } = useUrlFilters({
+        defaultValues: {
+            tab: 'pending',
+        }
+    });
+
     const [processingId, setProcessingId] = useState<number | null>(null);
 
     // Reject modal state
@@ -204,8 +211,8 @@ export function TeamVacationsPage() {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card
-                    className={`cursor-pointer transition-all ${activeTab === "pending" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
-                    onClick={() => setActiveTab("pending")}
+                    className={`cursor-pointer transition-all ${filters.tab === "pending" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
+                    onClick={() => setFilters({ tab: "pending" })}
                 >
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-yellow-100">
@@ -218,8 +225,8 @@ export function TeamVacationsPage() {
                     </CardContent>
                 </Card>
                 <Card
-                    className={`cursor-pointer transition-all ${activeTab === "confirm" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
-                    onClick={() => setActiveTab("confirm")}
+                    className={`cursor-pointer transition-all ${filters.tab === "confirm" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
+                    onClick={() => setFilters({ tab: "confirm" })}
                 >
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-orange-100">
@@ -232,8 +239,8 @@ export function TeamVacationsPage() {
                     </CardContent>
                 </Card>
                 <Card
-                    className={`cursor-pointer transition-all ${activeTab === "history" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
-                    onClick={() => setActiveTab("history")}
+                    className={`cursor-pointer transition-all ${filters.tab === "history" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
+                    onClick={() => setFilters({ tab: "history" })}
                 >
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-blue-100">
@@ -246,8 +253,8 @@ export function TeamVacationsPage() {
                     </CardContent>
                 </Card>
                 <Card
-                    className={`cursor-pointer transition-all ${activeTab === "calendar" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
-                    onClick={() => setActiveTab("calendar")}
+                    className={`cursor-pointer transition-all ${filters.tab === "calendar" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
+                    onClick={() => setFilters({ tab: "calendar" })}
                 >
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-purple-100">
@@ -262,7 +269,7 @@ export function TeamVacationsPage() {
             </div>
 
             {/* Tabs Content */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs value={filters.tab} onValueChange={(value) => setFilters({ tab: value })} className="w-full">
                 <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="pending" className="flex items-center gap-2">
                         <Clock className="w-4 h-4" />
