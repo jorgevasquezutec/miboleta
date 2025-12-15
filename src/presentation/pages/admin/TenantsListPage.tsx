@@ -5,7 +5,7 @@ import { useAuthStore } from '@/presentation/stores/authStore';
 import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 import { Tenant } from '@/core/domain/entities/Tenant';
 import { Button } from '@/presentation/components/ui/button';
-import { CheckCircle2, SquareX } from 'lucide-react';
+import { CheckCircle2, SquareX, Download } from 'lucide-react';
 // import { Users } from 'lucide-react';
 import {
     Table,
@@ -34,6 +34,8 @@ import {
 import { Building2, Search, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { PaginationControls } from '@/presentation/components/shared/PaginationControls';
 import { StatsCard } from '@/presentation/components/common';
+import { reportsRepository } from '@/infrastructure/persistence/repositories';
+import { toast } from 'sonner';
 
 // Debounce helper
 function useDebounce<T>(value: T, delay: number): T {
@@ -71,6 +73,7 @@ export function TenantsListPage() {
     const [localStatusFilter, setLocalStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [tenantToDelete, setTenantToDelete] = useState<{ id: string; name: string } | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
     const debouncedSearch = useDebounce(searchTerm, 500);
     const isFirstRender = useRef(true);
 
@@ -130,6 +133,22 @@ export function TenantsListPage() {
     };
     const canDeleteTenant = currentUser?.role === 'root';
 
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const blob = await reportsRepository.exportTenants({
+                status: localStatusFilter !== 'all' ? localStatusFilter : undefined,
+            });
+            const filename = `organizaciones_${new Date().toISOString().split('T')[0]}.xlsx`;
+            reportsRepository.downloadBlob(blob, filename);
+            toast.success('Exportación completada');
+        } catch (error) {
+            toast.error('Error al exportar organizaciones');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="container mx-auto py-6 space-y-6">
             {/* Header */}
@@ -140,12 +159,26 @@ export function TenantsListPage() {
                         Gestiona las organizaciones del sistema
                     </p>
                 </div>
-                {canCreateTenant && (
-                    <Button onClick={() => navigate('/tenants/new')}>
-                        <Building2 className="mr-2 h-4 w-4" />
-                        Crear Organización
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                    >
+                        {isExporting ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Download className="mr-2 h-4 w-4" />
+                        )}
+                        Exportar
                     </Button>
-                )}
+                    {canCreateTenant && (
+                        <Button onClick={() => navigate('/tenants/new')}>
+                            <Building2 className="mr-2 h-4 w-4" />
+                            Crear Organización
+                        </Button>
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

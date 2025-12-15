@@ -12,6 +12,7 @@ import ResetPasswordPage from "@/presentation/pages/auth/ResetPasswordPage";
 import {
   DashboardPage as AdminDashboardPage,
   UsersListPage,
+  AuditLogsPage,
 } from "@/presentation/pages/admin";
 import { VacationHistoryPage } from "@/presentation/pages/admin/VacationHistoryPage";
 import { TeamVacationsPage } from "@/presentation/pages/admin/TeamVacationsPage";
@@ -265,6 +266,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
             <VacationHistoryPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "audit-logs",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <AuditLogsPage />
           </ProtectedRoute>
         ),
       },

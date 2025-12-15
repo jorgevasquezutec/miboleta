@@ -9,6 +9,8 @@ export { useAuthStore } from "./authStore";
 export { useDocumentsStore } from "./documentsStore";
 export { useUsersStore } from "./usersStore";
 export { useTenantsStore } from "./tenantsStore";
+export { useReportsStore } from "./reportsStore";
 
 // Re-export tipos para conveniencia
 export type { User, Tenant, Document, LoginResponse, ApiResponse, PaginatedResponse } from "@/infrastructure/http/api/mockApi";
+

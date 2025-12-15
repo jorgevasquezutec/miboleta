@@ -6,3 +6,4 @@ export * from './DocumentType';
 export * from './DocumentBatch';
 export * from './VacationRequest';
 export * from './Notification';
+export * from './Report';

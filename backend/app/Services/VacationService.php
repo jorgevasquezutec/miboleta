@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\Mail;
 class VacationService
 {
     public function __construct(
-        protected NotificationService $notificationService
+        protected NotificationService $notificationService,
+        protected AuditService $auditService
     ) {
     }
     /**
@@ -53,6 +54,14 @@ class VacationService
         // Notify supervisor
         $this->notifySupervisor($vacationRequest);
 
+        // Audit log
+        $this->auditService->logVacationRequested($vacationRequest->id, [
+            'user_id' => $user->id,
+            'start_date' => $data['start_date'],
+            'end_date' => $data['end_date'],
+            'days_requested' => $data['days_requested'],
+        ]);
+
         Log::info('[VacationService] Vacation request created', [
             'request_id' => $vacationRequest->id,
             'user_id' => $user->id,
@@ -85,6 +94,9 @@ class VacationService
         // Notify employee
         $this->notifyEmployeeApproved($request);
 
+        // Audit log
+        $this->auditService->logVacationApproved($request->id);
+
         Log::info('[VacationService] Vacation request approved', [
             'request_id' => $request->id,
             'approved_by' => $approver->id,
@@ -116,6 +128,9 @@ class VacationService
         // Notify employee
         $this->notifyEmployeeRejected($request);
 
+        // Audit log
+        $this->auditService->logVacationRejected($request->id, $reason);
+
         Log::info('[VacationService] Vacation request rejected', [
             'request_id' => $request->id,
             'rejected_by' => $rejector->id,
@@ -144,6 +159,9 @@ class VacationService
         }
 
         $request->cancel();
+
+        // Audit log
+        $this->auditService->logVacationCancelled($request->id);
 
         Log::info('[VacationService] Vacation request cancelled', [
             'request_id' => $request->id,

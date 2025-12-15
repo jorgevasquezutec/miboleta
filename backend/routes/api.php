@@ -127,4 +127,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    // ============ MÓDULO 7: REPORTES Y AUDITORÍA ============
+
+    Route::prefix('reports')->group(function () {
+        // Dashboard stats
+        Route::get('/dashboard', [\App\Http\Controllers\Api\ReportsController::class, 'dashboard']);
+
+        // Individual stats
+        Route::get('/documents', [\App\Http\Controllers\Api\ReportsController::class, 'documents']);
+        Route::get('/vacations', [\App\Http\Controllers\Api\ReportsController::class, 'vacations']);
+        Route::get('/users', [\App\Http\Controllers\Api\ReportsController::class, 'users']);
+        Route::get('/activity', [\App\Http\Controllers\Api\ReportsController::class, 'activity']);
+
+        // Audit logs (admin/root only)
+        Route::get('/audit', [\App\Http\Controllers\Api\ReportsController::class, 'audit']);
+        Route::get('/audit/actions', [\App\Http\Controllers\Api\ReportsController::class, 'auditActions']);
+        Route::get('/audit/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportAudit']);
+
+        // Exports
+        Route::get('/documents/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportDocuments']);
+        Route::get('/vacations/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportVacations']);
+        Route::get('/users/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportUsers']);
+        Route::get('/batches/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportBatches']);
+        Route::get('/tenants/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportTenants']);
+    });
 });

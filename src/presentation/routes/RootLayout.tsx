@@ -14,6 +14,7 @@ import {
   ChevronRight,
   LucideIcon,
   History,
+  ClipboardList,
 } from "lucide-react";
 import { USER_ROLE_DISPLAY_LABELS, NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
@@ -187,6 +188,7 @@ function Sidebar({ isExpanded }: SidebarProps) {
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
     { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2 },
     { label: "Usuarios", path: "/users", icon: Users },
+    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
   ];
 
   const adminNavItems: NavItem[] = [
@@ -206,6 +208,7 @@ function Sidebar({ isExpanded }: SidebarProps) {
         { label: "Histórico General", path: "/vacation-history", icon: History },
       ],
     },
+    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
   ];
 
   const clientNavItems: NavItem[] = [
@@ -297,7 +300,7 @@ export function RootLayout() {
       <div className="flex">
         <Sidebar isExpanded={isSidebarExpanded} />
         <main className={cn(
-          "flex-1 p-6 min-h-[calc(100vh-73px)] transition-all duration-300",
+          "flex-1 p-6 min-h-[calc(100vh-73px)] transition-all duration-300 bg-[#F8FAFC]",
           isSidebarExpanded ? "ml-64" : "ml-16"
         )}>
           <Outlet />

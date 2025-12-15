@@ -4,3 +4,4 @@ export { default as SettingsPage } from './SettingsPage';
 export { UsersListPage } from './UsersListPage';
 export { VacationApprovalsPage } from './VacationApprovalsPage';
 export { VacationConfirmationPage } from './VacationConfirmationPage';
+export { AuditLogsPage } from './AuditLogsPage';

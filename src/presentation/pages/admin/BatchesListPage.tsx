@@ -6,6 +6,8 @@ import {
     Eye,
     RefreshCw,
     X,
+    Download,
+    Loader2,
 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
@@ -29,6 +31,8 @@ import { PaginationControls } from "@/presentation/components/shared/PaginationC
 import { useDocumentsStore } from "@/presentation/stores";
 import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
 import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
+import { reportsRepository } from "@/infrastructure/persistence/repositories";
+import { toast } from "sonner";
 
 export function BatchesListPage() {
     const navigate = useNavigate();
@@ -38,6 +42,7 @@ export function BatchesListPage() {
     const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined } | undefined>();
     const [currentPage, setCurrentPage] = useState(1);
     const [perPage, setPerPage] = useState(10);
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         loadBatches();
@@ -68,6 +73,24 @@ export function BatchesListPage() {
         setCurrentPage(1);
     };
 
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const blob = await reportsRepository.exportBatches({
+                status: statusFilter !== 'all' ? statusFilter : undefined,
+                start_date: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
+                end_date: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+            });
+            const filename = `lotes_carga_${new Date().toISOString().split('T')[0]}.xlsx`;
+            reportsRepository.downloadBlob(blob, filename);
+            toast.success('Exportación completada');
+        } catch (error) {
+            toast.error('Error al exportar lotes');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -81,10 +104,24 @@ export function BatchesListPage() {
                         Historial de cargas masivas de documentos
                     </p>
                 </div>
-                <Button onClick={loadBatches} variant="outline" disabled={batchesLoading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${batchesLoading ? "animate-spin" : ""}`} />
-                    Actualizar
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                    >
+                        {isExporting ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                        )}
+                        Exportar
+                    </Button>
+                    <Button onClick={loadBatches} variant="outline" disabled={batchesLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${batchesLoading ? "animate-spin" : ""}`} />
+                        Actualizar
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}

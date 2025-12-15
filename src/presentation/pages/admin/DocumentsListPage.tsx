@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Search, Filter, Eye, Trash2 } from "lucide-react";
+import { FileText, Search, Filter, Eye, Trash2, Download, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
@@ -28,6 +28,8 @@ import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { useAuthStore } from "@/presentation/stores";
 import { getDocumentStatusBadgeInline } from "@/presentation/utils";
+import { reportsRepository } from "@/infrastructure/persistence/repositories";
+import { toast } from "sonner";
 
 interface DocumentFilters {
     search?: string;
@@ -52,6 +54,7 @@ export function DocumentsListPage() {
     const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined } | undefined>(undefined);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
 
     // Use pagination hook
     const pagination = usePagination({
@@ -133,17 +136,50 @@ export function DocumentsListPage() {
         }
     };
 
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const blob = await reportsRepository.exportDocuments({
+                status: filters.status !== 'all' ? filters.status : undefined,
+                document_type: filters.docTypeId?.toString(),
+                start_date: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
+                end_date: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+            });
+            const filename = `documentos_${new Date().toISOString().split('T')[0]}.xlsx`;
+            reportsRepository.downloadBlob(blob, filename);
+            toast.success('Exportación completada');
+        } catch (error) {
+            toast.error('Error al exportar documentos');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="flex items-center gap-2">
-                    <FileText className="w-6 h-6 text-[#2563EB]" />
-                    Buscador de Documentos
-                </h1>
-                <p className="text-[#64748B]">
-                    Busca y gestiona todos los documentos del sistema
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="flex items-center gap-2">
+                        <FileText className="w-6 h-6 text-[#2563EB]" />
+                        Buscador de Documentos
+                    </h1>
+                    <p className="text-[#64748B]">
+                        Busca y gestiona todos los documentos del sistema
+                    </p>
+                </div>
+                <Button
+                    variant="outline"
+                    onClick={handleExport}
+                    disabled={isExporting}
+                >
+                    {isExporting ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                        <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Exportar
+                </Button>
             </div>
 
             {/* Filters */}

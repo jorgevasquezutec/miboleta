@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\Mail;
 
 class SignatureService
 {
+    public function __construct(
+        protected AuditService $auditService
+    ) {
+    }
+
     /**
      * Check if user has accepted signature terms.
      *
@@ -252,6 +257,9 @@ class SignatureService
         ];
 
         $document->sign($signatureData);
+
+        // Audit log
+        $this->auditService->logDocumentSigned($document->id, $user->id);
 
         return [
             'success' => true,

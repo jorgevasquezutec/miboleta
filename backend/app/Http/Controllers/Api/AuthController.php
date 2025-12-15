@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Services\AuthService;
+use App\Services\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -17,7 +18,8 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     public function __construct(
-        protected AuthService $authService
+        protected AuthService $authService,
+        protected AuditService $auditService
     ) {
     }
 
@@ -78,10 +80,16 @@ class AuthController extends Controller
         );
 
         if (!$result) {
+            // Log failed login attempt
+            $this->auditService->logLoginFailed($validated['email'], 'Invalid credentials');
+
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
+
+        // Log successful login
+        $this->auditService->logLogin($result['user']->id, $result['user']->current_tenant_id);
 
         return response()->json([
             'user' => $this->authService->transformAuthUser($result['user']),
@@ -182,6 +190,9 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
+        // Log logout
+        $this->auditService->logLogout();
+
         $this->authService->logout($request->user());
 
         return response()->json([

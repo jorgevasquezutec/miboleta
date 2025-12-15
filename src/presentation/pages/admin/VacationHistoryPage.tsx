@@ -11,6 +11,7 @@ import {
     CheckCircle,
     XCircle,
     Clock,
+    Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
@@ -36,6 +37,8 @@ import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
 import { VacationStatusBadge } from "@/presentation/components/features/vacations";
 import { formatDate } from "@/presentation/utils";
+import { reportsRepository } from "@/infrastructure/persistence/repositories";
+import { toast } from "sonner";
 
 // Status badge helper component
 function TakenBadge({ wasTaken }: { wasTaken: boolean | null | undefined }) {
@@ -82,6 +85,7 @@ export function VacationHistoryPage() {
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [yearFilter, setYearFilter] = useState<string>("all");
     const [searchTerm, setSearchTerm] = useState("");
+    const [isExporting, setIsExporting] = useState(false);
 
     // Get available years for filter (current year and 4 previous)
     const currentYear = new Date().getFullYear();
@@ -117,6 +121,25 @@ export function VacationHistoryPage() {
     const handlePageChange = (newPage: number) => {
         if (newPage >= 1 && newPage <= historyTotalPages) {
             setPage(newPage);
+        }
+    };
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
+            const blob = await reportsRepository.exportVacations({
+                tenant_id: tenantId,
+                status: statusFilter !== 'all' ? statusFilter : undefined,
+                year: yearFilter !== 'all' ? parseInt(yearFilter) : undefined,
+            });
+            const filename = `vacaciones_${new Date().toISOString().split('T')[0]}.xlsx`;
+            reportsRepository.downloadBlob(blob, filename);
+            toast.success('Exportación completada');
+        } catch (error) {
+            toast.error('Error al exportar vacaciones');
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -163,10 +186,24 @@ export function VacationHistoryPage() {
                         Todas las vacaciones de {currentTenant?.name || "la empresa"}
                     </p>
                 </div>
-                <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                    Actualizar
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                    >
+                        {isExporting ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                        )}
+                        Exportar
+                    </Button>
+                    <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+                        Actualizar
+                    </Button>
+                </div>
             </div>
 
             {/* Stats Cards */}

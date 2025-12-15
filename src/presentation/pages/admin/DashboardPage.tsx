@@ -1,15 +1,22 @@
+import { useEffect } from "react";
 import {
   FileText,
   Users,
   CheckCircle,
   Clock,
-  // TrendingUp,
   Upload,
   Settings,
-  FileBarChart,
+  Download,
+  RefreshCw,
+  Calendar,
+  LogIn,
+  FileSignature,
+  Trash2,
+  Eye,
+  UserPlus,
+  Building2,
 } from "lucide-react";
 import { StatsCard } from "@/presentation/components/common";
-// import { DocumentCard } from "@/presentation/components/features/documents";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import {
@@ -21,36 +28,95 @@ import {
   TableRow,
 } from "@/presentation/components/ui/table";
 import { Badge } from "@/presentation/components/ui/badge";
+import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { useReportsStore } from "@/presentation/stores/reportsStore";
+import { useAuthStore } from "@/presentation/stores/authStore";
 
 interface AdminDashboardViewProps {
   onNavigate: (view: string) => void;
 }
 
-const documentsData = [
-  { name: "Ene", value: 45 },
-  { name: "Feb", value: 52 },
-  { name: "Mar", value: 61 },
-  { name: "Abr", value: 58 },
-  { name: "May", value: 70 },
-  { name: "Jun", value: 68 },
-];
+// Map action categories to icons
+const getActionIcon = (action: string) => {
+  if (action.startsWith('user.login')) return <LogIn className="w-4 h-4 text-blue-500" />;
+  if (action.startsWith('user.logout')) return <LogIn className="w-4 h-4 text-gray-500" />;
+  if (action.startsWith('user.created') || action.startsWith('user.updated')) return <UserPlus className="w-4 h-4 text-green-500" />;
+  if (action.startsWith('document.signed')) return <FileSignature className="w-4 h-4 text-green-500" />;
+  if (action.startsWith('document.viewed')) return <Eye className="w-4 h-4 text-blue-500" />;
+  if (action.startsWith('document.uploaded')) return <Upload className="w-4 h-4 text-purple-500" />;
+  if (action.startsWith('document.deleted')) return <Trash2 className="w-4 h-4 text-red-500" />;
+  if (action.startsWith('vacation.')) return <Calendar className="w-4 h-4 text-amber-500" />;
+  if (action.startsWith('tenant.')) return <Building2 className="w-4 h-4 text-indigo-500" />;
+  return <FileText className="w-4 h-4 text-gray-500" />;
+};
 
-const statusData = [
-  { name: "Firmados", value: 156, color: "#10B981" },
-  { name: "Pendientes", value: 24, color: "#F59E0B" },
-  { name: "Vencidos", value: 8, color: "#EF4444" },
-];
-
-const recentActivity = [
-  { user: "María García", action: "Firmó contrato laboral", time: "Hace 5 min", status: "success" },
-  { user: "Carlos Ruiz", action: "Visualizó boleta de pago", time: "Hace 12 min", status: "info" },
-  { user: "Ana Martínez", action: "Documento pendiente por firmar", time: "Hace 1 hora", status: "warning" },
-  { user: "Luis Torres", action: "Descargó certificado", time: "Hace 2 horas", status: "success" },
-  { user: "Sofia López", action: "Documento vencido", time: "Hace 3 horas", status: "error" },
-];
+// Map action categories to badge variants
+const getActionBadge = (category: string) => {
+  switch (category) {
+    case 'user':
+      return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Usuario</Badge>;
+    case 'document':
+      return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Documento</Badge>;
+    case 'vacation':
+      return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Vacaciones</Badge>;
+    case 'tenant':
+      return <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">Organización</Badge>;
+    default:
+      return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">Sistema</Badge>;
+  }
+};
 
 export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
+  const { currentTenant } = useAuthStore();
+  const {
+    documentStats,
+    vacationStats,
+    userStats,
+    recentActivity,
+    isLoadingDashboard,
+    error,
+    fetchDashboardStats,
+    exportDocuments,
+    isExporting,
+  } = useReportsStore();
+
+  // Get current tenant ID from authStore
+  const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
+
+  // Fetch dashboard data on mount and when tenant changes
+  useEffect(() => {
+    fetchDashboardStats(tenantId ?? undefined);
+  }, [tenantId, fetchDashboardStats]);
+
+  // Prepare chart data with fallbacks
+  const documentsChartData = documentStats?.by_month ?? [];
+  const statusDistributionData = documentStats?.status_distribution ?? [];
+
+  const handleRefresh = () => {
+    fetchDashboardStats(tenantId ?? undefined);
+  };
+
+  const handleExport = async () => {
+    await exportDocuments({ tenant_id: tenantId ?? undefined });
+  };
+
+  // Loading skeleton for stats cards
+  const StatsCardSkeleton = () => (
+    <Card className="relative overflow-hidden">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <Skeleton className="h-12 w-12 rounded-full" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -58,77 +124,146 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
         <div>
           <h1>Panel de Administración</h1>
           <p className="text-[#64748B]">
-            Bienvenido de vuelta, aquí está el resumen de tu plataforma
+            {tenantId
+              ? `Estadísticas de tu organización`
+              : 'Vista general de todas las organizaciones'}
           </p>
         </div>
         <div className="flex gap-3">
-          {/* <Button
+          <Button
             variant="outline"
             className="gap-2"
-            onClick={() => onNavigate("reports")}
+            onClick={handleRefresh}
+            disabled={isLoadingDashboard}
           >
-            <FileBarChart className="w-4 h-4" />
-            Reportes
-          </Button> */}
-          {/* <Button
-            className="gap-2 bg-[#2563EB] hover:bg-[#1E40AF]"
-            onClick={() => onNavigate("upload")}
+            <RefreshCw className={`w-4 h-4 ${isLoadingDashboard ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExport}
+            disabled={isExporting}
           >
-            <Upload className="w-4 h-4" />
-            Cargar Documentos
-          </Button> */}
+            <Download className="w-4 h-4" />
+            Exportar
+          </Button>
         </div>
       </div>
 
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard
-          title="Total Documentos"
-          value="1,247"
-          icon={FileText}
-          trend={{ value: "12% este mes", isPositive: true }}
-          color="#2563EB"
-        />
-        <StatsCard
-          title="Usuarios Activos"
-          value="342"
-          icon={Users}
-          trend={{ value: "8% este mes", isPositive: true }}
-          color="#10B981"
-        />
-        <StatsCard
-          title="Documentos Firmados"
-          value="156"
-          icon={CheckCircle}
-          trend={{ value: "5% este mes", isPositive: true }}
-          color="#10B981"
-        />
-        <StatsCard
-          title="Pendientes"
-          value="24"
-          icon={Clock}
-          trend={{ value: "3% este mes", isPositive: false }}
-          color="#F59E0B"
-        />
+        {isLoadingDashboard ? (
+          <>
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+          </>
+        ) : (
+          <>
+            <StatsCard
+              title="Total Documentos"
+              value={documentStats?.total?.toLocaleString() ?? '0'}
+              icon={FileText}
+              color="#2563EB"
+            />
+            <StatsCard
+              title="Usuarios Activos"
+              value={userStats?.active?.toLocaleString() ?? '0'}
+              icon={Users}
+              color="#10B981"
+            />
+            <StatsCard
+              title="Documentos Firmados"
+              value={documentStats?.signed?.toLocaleString() ?? '0'}
+              icon={CheckCircle}
+              color="#10B981"
+            />
+            <StatsCard
+              title="Pendientes"
+              value={documentStats?.pending?.toLocaleString() ?? '0'}
+              icon={Clock}
+              color="#F59E0B"
+            />
+          </>
+        )}
       </div>
+
+      {/* Vacation Stats Row (if there are vacations) */}
+      {vacationStats && vacationStats.total > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="col-span-full md:col-span-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Vacaciones {vacationStats.current_year}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-3 bg-amber-50 rounded-lg">
+                  <p className="text-2xl font-bold text-amber-600">{vacationStats.pending}</p>
+                  <p className="text-sm text-amber-700">Pendientes</p>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <p className="text-2xl font-bold text-green-600">{vacationStats.approved}</p>
+                  <p className="text-sm text-green-700">Aprobadas</p>
+                </div>
+                <div className="text-center p-3 bg-red-50 rounded-lg">
+                  <p className="text-2xl font-bold text-red-600">{vacationStats.rejected}</p>
+                  <p className="text-sm text-red-700">Rechazadas</p>
+                </div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-600">{vacationStats.total_days_used}</p>
+                  <p className="text-sm text-blue-700">Días Usados</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Documents Trend */}
         <Card>
           <CardHeader>
-            <CardTitle>Documentos Cargados</CardTitle>
+            <CardTitle>Documentos Cargados (Últimos 6 meses)</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={documentsData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                <XAxis dataKey="name" stroke="#64748B" />
-                <YAxis stroke="#64748B" />
-                <Tooltip />
-                <Bar dataKey="value" fill="#2563EB" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {isLoadingDashboard ? (
+              <div className="h-[300px] flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
+              </div>
+            ) : documentsChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={documentsChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                  <XAxis dataKey="name" stroke="#64748B" />
+                  <YAxis stroke="#64748B" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Bar dataKey="value" fill="#2563EB" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-500">
+                No hay datos disponibles
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -138,27 +273,37 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
             <CardTitle>Estado de Documentos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-center">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {isLoadingDashboard ? (
+              <div className="h-[300px] flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
+              </div>
+            ) : statusDistributionData.length > 0 && statusDistributionData.some(d => d.value > 0) ? (
+              <div className="flex items-center justify-center">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={statusDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {statusDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-500">
+                No hay datos disponibles
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -167,85 +312,59 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Actividad Reciente</CardTitle>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => onNavigate("/audit-logs")}>
             Ver todo
           </Button>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Acción</TableHead>
-                <TableHead>Tiempo</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentActivity.map((activity, index) => (
-                <TableRow key={index}>
-                  <TableCell>{activity.user}</TableCell>
-                  <TableCell>{activity.action}</TableCell>
-                  <TableCell className="text-[#64748B]">{activity.time}</TableCell>
-                  <TableCell>
-                    {activity.status === "success" && (
-                      <Badge className="bg-[#10B981] text-white">Completado</Badge>
-                    )}
-                    {activity.status === "warning" && (
-                      <Badge className="bg-[#F59E0B] text-white">Pendiente</Badge>
-                    )}
-                    {activity.status === "error" && (
-                      <Badge className="bg-[#EF4444] text-white">Vencido</Badge>
-                    )}
-                    {activity.status === "info" && (
-                      <Badge className="bg-[#3B82F6] text-white">Información</Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
+          {isLoadingDashboard ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          ) : recentActivity.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12"></TableHead>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Acción</TableHead>
+                  <TableHead>Tiempo</TableHead>
+                  <TableHead>Tipo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentActivity.map((activity) => (
+                  <TableRow key={activity.id}>
+                    <TableCell>
+                      {getActionIcon(activity.action)}
+                    </TableCell>
+                    <TableCell className="font-medium">{activity.user}</TableCell>
+                    <TableCell>{activity.description}</TableCell>
+                    <TableCell className="text-[#64748B]">{activity.time_ago}</TableCell>
+                    <TableCell>
+                      {getActionBadge(activity.category)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="py-8 text-center text-gray-500">
+              <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No hay actividad reciente registrada</p>
+              <p className="text-sm">Las acciones de usuarios aparecerán aquí</p>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onNavigate("upload")}>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Upload className="w-6 h-6 text-[#2563EB]" />
-            </div>
-            <div>
-              <h3>Cargar Documentos</h3>
-              <p className="text-[#64748B]">Carga masiva de archivos</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onNavigate("users")}>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-[#10B981]" />
-            </div>
-            <div>
-              <h3>Gestionar Usuarios</h3>
-              <p className="text-[#64748B]">Administrar empleados</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onNavigate("settings")}>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Settings className="w-6 h-6 text-[#8B5CF6]" />
-            </div>
-            <div>
-              <h3>Configuración</h3>
-              <p className="text-[#64748B]">Ajustes de empresa</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

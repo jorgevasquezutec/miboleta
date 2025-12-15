@@ -30,9 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/presentation/components/ui/select";
-import { UserPlus, Search, Eye, Pencil, Trash2, Loader2 } from "lucide-react";
+import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Tenant } from "@/core/domain/entities/Tenant";
+import { reportsRepository } from "@/infrastructure/persistence/repositories";
 
 // Debounce helper
 function useDebounce<T>(value: T, delay: number): T {
@@ -71,6 +72,7 @@ export function UsersListPage() {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const debouncedSearch = useDebounce(searchTerm, 500);
   const isFirstRender = useRef(true);
 
@@ -124,6 +126,23 @@ export function UsersListPage() {
     changePerPage(perPage);
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const blob = await reportsRepository.exportUsers({
+        tenant_id: tenantFilter ? Number(tenantFilter) : undefined,
+        status: localStatusFilter !== 'all' ? localStatusFilter : undefined,
+      });
+      const filename = `usuarios_${new Date().toISOString().split('T')[0]}.xlsx`;
+      reportsRepository.downloadBlob(blob, filename);
+      toast.success('Exportación completada');
+    } catch (error) {
+      toast.error('Error al exportar usuarios');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
 
   const getRoleBadgeStyle = (role: string) => {
     switch (role) {
@@ -162,12 +181,26 @@ export function UsersListPage() {
                 Administra los usuarios del sistema
               </CardDescription>
             </div>
-            {currentUser?.role === "root" && (
-              <Button onClick={() => navigate("/users/new")}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Nuevo Usuario
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleExport}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                Exportar
               </Button>
-            )}
+              {currentUser?.role === "root" && (
+                <Button onClick={() => navigate("/users/new")}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Nuevo Usuario
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
