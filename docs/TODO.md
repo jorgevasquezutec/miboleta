@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-14  
-**Estado general del proyecto:** ~95% completado (Módulos 0-5 + Arquitectura)
+**Última actualización:** 2025-12-15 01:10  
+**Estado general del proyecto:** ~97% completado (Módulos 0-6 + Arquitectura)
 
 ---
 
@@ -17,7 +17,7 @@
 | **Módulo 4:** Documentos | ✅ Completado | 100% |
 | **Módulo 4+:** Arquitectura Backend | ✅ Completado | 100% |
 | **Módulo 5:** Vacaciones | ✅ Completado | 100% |
-| **Módulo 6:** Notificaciones | ⏳ Pendiente | 0% |
+| **Módulo 6:** Notificaciones | ✅ Completado | 100% |
 | **Módulo 7:** Reportes | ⏳ Pendiente | 0% |
 | **Módulo 8:** Testing/Deploy | ⏳ Pendiente | 0% |
 
@@ -25,128 +25,67 @@
 
 ## ✅ Módulos Completados
 
-### Módulo 0: Base de Datos ✅
-- Migraciones: tenants, users, roles, documents, document_types, document_batches, vacation_requests
-- Modelos Eloquent con relaciones
-- Seeders de datos de prueba
+### Módulo 0-4: Base ✅
+- Base de datos, autenticación, multi-tenancy, usuarios, documentos
+- Ver documentación anterior para detalles
 
-### Módulo 1: Autenticación ✅
-- Laravel Sanctum con HttpOnly Cookies
-- Access Token (1h) + Refresh Token (30d)
-- Auto-refresh transparente en frontend
-- Protección XSS/CSRF
+### Módulo 5: Vacaciones ✅ (2025-12-14)
+- Solicitudes de vacaciones con flujo de aprobación
+- Vista consolidada "Mi Equipo" con 3 tabs
+- Histórico general para admin
 
-### Módulo 1.5: Gestión de Contraseñas ✅
-- Creación de usuarios con password temporal
-- Forgot/Reset password con tokens
-- Force change password en primer login
-- Admin puede resetear contraseñas
+### Módulo 6: Notificaciones ✅ (2025-12-15) - Completado
 
-### Módulo 2: Multi-Tenancy ✅
-- Usuarios pertenecen a múltiples tenants
-- TenantSwitcher con logo y reload automático
-- Scope automático por tenant
+#### Backend Implementado ✅:
+- **Migración:** `notifications` table con campos completos
+- **Modelo:** `Notification.php` con tipos, scopes, helpers
+- **Resource:** `NotificationResource.php`
+- **Service:** `NotificationService.php` con métodos especializados
+- **Controller:** `NotificationController.php` con 5 endpoints
+- **Broadcast:** `NotificationCreated.php` para WebSockets
 
-### Módulo 3: Gestión de Usuarios ✅
-- CRUD completo con paginación server-side
-- Jerarquía de supervisores
-- Asignación de roles y tenants
-- Búsqueda y filtros avanzados
-
-### Módulo 4: Documentos ✅
-- Carga masiva vía ZIP
-- Preview PDF con react-pdf
-- Firma digital 2FA (email code)
-- Documentos huérfanos auto-asignados
-- Seguridad: archivos privados (no públicos)
-
-### Módulo 4+: Arquitectura ✅
-- Service Layer (9 services incluyendo VacationService)
-- API Resources (transformers)
-- Custom Exceptions + Global Handler
-- Form Requests (validación)
-- Swagger/OpenAPI documentación completa
-- Email templates estandarizados con componentes
-
-### Módulo 5: Vacaciones ✅ (COMPLETADO 2025-12-14)
-
-#### Backend Implementado:
-- **Modelo:** VacationRequest con estados y flujo completo
-- **Service:** VacationService.php con toda la lógica de negocio
-- **Controller:** VacationRequestController.php con 12 endpoints
-- **Validaciones:** CreateVacationRequestRequest.php, RejectVacationRequestRequest.php
-
-#### Endpoints Implementados:
+#### Endpoints API ✅:
 ```
-POST   /api/vacation-requests                    ✅ Crear solicitud
-GET    /api/vacation-requests                    ✅ Listar (scope por rol)
-GET    /api/vacation-requests/{id}               ✅ Ver detalle
-PUT    /api/vacation-requests/{id}/approve       ✅ Aprobar (supervisor)
-PUT    /api/vacation-requests/{id}/reject        ✅ Rechazar (supervisor)
-PUT    /api/vacation-requests/{id}/mark-taken    ✅ Marcar tomada (supervisor)
-PUT    /api/vacation-requests/{id}/mark-not-taken ✅ Marcar NO tomada (supervisor)
-DELETE /api/vacation-requests/{id}               ✅ Cancelar (empleado, solo si pending)
-GET    /api/vacation-requests/pending-approval   ✅ Pendientes de aprobar (supervisor)
-GET    /api/vacation-requests/pending-confirmation ✅ Pendientes de confirmar (supervisor)
-GET    /api/vacation-requests/my-team            ✅ Vacaciones de mi equipo
-GET    /api/vacation-requests/my-decisions       ✅ Historial de decisiones del supervisor
+GET    /api/notifications              # Lista paginada
+GET    /api/notifications/unread-count # Contador no leídas
+PUT    /api/notifications/{id}/read    # Marcar como leída
+PUT    /api/notifications/read-all     # Marcar todas leídas
+DELETE /api/notifications/{id}         # Eliminar
 ```
 
-#### Frontend Implementado:
-- **VacationRequestsListPage.tsx** - Mis vacaciones (empleado/admin)
-- **VacationRequestFormPage.tsx** - Nueva solicitud con calendario
-- **TeamVacationsPage.tsx** - Vista consolidada con 3 tabs:
-  - Tab "Pendientes": Solicitudes esperando aprobación
-  - Tab "Por Confirmar": Vacaciones terminadas pendientes de confirmación
-  - Tab "Mi Historial": Decisiones del supervisor (aprobadas/rechazadas)
-- **VacationHistoryPage.tsx** - Histórico general para admin
-- **VacationRequestCard.tsx** - Componente reutilizable para mostrar solicitudes
-- **VacationRejectModal.tsx** - Modal para rechazar con motivo
+#### Frontend Implementado ✅:
+- **Entity:** `Notification.ts`
+- **Repository:** `NotificationRepository.ts`
+- **Store:** `notificationsStore.ts` con WebSocket + polling fallback
+- **Realtime:** `echo.ts` con Laravel Echo configurado
+- **Componentes:**
+  - `NotificationBell.tsx` - Bell icon con badge y dropdown
+  - `NotificationsPage.tsx` - Página completa al estilo Facebook
 
-#### Store y Repository:
-- **vacationsStore.ts** - Estado global con Zustand
-- **VacationRepository.ts** - Acceso a API
+#### Características Implementadas ✅:
+- ✅ Badge con contador de no leídas
+- ✅ Dropdown con 10 notificaciones recientes
+- ✅ Página completa con 20 por página y paginación
+- ✅ Marcar como leída (individual y todas)
+- ✅ Eliminar notificaciones
+- ✅ Filtro: todas / solo no leídas
+- ✅ WebSocket primario + Polling fallback automático
+- ✅ Iconos dinámicos por tipo
+- ✅ Navegación a acción al hacer clic
 
-#### Navegación:
+#### ✅ Configuración Backend Completa:
+- `routes/channels.php` - Canales privados configurados: `user.{id}`, `tenant.{tenantId}`, `batch.{batchId}`
+- `NotificationCreated.php` - Broadcast implementado
+- `NotificationService.php` - Integrado con VacationService y SendBatchNotifications
+
+#### 💡 Para habilitar WebSockets en producción:
+```bash
+php artisan reverb:start
 ```
-Sidebar "Vacaciones":
-├── Mis Vacaciones     → /vacations
-├── Mi Equipo          → /team-vacations (3 tabs)
-└── Histórico General  → /vacation-history
-```
-
-#### Reglas de Negocio Implementadas:
-- ✅ No se pueden solicitar vacaciones con fechas superpuestas
-- ✅ Solo el supervisor puede aprobar/rechazar
-- ✅ Validación de días máximos (0.5 - 30)
-- ✅ "Mis Vacaciones" muestra solo las del usuario actual (incluso para admin)
-- ✅ Histórico general filtra por tenant
 
 ---
 
 ## ⏳ Módulos Pendientes
-
-### Módulo 6: Notificaciones en Tiempo Real 🔜
-**Estimación:** 5-6 días
-
-```
-Funcionalidades:
-- Notificaciones push en navegador
-- WebSockets con Laravel Reverb
-- Bell icon con contador
-- Historial de notificaciones
-- Marcar como leídas
-
-Eventos a crear:
-- NewDocumentAvailable
-- DocumentSigned
-- VacationRequestCreated
-- VacationRequestApproved/Rejected
-
-Tecnologías:
-- Laravel Reverb (WebSockets)
-- Laravel Echo (frontend)
-```
 
 ### Módulo 7: Reportes y Auditoría 🔜
 **Estimación:** 4-5 días
@@ -188,125 +127,78 @@ Deployment:
 ## 🔧 Mejoras Técnicas Pendientes
 
 ### Backend
-- [ ] Implementar rate limiting más estricto
-- [ ] Agregar caché para queries frecuentes (Redis)
-- [ ] Implementar soft deletes consistentes
-- [ ] Agregar tests unitarios/feature
-- [ ] Emails de notificación para vacaciones (aprobación/rechazo)
+- [ ] Rate limiting más estricto
+- [ ] Caché Redis para queries frecuentes
+- [ ] Soft deletes consistentes
+- [ ] Tests unitarios/feature
+- [ ] WebSockets para notificaciones en tiempo real (opcional)
 
 ### Frontend
-- [ ] Implementar PWA (service worker)
-- [ ] Agregar dark mode
-- [ ] Optimizar bundle size
-- [ ] Implementar lazy loading de rutas
-- [ ] Agregar tests con Vitest
-- [ ] Calendario visual de vacaciones del equipo
+- [ ] PWA (service worker)
+- [ ] Dark mode
+- [ ] Lazy loading de rutas
+- [ ] Tests con Vitest
+- [ ] Calendario visual de vacaciones
 
 ### DevOps
-- [ ] Configurar Docker para producción
-- [ ] Implementar CI/CD
-- [ ] Configurar backups automáticos
-- [ ] Monitoreo con Sentry o similar
+- [ ] Docker para producción
+- [ ] CI/CD con GitHub Actions
+- [ ] Backups automáticos
+- [ ] Monitoreo con Sentry
 
 ---
 
-## 🐛 Bugs Conocidos / Por Arreglar
+## 🐛 Bugs Arreglados (2025-12-15)
 
-- [ ] Lint warning: `@theme` en index.css (falso positivo, Tailwind v4 lo soporta)
-- [ ] Limpiar imports no usados (USER_ROLE_DISPLAY_LABELS, location, etc.)
+- ✅ **DocumentResource** ahora incluye `user_id` para validar ownership en firma
+- ✅ **Sidebar fijo** - Navbar y sidebar ya no se mueven con el scroll
+- ✅ **Comparación userId** - Corregida la comparación de tipos string/number
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## 📁 Estructura de Archivos Creados (Módulo 6)
 
-### Backend (Laravel 11)
-
+### Backend
 ```
 backend/
-├── app/
-│   ├── Http/
-│   │   ├── Controllers/Api/
-│   │   │   ├── AuthController.php
-│   │   │   ├── PasswordController.php
-│   │   │   ├── ProfileController.php
-│   │   │   ├── UserController.php
-│   │   │   ├── TenantController.php
-│   │   │   ├── DocumentController.php
-│   │   │   ├── DocumentBatchController.php
-│   │   │   ├── DocumentTypeController.php
-│   │   │   ├── DocumentSignatureController.php
-│   │   │   ├── FileUploadController.php
-│   │   │   └── VacationRequestController.php  # NUEVO
-│   │   ├── Requests/
-│   │   │   ├── CreateVacationRequestRequest.php  # NUEVO
-│   │   │   └── RejectVacationRequestRequest.php   # NUEVO
-│   │   └── Resources/
-│   │       └── VacationRequestResource.php  # NUEVO
-│   ├── Services/
-│   │   └── VacationService.php  # NUEVO
-│   └── Models/
-│       └── VacationRequest.php  # NUEVO
+├── database/migrations/
+│   └── 2025_12_15_044322_create_notifications_table.php
+├── app/Models/
+│   └── Notification.php
+├── app/Http/Controllers/Api/
+│   └── NotificationController.php
+├── app/Http/Resources/
+│   └── NotificationResource.php
+└── app/Services/
+    └── NotificationService.php
 ```
 
-### Frontend (React + TypeScript + Vite)
-
+### Frontend
 ```
 src/
 ├── core/domain/entities/
-│   └── VacationRequest.ts  # NUEVO
+│   └── Notification.ts
 ├── infrastructure/persistence/repositories/
-│   └── VacationRepository.ts  # NUEVO
+│   └── NotificationRepository.ts
 ├── presentation/
-│   ├── components/features/vacations/  # NUEVO
-│   │   ├── VacationRequestCard.tsx
-│   │   └── VacationRejectModal.tsx
-│   ├── pages/
-│   │   ├── admin/
-│   │   │   ├── TeamVacationsPage.tsx  # NUEVO (consolidado)
-│   │   │   └── VacationHistoryPage.tsx  # NUEVO
-│   │   └── employee/
-│   │       ├── VacationRequestsListPage.tsx  # NUEVO
-│   │       └── VacationRequestFormPage.tsx  # NUEVO
-│   └── stores/
-│       └── vacationsStore.ts  # NUEVO
-```
-
----
-
-## 📝 Notas de Desarrollo
-
-### Layout Fijo (actualizado 2025-12-14)
-- **Navbar:** Fixed top, z-50, siempre visible
-- **Sidebar:** Fixed left, z-40, debajo del navbar
-- **Contenido:** Scroll interno, margen izquierdo dinámico
-
-### Colores de la Plataforma
-```
-Primary Blue:     #2563EB
-Primary Hover:    #1E40AF
-Background:       #F8FAFC (content), #FFFFFF (cards)
-Text Primary:     #334155
-Text Secondary:   #64748B
-```
-
-### Usuarios de Prueba
-```
-Root Admin:    root@example.com / password
-Admin ABC:     admin@abc.com / password
-Admin XYZ:     admin@xyz.com / password
-Cliente 1:     juan.perez@abc.com / password
-Cliente 2:     maria.garcia@xyz.com / password
+│   ├── stores/
+│   │   └── notificationsStore.ts
+│   ├── components/notifications/
+│   │   ├── NotificationBell.tsx
+│   │   └── index.ts
+│   └── pages/shared/
+│       └── NotificationsPage.tsx
 ```
 
 ---
 
 ## 📅 Próximos Pasos
 
-1. **Inmediato:** Pruebas de vacaciones end-to-end
-2. **Corto plazo:** Módulo 6 (Notificaciones)
-3. **Mediano plazo:** Módulos 7-8 (Reportes, Testing)
-4. **Largo plazo:** Deploy a producción
+1. **Pruebas completas:** Probar flujo de notificaciones end-to-end
+2. **Módulo 7:** Reportes y Dashboard
+3. **Módulo 8:** Testing y CI/CD
+4. **Deploy:** Configurar producción
 
 ---
 
-*Última actualización: 2025-12-14 23:10*
+*Última actualización: 2025-12-15 00:38*

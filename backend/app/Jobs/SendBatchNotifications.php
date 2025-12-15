@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\NewDocumentAvailableMail;
 use App\Models\Document;
 use App\Models\DocumentBatch;
+use App\Services\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -31,7 +32,7 @@ class SendBatchNotifications implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(): void
+    public function handle(NotificationService $notificationService): void
     {
         Log::info("SendBatchNotifications: Enviando notificaciones para batch {$this->batch->id}");
 
@@ -50,6 +51,20 @@ class SendBatchNotifications implements ShouldQueue
             }
 
             try {
+                // In-app notification
+                $documentName = $document->documentType?->display_name ?? 'Documento';
+                $notificationService->notifyNewDocument(
+                    userId: $document->user_id,
+                    documentId: $document->id,
+                    documentName: "{$documentName} - {$document->period}",
+                    tenantId: $document->tenant_id
+                );
+            } catch (\Exception $e) {
+                Log::warning("SendBatchNotifications: Error creando notificación in-app para usuario {$document->user_id}: {$e->getMessage()}");
+            }
+
+            try {
+                // Email notification
                 Mail::to($document->user->email)->send(
                     new NewDocumentAvailableMail($document)
                 );
@@ -76,3 +91,4 @@ class SendBatchNotifications implements ShouldQueue
         Log::error("SendBatchNotifications: Job fallido para batch {$this->batch->id}: {$exception->getMessage()}");
     }
 }
+

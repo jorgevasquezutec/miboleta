@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\DocumentBatchController;
 use App\Http\Controllers\Api\DocumentSignatureController;
 use App\Http\Controllers\Api\VacationRequestController;
+use App\Http\Controllers\Api\NotificationController;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,6 +28,9 @@ Route::post('/refresh', [AuthController::class, 'refresh']);
 // Password recovery (públicas)
 Route::post('/password/forgot', [PasswordController::class, 'forgotPassword']);
 Route::post('/password/reset', [PasswordController::class, 'resetPassword']);
+
+// Broadcasting auth (requires authentication)
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 // Rutas protegidas con Sanctum
 Route::middleware('auth:sanctum')->group(function () {
@@ -114,4 +119,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/vacation-requests/{id}/reject', [VacationRequestController::class, 'reject']);
     Route::put('/vacation-requests/{id}/mark-taken', [VacationRequestController::class, 'markTaken']);
     Route::put('/vacation-requests/{id}/mark-not-taken', [VacationRequestController::class, 'markNotTaken']);
+
+    // ============ MÓDULO 6: NOTIFICACIONES ============
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 });

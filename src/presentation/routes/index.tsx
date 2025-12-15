@@ -34,6 +34,7 @@ import {
 
 // Shared pages
 import { ProfilePage } from "@/presentation/pages/shared";
+import { NotificationsPage } from "@/presentation/pages/shared/NotificationsPage";
 
 
 // Helper component for role-based redirect
@@ -182,6 +183,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
             <ProfilePage onBack={() => window.history.back()} />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "notifications",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+            <NotificationsPage />
           </ProtectedRoute>
         ),
       },

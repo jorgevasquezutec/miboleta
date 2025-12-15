@@ -31,13 +31,15 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\EnsureCookieAccessToken::class,
         ]);
 
-        // Excluir rutas de CSRF (para login público y Swagger)
+        // Excluir rutas de CSRF (para login público, Swagger y WebSocket auth)
         $middleware->validateCsrfTokens(except: [
             'api/login',
             'api/refresh',
             'api/logout',
             'api/documentation',
             'api/documentation/*',
+            'api/broadcasting/auth',
+            'broadcasting/auth',
         ]);
 
         // Configurar credenciales para Sanctum

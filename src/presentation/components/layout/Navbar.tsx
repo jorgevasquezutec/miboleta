@@ -1,4 +1,4 @@
-import { Bell, LogOut, User as UserIcon, Menu } from "lucide-react";
+import { LogOut, User as UserIcon, Menu } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/presentation/components/ui/avatar";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -9,8 +9,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/presentation/components/ui/dropdown-menu";
-import { Badge } from "@/presentation/components/ui/badge";
 import { TenantSwitcher } from "@/presentation/components/shared/TenantSwitcher";
+import { NotificationBell } from "@/presentation/components/notifications/NotificationBell";
 import { useNavigate } from "react-router-dom";
 import { User } from "@/core/domain/entities/User";
 
@@ -24,7 +24,6 @@ interface NavbarProps {
 
 export function Navbar({
   user,
-  notificationCount = 0,
   onLogout,
   onToggleSidebar,
 }: NavbarProps) {
@@ -73,25 +72,7 @@ export function Navbar({
         {/* Right Section */}
         <div className="flex items-center gap-4">
           {/* Notifications */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
-                {notificationCount > 0 && (
-                  <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-[#EF4444] text-white">
-                    {notificationCount}
-                  </Badge>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="p-4 text-center text-[#64748B]">
-                No tienes notificaciones nuevas
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <NotificationBell />
 
           {/* User Menu */}
           <DropdownMenu>

@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Mail;
 
 class VacationService
 {
+    public function __construct(
+        protected NotificationService $notificationService
+    ) {
+    }
     /**
      * Create a new vacation request.
      *
@@ -438,13 +442,35 @@ class VacationService
      */
     protected function notifySupervisor(VacationRequest $request): void
     {
+        $supervisor = $request->user->immediateSupervisor;
+        if (!$supervisor) {
+            return;
+        }
+
+        $dateRange = $request->start_date->format('d/m') . ' - ' . $request->end_date->format('d/m/Y');
+        $employeeName = $request->user->name . ' ' . $request->user->last_name;
+
+        // In-app notification
         try {
-            $supervisor = $request->user->immediateSupervisor;
-            if ($supervisor) {
-                Mail::to($supervisor->email)->send(new VacationRequestCreatedMail($request));
-            }
+            $this->notificationService->notifyVacationCreated(
+                supervisorId: $supervisor->id,
+                vacationId: $request->id,
+                employeeName: $employeeName,
+                dateRange: $dateRange,
+                tenantId: $request->tenant_id
+            );
         } catch (\Exception $e) {
-            Log::warning('[VacationService] Failed to send supervisor notification', [
+            Log::warning('[VacationService] Failed to create in-app notification', [
+                'request_id' => $request->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Email notification
+        try {
+            Mail::to($supervisor->email)->send(new VacationRequestCreatedMail($request));
+        } catch (\Exception $e) {
+            Log::warning('[VacationService] Failed to send supervisor email', [
                 'request_id' => $request->id,
                 'error' => $e->getMessage(),
             ]);
@@ -456,10 +482,30 @@ class VacationService
      */
     protected function notifyEmployeeApproved(VacationRequest $request): void
     {
+        $dateRange = $request->start_date->format('d/m') . ' - ' . $request->end_date->format('d/m/Y');
+        $approverName = $request->approvedByUser->name . ' ' . $request->approvedByUser->last_name;
+
+        // In-app notification
+        try {
+            $this->notificationService->notifyVacationApproved(
+                employeeId: $request->user_id,
+                vacationId: $request->id,
+                dateRange: $dateRange,
+                approverName: $approverName,
+                tenantId: $request->tenant_id
+            );
+        } catch (\Exception $e) {
+            Log::warning('[VacationService] Failed to create in-app notification', [
+                'request_id' => $request->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Email notification
         try {
             Mail::to($request->user->email)->send(new VacationRequestApprovedMail($request));
         } catch (\Exception $e) {
-            Log::warning('[VacationService] Failed to send approval notification', [
+            Log::warning('[VacationService] Failed to send approval email', [
                 'request_id' => $request->id,
                 'error' => $e->getMessage(),
             ]);
@@ -471,10 +517,31 @@ class VacationService
      */
     protected function notifyEmployeeRejected(VacationRequest $request): void
     {
+        $dateRange = $request->start_date->format('d/m') . ' - ' . $request->end_date->format('d/m/Y');
+        $rejecterName = $request->rejectedByUser->name . ' ' . $request->rejectedByUser->last_name;
+
+        // In-app notification
+        try {
+            $this->notificationService->notifyVacationRejected(
+                employeeId: $request->user_id,
+                vacationId: $request->id,
+                dateRange: $dateRange,
+                rejecterName: $rejecterName,
+                reason: $request->rejection_reason,
+                tenantId: $request->tenant_id
+            );
+        } catch (\Exception $e) {
+            Log::warning('[VacationService] Failed to create in-app notification', [
+                'request_id' => $request->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Email notification
         try {
             Mail::to($request->user->email)->send(new VacationRequestRejectedMail($request));
         } catch (\Exception $e) {
-            Log::warning('[VacationService] Failed to send rejection notification', [
+            Log::warning('[VacationService] Failed to send rejection email', [
                 'request_id' => $request->id,
                 'error' => $e->getMessage(),
             ]);

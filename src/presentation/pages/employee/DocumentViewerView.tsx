@@ -208,41 +208,57 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
           </Card>
 
           {/* Signature Section - Only show if pending, requires signature, AND user is the owner */}
-          {currentDocument.status === 'pending' &&
-            currentDocument.requiresSignature &&
-            currentDocument.userId === (user?.id ? parseInt(user.id) : null) && (
-              <Card className="border-[#2563EB]">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-[#2563EB]" />
-                    </div>
-                    <div>
-                      <h3 className="text-[#1E40AF]">Firma Digital</h3>
-                      <p className="text-[#64748B]">
-                        Requerida para continuar
-                      </p>
-                    </div>
-                  </div>
+          {(() => {
+            const docUserId = currentDocument.userId;
+            const currentUserId = user?.id ? Number(user.id) : null;
+            const isOwner = docUserId !== null && currentUserId !== null && docUserId === currentUserId;
 
-                  <Alert>
-                    <Info className="w-4 h-4" />
-                    <AlertDescription>
-                      Por favor lee el documento completo antes de firmar. Tu firma
-                      tendrá validez legal.
-                    </AlertDescription>
-                  </Alert>
+            console.log('[DocumentViewerView] Signature check:', {
+              status: currentDocument.status,
+              requiresSignature: currentDocument.requiresSignature,
+              docUserId,
+              currentUserId,
+              isOwner,
+              showSignatureSection: currentDocument.status === 'pending' && currentDocument.requiresSignature && isOwner
+            });
 
-                  <Button
-                    className="w-full h-12 bg-[#2563EB] hover:bg-[#1E40AF] mt-4"
-                    onClick={handleSign}
-                  >
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Firmar Documento
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            if (currentDocument.status === 'pending' && currentDocument.requiresSignature && isOwner) {
+              return (
+                <Card className="border-[#2563EB]">
+                  <CardContent className="p-6 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-[#2563EB]" />
+                      </div>
+                      <div>
+                        <h3 className="text-[#1E40AF]">Firma Digital</h3>
+                        <p className="text-[#64748B]">
+                          Requerida para continuar
+                        </p>
+                      </div>
+                    </div>
+
+                    <Alert>
+                      <Info className="w-4 h-4" />
+                      <AlertDescription>
+                        Por favor lee el documento completo antes de firmar. Tu firma
+                        tendrá validez legal.
+                      </AlertDescription>
+                    </Alert>
+
+                    <Button
+                      className="w-full h-12 bg-[#2563EB] hover:bg-[#1E40AF] mt-4"
+                      onClick={handleSign}
+                    >
+                      <CheckCircle className="w-5 h-5 mr-2" />
+                      Firmar Documento
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            }
+            return null;
+          })()}
 
           {/* Signed Info */}
           {currentDocument.status === 'signed' && (
