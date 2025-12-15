@@ -247,6 +247,7 @@ export function DocumentsListPage() {
                                 onUpdate={({ range }) => setDateRange(range)}
                                 showCompare={false}
                                 align="start"
+                                compact
                             />
                         </div>
                     </div>

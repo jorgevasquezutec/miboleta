@@ -14,8 +14,6 @@ import {
     Building2,
     Calendar,
     Upload,
-    ChevronLeft,
-    ChevronRight,
     X,
 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
@@ -41,6 +39,7 @@ import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
+import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { AuditLog, ReportFilters } from "@/core/domain/entities";
 import { Tenant } from "@/core/domain/entities/Tenant";
 
@@ -132,6 +131,7 @@ export function AuditLogsPage() {
     const [totalPages, setTotalPages] = useState(0);
     const [totalItems, setTotalItems] = useState(0);
     const [isExporting, setIsExporting] = useState(false);
+    const [perPage, setPerPage] = useState(20);
 
     // Filters
     const [searchTerm, setSearchTerm] = useState("");
@@ -146,7 +146,7 @@ export function AuditLogsPage() {
             const filters: ReportFilters = {
                 tenant_id: tenantId,
                 page: currentPage,
-                per_page: 20,
+                per_page: perPage,
                 search: searchTerm || undefined,
                 action: actionFilter && actionFilter !== 'all' ? actionFilter : undefined,
             };
@@ -160,7 +160,7 @@ export function AuditLogsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [tenantId, currentPage, searchTerm, actionFilter]);
+    }, [tenantId, currentPage, perPage, searchTerm, actionFilter]);
 
     useEffect(() => {
         fetchLogs();
@@ -401,56 +401,20 @@ export function AuditLogsPage() {
             </Card>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1 || isLoading}
-                    >
-                        <ChevronLeft className="w-4 h-4" />
-                        Anterior
-                    </Button>
-
-                    <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum: number;
-                            if (totalPages <= 5) {
-                                pageNum = i + 1;
-                            } else if (currentPage <= 3) {
-                                pageNum = i + 1;
-                            } else if (currentPage >= totalPages - 2) {
-                                pageNum = totalPages - 4 + i;
-                            } else {
-                                pageNum = currentPage - 2 + i;
-                            }
-
-                            return (
-                                <Button
-                                    key={pageNum}
-                                    variant={currentPage === pageNum ? "default" : "outline"}
-                                    size="sm"
-                                    onClick={() => setCurrentPage(pageNum)}
-                                    disabled={isLoading}
-                                    className="w-10"
-                                >
-                                    {pageNum}
-                                </Button>
-                            );
-                        })}
-                    </div>
-
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages || isLoading}
-                    >
-                        Siguiente
-                        <ChevronRight className="w-4 h-4" />
-                    </Button>
-                </div>
+            {totalPages > 0 && (
+                <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    total={totalItems}
+                    perPage={perPage}
+                    onPageChange={setCurrentPage}
+                    onPerPageChange={(newPerPage) => {
+                        setPerPage(newPerPage);
+                        setCurrentPage(1);
+                    }}
+                    disabled={isLoading}
+                    showPerPageSelector={true}
+                />
             )}
         </div>
     );

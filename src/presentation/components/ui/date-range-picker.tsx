@@ -2,6 +2,7 @@
 'use client'
 
 import React, { type FC, useState, useEffect, useRef } from 'react'
+import { es } from 'date-fns/locale'
 import { Button } from './button'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Calendar } from './calendar'
@@ -35,9 +36,18 @@ export interface DateRangePickerProps {
     locale?: string
     /** Option for showing compare feature */
     showCompare?: boolean
+    /** Compact mode for smaller display */
+    compact?: boolean
 }
 
-const formatDate = (date: Date, locale: string = 'en-us'): string => {
+const formatDate = (date: Date, locale: string = 'en-us', compact: boolean = false): string => {
+    if (compact) {
+        return date.toLocaleDateString(locale, {
+            month: '2-digit',
+            day: '2-digit',
+            year: '2-digit'
+        })
+    }
     return date.toLocaleDateString(locale, {
         month: 'short',
         day: 'numeric',
@@ -71,15 +81,15 @@ interface Preset {
 
 // Define presets
 const PRESETS: Preset[] = [
-    { name: 'today', label: 'Today' },
-    { name: 'yesterday', label: 'Yesterday' },
-    { name: 'last7', label: 'Last 7 days' },
-    { name: 'last14', label: 'Last 14 days' },
-    { name: 'last30', label: 'Last 30 days' },
-    { name: 'thisWeek', label: 'This Week' },
-    { name: 'lastWeek', label: 'Last Week' },
-    { name: 'thisMonth', label: 'This Month' },
-    { name: 'lastMonth', label: 'Last Month' }
+    { name: 'today', label: 'Hoy' },
+    { name: 'yesterday', label: 'Ayer' },
+    { name: 'last7', label: 'Últimos 7 días' },
+    { name: 'last14', label: 'Últimos 14 días' },
+    { name: 'last30', label: 'Últimos 30 días' },
+    { name: 'thisWeek', label: 'Esta semana' },
+    { name: 'lastWeek', label: 'Semana pasada' },
+    { name: 'thisMonth', label: 'Este mes' },
+    { name: 'lastMonth', label: 'Mes pasado' }
 ]
 
 /** The DateRangePicker component allows a user to select a range of dates */
@@ -90,8 +100,9 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
     initialCompareTo,
     onUpdate,
     align = 'end',
-    locale = 'en-US',
-    showCompare = true
+    locale = 'es-ES',
+    showCompare = true,
+    compact = false
 }): React.ReactElement => {
     const [isOpen, setIsOpen] = useState(false)
 
@@ -293,15 +304,16 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
         isSelected: boolean
     }): React.ReactElement => (
         <Button
-            className={cn(isSelected && 'pointer-events-none')}
+            className={cn('h-7 text-xs px-2', isSelected && 'pointer-events-none')}
             variant="ghost"
+            size="sm"
             onClick={() => {
                 setPreset(preset)
             }}
         >
             <>
-                <span className={cn('pr-2 opacity-0', isSelected && 'opacity-70')}>
-                    <CheckIcon width={18} height={18} />
+                <span className={cn('pr-1 opacity-0', isSelected && 'opacity-70')}>
+                    <CheckIcon width={12} height={12} />
                 </span>
                 {label}
             </>
@@ -336,13 +348,13 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
             }}
         >
             <PopoverTrigger asChild>
-                <Button size={'lg'} variant="outline">
+                <Button size={compact ? 'sm' : 'lg'} variant="outline" className={compact ? 'text-xs h-9 px-3' : ''}>
                     <div className="text-right">
-                        <div className="py-1">
-                            <div>{`${formatDate(range.from, locale)}${range.to != null ? ' - ' + formatDate(range.to, locale) : ''
+                        <div className={compact ? '' : 'py-1'}>
+                            <div>{`${formatDate(range.from, locale, compact)}${range.to != null ? ' - ' + formatDate(range.to, locale, compact) : ''
                                 }`}</div>
                         </div>
-                        {rangeCompare != null && (
+                        {rangeCompare != null && !compact && (
                             <div className="opacity-60 text-xs -mt-1">
                                 <>
                                     vs. {formatDate(rangeCompare.from, locale)}
@@ -353,8 +365,8 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
                             </div>
                         )}
                     </div>
-                    <div className="pl-1 opacity-60 -mr-2 scale-125">
-                        {isOpen ? (<ChevronUpIcon width={24} />) : (<ChevronDownIcon width={24} />)}
+                    <div className={compact ? 'pl-1 opacity-60' : 'pl-1 opacity-60 -mr-2 scale-125'}>
+                        {isOpen ? (<ChevronUpIcon width={compact ? 16 : 24} />) : (<ChevronDownIcon width={compact ? 16 : 24} />)}
                     </div>
                 </Button>
             </PopoverTrigger>
@@ -399,7 +411,7 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
                                             }}
                                             id="compare-mode"
                                         />
-                                        <Label htmlFor="compare-mode">Compare</Label>
+                                        <Label htmlFor="compare-mode">Comparar</Label>
                                     </div>
                                 )}
                                 <div className="flex flex-col gap-2">
@@ -490,6 +502,7 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
                             <div>
                                 <Calendar
                                     mode="range"
+                                    locale={es}
                                     onSelect={(value: { from?: Date, to?: Date } | undefined) => {
                                         if (value?.from != null) {
                                             setRange({ from: value.from, to: value?.to })
@@ -509,8 +522,8 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
                         </div>
                     </div>
                     {!isSmallScreen && (
-                        <div className="flex flex-col items-end gap-1 pr-2 pl-6 pb-6">
-                            <div className="flex w-full flex-col items-end gap-1 pr-2 pl-6 pb-6">
+                        <div className="flex flex-col items-end gap-0.5 pr-2 pl-3 pb-3">
+                            <div className="flex w-full flex-col items-end gap-0.5">
                                 {PRESETS.map((preset) => (
                                     <PresetButton
                                         key={preset.name}
@@ -531,7 +544,7 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
                         }}
                         variant="ghost"
                     >
-                        Cancel
+                        Cancelar
                     </Button>
                     <Button
                         onClick={() => {
@@ -544,7 +557,7 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
                             }
                         }}
                     >
-                        Update
+                        Aplicar
                     </Button>
                 </div>
             </PopoverContent>

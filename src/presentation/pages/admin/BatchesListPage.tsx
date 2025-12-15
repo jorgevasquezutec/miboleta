@@ -150,6 +150,7 @@ export function BatchesListPage() {
                             onUpdate={({ range }) => setDateRange(range)}
                             showCompare={false}
                             align="start"
+                            compact
                         />
                         {(statusFilter !== "all" || dateRange) && (
                             <Button variant="ghost" size="sm" onClick={clearFilters}>

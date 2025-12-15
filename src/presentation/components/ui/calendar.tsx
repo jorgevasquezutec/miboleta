@@ -18,48 +18,49 @@ function Calendar({
       <style>{`
         .rdp-head_row, .rdp-row {
           display: grid !important;
-          grid-template-columns: repeat(7, 2.25rem) !important;
-          gap: 0.25rem !important;
+          grid-template-columns: repeat(7, 1.75rem) !important;
+          gap: 0.125rem !important;
         }
         .rdp-head_cell {
-          width: 2.25rem !important;
+          width: 1.75rem !important;
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
+          font-size: 0.7rem !important;
         }
         .rdp-cell {
-          width: 2.25rem !important;
+          width: 1.75rem !important;
         }
       `}</style>
       <DayPicker
         showOutsideDays={showOutsideDays}
-        className={cn("p-3", className)}
+        className={cn("p-2", className)}
         classNames={{
-          months: "flex flex-col sm:flex-row gap-4",
-          month: "flex flex-col gap-4",
+          months: "flex flex-col sm:flex-row gap-2",
+          month: "flex flex-col gap-2",
           caption: "flex justify-center pt-1 relative items-center w-full",
-          caption_label: "text-sm font-medium",
+          caption_label: "text-xs font-medium",
           nav: "flex items-center gap-1",
           nav_button: cn(
             buttonVariants({ variant: "outline" }),
-            "size-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+            "size-6 bg-transparent p-0 opacity-50 hover:opacity-100",
           ),
           nav_button_previous: "absolute left-1",
           nav_button_next: "absolute right-1",
           table: "w-full border-collapse",
           head_row: "rdp-head_row",
           head_cell:
-            "rdp-head_cell text-muted-foreground font-normal text-[0.8rem]",
-          row: "rdp-row w-full mt-2",
+            "rdp-head_cell text-muted-foreground font-normal text-[0.65rem]",
+          row: "rdp-row w-full mt-1",
           cell: cn(
-            "rdp-cell relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-range-end)]:rounded-r-md",
+            "rdp-cell relative p-0 text-center text-xs focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-range-end)]:rounded-r-md",
             props.mode === "range"
               ? "[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md"
               : "[&:has([aria-selected])]:rounded-md",
           ),
           day: cn(
             buttonVariants({ variant: "ghost" }),
-            "size-9 p-0 font-normal aria-selected:opacity-100",
+            "size-7 p-0 font-normal text-xs aria-selected:opacity-100",
           ),
           day_range_start:
             "day-range-start aria-selected:bg-primary aria-selected:text-primary-foreground",
@@ -78,10 +79,10 @@ function Calendar({
         }}
         components={{
           IconLeft: ({ className, ...props }) => (
-            <ChevronLeft className={cn("size-4", className)} {...props} />
+            <ChevronLeft className={cn("size-3", className)} {...props} />
           ),
           IconRight: ({ className, ...props }) => (
-            <ChevronRight className={cn("size-4", className)} {...props} />
+            <ChevronRight className={cn("size-3", className)} {...props} />
           ),
         }}
         {...props}
