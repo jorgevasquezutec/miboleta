@@ -29,12 +29,16 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
 
-        $stats = $this->reportsService->getDashboardStats($tenantId);
+        $stats = $this->reportsService->getDashboardStats($tenantId, $startDate, $endDate);
 
         return response()->json([
             'data' => $stats,
             'tenant_id' => $tenantId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
         ]);
     }
 
@@ -250,6 +254,8 @@ class ReportsController extends Controller
 
         $filters = [
             'tenant_id' => $tenantId,
+            'search' => $request->query('search'),
+            'status' => $request->query('status'),
             'is_active' => $request->query('is_active'),
         ];
 
@@ -338,6 +344,7 @@ class ReportsController extends Controller
         }
 
         $filters = [
+            'search' => $request->query('search'),
             'status' => $request->query('status'),
         ];
 

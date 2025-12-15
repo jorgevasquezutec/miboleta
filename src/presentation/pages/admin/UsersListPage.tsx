@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { useAuthStore } from "@/presentation/stores/authStore";
+import { useUrlFilters } from "@/presentation/hooks";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Table,
@@ -35,23 +36,6 @@ import { toast } from "sonner";
 import { Tenant } from "@/core/domain/entities/Tenant";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 
-// Debounce helper
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
 export function UsersListPage() {
   const navigate = useNavigate();
   const {
@@ -65,36 +49,56 @@ export function UsersListPage() {
   } = useUsersStore();
   const { user: currentUser } = useAuthStore();
 
+  // URL-synced filters
+  const { filters, setFilter, setFilters, resetFilters } = useUrlFilters({
+    defaultValues: {
+      search: '',
+      status: 'all',
+      tenant_id: '',
+      page: 1,
+    }
+  });
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [localStatusFilter, setLocalStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [tenantFilter, setTenantFilter] = useState<string | null>(null);
+  // Local state for search input (for debounce)
+  const [searchInput, setSearchInput] = useState(filters.search);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const debouncedSearch = useDebounce(searchTerm, 500);
-  const isFirstRender = useRef(true);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Single useEffect that handles initial load and filter changes
+  // Debounce search input -> update URL
   useEffect(() => {
-    // On first render, just load data
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      fetchUsers();
-      return;
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
     }
+    debounceTimer.current = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        setFilters({ search: searchInput, page: 1 });
+      }
+    }, 500);
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [searchInput, filters.search, setFilters]);
 
-    // On subsequent renders (when filters change), call fetchUsers with both params
-    const statusValue = localStatusFilter === "all" ? "" : localStatusFilter;
+  // Sync search input with URL on mount
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, []);
+
+  // Fetch users when URL filters change
+  useEffect(() => {
+    const statusValue = filters.status === 'all' ? '' : filters.status;
     fetchUsers({
-      search: debouncedSearch,
+      search: filters.search,
       status: statusValue,
-      tenant_id: tenantFilter || undefined,
-      page: 1 // Reset to page 1 when filters change
+      tenant_id: filters.tenant_id || undefined,
+      page: filters.page,
     });
-  }, [debouncedSearch, localStatusFilter, tenantFilter]);
-
+  }, [filters.search, filters.status, filters.tenant_id, filters.page, fetchUsers]);
 
   const handleDelete = (id: string, userName: string) => {
     setUserToDelete({ id, name: userName });
@@ -106,7 +110,6 @@ export function UsersListPage() {
     try {
       await deleteUser(userToDelete.id);
       toast.success("Usuario eliminado exitosamente");
-      // Reload current page
       await fetchUsers();
     } catch (error) {
       toast.error("Error al eliminar usuario");
@@ -114,24 +117,41 @@ export function UsersListPage() {
   };
 
   const handleStatusFilterChange = (value: string) => {
-    // Just update local state, the useEffect will handle the fetch
-    setLocalStatusFilter(value as "all" | "active" | "inactive");
+    setFilters({ status: value, page: 1 });
+  };
+
+  const handleTenantFilterChange = (id: string | null) => {
+    setFilters({ tenant_id: id || '', page: 1 });
+    if (id) {
+      const foundTenant = users.flatMap(u => u.tenants || []).find(t => t.id === id);
+      setSelectedTenant(foundTenant ? { id: foundTenant.id, name: foundTenant.name, ruc: foundTenant.ruc || '' } as Tenant : null);
+    } else {
+      setSelectedTenant(null);
+    }
   };
 
   const handlePageChange = (page: number) => {
+    setFilter('page', page);
     goToPage(page);
   };
 
   const handlePerPageChange = (perPage: number) => {
+    setFilter('page', 1);
     changePerPage(perPage);
   };
 
+  const handleResetFilters = () => {
+    setSearchInput('');
+    setSelectedTenant(null);
+    resetFilters();
+  };
   const handleExport = async () => {
     setIsExporting(true);
     try {
       const blob = await reportsRepository.exportUsers({
-        tenant_id: tenantFilter ? Number(tenantFilter) : undefined,
-        status: localStatusFilter !== 'all' ? localStatusFilter : undefined,
+        search: filters.search || undefined,
+        tenant_id: filters.tenant_id ? Number(filters.tenant_id) : undefined,
+        status: filters.status !== 'all' ? filters.status : undefined,
       });
       const filename = `usuarios_${new Date().toISOString().split('T')[0]}.xlsx`;
       reportsRepository.downloadBlob(blob, filename);
@@ -213,8 +233,8 @@ export function UsersListPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   placeholder="Nombre, email o documento..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -224,16 +244,8 @@ export function UsersListPage() {
             <div>
               <label className="text-sm font-medium mb-2 block">Organización</label>
               <TenantAutocompleteSelector
-                value={tenantFilter}
-                onChange={(id) => {
-                  setTenantFilter(id);
-                  if (id) {
-                    const foundTenant = users.flatMap(u => u.tenants || []).find(t => t.id === id);
-                    setSelectedTenant(foundTenant ? { id: foundTenant.id, name: foundTenant.name, ruc: foundTenant.ruc || '' } as Tenant : null);
-                  } else {
-                    setSelectedTenant(null);
-                  }
-                }}
+                value={filters.tenant_id || null}
+                onChange={handleTenantFilterChange}
                 selectedTenant={selectedTenant}
                 placeholder="Todas"
               />
@@ -242,7 +254,7 @@ export function UsersListPage() {
             {/* Status filter */}
             <div>
               <label className="text-sm font-medium mb-2 block">Estado</label>
-              <Select value={localStatusFilter} onValueChange={handleStatusFilterChange}>
+              <Select value={filters.status} onValueChange={handleStatusFilterChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
@@ -264,7 +276,7 @@ export function UsersListPage() {
           ) : users.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">
-                {searchTerm || localStatusFilter !== "all"
+                {filters.search || filters.status !== "all"
                   ? "No se encontraron usuarios"
                   : "No hay usuarios registrados"}
               </p>

@@ -18,9 +18,13 @@ export class ReportsRepository {
     /**
      * Get complete dashboard statistics
      */
-    async getDashboardStats(tenantId?: number): Promise<DashboardStats> {
+    async getDashboardStats(tenantId?: number, startDate?: string, endDate?: string): Promise<DashboardStats> {
         try {
-            const params = tenantId ? { tenant_id: tenantId } : {};
+            const params: Record<string, unknown> = {};
+            if (tenantId) params.tenant_id = tenantId;
+            if (startDate) params.start_date = startDate;
+            if (endDate) params.end_date = endDate;
+
             const response = await apiClient.get<{ data: DashboardStats }>('/reports/dashboard', { params });
             return response.data.data;
         } catch (error) {

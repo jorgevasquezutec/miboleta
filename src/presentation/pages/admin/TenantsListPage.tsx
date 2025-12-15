@@ -2,11 +2,11 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
 import { useAuthStore } from '@/presentation/stores/authStore';
+import { useUrlFilters } from '@/presentation/hooks';
 import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 import { Tenant } from '@/core/domain/entities/Tenant';
 import { Button } from '@/presentation/components/ui/button';
 import { CheckCircle2, SquareX, Download } from 'lucide-react';
-// import { Users } from 'lucide-react';
 import {
     Table,
     TableBody,
@@ -37,23 +37,6 @@ import { StatsCard } from '@/presentation/components/common';
 import { reportsRepository } from '@/infrastructure/persistence/repositories';
 import { toast } from 'sonner';
 
-// Debounce helper
-function useDebounce<T>(value: T, delay: number): T {
-    const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedValue(value);
-        }, delay);
-
-        return () => {
-            clearTimeout(handler);
-        };
-    }, [value, delay]);
-
-    return debouncedValue;
-}
-
 export function TenantsListPage() {
     const navigate = useNavigate();
     const {
@@ -69,28 +52,50 @@ export function TenantsListPage() {
     } = useTenantsStore();
     const { user: currentUser } = useAuthStore();
 
-    const [searchTerm, setSearchTerm] = useState('');
-    const [localStatusFilter, setLocalStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+    // URL-synced filters
+    const { filters, setFilters } = useUrlFilters({
+        defaultValues: {
+            search: '',
+            status: 'all',
+            page: 1,
+        }
+    });
+
+    // Local state for search input (for debounce)
+    const [searchInput, setSearchInput] = useState(filters.search);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [tenantToDelete, setTenantToDelete] = useState<{ id: string; name: string } | null>(null);
     const [isExporting, setIsExporting] = useState(false);
-    const debouncedSearch = useDebounce(searchTerm, 500);
-    const isFirstRender = useRef(true);
+    const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Single useEffect that handles initial load and filter changes
+    // Debounce search input -> update URL
     useEffect(() => {
-        // On first render, just load data
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            fetchTenants();
-            return;
+        if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current);
         }
+        debounceTimer.current = setTimeout(() => {
+            if (searchInput !== filters.search) {
+                setFilters({ search: searchInput, page: 1 });
+            }
+        }, 500);
+        return () => {
+            if (debounceTimer.current) {
+                clearTimeout(debounceTimer.current);
+            }
+        };
+    }, [searchInput, filters.search, setFilters]);
 
-        // On subsequent renders (when filters change), update and fetch
-        setSearchInStore(debouncedSearch);
-        setStatusFilter(localStatusFilter === 'all' ? '' : localStatusFilter);
+    // Sync search input with URL on mount
+    useEffect(() => {
+        setSearchInput(filters.search);
+    }, []);
+
+    // Fetch tenants when URL filters change
+    useEffect(() => {
+        setSearchInStore(filters.search);
+        setStatusFilter(filters.status === 'all' ? '' : filters.status);
         fetchTenants();
-    }, [debouncedSearch, localStatusFilter]);
+    }, [filters.search, filters.status, filters.page, fetchTenants, setSearchInStore, setStatusFilter]);
 
     const handleDelete = (id: string, tenantName: string) => {
         setTenantToDelete({ id, name: tenantName });
@@ -137,7 +142,8 @@ export function TenantsListPage() {
         setIsExporting(true);
         try {
             const blob = await reportsRepository.exportTenants({
-                status: localStatusFilter !== 'all' ? localStatusFilter : undefined,
+                search: filters.search || undefined,
+                status: filters.status !== 'all' ? filters.status : undefined,
             });
             const filename = `organizaciones_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
@@ -147,6 +153,20 @@ export function TenantsListPage() {
         } finally {
             setIsExporting(false);
         }
+    };
+
+    const handleStatusChange = (value: string) => {
+        setFilters({ status: value, page: 1 });
+    };
+
+    const handlePageChange = (page: number) => {
+        setFilters({ page });
+        goToPage(page);
+    };
+
+    const handlePerPageChange = (perPage: number) => {
+        setFilters({ page: 1 });
+        changePerPage(perPage);
     };
 
     return (
@@ -222,15 +242,15 @@ export function TenantsListPage() {
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                                 <Input
                                     placeholder="Buscar por nombre, RUC o razón social..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
                                     className="pl-10"
                                 />
                             </div>
                         </div>
 
                         {/* Status Filter */}
-                        <Select value={localStatusFilter} onValueChange={(value) => setLocalStatusFilter(value as 'all' | 'active' | 'inactive')}>
+                        <Select value={filters.status} onValueChange={handleStatusChange}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Filtrar por estado" />
                             </SelectTrigger>
@@ -238,7 +258,6 @@ export function TenantsListPage() {
                                 <SelectItem value="all">Todos los estados</SelectItem>
                                 <SelectItem value="active">Activo</SelectItem>
                                 <SelectItem value="inactive">Inactivo</SelectItem>
-                                {/* <SelectItem value="suspended">Suspendido</SelectItem> */}
                             </SelectContent>
                         </Select>
                     </div>

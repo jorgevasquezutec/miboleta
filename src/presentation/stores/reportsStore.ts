@@ -33,7 +33,7 @@ interface ReportsState {
     error: string | null;
 
     // Actions
-    fetchDashboardStats: (tenantId?: number) => Promise<void>;
+    fetchDashboardStats: (tenantId?: number, startDate?: string, endDate?: string) => Promise<void>;
     fetchDocumentStats: (tenantId?: number) => Promise<void>;
     fetchVacationStats: (tenantId?: number) => Promise<void>;
     fetchUserStats: (tenantId?: number) => Promise<void>;
@@ -70,10 +70,10 @@ const initialState = {
 export const useReportsStore = create<ReportsState>((set) => ({
     ...initialState,
 
-    fetchDashboardStats: async (tenantId?: number) => {
+    fetchDashboardStats: async (tenantId?: number, startDate?: string, endDate?: string) => {
         set({ isLoadingDashboard: true, error: null });
         try {
-            const stats = await reportsRepository.getDashboardStats(tenantId);
+            const stats = await reportsRepository.getDashboardStats(tenantId, startDate, endDate);
             set({
                 dashboardStats: stats,
                 documentStats: stats.documents,

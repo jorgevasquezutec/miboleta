@@ -67,18 +67,18 @@ class Tenant extends Model
     /**
      * Documentos del tenant
      */
-    // public function documents(): HasMany
-    // {
-    //     return $this->hasMany(Document::class);
-    // }
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
 
     /**
      * Solicitudes de vacaciones del tenant
      */
-    // public function vacationRequests(): HasMany
-    // {
-    //     return $this->hasMany(VacationRequest::class);
-    // }
+    public function vacationRequests(): HasMany
+    {
+        return $this->hasMany(VacationRequest::class);
+    }
 
     /**
      * Verificar si el tenant está activo

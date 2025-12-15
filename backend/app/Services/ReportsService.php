@@ -24,11 +24,11 @@ class ReportsService
     /**
      * Get complete dashboard statistics.
      */
-    public function getDashboardStats(?int $tenantId = null): array
+    public function getDashboardStats(?int $tenantId = null, ?string $startDate = null, ?string $endDate = null): array
     {
         return [
-            'documents' => $this->getDocumentStats($tenantId),
-            'vacations' => $this->getVacationStats($tenantId),
+            'documents' => $this->getDocumentStats($tenantId, $startDate, $endDate),
+            'vacations' => $this->getVacationStats($tenantId, $startDate, $endDate),
             'users' => $this->getUserStats($tenantId),
             'recent_activity' => $this->getRecentActivity($tenantId, 10),
         ];
@@ -37,7 +37,7 @@ class ReportsService
     /**
      * Get document statistics.
      */
-    public function getDocumentStats(?int $tenantId = null): array
+    public function getDocumentStats(?int $tenantId = null, ?string $startDate = null, ?string $endDate = null): array
     {
         $query = Document::query();
 
@@ -45,18 +45,35 @@ class ReportsService
             $query->where('tenant_id', $tenantId);
         }
 
+        // Apply date filters
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
         $total = (clone $query)->count();
         $signed = (clone $query)->where('status', 'signed')->count();
         $pending = (clone $query)->where('status', 'pending')->count();
         $active = (clone $query)->where('status', 'active')->count();
 
-        // Documents by month (last 6 months)
+        // Documents by month (always show last 6 months for trend chart)
         $byMonth = $this->getDocumentsByMonth($tenantId, 6);
 
         // Documents by type (using document_types relationship)
-        $byType = Document::query()
+        $byTypeQuery = Document::query()
             ->join('document_types', 'documents.doc_type_id', '=', 'document_types.id')
-            ->when($tenantId, fn($q) => $q->where('documents.tenant_id', $tenantId))
+            ->when($tenantId, fn($q) => $q->where('documents.tenant_id', $tenantId));
+
+        if ($startDate) {
+            $byTypeQuery->whereDate('documents.created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $byTypeQuery->whereDate('documents.created_at', '<=', $endDate);
+        }
+
+        $byType = $byTypeQuery
             ->select('document_types.name as type_name', DB::raw('count(*) as count'))
             ->groupBy('document_types.id', 'document_types.name')
             ->get()
@@ -84,12 +101,18 @@ class ReportsService
     /**
      * Get documents grouped by month.
      */
-    private function getDocumentsByMonth(?int $tenantId, int $months = 6): array
+    private function getDocumentsByMonth(?int $tenantId, int $months = 6, ?string $startDate = null, ?string $endDate = null): array
     {
-        $startDate = Carbon::now()->subMonths($months - 1)->startOfMonth();
+        $calcStartDate = $startDate
+            ? Carbon::parse($startDate)->startOfMonth()
+            : Carbon::now()->subMonths($months - 1)->startOfMonth();
+
+        $calcEndDate = $endDate
+            ? Carbon::parse($endDate)->endOfMonth()
+            : Carbon::now()->endOfMonth();
 
         $query = Document::query()
-            ->where('created_at', '>=', $startDate);
+            ->whereBetween('created_at', [$calcStartDate, $calcEndDate]);
 
         if ($tenantId) {
             $query->where('tenant_id', $tenantId);
@@ -110,18 +133,18 @@ class ReportsService
         $monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         $data = [];
 
-        for ($i = 0; $i < $months; $i++) {
-            $date = Carbon::now()->subMonths($months - 1 - $i);
-            $year = $date->year;
-            $month = $date->month;
+        $current = $calcStartDate->copy();
+        while ($current <= $calcEndDate) {
+            $year = $current->year;
+            $month = $current->month;
 
             $count = $results->first(fn($r) => $r->year == $year && $r->month == $month)?->count ?? 0;
 
             $data[] = [
                 'name' => $monthNames[$month - 1],
-                'month' => $date->format('Y-m'),
                 'value' => $count,
             ];
+            $current->addMonth();
         }
 
         return $data;
@@ -130,15 +153,23 @@ class ReportsService
     /**
      * Get vacation statistics.
      */
-    public function getVacationStats(?int $tenantId = null): array
+    public function getVacationStats(?int $tenantId = null, ?string $startDate = null, ?string $endDate = null): array
     {
-        $currentYear = Carbon::now()->year;
-
-        $query = VacationRequest::query()
-            ->whereYear('start_date', $currentYear);
+        $query = VacationRequest::query();
 
         if ($tenantId) {
             $query->where('tenant_id', $tenantId);
+        }
+
+        // Apply date filters or default to current year
+        if ($startDate) {
+            $query->whereDate('start_date', '>=', $startDate);
+        } else {
+            $query->whereYear('start_date', Carbon::now()->year);
+        }
+
+        if ($endDate) {
+            $query->whereDate('start_date', '<=', $endDate);
         }
 
         $total = (clone $query)->count();
@@ -165,7 +196,6 @@ class ReportsService
             'rejected' => $rejected,
             'total_days_used' => $totalDaysUsed,
             'status_distribution' => $statusDistribution,
-            'current_year' => $currentYear,
         ];
     }
 
@@ -401,6 +431,15 @@ class ReportsService
             $query->whereHas('tenants', fn($q) => $q->where('tenants.id', $filters['tenant_id']));
         }
 
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('document_id', 'like', "%{$search}%");
+            });
+        }
+
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
@@ -515,6 +554,15 @@ class ReportsService
     {
         $query = Tenant::withCount(['users', 'documents'])
             ->orderBy('name');
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('ruc', 'like', "%{$search}%")
+                    ->orWhere('business_name', 'like', "%{$search}%");
+            });
+        }
 
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);

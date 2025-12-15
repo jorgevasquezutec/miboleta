@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { format, subDays } from "date-fns";
 import {
   FileText,
   Users,
@@ -33,6 +34,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useReportsStore } from "@/presentation/stores/reportsStore";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { Tenant } from "@/core/domain/entities/Tenant";
 
 // Map action categories to icons
@@ -84,6 +86,12 @@ export function AdminDashboardView() {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
 
+  // Date range state - default to last 30 days
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
+
   const isRoot = user?.role === 'root';
 
   // Get current tenant ID - for root use selected, for admin use currentTenant
@@ -91,30 +99,40 @@ export function AdminDashboardView() {
     ? (selectedTenantId ? Number(selectedTenantId) : undefined)
     : (currentTenant?.id ? Number(currentTenant.id) : undefined);
 
-  // Fetch dashboard data on mount and when tenant changes
+  // Format dates for API
+  const startDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined;
+  const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined;
+
+  // Fetch dashboard data on mount and when filters change
   useEffect(() => {
-    fetchDashboardStats(tenantId);
-  }, [tenantId, fetchDashboardStats]);
+    fetchDashboardStats(tenantId, startDate, endDate);
+  }, [tenantId, startDate, endDate, fetchDashboardStats]);
 
   // Prepare chart data with fallbacks
   const documentsChartData = documentStats?.by_month ?? [];
   const statusDistributionData = documentStats?.status_distribution ?? [];
 
   const handleRefresh = () => {
-    fetchDashboardStats(tenantId);
+    fetchDashboardStats(tenantId, startDate, endDate);
   };
 
   const handleExport = async () => {
-    await exportDocuments({ tenant_id: tenantId });
+    await exportDocuments({
+      tenant_id: tenantId,
+      start_date: startDate,
+      end_date: endDate,
+    });
   };
 
   const handleTenantChange = (id: string | null) => {
     setSelectedTenantId(id);
-    // When we have the tenant object from search results, we could store it
-    // For now, we just clear the selected tenant object
     if (!id) {
       setSelectedTenant(null);
     }
+  };
+
+  const handleDateRangeChange = (values: { range: DateRange }) => {
+    setDateRange(values.range);
   };
 
   // Loading skeleton for stats cards
@@ -182,6 +200,19 @@ export function AdminDashboardView() {
             </div>
           </div>
         )}
+
+        {/* Date range filter */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">Período:</span>
+          <DateRangePicker
+            initialDateFrom={dateRange.from}
+            initialDateTo={dateRange.to}
+            onUpdate={handleDateRangeChange}
+            showCompare={false}
+            align="start"
+            compact
+          />
+        </div>
       </div>
 
       {/* Error message */}
