@@ -196,6 +196,7 @@ class ReportsService
             'rejected' => $rejected,
             'total_days_used' => $totalDaysUsed,
             'status_distribution' => $statusDistribution,
+            'current_year' => Carbon::now()->year,
         ];
     }
 
