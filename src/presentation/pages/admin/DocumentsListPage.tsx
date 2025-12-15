@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Search, Filter, Eye, Trash2, Download, Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Input } from "@/presentation/components/ui/input";
@@ -20,22 +20,16 @@ import {
     TableHeader,
     TableRow,
 } from "@/presentation/components/ui/table";
-import { DateRangePicker } from "@/presentation/components/ui/date-range-picker";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { usePagination, useTableFilters } from "@/presentation/hooks";
+import { useUrlFilters } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { useAuthStore } from "@/presentation/stores";
 import { getDocumentStatusBadgeInline } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
-
-interface DocumentFilters {
-    search?: string;
-    status?: Document['status'] | 'all';
-    docTypeId?: number;
-}
 
 export function DocumentsListPage() {
     const navigate = useNavigate();
@@ -50,32 +44,54 @@ export function DocumentsListPage() {
         totalPages,
     } = useDocumentsStore();
 
+    // URL-synced filters
+    const { filters, setFilters, resetFilters } = useUrlFilters({
+        defaultValues: {
+            search: '',
+            status: 'all',
+            doc_type_id: '',
+            date_from: '',
+            date_to: '',
+            page: 1,
+            per_page: 10,
+        }
+    });
+
+    // Local state for search input (debounce)
+    const [searchInput, setSearchInput] = useState(filters.search);
     const [documentTypes, setDocumentTypes] = useState<any[]>([]);
-    const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined } | undefined>(undefined);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Use pagination hook
-    const pagination = usePagination({
-        initialPage: 1,
-        initialPerPage: 5,
-    });
+    // Parse dates from URL
+    const dateRange: DateRange | undefined = filters.date_from ? {
+        from: parse(filters.date_from, 'yyyy-MM-dd', new Date()),
+        to: filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined,
+    } : undefined;
 
-    // Use filters hook
-    const { filters, setFilter, resetFilters: resetFiltersState } = useTableFilters<DocumentFilters>({
-        initialFilters: {
-            search: '',
-            status: 'all',
-            docTypeId: undefined,
-        },
-    });
-
-    // Sync pagination state with store
+    // Debounce search
     useEffect(() => {
-        pagination.setTotal(total);
-        pagination.setTotalPages(totalPages);
-    }, [total, totalPages]);
+        if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current);
+        }
+        debounceTimer.current = setTimeout(() => {
+            if (searchInput !== filters.search) {
+                setFilters({ search: searchInput, page: 1 });
+            }
+        }, 500);
+        return () => {
+            if (debounceTimer.current) {
+                clearTimeout(debounceTimer.current);
+            }
+        };
+    }, [searchInput, filters.search, setFilters]);
+
+    // Sync search input with URL on mount
+    useEffect(() => {
+        setSearchInput(filters.search);
+    }, []);
 
     useEffect(() => {
         const fetchTypes = async () => {
@@ -84,49 +100,61 @@ export function DocumentsListPage() {
         fetchTypes();
     }, [fetchDocumentTypes]);
 
-    // Fetch documents when pagination or filters change
+    // Fetch documents when filters change
     useEffect(() => {
         fetchDocuments({
-            page: pagination.currentPage,
-            perPage: pagination.perPage,
+            page: filters.page,
+            perPage: filters.per_page,
             search: filters.search || undefined,
-            status: filters.status !== "all" ? (filters.status as Document['status']) : undefined,
-            docTypeId: filters.docTypeId || undefined,
-            dateFrom: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-            dateTo: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+            status: filters.status !== 'all' ? (filters.status as Document['status']) : undefined,
+            docTypeId: filters.doc_type_id ? parseInt(filters.doc_type_id) : undefined,
+            dateFrom: filters.date_from || undefined,
+            dateTo: filters.date_to || undefined,
         });
-    }, [pagination.currentPage, pagination.perPage, filters, dateRange, fetchDocuments]);
+    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments]);
 
     const handleSearch = () => {
-        pagination.setPage(1); // Reset to page 1 when searching
+        setFilters({ page: 1 });
     };
 
     const handleResetFilters = () => {
-        resetFiltersState();
-        setDateRange(undefined);
-        pagination.setPage(1);
+        setSearchInput('');
+        resetFilters();
+    };
+
+    const handleStatusChange = (value: string) => {
+        setFilters({ status: value, page: 1 });
+    };
+
+    const handleDocTypeChange = (value: string) => {
+        setFilters({ doc_type_id: value === 'all' ? '' : value, page: 1 });
+    };
+
+    const handleDateRangeChange = (values: { range: DateRange }) => {
+        setFilters({
+            date_from: values.range.from ? format(values.range.from, 'yyyy-MM-dd') : '',
+            date_to: values.range.to ? format(values.range.to, 'yyyy-MM-dd') : '',
+            page: 1,
+        });
+    };
+
+    const handlePageChange = (page: number) => {
+        setFilters({ page });
+    };
+
+    const handlePerPageChange = (perPage: number) => {
+        setFilters({ per_page: perPage, page: 1 });
     };
 
     const handleDeleteClick = (id: number) => {
         setDocumentToDelete(id);
         setDeleteDialogOpen(true);
-
     };
 
     const handleDeleteConfirm = async () => {
         if (documentToDelete) {
             try {
                 await deleteDocument(documentToDelete);
-                // Refetch current page
-                fetchDocuments({
-                    page: pagination.currentPage,
-                    perPage: pagination.perPage,
-                    search: filters.search || undefined,
-                    status: filters.status !== "all" ? (filters.status as Document['status']) : undefined,
-                    docTypeId: filters.docTypeId || undefined,
-                    dateFrom: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-                    dateTo: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
-                });
             } catch (error) {
                 console.error("Error deleting document:", error);
             } finally {
@@ -140,10 +168,11 @@ export function DocumentsListPage() {
         setIsExporting(true);
         try {
             const blob = await reportsRepository.exportDocuments({
+                search: filters.search || undefined,
                 status: filters.status !== 'all' ? filters.status : undefined,
-                document_type: filters.docTypeId?.toString(),
-                start_date: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-                end_date: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+                document_type: filters.doc_type_id || undefined,
+                start_date: filters.date_from || undefined,
+                end_date: filters.date_to || undefined,
             });
             const filename = `documentos_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
@@ -192,8 +221,8 @@ export function DocumentsListPage() {
                             <div className="flex gap-2">
                                 <Input
                                     placeholder="Busca por Nombre, Apellido, Documento o identidad"
-                                    value={filters.search || ''}
-                                    onChange={(e) => setFilter('search', e.target.value)}
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                                 />
                                 <Button onClick={handleSearch} disabled={isLoading}>
@@ -205,7 +234,7 @@ export function DocumentsListPage() {
                         {/* Document Type Filter */}
                         <div>
                             <label className="text-sm font-medium mb-2 block">Tipo de documento</label>
-                            <Select value={filters.docTypeId?.toString() || "all"} onValueChange={(value) => setFilter('docTypeId', value === "all" ? undefined : parseInt(value))}>
+                            <Select value={filters.doc_type_id || 'all'} onValueChange={handleDocTypeChange}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
@@ -223,7 +252,7 @@ export function DocumentsListPage() {
                         {/* Status Filter */}
                         <div>
                             <label className="text-sm font-medium mb-2 block">Estado</label>
-                            <Select value={filters.status || "all"} onValueChange={(value) => setFilter('status', value as Document['status'] | 'all')}>
+                            <Select value={filters.status} onValueChange={handleStatusChange}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
@@ -244,7 +273,7 @@ export function DocumentsListPage() {
                             <DateRangePicker
                                 initialDateFrom={dateRange?.from}
                                 initialDateTo={dateRange?.to}
-                                onUpdate={({ range }) => setDateRange(range)}
+                                onUpdate={handleDateRangeChange}
                                 showCompare={false}
                                 align="start"
                                 compact
@@ -353,12 +382,12 @@ export function DocumentsListPage() {
 
                             {/* Pagination */}
                             <PaginationControls
-                                currentPage={pagination.currentPage}
-                                totalPages={pagination.totalPages}
-                                total={pagination.total}
-                                perPage={pagination.perPage}
-                                onPageChange={pagination.setPage}
-                                onPerPageChange={pagination.setPerPage}
+                                currentPage={filters.page}
+                                totalPages={totalPages}
+                                total={total}
+                                perPage={filters.per_page}
+                                onPageChange={handlePageChange}
+                                onPerPageChange={handlePerPageChange}
                                 disabled={isLoading}
                                 className="mt-4 pt-4 border-t"
                             />

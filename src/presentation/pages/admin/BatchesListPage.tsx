@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import {
     FileStack,
     Eye,
@@ -26,9 +26,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/presentation/components/ui/select";
-import { DateRangePicker } from "@/presentation/components/ui/date-range-picker";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useDocumentsStore } from "@/presentation/stores";
+import { useUrlFilters } from "@/presentation/hooks";
 import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
 import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -38,48 +39,67 @@ export function BatchesListPage() {
     const navigate = useNavigate();
     const { batches, batchesMeta, fetchBatches, batchesLoading } = useDocumentsStore();
 
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined } | undefined>();
-    const [currentPage, setCurrentPage] = useState(1);
-    const [perPage, setPerPage] = useState(10);
+    // URL-synced filters
+    const { filters, setFilters, resetFilters } = useUrlFilters({
+        defaultValues: {
+            status: 'all',
+            date_from: '',
+            date_to: '',
+            page: 1,
+            per_page: 10,
+        }
+    });
+
     const [isExporting, setIsExporting] = useState(false);
 
-    useEffect(() => {
-        loadBatches();
-    }, [statusFilter, dateRange, currentPage, perPage]);
+    // Parse dates from URL
+    const dateRange: DateRange | undefined = filters.date_from ? {
+        from: parse(filters.date_from, 'yyyy-MM-dd', new Date()),
+        to: filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined,
+    } : undefined;
 
-    const loadBatches = () => {
+    // Fetch batches when filters change
+    useEffect(() => {
         fetchBatches({
-            status: statusFilter !== "all" ? statusFilter : undefined,
-            page: currentPage,
-            perPage: perPage,
-            dateFrom: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-            dateTo: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+            status: filters.status !== 'all' ? filters.status : undefined,
+            page: filters.page,
+            perPage: filters.per_page,
+            dateFrom: filters.date_from || undefined,
+            dateTo: filters.date_to || undefined,
+        });
+    }, [filters.status, filters.date_from, filters.date_to, filters.page, filters.per_page, fetchBatches]);
+
+    const handleStatusChange = (value: string) => {
+        setFilters({ status: value, page: 1 });
+    };
+
+    const handleDateRangeChange = (values: { range: DateRange }) => {
+        setFilters({
+            date_from: values.range.from ? format(values.range.from, 'yyyy-MM-dd') : '',
+            date_to: values.range.to ? format(values.range.to, 'yyyy-MM-dd') : '',
+            page: 1,
         });
     };
 
     const clearFilters = () => {
-        setStatusFilter("all");
-        setDateRange(undefined);
-        setCurrentPage(1);
+        resetFilters();
     };
 
     const handlePageChange = (page: number) => {
-        setCurrentPage(page);
+        setFilters({ page });
     };
 
     const handlePerPageChange = (newPerPage: number) => {
-        setPerPage(newPerPage);
-        setCurrentPage(1);
+        setFilters({ per_page: newPerPage, page: 1 });
     };
 
     const handleExport = async () => {
         setIsExporting(true);
         try {
             const blob = await reportsRepository.exportBatches({
-                status: statusFilter !== 'all' ? statusFilter : undefined,
-                start_date: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-                end_date: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+                status: filters.status !== 'all' ? filters.status : undefined,
+                start_date: filters.date_from || undefined,
+                end_date: filters.date_to || undefined,
             });
             const filename = `lotes_carga_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
@@ -89,6 +109,16 @@ export function BatchesListPage() {
         } finally {
             setIsExporting(false);
         }
+    };
+
+    const loadBatches = () => {
+        fetchBatches({
+            status: filters.status !== 'all' ? filters.status : undefined,
+            page: filters.page,
+            perPage: filters.per_page,
+            dateFrom: filters.date_from || undefined,
+            dateTo: filters.date_to || undefined,
+        });
     };
 
     return (
@@ -130,7 +160,7 @@ export function BatchesListPage() {
                     <div className="flex flex-wrap items-center gap-4">
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">Estado:</span>
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <Select value={filters.status} onValueChange={handleStatusChange}>
                                 <SelectTrigger className="w-40">
                                     <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
@@ -147,12 +177,12 @@ export function BatchesListPage() {
                         <DateRangePicker
                             initialDateFrom={dateRange?.from}
                             initialDateTo={dateRange?.to}
-                            onUpdate={({ range }) => setDateRange(range)}
+                            onUpdate={handleDateRangeChange}
                             showCompare={false}
                             align="start"
                             compact
                         />
-                        {(statusFilter !== "all" || dateRange) && (
+                        {(filters.status !== 'all' || filters.date_from) && (
                             <Button variant="ghost" size="sm" onClick={clearFilters}>
                                 <X className="w-4 h-4 mr-1" />
                                 Limpiar filtros
@@ -239,10 +269,10 @@ export function BatchesListPage() {
                             {/* Pagination */}
                             {batchesMeta && (
                                 <PaginationControls
-                                    currentPage={currentPage}
+                                    currentPage={filters.page}
                                     totalPages={batchesMeta.lastPage || 1}
                                     total={batchesMeta.total}
-                                    perPage={perPage}
+                                    perPage={filters.per_page}
                                     onPageChange={handlePageChange}
                                     onPerPageChange={handlePerPageChange}
                                     disabled={batchesLoading}

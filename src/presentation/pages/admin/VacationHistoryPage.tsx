@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     History,
     Loader2,
@@ -35,6 +35,7 @@ import {
 } from "@/presentation/components/ui/table";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
+import { useUrlFilters } from "@/presentation/hooks";
 import { VacationStatusBadge } from "@/presentation/components/features/vacations";
 import { formatDate } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -71,56 +72,85 @@ export function VacationHistoryPage() {
         historyRequests,
         historyTotal,
         historyTotalPages,
-        page,
-        perPage,
         fetchHistoryRequests,
-        setPage,
-        setPerPage,
         isLoading,
         error,
     } = useVacationsStore();
 
     const { currentTenant } = useAuthStore();
 
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [yearFilter, setYearFilter] = useState<string>("all");
-    const [searchTerm, setSearchTerm] = useState("");
+    // URL-synced filters
+    const { filters, setFilters, resetFilters } = useUrlFilters({
+        defaultValues: {
+            status: 'all',
+            year: 'all',
+            search: '',
+            page: 1,
+            per_page: 10,
+        }
+    });
+
+    // Local state for search input (debounce)
+    const [searchInput, setSearchInput] = useState(filters.search);
     const [isExporting, setIsExporting] = useState(false);
+    const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
     // Get available years for filter (current year and 4 previous)
     const currentYear = new Date().getFullYear();
     const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
+    // Debounce search
     useEffect(() => {
-        loadData();
-    }, [statusFilter, yearFilter, page, currentTenant]);
+        if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current);
+        }
+        debounceTimer.current = setTimeout(() => {
+            if (searchInput !== filters.search) {
+                setFilters({ search: searchInput, page: 1 });
+            }
+        }, 500);
+        return () => {
+            if (debounceTimer.current) {
+                clearTimeout(debounceTimer.current);
+            }
+        };
+    }, [searchInput, filters.search, setFilters]);
 
-    const loadData = () => {
+    // Sync search input with URL on mount
+    useEffect(() => {
+        setSearchInput(filters.search);
+    }, []);
+
+    // Fetch data when filters change
+    useEffect(() => {
         fetchHistoryRequests({
-            page,
-            perPage,
-            status: statusFilter !== "all" ? statusFilter : undefined,
-            year: yearFilter !== "all" ? parseInt(yearFilter) : undefined,
+            page: filters.page,
+            perPage: filters.per_page,
+            status: filters.status !== 'all' ? filters.status : undefined,
+            year: filters.year !== 'all' ? parseInt(filters.year) : undefined,
+        });
+    }, [filters.status, filters.year, filters.page, filters.per_page, currentTenant, fetchHistoryRequests]);
+
+    const handleRefresh = () => {
+        fetchHistoryRequests({
+            page: filters.page,
+            perPage: filters.per_page,
+            status: filters.status !== 'all' ? filters.status : undefined,
+            year: filters.year !== 'all' ? parseInt(filters.year) : undefined,
         });
     };
 
-    const handleRefresh = () => {
-        loadData();
-    };
-
     const handleStatusChange = (value: string) => {
-        setStatusFilter(value);
-        setPage(1);
+        setFilters({ status: value, page: 1 });
     };
 
     const handleYearChange = (value: string) => {
-        setYearFilter(value);
-        setPage(1);
+        setFilters({ year: value, page: 1 });
     };
 
     const handlePageChange = (newPage: number) => {
         if (newPage >= 1 && newPage <= historyTotalPages) {
-            setPage(newPage);
+            setFilters({ page: newPage });
         }
     };
 
@@ -130,8 +160,8 @@ export function VacationHistoryPage() {
             const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
             const blob = await reportsRepository.exportVacations({
                 tenant_id: tenantId,
-                status: statusFilter !== 'all' ? statusFilter : undefined,
-                year: yearFilter !== 'all' ? parseInt(yearFilter) : undefined,
+                status: filters.status !== 'all' ? filters.status : undefined,
+                year: filters.year !== 'all' ? parseInt(filters.year) : undefined,
             });
             const filename = `vacaciones_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
@@ -145,8 +175,8 @@ export function VacationHistoryPage() {
 
     // Filter by search term (client-side for name/email)
     const filteredRequests = historyRequests.filter((request) => {
-        if (!searchTerm) return true;
-        const search = searchTerm.toLowerCase();
+        if (!filters.search) return true;
+        const search = filters.search.toLowerCase();
         const userName = request.user?.fullName?.toLowerCase() || "";
         const userEmail = request.user?.email?.toLowerCase() || "";
         return userName.includes(search) || userEmail.includes(search);
@@ -252,14 +282,14 @@ export function VacationHistoryPage() {
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
                                 placeholder="Buscar por nombre o email..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
                                 className="pl-10"
                             />
                         </div>
 
                         {/* Status Filter */}
-                        <Select value={statusFilter} onValueChange={handleStatusChange}>
+                        <Select value={filters.status} onValueChange={handleStatusChange}>
                             <SelectTrigger className="w-full sm:w-[180px]">
                                 <Filter className="w-4 h-4 mr-2" />
                                 <SelectValue placeholder="Estado" />
@@ -274,7 +304,7 @@ export function VacationHistoryPage() {
                         </Select>
 
                         {/* Year Filter */}
-                        <Select value={yearFilter} onValueChange={handleYearChange}>
+                        <Select value={filters.year} onValueChange={handleYearChange}>
                             <SelectTrigger className="w-full sm:w-[140px]">
                                 <Calendar className="w-4 h-4 mr-2" />
                                 <SelectValue placeholder="Año" />
@@ -316,7 +346,7 @@ export function VacationHistoryPage() {
                                 No hay solicitudes
                             </h3>
                             <p className="text-gray-600">
-                                {searchTerm || statusFilter !== "all" || yearFilter !== "all"
+                                {filters.search || filters.status !== 'all' || filters.year !== 'all'
                                     ? "No se encontraron solicitudes con los filtros seleccionados"
                                     : "Aún no hay historial de vacaciones"}
                             </p>
@@ -420,15 +450,14 @@ export function VacationHistoryPage() {
                     {historyTotal > 0 && (
                         <div className="mt-4 pt-4 border-t">
                             <TablePagination
-                                currentPage={page}
+                                currentPage={filters.page}
                                 totalPages={historyTotalPages || 1}
                                 totalItems={historyTotal}
-                                pageSize={perPage}
+                                pageSize={filters.per_page}
                                 pageSizeOptions={[10, 25, 50, 100]}
                                 onPageChange={handlePageChange}
                                 onPageSizeChange={(size) => {
-                                    setPerPage(size);
-                                    setPage(1);
+                                    setFilters({ per_page: size, page: 1 });
                                 }}
                                 showPageSizeSelector={true}
                                 showPageInfo={true}
