@@ -7,7 +7,7 @@ export interface DocumentStats {
     total: number;
     signed: number;
     pending: number;
-    viewed: number;
+    active: number;
     by_month: MonthlyData[];
     by_type: Record<string, number>;
     status_distribution: ChartData[];

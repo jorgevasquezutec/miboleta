@@ -1,23 +1,14 @@
 import { create } from "zustand";
 import { User } from "@/core/domain/entities";
-import { 
-  CreateUserUseCase,
-  UpdateUserUseCase,
-  DeleteUserUseCase
-} from "@/core/domain/use-cases/users";
 import { userRepository } from "@/infrastructure/persistence/repositories";
-import type { PaginationMeta, PaginationLinks, GetUsersParams } from "@/infrastructure/persistence/repositories/UserRepository";
-
-// Instanciar use cases (ya no necesitamos GetUsersUseCase porque llamamos directamente al repository)
-const createUserUseCase = new CreateUserUseCase(userRepository);
-const updateUserUseCase = new UpdateUserUseCase(userRepository);
-const deleteUserUseCase = new DeleteUserUseCase(userRepository);
+import type { PaginationMeta, PaginationLinks } from "@/infrastructure/persistence/repositories/types";
+import type { GetUsersParams } from "@/infrastructure/persistence/repositories/UserRepository";
 
 interface UsersState {
   users: User[];
   isLoading: boolean;
   error: string | null;
-  
+
   // Pagination state
   pagination: PaginationMeta | null;
   links: PaginationLinks | null;
@@ -33,7 +24,7 @@ interface UsersState {
   deleteUser: (id: string) => Promise<void>;
   getUsersByTenant: (tenantId?: string) => User[];
   clearError: () => void;
-  
+
   // Current filters
   currentFilters: GetUsersParams;
 }
@@ -53,16 +44,8 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      // Merge with current filters
       const filters = { ...get().currentFilters, ...params };
-      
       const response = await userRepository.getUsers(filters);
-      
-      console.log('📊 Pagination response:', {
-        data_length: response.data.length,
-        meta: response.meta,
-        links: response.links
-      });
 
       set({
         users: response.data,
@@ -72,7 +55,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
-      console.error('❌ Error fetching users:', error);
+      console.error('Error fetching users:', error);
       set({
         error: error instanceof Error ? error.message : "Error al cargar usuarios",
         isLoading: false,
@@ -100,7 +83,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const newUser = await createUserUseCase.execute(userData);
+      const newUser = await userRepository.create(userData);
 
       set((state) => ({
         users: [...state.users, newUser],
@@ -121,7 +104,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const updatedUser = await updateUserUseCase.execute(id, updates);
+      const updatedUser = await userRepository.update(id, updates);
 
       set((state) => ({
         users: state.users.map((u) => (u.id === id ? updatedUser : u)),
@@ -142,7 +125,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      await deleteUserUseCase.execute(id);
+      await userRepository.delete(id);
 
       set((state) => ({
         users: state.users.filter((u) => u.id !== id),

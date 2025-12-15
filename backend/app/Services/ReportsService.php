@@ -48,7 +48,7 @@ class ReportsService
         $total = (clone $query)->count();
         $signed = (clone $query)->where('status', 'signed')->count();
         $pending = (clone $query)->where('status', 'pending')->count();
-        $viewed = (clone $query)->where('status', 'viewed')->count();
+        $active = (clone $query)->where('status', 'active')->count();
 
         // Documents by month (last 6 months)
         $byMonth = $this->getDocumentsByMonth($tenantId, 6);
@@ -67,14 +67,14 @@ class ReportsService
         $statusDistribution = [
             ['name' => 'Firmados', 'value' => $signed, 'color' => '#10B981'],
             ['name' => 'Pendientes', 'value' => $pending, 'color' => '#F59E0B'],
-            ['name' => 'Visualizados', 'value' => $viewed, 'color' => '#3B82F6'],
+            ['name' => 'Activos', 'value' => $active, 'color' => '#3B82F6'],
         ];
 
         return [
             'total' => $total,
             'signed' => $signed,
             'pending' => $pending,
-            'viewed' => $viewed,
+            'active' => $active,
             'by_month' => $byMonth,
             'by_type' => $byType,
             'status_distribution' => $statusDistribution,
@@ -426,10 +426,11 @@ class ReportsService
     {
         return match ($status) {
             'pending' => 'Pendiente',
-            'viewed' => 'Visualizado',
+            'active' => 'Activo',
             'signed' => 'Firmado',
             'expired' => 'Vencido',
-            default => $status,
+            'orphan' => 'Huérfano',
+            default => ucfirst($status),
         };
     }
 

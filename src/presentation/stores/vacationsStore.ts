@@ -3,7 +3,7 @@ import {
     VacationRequest,
     VacationStatus,
     CreateVacationRequestDTO,
-    RejectVacationRequestDTO,
+    // RejectVacationRequestDTO,
 } from "@/core/domain/entities";
 import { vacationRepository, VacationFilters } from "@/infrastructure/persistence/repositories";
 

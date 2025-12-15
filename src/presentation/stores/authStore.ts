@@ -32,13 +32,13 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
 
         try {
-          console.log('🔐 [AuthStore] Attempting login for:', email);
+          console.log('[AuthStore] Attempting login for:', email);
 
           // Llamar directamente al repositorio (cookies se manejan automáticamente)
           const response = await userRepository.login(email, password);
 
-          console.log('✅ [AuthStore] Login successful, user:', response.user.name);
-          console.log('🍪 [AuthStore] Checking cookies after login...');
+          console.log('[AuthStore] Login successful, user:', response.user.name);
+          console.log('[AuthStore] Checking cookies after login...');
           console.log('   document.cookie:', document.cookie || '(empty - HttpOnly cookies not visible)');
 
           // Determinar tenant actual (primary o primero de la lista)
@@ -56,7 +56,7 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (error) {
-          console.error('❌ [AuthStore] Login failed:', error);
+          console.error('[AuthStore] Login failed:', error);
           set({
             error: error instanceof Error ? error.message : "Error al iniciar sesión",
             isLoading: false,

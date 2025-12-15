@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-15 01:10  
-**Estado general del proyecto:** ~97% completado (Módulos 0-6 + Arquitectura)
+**Última actualización:** 2025-12-15 11:15  
+**Estado general del proyecto:** ~99% completado (Módulos 0-7 + Arquitectura)
 
 ---
 
@@ -18,7 +18,7 @@
 | **Módulo 4+:** Arquitectura Backend | ✅ Completado | 100% |
 | **Módulo 5:** Vacaciones | ✅ Completado | 100% |
 | **Módulo 6:** Notificaciones | ✅ Completado | 100% |
-| **Módulo 7:** Reportes | ⏳ Pendiente | 0% |
+| **Módulo 7:** Reportes y Auditoría | ✅ Completado | 100% |
 | **Módulo 8:** Testing/Deploy | ⏳ Pendiente | 0% |
 
 ---
@@ -34,75 +34,77 @@
 - Vista consolidada "Mi Equipo" con 3 tabs
 - Histórico general para admin
 
-### Módulo 6: Notificaciones ✅ (2025-12-15) - Completado
+### Módulo 6: Notificaciones ✅ (2025-12-15)
+- Backend: Notification model, service, controller, broadcast
+- Frontend: NotificationBell, NotificationsPage
+- WebSocket primario + Polling fallback
+- Marcar como leída (individual y todas)
+- Eliminar notificaciones
 
-#### Backend Implementado ✅:
-- **Migración:** `notifications` table con campos completos
-- **Modelo:** `Notification.php` con tipos, scopes, helpers
-- **Resource:** `NotificationResource.php`
-- **Service:** `NotificationService.php` con métodos especializados
-- **Controller:** `NotificationController.php` con 5 endpoints
-- **Broadcast:** `NotificationCreated.php` para WebSockets
+### Módulo 7: Reportes y Auditoría ✅ (2025-12-15)
 
-#### Endpoints API ✅:
+#### Dashboard Implementado ✅:
+- **DashboardPage.tsx** - Dashboard completo con métricas
+- **Estadísticas de documentos** - Total, firmados, pendientes, visualizados
+- **Estadísticas de vacaciones** - Total, aprobadas, pendientes, rechazadas
+- **Estadísticas de usuarios** - Total, activos, inactivos
+- **Gráfico de documentos por mes** - BarChart con tendencia
+- **Distribución por tipo** - PieChart con colores
+- **Actividad reciente** - Últimas 10 acciones del sistema
+
+#### Auditoría Implementada ✅:
+- **Modelo:** `AuditLog.php` con categorías y acciones definidas
+- **Service:** `AuditService.php` con métodos especializados por acción
+- **Tabla:** `audit_logs` con campos completos (user, tenant, action, entity, metadata, IP, user_agent)
+- **Página:** `AuditLogsPage.tsx` con filtros y paginación
+- **Integración:** Logging automático en AuthController, VacationService, SignatureService
+
+#### Acciones Auditadas ✅:
+- `user.login` - Inicio de sesión
+- `user.logout` - Cierre de sesión
+- `user.login_failed` - Login fallido
+- `document.signed` - Documento firmado
+- `vacation.requested` - Vacación solicitada
+- `vacation.approved` - Vacación aprobada
+- `vacation.rejected` - Vacación rechazada
+- `vacation.cancelled` - Vacación cancelada
+
+#### Exportación a Excel ✅:
+- **Paquete:** `maatwebsite/excel` instalado
+- **Clase:** `GenericExport.php` con estilos (headers azules, autosize)
+- **Formato:** `.xlsx` nativo de Excel
+
+#### Exportaciones Disponibles ✅:
+
+| Página | Endpoint | Archivo |
+|--------|----------|---------|
+| Usuarios | `GET /api/reports/users/export` | `usuarios_*.xlsx` |
+| Documentos | `GET /api/reports/documents/export` | `documentos_*.xlsx` |
+| Lotes de Carga | `GET /api/reports/batches/export` | `lotes_carga_*.xlsx` |
+| Vacaciones | `GET /api/reports/vacations/export` | `vacaciones_*.xlsx` |
+| Auditoría | `GET /api/reports/audit/export` | `auditoria_*.xlsx` |
+| Organizaciones | `GET /api/reports/tenants/export` | `organizaciones_*.xlsx` |
+
+#### Endpoints API Reports ✅:
 ```
-GET    /api/notifications              # Lista paginada
-GET    /api/notifications/unread-count # Contador no leídas
-PUT    /api/notifications/{id}/read    # Marcar como leída
-PUT    /api/notifications/read-all     # Marcar todas leídas
-DELETE /api/notifications/{id}         # Eliminar
-```
-
-#### Frontend Implementado ✅:
-- **Entity:** `Notification.ts`
-- **Repository:** `NotificationRepository.ts`
-- **Store:** `notificationsStore.ts` con WebSocket + polling fallback
-- **Realtime:** `echo.ts` con Laravel Echo configurado
-- **Componentes:**
-  - `NotificationBell.tsx` - Bell icon con badge y dropdown
-  - `NotificationsPage.tsx` - Página completa al estilo Facebook
-
-#### Características Implementadas ✅:
-- ✅ Badge con contador de no leídas
-- ✅ Dropdown con 10 notificaciones recientes
-- ✅ Página completa con 20 por página y paginación
-- ✅ Marcar como leída (individual y todas)
-- ✅ Eliminar notificaciones
-- ✅ Filtro: todas / solo no leídas
-- ✅ WebSocket primario + Polling fallback automático
-- ✅ Iconos dinámicos por tipo
-- ✅ Navegación a acción al hacer clic
-
-#### ✅ Configuración Backend Completa:
-- `routes/channels.php` - Canales privados configurados: `user.{id}`, `tenant.{tenantId}`, `batch.{batchId}`
-- `NotificationCreated.php` - Broadcast implementado
-- `NotificationService.php` - Integrado con VacationService y SendBatchNotifications
-
-#### 💡 Para habilitar WebSockets en producción:
-```bash
-php artisan reverb:start
+GET /api/reports/dashboard         # Estadísticas del dashboard
+GET /api/reports/documents         # Stats de documentos
+GET /api/reports/vacations         # Stats de vacaciones
+GET /api/reports/users             # Stats de usuarios
+GET /api/reports/activity          # Actividad reciente
+GET /api/reports/audit             # Logs de auditoría paginados
+GET /api/reports/audit/actions     # Acciones disponibles
+GET /api/reports/documents/export  # Exportar documentos
+GET /api/reports/vacations/export  # Exportar vacaciones
+GET /api/reports/users/export      # Exportar usuarios
+GET /api/reports/audit/export      # Exportar auditoría
+GET /api/reports/batches/export    # Exportar lotes
+GET /api/reports/tenants/export    # Exportar organizaciones
 ```
 
 ---
 
 ## ⏳ Módulos Pendientes
-
-### Módulo 7: Reportes y Auditoría 🔜
-**Estimación:** 4-5 días
-
-```
-Funcionalidades:
-- Dashboard con métricas
-- Reportes exportables (Excel/PDF)
-- Auditoría de acciones
-- Logs de acceso a documentos
-
-Reportes:
-- Documentos por período/tipo
-- Firmas pendientes
-- Vacaciones por equipo
-- Actividad de usuarios
-```
 
 ### Módulo 8: Testing y Deployment 🔜
 **Estimación:** 5-7 días
@@ -131,7 +133,6 @@ Deployment:
 - [ ] Caché Redis para queries frecuentes
 - [ ] Soft deletes consistentes
 - [ ] Tests unitarios/feature
-- [ ] WebSockets para notificaciones en tiempo real (opcional)
 
 ### Frontend
 - [ ] PWA (service worker)
@@ -153,52 +154,54 @@ Deployment:
 - ✅ **DocumentResource** ahora incluye `user_id` para validar ownership en firma
 - ✅ **Sidebar fijo** - Navbar y sidebar ya no se mueven con el scroll
 - ✅ **Comparación userId** - Corregida la comparación de tipos string/number
+- ✅ **Scrollable background** - Fondo consistente en páginas con scroll
+- ✅ **Select value vacío** - Radix UI Select con value="all" en lugar de ""
+- ✅ **Relación approver** - Corregida a `approvedByUser` en VacationRequest
 
 ---
 
-## 📁 Estructura de Archivos Creados (Módulo 6)
+## 📁 Estructura de Archivos Creados (Módulo 7)
 
 ### Backend
 ```
 backend/
 ├── database/migrations/
-│   └── 2025_12_15_044322_create_notifications_table.php
+│   └── 2025_12_15_061800_create_audit_logs_table.php
 ├── app/Models/
-│   └── Notification.php
+│   └── AuditLog.php
 ├── app/Http/Controllers/Api/
-│   └── NotificationController.php
-├── app/Http/Resources/
-│   └── NotificationResource.php
-└── app/Services/
-    └── NotificationService.php
+│   └── ReportsController.php
+├── app/Services/
+│   ├── AuditService.php
+│   └── ReportsService.php
+└── app/Exports/
+    └── GenericExport.php
 ```
 
 ### Frontend
 ```
 src/
 ├── core/domain/entities/
-│   └── Notification.ts
+│   └── Report.ts
 ├── infrastructure/persistence/repositories/
-│   └── NotificationRepository.ts
+│   └── ReportsRepository.ts
 ├── presentation/
 │   ├── stores/
-│   │   └── notificationsStore.ts
-│   ├── components/notifications/
-│   │   ├── NotificationBell.tsx
-│   │   └── index.ts
-│   └── pages/shared/
-│       └── NotificationsPage.tsx
+│   │   └── reportsStore.ts
+│   └── pages/admin/
+│       ├── DashboardPage.tsx (mejorado)
+│       └── AuditLogsPage.tsx
 ```
 
 ---
 
 ## 📅 Próximos Pasos
 
-1. **Pruebas completas:** Probar flujo de notificaciones end-to-end
-2. **Módulo 7:** Reportes y Dashboard
-3. **Módulo 8:** Testing y CI/CD
-4. **Deploy:** Configurar producción
+1. ✅ ~~**Módulo 7:** Reportes y Dashboard~~ COMPLETADO
+2. **Módulo 8:** Testing y CI/CD
+3. **Deploy:** Configurar producción
+4. **Optimización:** PWA, Dark mode, Lazy loading
 
 ---
 
-*Última actualización: 2025-12-15 00:38*
+*Última actualización: 2025-12-15 11:15*
