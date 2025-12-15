@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Users,
   CheckCircle,
   Clock,
   Upload,
-  Settings,
   Download,
   RefreshCw,
   Calendar,
@@ -32,10 +32,8 @@ import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useReportsStore } from "@/presentation/stores/reportsStore";
 import { useAuthStore } from "@/presentation/stores/authStore";
-
-interface AdminDashboardViewProps {
-  onNavigate: (view: string) => void;
-}
+import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
+import { Tenant } from "@/core/domain/entities/Tenant";
 
 // Map action categories to icons
 const getActionIcon = (action: string) => {
@@ -67,8 +65,9 @@ const getActionBadge = (category: string) => {
   }
 };
 
-export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
-  const { currentTenant } = useAuthStore();
+export function AdminDashboardView() {
+  const navigate = useNavigate();
+  const { currentTenant, user } = useAuthStore();
   const {
     documentStats,
     vacationStats,
@@ -81,12 +80,20 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
     isExporting,
   } = useReportsStore();
 
-  // Get current tenant ID from authStore
-  const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
+  // State for root users to select a tenant
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+
+  const isRoot = user?.role === 'root';
+
+  // Get current tenant ID - for root use selected, for admin use currentTenant
+  const tenantId = isRoot
+    ? (selectedTenantId ? Number(selectedTenantId) : undefined)
+    : (currentTenant?.id ? Number(currentTenant.id) : undefined);
 
   // Fetch dashboard data on mount and when tenant changes
   useEffect(() => {
-    fetchDashboardStats(tenantId ?? undefined);
+    fetchDashboardStats(tenantId);
   }, [tenantId, fetchDashboardStats]);
 
   // Prepare chart data with fallbacks
@@ -94,11 +101,20 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
   const statusDistributionData = documentStats?.status_distribution ?? [];
 
   const handleRefresh = () => {
-    fetchDashboardStats(tenantId ?? undefined);
+    fetchDashboardStats(tenantId);
   };
 
   const handleExport = async () => {
-    await exportDocuments({ tenant_id: tenantId ?? undefined });
+    await exportDocuments({ tenant_id: tenantId });
+  };
+
+  const handleTenantChange = (id: string | null) => {
+    setSelectedTenantId(id);
+    // When we have the tenant object from search results, we could store it
+    // For now, we just clear the selected tenant object
+    if (!id) {
+      setSelectedTenant(null);
+    }
   };
 
   // Loading skeleton for stats cards
@@ -120,35 +136,52 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1>Panel de Administración</h1>
-          <p className="text-[#64748B]">
-            {tenantId
-              ? `Estadísticas de tu organización`
-              : 'Vista general de todas las organizaciones'}
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1>Panel de Administración</h1>
+            <p className="text-[#64748B]">
+              {isRoot
+                ? (selectedTenantId ? `Estadísticas de: ${selectedTenant?.name || 'Organización seleccionada'}` : 'Vista general de todas las organizaciones')
+                : `Estadísticas de ${currentTenant?.name || 'tu organización'}`}
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleRefresh}
+              disabled={isLoadingDashboard}
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoadingDashboard ? 'animate-spin' : ''}`} />
+              Actualizar
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              <Download className="w-4 h-4" />
+              Exportar
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={handleRefresh}
-            disabled={isLoadingDashboard}
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoadingDashboard ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={handleExport}
-            disabled={isExporting}
-          >
-            <Download className="w-4 h-4" />
-            Exportar
-          </Button>
-        </div>
+
+        {/* Tenant selector for root users */}
+        {isRoot && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-500">Filtrar por organización:</span>
+            <div className="w-80">
+              <TenantAutocompleteSelector
+                value={selectedTenantId}
+                onChange={handleTenantChange}
+                selectedTenant={selectedTenant}
+                placeholder="Todas las organizaciones"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Error message */}
@@ -312,7 +345,7 @@ export function AdminDashboardView({ onNavigate }: AdminDashboardViewProps) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Actividad Reciente</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => onNavigate("/audit-logs")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/audit-logs")}>
             Ver todo
           </Button>
         </CardHeader>

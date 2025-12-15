@@ -384,3 +384,5 @@ export function UserDetailPage() {
         </div>
     );
 }
+
+export default UserDetailPage;

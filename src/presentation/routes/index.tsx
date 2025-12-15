@@ -1,42 +1,44 @@
+import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { RootLayout } from "./RootLayout";
+import { PageLoader } from "@/presentation/components/shared/PageLoader";
 
-// Auth pages
-import { LoginView } from "@/presentation/pages/auth";
-import ForceChangePasswordPage from "@/presentation/pages/auth/ForceChangePasswordPage";
-import ForgotPasswordPage from "@/presentation/pages/auth/ForgotPasswordPage";
-import ResetPasswordPage from "@/presentation/pages/auth/ResetPasswordPage";
+// Auth pages (lazy loaded) - tienen export default
+const LoginView = lazy(() => import("@/presentation/pages/auth/LoginView"));
+const ForceChangePasswordPage = lazy(() => import("@/presentation/pages/auth/ForceChangePasswordPage"));
+const ForgotPasswordPage = lazy(() => import("@/presentation/pages/auth/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("@/presentation/pages/auth/ResetPasswordPage"));
 
-// Admin pages
-import {
-  DashboardPage as AdminDashboardPage,
-  UsersListPage,
-  AuditLogsPage,
-} from "@/presentation/pages/admin";
-import { VacationHistoryPage } from "@/presentation/pages/admin/VacationHistoryPage";
-import { TeamVacationsPage } from "@/presentation/pages/admin/TeamVacationsPage";
-import { TenantsListPage } from "@/presentation/pages/admin/TenantsListPage";
-import { TenantFormPage } from "@/presentation/pages/admin/TenantFormPage";
-import { UserDetailPage } from "@/presentation/pages/admin/UserDetailPage";
-import { UserFormPage } from "@/presentation/pages/admin/UserFormPage";
-import { BatchesListPage } from "@/presentation/pages/admin/BatchesListPage";
-import { BatchDetailPage } from "@/presentation/pages/admin/BatchDetailPage";
-import { DocumentsListPage } from "@/presentation/pages/admin/DocumentsListPage";
+// Admin pages (lazy loaded)
+const AdminDashboardPage = lazy(() => import("@/presentation/pages/admin/DashboardPage"));
+const UsersListPage = lazy(() => import("@/presentation/pages/admin/UsersListPage"));
+const UserFormPage = lazy(() => import("@/presentation/pages/admin/UserFormPage"));
+const UserDetailPage = lazy(() => import("@/presentation/pages/admin/UserDetailPage"));
+const TenantsListPage = lazy(() => import("@/presentation/pages/admin/TenantsListPage"));
+const TenantFormPage = lazy(() => import("@/presentation/pages/admin/TenantFormPage"));
+const BatchesListPage = lazy(() => import("@/presentation/pages/admin/BatchesListPage"));
+const BatchDetailPage = lazy(() => import("@/presentation/pages/admin/BatchDetailPage"));
+const DocumentsListPage = lazy(() => import("@/presentation/pages/admin/DocumentsListPage"));
+const VacationHistoryPage = lazy(() => import("@/presentation/pages/admin/VacationHistoryPage"));
+const TeamVacationsPage = lazy(() => import("@/presentation/pages/admin/TeamVacationsPage"));
+const AuditLogsPage = lazy(() => import("@/presentation/pages/admin/AuditLogsPage"));
 
-// Employee pages
-import {
-  DashboardPage as EmployeeDashboardPage,
-  DocumentUploadView,
-  DocumentViewerView,
-  VacationRequestsListPage,
-  VacationRequestFormPage,
-} from "@/presentation/pages/employee";
+// Employee pages (lazy loaded)
+const EmployeeDashboardPage = lazy(() => import("@/presentation/pages/employee/DashboardPage"));
+const DocumentUploadView = lazy(() => import("@/presentation/pages/employee/DocumentUploadView"));
+const DocumentViewerView = lazy(() => import("@/presentation/pages/employee/DocumentViewerView"));
+const VacationRequestsListPage = lazy(() => import("@/presentation/pages/employee/VacationRequestsListPage"));
+const VacationRequestFormPage = lazy(() => import("@/presentation/pages/employee/VacationRequestFormPage"));
 
-// Shared pages
-import { ProfilePage } from "@/presentation/pages/shared";
-import { NotificationsPage } from "@/presentation/pages/shared/NotificationsPage";
+// Shared pages (lazy loaded)
+const ProfilePage = lazy(() => import("@/presentation/pages/shared/ProfilePage"));
+const NotificationsPage = lazy(() => import("@/presentation/pages/shared/NotificationsPage"));
 
+// Suspense wrapper component
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
+}
 
 // Helper component for role-based redirect
 function RootRedirect() {
@@ -61,19 +63,19 @@ function RootRedirect() {
 export const router = createBrowserRouter([
   {
     path: "/login",
-    element: <LoginView />,
+    element: <LazyPage><LoginView /></LazyPage>,
   },
   {
     path: "/forgot-password",
-    element: <ForgotPasswordPage />,
+    element: <LazyPage><ForgotPasswordPage /></LazyPage>,
   },
   {
     path: "/reset-password",
-    element: <ResetPasswordPage />,
+    element: <LazyPage><ResetPasswordPage /></LazyPage>,
   },
   {
     path: "/force-change-password",
-    element: <ForceChangePasswordPage />,
+    element: <LazyPage><ForceChangePasswordPage /></LazyPage>,
   },
   {
     path: "/",
@@ -87,7 +89,9 @@ export const router = createBrowserRouter([
         path: "admin",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <AdminDashboardPage onNavigate={(path) => window.location.href = path} />
+            <LazyPage>
+              <AdminDashboardPage />
+            </LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -95,7 +99,7 @@ export const router = createBrowserRouter([
         path: "dashboard",
         element: (
           <ProtectedRoute allowedRoles={["client", "admin", "root"]}>
-            <EmployeeDashboardPage />
+            <LazyPage><EmployeeDashboardPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -103,7 +107,9 @@ export const router = createBrowserRouter([
         path: "upload",
         element: (
           <ProtectedRoute allowedRoles={["admin", "client"]}>
-            <DocumentUploadView onBack={() => window.history.back()} />
+            <LazyPage>
+              <DocumentUploadView />
+            </LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -111,7 +117,9 @@ export const router = createBrowserRouter([
         path: "viewer",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
-            <DocumentViewerView onBack={() => window.history.back()} />
+            <LazyPage>
+              <DocumentViewerView />
+            </LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -119,7 +127,7 @@ export const router = createBrowserRouter([
         path: "users",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <UsersListPage />
+            <LazyPage><UsersListPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -127,7 +135,7 @@ export const router = createBrowserRouter([
         path: "users/new",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <UserFormPage />
+            <LazyPage><UserFormPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -135,7 +143,7 @@ export const router = createBrowserRouter([
         path: "users/:id",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <UserDetailPage />
+            <LazyPage><UserDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -143,7 +151,7 @@ export const router = createBrowserRouter([
         path: "users/:id/edit",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <UserFormPage />
+            <LazyPage><UserFormPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -151,7 +159,7 @@ export const router = createBrowserRouter([
         path: "tenants",
         element: (
           <ProtectedRoute allowedRoles={["root"]}>
-            <TenantsListPage />
+            <LazyPage><TenantsListPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -159,7 +167,7 @@ export const router = createBrowserRouter([
         path: "tenants/new",
         element: (
           <ProtectedRoute allowedRoles={["root"]}>
-            <TenantFormPage />
+            <LazyPage><TenantFormPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -167,23 +175,17 @@ export const router = createBrowserRouter([
         path: "tenants/:id",
         element: (
           <ProtectedRoute allowedRoles={["root"]}>
-            <TenantFormPage />
+            <LazyPage><TenantFormPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
-      // {
-      //   path: "settings",
-      //   element: (
-      //     <ProtectedRoute allowedRoles={["root", "admin"]}>
-      //       <SettingsPage onBack={() => window.history.back()} />
-      //     </ProtectedRoute>
-      //   ),
-      // },
       {
         path: "profile",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
-            <ProfilePage onBack={() => window.history.back()} />
+            <LazyPage>
+              <ProfilePage />
+            </LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -191,32 +193,15 @@ export const router = createBrowserRouter([
         path: "notifications",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
-            <NotificationsPage />
+            <LazyPage><NotificationsPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
-      // {
-      //   path: "reports",
-      //   element: (
-      //     <ProtectedRoute allowedRoles={["admin"]}>
-      //       <div className="space-y-6">
-      //         <h1>Reportes y Análisis</h1>
-      //         <div className="bg-white rounded-lg p-12 text-center border border-[rgba(0,0,0,0.1)]">
-      //           <BarChart3 className="w-16 h-16 text-[#64748B] mx-auto mb-4" />
-      //           <h2 className="text-[#1E40AF] mb-2">Módulo de Reportes</h2>
-      //           <p className="text-[#64748B]">
-      //             Aquí se mostrarán los reportes detallados y análisis de la plataforma
-      //           </p>
-      //         </div>
-      //       </div>
-      //     </ProtectedRoute>
-      //   ),
-      // },
       {
         path: "batches",
         element: (
           <ProtectedRoute allowedRoles={["admin"]}>
-            <BatchesListPage />
+            <LazyPage><BatchesListPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -224,7 +209,7 @@ export const router = createBrowserRouter([
         path: "batches/:id",
         element: (
           <ProtectedRoute allowedRoles={["admin"]}>
-            <BatchDetailPage />
+            <LazyPage><BatchDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -232,7 +217,7 @@ export const router = createBrowserRouter([
         path: "documents",
         element: (
           <ProtectedRoute allowedRoles={["admin"]}>
-            <DocumentsListPage />
+            <LazyPage><DocumentsListPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -241,7 +226,7 @@ export const router = createBrowserRouter([
         path: "vacations",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
-            <VacationRequestsListPage />
+            <LazyPage><VacationRequestsListPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -249,7 +234,7 @@ export const router = createBrowserRouter([
         path: "vacations/new",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
-            <VacationRequestFormPage />
+            <LazyPage><VacationRequestFormPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -257,7 +242,7 @@ export const router = createBrowserRouter([
         path: "team-vacations",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <TeamVacationsPage />
+            <LazyPage><TeamVacationsPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -265,7 +250,7 @@ export const router = createBrowserRouter([
         path: "vacation-history",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <VacationHistoryPage />
+            <LazyPage><VacationHistoryPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
@@ -273,7 +258,7 @@ export const router = createBrowserRouter([
         path: "audit-logs",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
-            <AuditLogsPage />
+            <LazyPage><AuditLogsPage /></LazyPage>
           </ProtectedRoute>
         ),
       },

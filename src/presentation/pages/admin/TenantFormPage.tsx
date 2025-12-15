@@ -462,3 +462,4 @@ export function TenantFormPage() {
         </div>
     );
 }
+export default TenantFormPage;

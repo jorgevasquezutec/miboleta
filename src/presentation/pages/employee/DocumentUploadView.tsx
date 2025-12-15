@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Upload, FileArchive, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
@@ -26,10 +27,20 @@ import { formatFileSize } from "@/presentation/utils";
 import { toast } from "sonner";
 
 interface DocumentUploadViewProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate(-1);
+    }
+  };
+
   const {
     documentTypes,
     fetchDocumentTypes,
@@ -151,7 +162,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={onBack}>
+        <Button variant="ghost" size="icon" onClick={handleBack}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1">

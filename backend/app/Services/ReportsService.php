@@ -189,7 +189,8 @@ class ReportsService
             // Users by role in this tenant
             $byRole = DB::table('user_tenants')
                 ->join('users', 'user_tenants.user_id', '=', 'users.id')
-                ->join('roles', 'user_tenants.role_id', '=', 'roles.id')
+                ->join('user_roles', 'users.id', '=', 'user_roles.user_id')
+                ->join('roles', 'user_roles.role_id', '=', 'roles.id')
                 ->where('user_tenants.tenant_id', $tenantId)
                 ->select('roles.name', DB::raw('count(*) as count'))
                 ->groupBy('roles.name')

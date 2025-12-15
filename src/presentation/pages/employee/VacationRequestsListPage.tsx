@@ -344,3 +344,4 @@ export function VacationRequestsListPage() {
         </div>
     );
 }
+export default VacationRequestsListPage;

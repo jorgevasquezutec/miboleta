@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FileText, CheckCircle, Info, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -12,10 +12,19 @@ import { DocumentSignatureModal } from "@/presentation/components/features/docum
 import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
 
 interface DocumentViewerViewProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate(-1); // Go back to previous page
+    }
+  };
   const [searchParams] = useSearchParams();
   const documentId = searchParams.get("id");
 
@@ -100,7 +109,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h3 className="mb-2">Documento no encontrado</h3>
             <p className="text-[#64748B] mb-4">{error || "No se pudo cargar el documento"}</p>
-            <Button onClick={onBack}>Volver</Button>
+            <Button onClick={handleBack}>Volver</Button>
           </CardContent>
         </Card>
       </div>
@@ -112,7 +121,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
+          <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>

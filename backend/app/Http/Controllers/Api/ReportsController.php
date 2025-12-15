@@ -28,12 +28,7 @@ class ReportsController extends Controller
     public function dashboard(Request $request): JsonResponse
     {
         $user = $request->user();
-        $tenantId = $user->current_tenant_id;
-
-        // Root users can see global stats or specific tenant
-        if ($user->getCurrentRole() === 'root') {
-            $tenantId = $request->query('tenant_id') ?: $tenantId;
-        }
+        $tenantId = $this->getTenantId($request, $user);
 
         $stats = $this->reportsService->getDashboardStats($tenantId);
 
@@ -353,17 +348,32 @@ class ReportsController extends Controller
 
     /**
      * Helper to get tenant ID based on user role.
+     * 
+     * - For root users: use tenant_id from query or null (all tenants)
+     * - For admin users: use tenant_id from query (must belong to user) or primary tenant
+     * - For other users: use primary tenant only
      */
     private function getTenantId(Request $request, $user): ?int
     {
-        $tenantId = $user->current_tenant_id;
+        $role = $user->getCurrentRole();
+        $requestedTenantId = $request->query('tenant_id');
 
-        // Root users can query any tenant
-        if ($user->getCurrentRole() === 'root') {
-            $tenantId = $request->query('tenant_id') ?: $tenantId;
+        // Root users can query any tenant (or all if not specified)
+        if ($role === 'root') {
+            return $requestedTenantId ? (int) $requestedTenantId : null;
         }
 
-        return $tenantId ? (int) $tenantId : null;
+        // Admin users can query tenants they belong to
+        if ($role === 'admin' && $requestedTenantId) {
+            // Verify user belongs to the requested tenant
+            if ($user->belongsToTenant((int) $requestedTenantId)) {
+                return (int) $requestedTenantId;
+            }
+        }
+
+        // Default: use primary tenant
+        $primaryTenant = $user->primaryTenant();
+        return $primaryTenant?->id;
     }
 
     /**

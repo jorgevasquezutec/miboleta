@@ -40,7 +40,9 @@ import {
 import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
+import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { AuditLog, ReportFilters } from "@/core/domain/entities";
+import { Tenant } from "@/core/domain/entities/Tenant";
 
 // Map action to icon
 const getActionIcon = (action: string) => {
@@ -110,8 +112,17 @@ const actionDescriptions: Record<string, string> = {
 };
 
 export function AuditLogsPage() {
-    const { currentTenant } = useAuthStore();
-    const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
+    const { currentTenant, user } = useAuthStore();
+    const isRoot = user?.role === 'root';
+
+    // State for root users to select a tenant
+    const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+
+    // Get tenant ID - for root use selected, for admin use currentTenant
+    const tenantId = isRoot
+        ? (selectedTenantId ? Number(selectedTenantId) : undefined)
+        : (currentTenant?.id ? Number(currentTenant.id) : undefined);
 
     // State
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -158,7 +169,7 @@ export function AuditLogsPage() {
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, actionFilter, categoryFilter]);
+    }, [searchTerm, actionFilter, categoryFilter, selectedTenantId]);
 
     // Export
     const handleExport = async () => {
@@ -236,6 +247,21 @@ export function AuditLogsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {/* Tenant Filter (only for root) */}
+                        {isRoot && (
+                            <div>
+                                <TenantAutocompleteSelector
+                                    value={selectedTenantId}
+                                    onChange={(id) => {
+                                        setSelectedTenantId(id);
+                                        if (!id) setSelectedTenant(null);
+                                    }}
+                                    selectedTenant={selectedTenant}
+                                    placeholder="Todas las organizaciones"
+                                />
+                            </div>
+                        )}
+
                         {/* Search */}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

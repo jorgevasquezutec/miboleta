@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\DocumentBatchController;
 use App\Http\Controllers\Api\DocumentSignatureController;
 use App\Http\Controllers\Api\VacationRequestController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ReportsController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
@@ -132,24 +133,24 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('reports')->group(function () {
         // Dashboard stats
-        Route::get('/dashboard', [\App\Http\Controllers\Api\ReportsController::class, 'dashboard']);
+        Route::get('/dashboard', [ReportsController::class, 'dashboard']);
 
         // Individual stats
-        Route::get('/documents', [\App\Http\Controllers\Api\ReportsController::class, 'documents']);
-        Route::get('/vacations', [\App\Http\Controllers\Api\ReportsController::class, 'vacations']);
-        Route::get('/users', [\App\Http\Controllers\Api\ReportsController::class, 'users']);
-        Route::get('/activity', [\App\Http\Controllers\Api\ReportsController::class, 'activity']);
+        Route::get('/documents', [ReportsController::class, 'documents']);
+        Route::get('/vacations', [ReportsController::class, 'vacations']);
+        Route::get('/users', [ReportsController::class, 'users']);
+        Route::get('/activity', [ReportsController::class, 'activity']);
 
         // Audit logs (admin/root only)
-        Route::get('/audit', [\App\Http\Controllers\Api\ReportsController::class, 'audit']);
-        Route::get('/audit/actions', [\App\Http\Controllers\Api\ReportsController::class, 'auditActions']);
-        Route::get('/audit/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportAudit']);
+        Route::get('/audit', [ReportsController::class, 'audit']);
+        Route::get('/audit/actions', [ReportsController::class, 'auditActions']);
+        Route::get('/audit/export', [ReportsController::class, 'exportAudit']);
 
         // Exports
-        Route::get('/documents/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportDocuments']);
-        Route::get('/vacations/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportVacations']);
-        Route::get('/users/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportUsers']);
-        Route::get('/batches/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportBatches']);
-        Route::get('/tenants/export', [\App\Http\Controllers\Api\ReportsController::class, 'exportTenants']);
+        Route::get('/documents/export', [ReportsController::class, 'exportDocuments']);
+        Route::get('/vacations/export', [ReportsController::class, 'exportVacations']);
+        Route::get('/users/export', [ReportsController::class, 'exportUsers']);
+        Route::get('/batches/export', [ReportsController::class, 'exportBatches']);
+        Route::get('/tenants/export', [ReportsController::class, 'exportTenants']);
     });
 });

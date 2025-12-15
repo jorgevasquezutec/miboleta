@@ -30,6 +30,7 @@ interface VacationsState {
     pendingConfirmations: VacationRequest[];
     pendingConfirmationsCount: number;
     teamRequests: VacationRequest[];
+    myTeam: VacationRequest[]; // alias for calendar view
 
     // Admin history view
     historyRequests: VacationRequest[];
@@ -56,6 +57,7 @@ interface VacationsState {
     fetchPendingApprovals: (page?: number) => Promise<void>;
     fetchPendingConfirmations: (page?: number) => Promise<void>;
     fetchTeamRequests: (params?: VacationFilters) => Promise<void>;
+    fetchMyTeam: (params?: VacationFilters) => Promise<void>; // alias for calendar
     fetchMyDecisions: (params?: VacationFilters) => Promise<void>;
     approveRequest: (id: number) => Promise<void>;
     rejectRequest: (id: number, reason: string) => Promise<void>;
@@ -90,6 +92,7 @@ const initialState = {
     pendingConfirmations: [],
     pendingConfirmationsCount: 0,
     teamRequests: [],
+    myTeam: [],
     historyRequests: [],
     historyTotal: 0,
     historyTotalPages: 0,
@@ -202,6 +205,7 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
             const result = await vacationRepository.getMyTeam(params);
             set({
                 teamRequests: result.data,
+                myTeam: result.data,
                 page: result.meta.currentPage,
                 totalPages: result.meta.lastPage,
                 total: result.meta.total,
@@ -209,6 +213,21 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
             });
         } catch (error: any) {
             set({ error: error.message || 'Error al cargar vacaciones del equipo', isLoading: false });
+        }
+    },
+
+    fetchMyTeam: async (params) => {
+        // Alias for fetchTeamRequests for calendar view
+        set({ isLoading: true, error: null });
+        try {
+            const result = await vacationRepository.getMyTeam({ ...params, perPage: 100 });
+            set({
+                myTeam: result.data,
+                teamRequests: result.data,
+                isLoading: false,
+            });
+        } catch (error: any) {
+            set({ error: error.message || 'Error al cargar vacaciones para calendario', isLoading: false });
         }
     },
 

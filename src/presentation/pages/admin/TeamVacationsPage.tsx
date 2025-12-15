@@ -9,6 +9,7 @@ import {
     History,
     XCircle,
     Check,
+    CalendarDays,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
@@ -18,6 +19,7 @@ import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
 import { VacationRequestCard } from "@/presentation/components/features/vacations/VacationRequestCard";
 import { VacationRejectModal } from "@/presentation/components/features/vacations/VacationRejectModal";
+import { VacationCalendar } from "@/presentation/components/features/vacations/VacationCalendar";
 import { VacationRequest } from "@/core/domain/entities";
 import { toast } from "sonner";
 import {
@@ -39,9 +41,11 @@ export function TeamVacationsPage() {
         pendingConfirmationsCount,
         myDecisions,
         myDecisionsTotal,
+        myTeam,
         fetchPendingApprovals,
         fetchPendingConfirmations,
         fetchMyDecisions,
+        fetchMyTeam,
         approveRequest,
         rejectRequest,
         markAsTaken,
@@ -80,6 +84,7 @@ export function TeamVacationsPage() {
         fetchPendingApprovals();
         fetchPendingConfirmations();
         fetchMyDecisions();
+        fetchMyTeam();
     };
 
     // Approve handlers
@@ -197,7 +202,7 @@ export function TeamVacationsPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card
                     className={`cursor-pointer transition-all ${activeTab === "pending" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
                     onClick={() => setActiveTab("pending")}
@@ -207,7 +212,7 @@ export function TeamVacationsPage() {
                             <Clock className="w-6 h-6 text-yellow-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Pendientes de Aprobar</p>
+                            <p className="text-sm text-gray-600">Pendientes</p>
                             <p className="text-2xl font-bold text-yellow-600">{pendingApprovalsCount}</p>
                         </div>
                     </CardContent>
@@ -240,28 +245,46 @@ export function TeamVacationsPage() {
                         </div>
                     </CardContent>
                 </Card>
+                <Card
+                    className={`cursor-pointer transition-all ${activeTab === "calendar" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
+                    onClick={() => setActiveTab("calendar")}
+                >
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-3 rounded-full bg-purple-100">
+                            <CalendarDays className="w-6 h-6 text-purple-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-600">Calendario</p>
+                            <p className="text-2xl font-bold text-purple-600">{myTeam.length}</p>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Tabs Content */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="pending" className="flex items-center gap-2">
                         <Clock className="w-4 h-4" />
-                        Pendientes
+                        <span className="hidden sm:inline">Pendientes</span>
                         {pendingApprovalsCount > 0 && (
                             <Badge className="ml-1 bg-yellow-500">{pendingApprovalsCount}</Badge>
                         )}
                     </TabsTrigger>
                     <TabsTrigger value="confirm" className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4" />
-                        Por Confirmar
+                        <span className="hidden sm:inline">Confirmar</span>
                         {pendingConfirmationsCount > 0 && (
                             <Badge className="ml-1 bg-orange-500">{pendingConfirmationsCount}</Badge>
                         )}
                     </TabsTrigger>
                     <TabsTrigger value="history" className="flex items-center gap-2">
                         <History className="w-4 h-4" />
-                        Mi Historial
+                        <span className="hidden sm:inline">Historial</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="calendar" className="flex items-center gap-2">
+                        <CalendarDays className="w-4 h-4" />
+                        <span className="hidden sm:inline">Calendario</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -389,6 +412,11 @@ export function TeamVacationsPage() {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* Tab: Calendar View */}
+                <TabsContent value="calendar" className="mt-6">
+                    <VacationCalendar vacations={myTeam} isLoading={isLoading} />
                 </TabsContent>
             </Tabs>
 

@@ -423,3 +423,5 @@ export function UsersListPage() {
     </div>
   );
 }
+
+export default UsersListPage;

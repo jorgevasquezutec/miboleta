@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User as UserIcon, Mail, Phone, FileText, Building2, Shield, Calendar, Save, Loader2, Upload, Trash2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
@@ -9,11 +10,8 @@ import { Badge } from "@/presentation/components/ui/badge";
 import { toast } from "sonner";
 import { useAuthStore } from "@/presentation/stores";
 
-interface ProfilePageProps {
-  onBack: () => void;
-}
-
-export function ProfilePage({ onBack }: ProfilePageProps) {
+export function ProfilePage() {
+  const navigate = useNavigate();
   const { user, me, updateProfile, uploadAvatar, deleteAvatar, isLoading } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,7 +162,7 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={onBack}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
@@ -413,7 +411,7 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-[rgba(0,0,0,0.1)]">
-              <Button variant="outline" onClick={onBack}>
+              <Button variant="outline" onClick={() => navigate(-1)}>
                 Cancelar
               </Button>
               <Button

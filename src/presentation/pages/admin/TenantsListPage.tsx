@@ -377,3 +377,4 @@ export function TenantsListPage() {
         </div>
     );
 }
+export default TenantsListPage;

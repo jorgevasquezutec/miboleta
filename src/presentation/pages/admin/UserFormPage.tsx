@@ -452,3 +452,5 @@ export function UserFormPage() {
         </div>
     );
 }
+
+export default UserFormPage;
