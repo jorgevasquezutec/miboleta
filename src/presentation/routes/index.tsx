@@ -12,8 +12,9 @@ import ResetPasswordPage from "@/presentation/pages/auth/ResetPasswordPage";
 import {
   DashboardPage as AdminDashboardPage,
   UsersListPage,
-  SettingsPage,
 } from "@/presentation/pages/admin";
+import { VacationHistoryPage } from "@/presentation/pages/admin/VacationHistoryPage";
+import { TeamVacationsPage } from "@/presentation/pages/admin/TeamVacationsPage";
 import { TenantsListPage } from "@/presentation/pages/admin/TenantsListPage";
 import { TenantFormPage } from "@/presentation/pages/admin/TenantFormPage";
 import { UserDetailPage } from "@/presentation/pages/admin/UserDetailPage";
@@ -27,6 +28,8 @@ import {
   DashboardPage as EmployeeDashboardPage,
   DocumentUploadView,
   DocumentViewerView,
+  VacationRequestsListPage,
+  VacationRequestFormPage,
 } from "@/presentation/pages/employee";
 
 // Shared pages
@@ -220,6 +223,39 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={["admin"]}>
             <DocumentsListPage />
+          </ProtectedRoute>
+        ),
+      },
+      // Vacation Routes
+      {
+        path: "vacations",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+            <VacationRequestsListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "vacations/new",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+            <VacationRequestFormPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "team-vacations",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <TeamVacationsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "vacation-history",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <VacationHistoryPage />
           </ProtectedRoute>
         ),
       },

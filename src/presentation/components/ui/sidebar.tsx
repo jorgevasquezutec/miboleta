@@ -109,6 +109,26 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
 
+  // Auto-collapse sidebar on medium screens (tablets)
+  React.useEffect(() => {
+    const TABLET_BREAKPOINT = 1024;
+
+    const handleResize = () => {
+      if (!isMobile && window.innerWidth < TABLET_BREAKPOINT) {
+        _setOpen(false);
+      } else if (!isMobile && window.innerWidth >= TABLET_BREAKPOINT && !openProp) {
+        // Only auto-expand if not controlled from outside
+        _setOpen(true);
+      }
+    };
+
+    // Check on mount
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isMobile, openProp]);
+
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed";

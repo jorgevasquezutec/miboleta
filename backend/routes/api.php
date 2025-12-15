@@ -101,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/vacation-requests/pending-approval', [VacationRequestController::class, 'pendingApprovals']);
     Route::get('/vacation-requests/pending-confirmation', [VacationRequestController::class, 'pendingConfirmations']);
     Route::get('/vacation-requests/my-team', [VacationRequestController::class, 'myTeam']);
+    Route::get('/vacation-requests/my-decisions', [VacationRequestController::class, 'myDecisions']);
 
     // Vacation Requests - CRUD
     Route::get('/vacation-requests', [VacationRequestController::class, 'index']);

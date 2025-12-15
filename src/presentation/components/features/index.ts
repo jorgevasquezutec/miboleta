@@ -14,3 +14,6 @@ export * from './users';
 
 // Tenants (when components are added)
 // export * from './tenants';
+
+// Vacations
+export * from './vacations';

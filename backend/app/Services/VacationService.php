@@ -303,6 +303,40 @@ class VacationService
     }
 
     /**
+     * Get vacation requests that this supervisor has approved or rejected (decision history).
+     *
+     * @param User $supervisor
+     * @param array $filters
+     * @return LengthAwarePaginator
+     */
+    public function getMyDecisions(User $supervisor, array $filters = []): LengthAwarePaginator
+    {
+        $tenantId = $filters['tenant_id'] ?? $supervisor->tenants->first()?->id;
+
+        $query = VacationRequest::with(['user', 'approvedByUser', 'rejectedByUser', 'confirmedByUser'])
+            ->where(function ($q) use ($supervisor) {
+                $q->where('approved_by', $supervisor->id)
+                    ->orWhere('rejected_by', $supervisor->id);
+            })
+            ->whereIn('status', [VacationRequest::STATUS_APPROVED, VacationRequest::STATUS_REJECTED])
+            ->orderBy('updated_at', 'desc');
+
+        if ($tenantId) {
+            $query->forTenant($tenantId);
+        }
+
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['year'])) {
+            $query->whereYear('start_date', $filters['year']);
+        }
+
+        return $query->paginate($filters['per_page'] ?? 15);
+    }
+
+    /**
      * Get all vacation requests (admin view).
      *
      * @param User $user

@@ -1,7 +1,7 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-13  
-**Estado general del proyecto:** ~85% completado (Módulos 0-4 + Arquitectura)
+**Última actualización:** 2025-12-14  
+**Estado general del proyecto:** ~95% completado (Módulos 0-5 + Arquitectura)
 
 ---
 
@@ -16,164 +16,17 @@
 | **Módulo 3:** Gestión de Usuarios | ✅ Completado | 100% |
 | **Módulo 4:** Documentos | ✅ Completado | 100% |
 | **Módulo 4+:** Arquitectura Backend | ✅ Completado | 100% |
-| **Módulo 5:** Vacaciones | ⏳ Pendiente | 0% |
+| **Módulo 5:** Vacaciones | ✅ Completado | 100% |
 | **Módulo 6:** Notificaciones | ⏳ Pendiente | 0% |
 | **Módulo 7:** Reportes | ⏳ Pendiente | 0% |
 | **Módulo 8:** Testing/Deploy | ⏳ Pendiente | 0% |
 
 ---
 
-## 🏗️ Arquitectura del Sistema
-
-### Backend (Laravel 11)
-
-```
-backend/
-├── app/
-│   ├── Http/
-│   │   ├── Controllers/Api/
-│   │   │   ├── AuthController.php        # Login, logout, refresh, me
-│   │   │   ├── PasswordController.php    # Forgot, reset, change, force-change
-│   │   │   ├── ProfileController.php     # Perfil, avatar upload/delete
-│   │   │   ├── UserController.php        # CRUD usuarios
-│   │   │   ├── TenantController.php      # CRUD tenants, logo upload
-│   │   │   ├── DocumentController.php    # Documentos, download, preview
-│   │   │   ├── DocumentBatchController.php # Carga masiva ZIP
-│   │   │   ├── DocumentTypeController.php  # Tipos de documento
-│   │   │   ├── DocumentSignatureController.php # Firma 2FA
-│   │   │   └── FileUploadController.php  # Upload de archivos  
-│   │   ├── Middleware/
-│   │   │   ├── CheckRole.php             # Verificación de roles
-│   │   │   ├── TenantScope.php           # Scope multi-tenant
-│   │   │   └── EnsureCookieAccessToken.php # Auth cookies HttpOnly
-│   │   ├── Requests/                     # Form Requests (validación)
-│   │   └── Resources/                    # API Resources (transformación)
-│   │       ├── UserResource.php
-│   │       ├── UserSummaryResource.php
-│   │       ├── TenantResource.php
-│   │       ├── DocumentResource.php
-│   │       ├── DocumentBatchResource.php
-│   │       └── DocumentTypeResource.php
-│   ├── Services/                         # Business Logic Layer
-│   │   ├── AuthService.php
-│   │   ├── PasswordService.php
-│   │   ├── ProfileService.php
-│   │   ├── UserService.php
-│   │   ├── TenantService.php
-│   │   ├── DocumentService.php
-│   │   ├── DocumentBatchService.php
-│   │   └── SignatureService.php
-│   ├── Exceptions/                       # Custom Exceptions
-│   │   ├── UserCreationException.php
-│   │   ├── DocumentNotFoundException.php
-│   │   └── UnauthorizedAccessException.php
-│   ├── Jobs/
-│   │   └── ProcessDocumentBatch.php      # Procesamiento async de ZIP
-│   ├── Mail/
-│   │   ├── WelcomeUserMail.php
-│   │   ├── ForgotPasswordMail.php
-│   │   ├── PasswordResetByAdminMail.php
-│   │   ├── NewDocumentAvailableMail.php
-│   │   └── SignatureCodeMail.php
-│   └── Models/
-│       ├── User.php
-│       ├── Tenant.php
-│       ├── Role.php
-│       ├── Document.php
-│       ├── DocumentType.php
-│       ├── DocumentBatch.php
-│       └── RefreshToken.php
-├── resources/views/emails/
-│   ├── layouts/
-│   │   └── base.blade.php                # Layout base de emails
-│   ├── components/                       # Componentes reutilizables
-│   │   ├── button.blade.php
-│   │   ├── alert-warning.blade.php
-│   │   ├── alert-success.blade.php
-│   │   ├── alert-danger.blade.php
-│   │   ├── code-box.blade.php
-│   │   └── info-box.blade.php
-│   ├── welcome.blade.php
-│   ├── forgot-password.blade.php
-│   ├── password-reset-admin.blade.php
-│   ├── signature-code.blade.php
-│   └── new-document-available.blade.php
-└── bootstrap/app.php                     # Global Exception Handler
-```
-
-### Frontend (React + TypeScript + Vite)
-
-```
-src/
-├── domain/
-│   ├── entities/                         # Interfaces/Types
-│   │   ├── User.ts
-│   │   ├── Tenant.ts
-│   │   ├── Document.ts
-│   │   └── ...
-│   └── usecases/                         # Business Logic
-│       ├── auth/
-│       ├── users/
-│       ├── tenants/
-│       └── documents/
-├── infrastructure/
-│   ├── http/
-│   │   └── apiClient.ts                  # Axios con interceptors
-│   └── repositories/
-│       ├── UserRepository.ts
-│       ├── TenantRepository.ts
-│       └── DocumentRepository.ts
-├── presentation/
-│   ├── components/
-│   │   ├── ui/                           # UI Components (shadcn)
-│   │   ├── layout/                       # Layout (AppSidebar, Navbar)
-│   │   ├── shared/                       # TenantSwitcher, ConfirmDialog
-│   │   └── features/
-│   │       ├── users/
-│   │       │   ├── PasswordResetModal.tsx
-│   │       │   └── UserTenantsManager.tsx
-│   │       └── documents/
-│   │           ├── DocumentSignatureModal.tsx
-│   │           └── PDFViewer.tsx
-│   ├── pages/
-│   │   ├── auth/
-│   │   │   ├── LoginView.tsx
-│   │   │   ├── ForgotPasswordPage.tsx
-│   │   │   ├── ResetPasswordPage.tsx
-│   │   │   └── ForceChangePasswordPage.tsx
-│   │   ├── admin/
-│   │   │   ├── UsersListPage.tsx
-│   │   │   ├── UserDetailPage.tsx
-│   │   │   ├── UserFormPage.tsx
-│   │   │   ├── TenantsListPage.tsx
-│   │   │   ├── TenantFormPage.tsx
-│   │   │   ├── DocumentsListPage.tsx
-│   │   │   ├── BatchesListPage.tsx
-│   │   │   └── BatchDetailPage.tsx
-│   │   ├── employee/
-│   │   │   ├── DashboardPage.tsx         # Mis Documentos
-│   │   │   ├── DocumentUploadView.tsx
-│   │   │   └── DocumentViewerView.tsx
-│   │   └── shared/
-│   │       └── ProfilePage.tsx
-│   ├── stores/                           # Zustand stores
-│   │   ├── authStore.ts
-│   │   ├── usersStore.ts
-│   │   ├── tenantsStore.ts
-│   │   └── documentsStore.ts
-│   └── utils/
-│       ├── formatters.ts                 # formatDate, formatFileSize, etc.
-│       ├── documentStatus.ts             # Badges de estado
-│       └── batchStatus.ts
-└── index.tsx                             # App Router
-```
-
----
-
 ## ✅ Módulos Completados
 
 ### Módulo 0: Base de Datos ✅
-- Migraciones: tenants, users, roles, documents, document_types, document_batches
+- Migraciones: tenants, users, roles, documents, document_types, document_batches, vacation_requests
 - Modelos Eloquent con relaciones
 - Seeders de datos de prueba
 
@@ -208,93 +61,70 @@ src/
 - Seguridad: archivos privados (no públicos)
 
 ### Módulo 4+: Arquitectura ✅
-- Service Layer (8 services)
+- Service Layer (9 services incluyendo VacationService)
 - API Resources (transformers)
 - Custom Exceptions + Global Handler
 - Form Requests (validación)
 - Swagger/OpenAPI documentación completa
 - Email templates estandarizados con componentes
 
+### Módulo 5: Vacaciones ✅ (COMPLETADO 2025-12-14)
+
+#### Backend Implementado:
+- **Modelo:** VacationRequest con estados y flujo completo
+- **Service:** VacationService.php con toda la lógica de negocio
+- **Controller:** VacationRequestController.php con 12 endpoints
+- **Validaciones:** CreateVacationRequestRequest.php, RejectVacationRequestRequest.php
+
+#### Endpoints Implementados:
+```
+POST   /api/vacation-requests                    ✅ Crear solicitud
+GET    /api/vacation-requests                    ✅ Listar (scope por rol)
+GET    /api/vacation-requests/{id}               ✅ Ver detalle
+PUT    /api/vacation-requests/{id}/approve       ✅ Aprobar (supervisor)
+PUT    /api/vacation-requests/{id}/reject        ✅ Rechazar (supervisor)
+PUT    /api/vacation-requests/{id}/mark-taken    ✅ Marcar tomada (supervisor)
+PUT    /api/vacation-requests/{id}/mark-not-taken ✅ Marcar NO tomada (supervisor)
+DELETE /api/vacation-requests/{id}               ✅ Cancelar (empleado, solo si pending)
+GET    /api/vacation-requests/pending-approval   ✅ Pendientes de aprobar (supervisor)
+GET    /api/vacation-requests/pending-confirmation ✅ Pendientes de confirmar (supervisor)
+GET    /api/vacation-requests/my-team            ✅ Vacaciones de mi equipo
+GET    /api/vacation-requests/my-decisions       ✅ Historial de decisiones del supervisor
+```
+
+#### Frontend Implementado:
+- **VacationRequestsListPage.tsx** - Mis vacaciones (empleado/admin)
+- **VacationRequestFormPage.tsx** - Nueva solicitud con calendario
+- **TeamVacationsPage.tsx** - Vista consolidada con 3 tabs:
+  - Tab "Pendientes": Solicitudes esperando aprobación
+  - Tab "Por Confirmar": Vacaciones terminadas pendientes de confirmación
+  - Tab "Mi Historial": Decisiones del supervisor (aprobadas/rechazadas)
+- **VacationHistoryPage.tsx** - Histórico general para admin
+- **VacationRequestCard.tsx** - Componente reutilizable para mostrar solicitudes
+- **VacationRejectModal.tsx** - Modal para rechazar con motivo
+
+#### Store y Repository:
+- **vacationsStore.ts** - Estado global con Zustand
+- **VacationRepository.ts** - Acceso a API
+
+#### Navegación:
+```
+Sidebar "Vacaciones":
+├── Mis Vacaciones     → /vacations
+├── Mi Equipo          → /team-vacations (3 tabs)
+└── Histórico General  → /vacation-history
+```
+
+#### Reglas de Negocio Implementadas:
+- ✅ No se pueden solicitar vacaciones con fechas superpuestas
+- ✅ Solo el supervisor puede aprobar/rechazar
+- ✅ Validación de días máximos (0.5 - 30)
+- ✅ "Mis Vacaciones" muestra solo las del usuario actual (incluso para admin)
+- ✅ Histórico general filtra por tenant
+
 ---
 
 ## ⏳ Módulos Pendientes
-
-### Módulo 5: Vacaciones 🔜
-**Estimación:** 6-8 días
-
-```
-FLUJO DE VACACIONES:
-┌─────────────────────────────────────────────────────────────────┐
-│  Empleado          Supervisor              Sistema              │
-│     │                  │                      │                 │
-│     │──Solicita───────►│                      │                 │
-│     │                  │                      │                 │
-│     │◄──Aprueba/Rechaza│                      │                 │
-│     │                  │                      │                 │
-│     │  [Toma vacaciones]                      │                 │
-│     │                  │                      │                 │
-│     │                  │──Marca "Tomadas"────►│                 │
-│     │                  │  o "No Tomadas"      │                 │
-│     │                  │                      │                 │
-│     │                  │◄──Reportes───────────│                 │
-└─────────────────────────────────────────────────────────────────┘
-
-REGLAS DE NEGOCIO:
-- El SUPERVISOR es quien marca si las vacaciones fueron tomadas o no
-- Al aprobar, was_taken = NULL (pendiente de confirmación)
-- Después de la fecha de fin, el supervisor confirma:
-  • "Tomadas" → was_taken = TRUE
-  • "No Tomadas" → was_taken = FALSE (canceló, emergencia, etc.)
-- Admin puede ver reporte de vacaciones pendientes de confirmar
-
-ESTADOS:
-- pending    → Esperando aprobación del supervisor
-- approved   → Aprobada, pendiente de tomar
-- rejected   → Rechazada por supervisor
-- taken      → Confirmada como tomada (was_taken = TRUE)
-- not_taken  → Confirmada como NO tomada (was_taken = FALSE)
-- cancelled  → Cancelada por el empleado antes de tomarla
-
-Endpoints a crear:
-POST   /api/vacation-requests                    # Crear solicitud
-GET    /api/vacation-requests                    # Listar (scope por rol)
-GET    /api/vacation-requests/{id}               # Ver detalle
-PUT    /api/vacation-requests/{id}/approve       # Aprobar (supervisor)
-PUT    /api/vacation-requests/{id}/reject        # Rechazar (supervisor)
-PUT    /api/vacation-requests/{id}/mark-taken    # Marcar tomada (supervisor)
-PUT    /api/vacation-requests/{id}/mark-not-taken # Marcar NO tomada (supervisor)
-DELETE /api/vacation-requests/{id}               # Cancelar (empleado, solo si pending)
-GET    /api/vacation-requests/pending-approval   # Pendientes de aprobar (supervisor)
-GET    /api/vacation-requests/pending-confirmation # Pendientes de confirmar (supervisor)
-GET    /api/vacation-requests/my-team            # Vacaciones de mi equipo
-
-Modelo VacationRequest:
-- id
-- user_id (FK)           # Empleado que solicita
-- tenant_id (FK)
-- start_date             # Fecha inicio
-- end_date               # Fecha fin
-- days_requested         # Días solicitados (decimal, permite 0.5)
-- reason                 # Motivo (opcional)
-- status                 # pending, approved, rejected, cancelled
-- approved_by (FK)       # Supervisor que aprobó
-- approved_at
-- rejected_by (FK)
-- rejected_at
-- rejection_reason
-- was_taken (boolean|null)  # NULL=pendiente, TRUE=tomada, FALSE=no tomada
-- confirmed_by (FK)      # Supervisor que confirmó
-- confirmed_at
-- timestamps
-
-Páginas frontend:
-- VacationRequestsListPage.tsx    # Mis solicitudes (empleado)
-- VacationRequestFormPage.tsx     # Nueva solicitud
-- VacationApprovalsPage.tsx       # Aprobar solicitudes (supervisor)
-- VacationConfirmationPage.tsx    # Confirmar tomadas/no tomadas (supervisor)
-- VacationCalendarPage.tsx        # Calendario del equipo
-- VacationReportsPage.tsx         # Reportes (admin)
-```
 
 ### Módulo 6: Notificaciones en Tiempo Real 🔜
 **Estimación:** 5-6 días
@@ -362,6 +192,7 @@ Deployment:
 - [ ] Agregar caché para queries frecuentes (Redis)
 - [ ] Implementar soft deletes consistentes
 - [ ] Agregar tests unitarios/feature
+- [ ] Emails de notificación para vacaciones (aprobación/rechazo)
 
 ### Frontend
 - [ ] Implementar PWA (service worker)
@@ -369,6 +200,7 @@ Deployment:
 - [ ] Optimizar bundle size
 - [ ] Implementar lazy loading de rutas
 - [ ] Agregar tests con Vitest
+- [ ] Calendario visual de vacaciones del equipo
 
 ### DevOps
 - [ ] Configurar Docker para producción
@@ -378,24 +210,83 @@ Deployment:
 
 ---
 
+## 🐛 Bugs Conocidos / Por Arreglar
+
+- [ ] Lint warning: `@theme` en index.css (falso positivo, Tailwind v4 lo soporta)
+- [ ] Limpiar imports no usados (USER_ROLE_DISPLAY_LABELS, location, etc.)
+
+---
+
+## 🏗️ Arquitectura del Sistema
+
+### Backend (Laravel 11)
+
+```
+backend/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/Api/
+│   │   │   ├── AuthController.php
+│   │   │   ├── PasswordController.php
+│   │   │   ├── ProfileController.php
+│   │   │   ├── UserController.php
+│   │   │   ├── TenantController.php
+│   │   │   ├── DocumentController.php
+│   │   │   ├── DocumentBatchController.php
+│   │   │   ├── DocumentTypeController.php
+│   │   │   ├── DocumentSignatureController.php
+│   │   │   ├── FileUploadController.php
+│   │   │   └── VacationRequestController.php  # NUEVO
+│   │   ├── Requests/
+│   │   │   ├── CreateVacationRequestRequest.php  # NUEVO
+│   │   │   └── RejectVacationRequestRequest.php   # NUEVO
+│   │   └── Resources/
+│   │       └── VacationRequestResource.php  # NUEVO
+│   ├── Services/
+│   │   └── VacationService.php  # NUEVO
+│   └── Models/
+│       └── VacationRequest.php  # NUEVO
+```
+
+### Frontend (React + TypeScript + Vite)
+
+```
+src/
+├── core/domain/entities/
+│   └── VacationRequest.ts  # NUEVO
+├── infrastructure/persistence/repositories/
+│   └── VacationRepository.ts  # NUEVO
+├── presentation/
+│   ├── components/features/vacations/  # NUEVO
+│   │   ├── VacationRequestCard.tsx
+│   │   └── VacationRejectModal.tsx
+│   ├── pages/
+│   │   ├── admin/
+│   │   │   ├── TeamVacationsPage.tsx  # NUEVO (consolidado)
+│   │   │   └── VacationHistoryPage.tsx  # NUEVO
+│   │   └── employee/
+│   │       ├── VacationRequestsListPage.tsx  # NUEVO
+│   │       └── VacationRequestFormPage.tsx  # NUEVO
+│   └── stores/
+│       └── vacationsStore.ts  # NUEVO
+```
+
+---
+
 ## 📝 Notas de Desarrollo
 
-### Patrones Utilizados
-- **Repository Pattern** - Abstracción de acceso a datos
-- **Service Layer** - Lógica de negocio separada de controllers
-- **Use Cases** - Frontend organizado por casos de uso
-- **Zustand Stores** - Estado global en frontend
+### Layout Fijo (actualizado 2025-12-14)
+- **Navbar:** Fixed top, z-50, siempre visible
+- **Sidebar:** Fixed left, z-40, debajo del navbar
+- **Contenido:** Scroll interno, margen izquierdo dinámico
 
 ### Colores de la Plataforma
 ```
 Primary Blue:     #2563EB
 Primary Hover:    #1E40AF
-Background:       #F1F5F9
+Background:       #F8FAFC (content), #FFFFFF (cards)
 Text Primary:     #334155
 Text Secondary:   #64748B
-Text Tertiary:    #94A3B8
-Border:           #E2E8F0
-Footer BG:        #F8FAFC
 ```
 
 ### Usuarios de Prueba
@@ -405,18 +296,17 @@ Admin ABC:     admin@abc.com / password
 Admin XYZ:     admin@xyz.com / password
 Cliente 1:     juan.perez@abc.com / password
 Cliente 2:     maria.garcia@xyz.com / password
-Multi-tenant:  multi@tenant.com / password
 ```
 
 ---
 
 ## 📅 Próximos Pasos
 
-1. **Inmediato:** Comenzar Módulo 5 (Vacaciones)
+1. **Inmediato:** Pruebas de vacaciones end-to-end
 2. **Corto plazo:** Módulo 6 (Notificaciones)
 3. **Mediano plazo:** Módulos 7-8 (Reportes, Testing)
 4. **Largo plazo:** Deploy a producción
 
 ---
 
-*Última actualización: 2025-12-13 08:30*
+*Última actualización: 2025-12-14 23:10*

@@ -31,6 +31,16 @@ interface VacationsState {
     pendingConfirmationsCount: number;
     teamRequests: VacationRequest[];
 
+    // Admin history view
+    historyRequests: VacationRequest[];
+    historyTotal: number;
+    historyTotalPages: number;
+
+    // Supervisor decision history
+    myDecisions: VacationRequest[];
+    myDecisionsTotal: number;
+    myDecisionsTotalPages: number;
+
     // Actions - CRUD
     fetchVacationRequests: (params?: {
         page?: number;
@@ -46,10 +56,14 @@ interface VacationsState {
     fetchPendingApprovals: (page?: number) => Promise<void>;
     fetchPendingConfirmations: (page?: number) => Promise<void>;
     fetchTeamRequests: (params?: VacationFilters) => Promise<void>;
+    fetchMyDecisions: (params?: VacationFilters) => Promise<void>;
     approveRequest: (id: number) => Promise<void>;
     rejectRequest: (id: number, reason: string) => Promise<void>;
     markAsTaken: (id: number) => Promise<void>;
     markAsNotTaken: (id: number) => Promise<void>;
+
+    // Actions - Admin History
+    fetchHistoryRequests: (params?: VacationFilters) => Promise<void>;
 
     // Utility
     setStatusFilter: (status: VacationStatus | 'all') => void;
@@ -76,6 +90,12 @@ const initialState = {
     pendingConfirmations: [],
     pendingConfirmationsCount: 0,
     teamRequests: [],
+    historyRequests: [],
+    historyTotal: 0,
+    historyTotalPages: 0,
+    myDecisions: [],
+    myDecisionsTotal: 0,
+    myDecisionsTotalPages: 0,
 };
 
 export const useVacationsStore = create<VacationsState>((set, get) => ({
@@ -189,6 +209,53 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
             });
         } catch (error: any) {
             set({ error: error.message || 'Error al cargar vacaciones del equipo', isLoading: false });
+        }
+    },
+
+    fetchMyDecisions: async (params) => {
+        set({ isLoading: true, error: null });
+        try {
+            const filters: VacationFilters = {
+                page: params?.page ?? 1,
+                perPage: params?.perPage ?? 15,
+                status: params?.status,
+                year: params?.year ?? undefined,
+            };
+
+            const result = await vacationRepository.getMyDecisions(filters);
+            set({
+                myDecisions: result.data,
+                myDecisionsTotal: result.meta.total,
+                myDecisionsTotalPages: result.meta.lastPage,
+                isLoading: false,
+            });
+        } catch (error: any) {
+            set({ error: error.message || 'Error al cargar historial de decisiones', isLoading: false });
+        }
+    },
+
+    // ============ Admin History Actions ============
+
+    fetchHistoryRequests: async (params) => {
+        set({ isLoading: true, error: null });
+        try {
+            const filters: VacationFilters = {
+                page: params?.page ?? get().page,
+                perPage: params?.perPage ?? get().perPage,
+                status: params?.status,
+                year: params?.year ?? get().yearFilter ?? undefined,
+            };
+
+            const result = await vacationRepository.getAllHistory(filters);
+            set({
+                historyRequests: result.data,
+                page: result.meta.currentPage,
+                historyTotalPages: result.meta.lastPage,
+                historyTotal: result.meta.total,
+                isLoading: false,
+            });
+        } catch (error: any) {
+            set({ error: error.message || 'Error al cargar el histórico', isLoading: false });
         }
     },
 

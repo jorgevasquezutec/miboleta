@@ -141,6 +141,7 @@ class AuthService
                 'name' => $user->primaryTenant()->name,
                 'ruc' => $user->primaryTenant()->ruc,
             ] : null,
+            'immediate_supervisor_id' => $user->immediate_supervisor_id,
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
         ];

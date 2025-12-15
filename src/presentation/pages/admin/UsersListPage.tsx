@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useUsersStore } from "@/presentation/stores/usersStore";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
+import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -31,6 +32,7 @@ import {
 } from "@/presentation/components/ui/select";
 import { UserPlus, Search, Eye, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Tenant } from "@/core/domain/entities/Tenant";
 
 // Debounce helper
 function useDebounce<T>(value: T, delay: number): T {
@@ -65,6 +67,8 @@ export function UsersListPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [localStatusFilter, setLocalStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [tenantFilter, setTenantFilter] = useState<string | null>(null);
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
   const debouncedSearch = useDebounce(searchTerm, 500);
@@ -84,9 +88,11 @@ export function UsersListPage() {
     fetchUsers({
       search: debouncedSearch,
       status: statusValue,
+      tenant_id: tenantFilter || undefined,
       page: 1 // Reset to page 1 when filters change
     });
-  }, [debouncedSearch, localStatusFilter]);
+  }, [debouncedSearch, localStatusFilter, tenantFilter]);
+
 
   const handleDelete = (id: string, userName: string) => {
     setUserToDelete({ id, name: userName });
@@ -166,27 +172,54 @@ export function UsersListPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="w-full sm:w-[70%] relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Buscar por nombre, email o documento..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-10"
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search - takes 2 columns */}
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium mb-2 block">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Nombre, email o documento..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Tenant filter */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Organización</label>
+              <TenantAutocompleteSelector
+                value={tenantFilter}
+                onChange={(id) => {
+                  setTenantFilter(id);
+                  if (id) {
+                    const foundTenant = users.flatMap(u => u.tenants || []).find(t => t.id === id);
+                    setSelectedTenant(foundTenant ? { id: foundTenant.id, name: foundTenant.name, ruc: foundTenant.ruc || '' } as Tenant : null);
+                  } else {
+                    setSelectedTenant(null);
+                  }
+                }}
+                selectedTenant={selectedTenant}
+                placeholder="Todas"
               />
             </div>
-            <Select value={localStatusFilter} onValueChange={handleStatusFilterChange}>
-              <SelectTrigger className="w-full sm:w-[30%] h-10">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="active">Activo</SelectItem>
-                <SelectItem value="inactive">Inactivo</SelectItem>
-                {/* <SelectItem value="suspended">Suspendido</SelectItem> */}
-              </SelectContent>
-            </Select>
+
+            {/* Status filter */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Estado</label>
+              <Select value={localStatusFilter} onValueChange={handleStatusFilterChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="active">Activo</SelectItem>
+                  <SelectItem value="inactive">Inactivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Loading State */}

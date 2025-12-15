@@ -1,4 +1,4 @@
-import { Bell, Settings, LogOut, User, Menu } from "lucide-react";
+import { Bell, LogOut, User as UserIcon, Menu } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/presentation/components/ui/avatar";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -11,38 +11,51 @@ import {
 } from "@/presentation/components/ui/dropdown-menu";
 import { Badge } from "@/presentation/components/ui/badge";
 import { TenantSwitcher } from "@/presentation/components/shared/TenantSwitcher";
+import { useNavigate } from "react-router-dom";
+import { User } from "@/core/domain/entities/User";
 
 interface NavbarProps {
-  userName: string;
-  userRole: string;
-  avatarUrl?: string;
+  user: User | null;
   notificationCount?: number;
   onLogout?: () => void;
-  onSettings?: () => void;
-  onProfile?: () => void;
   onToggleSidebar?: () => void;
-  showSidebar?: boolean;
+  isSidebarExpanded?: boolean;
 }
 
 export function Navbar({
-  userName,
-  userRole,
-  avatarUrl,
+  user,
   notificationCount = 0,
   onLogout,
-  onSettings,
-  onProfile,
   onToggleSidebar,
-  showSidebar = true,
 }: NavbarProps) {
+  const navigate = useNavigate();
   const brandingPrimaryColor = "#2563EB";
 
+  const userName = user ? `${user.name || ''} ${user.last_name || ''}`.trim() || user.email : 'Usuario';
+  const userRole = user?.role || 'user';
+
+  // Get initials safely
+  const getInitials = (name: string): string => {
+    if (!name) return 'U';
+    return name
+      .split(" ")
+      .filter(n => n.length > 0)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || 'U';
+  };
+
+  const handleProfile = () => {
+    navigate('/profile');
+  };
+
   return (
-    <nav className="bg-white border-b border-[rgba(0,0,0,0.1)] px-6 py-4">
+    <nav className="fixed top-0 left-0 right-0 bg-white border-b border-[rgba(0,0,0,0.1)] px-6 py-4 z-50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           {/* Sidebar Toggle Button */}
-          {showSidebar && onToggleSidebar && (
+          {onToggleSidebar && (
             <button
               type="button"
               onClick={onToggleSidebar}
@@ -85,36 +98,27 @@ export function Navbar({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-3 pl-2">
                 <Avatar>
-                  <AvatarImage src={avatarUrl || ""} />
+                  <AvatarImage src="" />
                   <AvatarFallback
                     className="text-white"
                     style={{ backgroundColor: brandingPrimaryColor }}
                   >
-                    {userName
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase()
-                      .slice(0, 2)}
+                    {getInitials(userName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="text-left">
                   <p>{userName}</p>
-                  <p className="text-[#64748B]">{userRole}</p>
+                  <p className="text-[#64748B] text-sm capitalize">{userRole}</p>
                 </div>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onProfile}>
-                <User className="w-4 h-4 mr-2" />
+              <DropdownMenuItem onClick={handleProfile}>
+                <UserIcon className="w-4 h-4 mr-2" />
                 Perfil
               </DropdownMenuItem>
-              {/* <DropdownMenuItem onClick={onSettings}>
-                <Settings className="w-4 h-4 mr-2" />
-                Configuración
-              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onLogout} className="text-[#EF4444]">
                 <LogOut className="w-4 h-4 mr-2" />

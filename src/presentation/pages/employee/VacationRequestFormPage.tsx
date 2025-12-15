@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 import {
     ArrowLeft,
     Calendar,
@@ -12,8 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/compone
 import { Button } from "@/presentation/components/ui/button";
 import { Label } from "@/presentation/components/ui/label";
 import { Textarea } from "@/presentation/components/ui/textarea";
-import { Input } from "@/presentation/components/ui/input";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
 import { toast } from "sonner";
@@ -23,17 +24,16 @@ export function VacationRequestFormPage() {
     const { createVacationRequest, error } = useVacationsStore();
     const { user } = useAuthStore();
 
-    const [startDate, setStartDate] = useState<string>("");
-    const [endDate, setEndDate] = useState<string>("");
+    const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [reason, setReason] = useState<string>("");
     const [submitting, setSubmitting] = useState(false);
 
     // Calculate days requested (excluding weekends)
     const daysRequested = useMemo(() => {
-        if (!startDate || !endDate) return 0;
+        if (!dateRange?.from || !dateRange?.to) return 0;
 
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = new Date(dateRange.from);
+        const end = new Date(dateRange.to);
 
         if (end < start) return 0;
 
@@ -50,33 +50,33 @@ export function VacationRequestFormPage() {
         }
 
         return days;
-    }, [startDate, endDate]);
+    }, [dateRange]);
 
     // Validation
     const isValid = useMemo(() => {
-        if (!startDate || !endDate) return false;
+        if (!dateRange?.from || !dateRange?.to) return false;
         if (daysRequested <= 0) return false;
         if (daysRequested > 30) return false;
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const start = new Date(startDate);
+        const start = new Date(dateRange.from);
 
         if (start < today) return false;
 
         return true;
-    }, [startDate, endDate, daysRequested]);
+    }, [dateRange, daysRequested]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!isValid) return;
+        if (!isValid || !dateRange?.from || !dateRange?.to) return;
 
         setSubmitting(true);
         try {
             await createVacationRequest({
-                startDate,
-                endDate,
+                startDate: format(dateRange.from, 'yyyy-MM-dd'),
+                endDate: format(dateRange.to, 'yyyy-MM-dd'),
                 daysRequested,
                 reason: reason.trim() || undefined,
             });
@@ -94,22 +94,16 @@ export function VacationRequestFormPage() {
     };
 
     // Format date range for display
-    const formatDateRange = () => {
-        if (!startDate || !endDate) return "";
+    const formatDateRangeText = () => {
+        if (!dateRange?.from || !dateRange?.to) return "";
         const options: Intl.DateTimeFormatOptions = {
             day: "2-digit",
             month: "long",
             year: "numeric",
         };
-        const start = new Date(startDate).toLocaleDateString("es-ES", options);
-        const end = new Date(endDate).toLocaleDateString("es-ES", options);
+        const start = dateRange.from.toLocaleDateString("es-ES", options);
+        const end = dateRange.to.toLocaleDateString("es-ES", options);
         return `${start} - ${end}`;
-    };
-
-    // Get min date (today)
-    const getMinDate = () => {
-        const today = new Date();
-        return today.toISOString().split("T")[0];
     };
 
     return (
@@ -150,32 +144,19 @@ export function VacationRequestFormPage() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Date Selection */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="startDate">Fecha de Inicio *</Label>
-                                <Input
-                                    id="startDate"
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    min={getMinDate()}
-                                    required
-                                    className="w-full"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="endDate">Fecha de Fin *</Label>
-                                <Input
-                                    id="endDate"
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    min={startDate || getMinDate()}
-                                    required
-                                    className="w-full"
-                                />
-                            </div>
+                        {/* Date Range Selection */}
+                        <div className="space-y-2">
+                            <Label>Rango de Fechas *</Label>
+                            <DateRangePicker
+                                initialDateFrom={dateRange?.from}
+                                initialDateTo={dateRange?.to}
+                                onUpdate={({ range }) => setDateRange(range)}
+                                showCompare={false}
+                                align="start"
+                            />
+                            <p className="text-xs text-gray-500">
+                                Selecciona las fechas de inicio y fin de tus vacaciones
+                            </p>
                         </div>
 
                         {/* Days Summary */}
@@ -190,8 +171,8 @@ export function VacationRequestFormPage() {
                                         <p className="text-2xl font-bold text-blue-900">
                                             {daysRequested} {daysRequested === 1 ? "día" : "días"}
                                         </p>
-                                        {formatDateRange() && (
-                                            <p className="text-sm text-blue-600 mt-1">{formatDateRange()}</p>
+                                        {formatDateRangeText() && (
+                                            <p className="text-sm text-blue-600 mt-1">{formatDateRangeText()}</p>
                                         )}
                                     </div>
                                 </div>
@@ -259,7 +240,6 @@ export function VacationRequestFormPage() {
                             <Button
                                 type="submit"
                                 disabled={!isValid || submitting || !user?.immediate_supervisor_id}
-                                className="bg-blue-600 hover:bg-blue-700"
                             >
                                 {submitting ? (
                                     <>
@@ -280,3 +260,5 @@ export function VacationRequestFormPage() {
         </div>
     );
 }
+
+export default VacationRequestFormPage;

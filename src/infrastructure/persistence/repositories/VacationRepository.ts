@@ -173,6 +173,61 @@ export class VacationRepository {
         };
     }
 
+    async getMyDecisions(filters?: VacationFilters): Promise<PaginatedVacationRequests> {
+        const params = new URLSearchParams();
+
+        if (filters?.page) params.append('page', filters.page.toString());
+        if (filters?.perPage) params.append('per_page', filters.perPage.toString());
+        if (filters?.status) params.append('status', filters.status);
+        if (filters?.year) params.append('year', filters.year.toString());
+
+        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+            `/vacation-requests/my-decisions?${params.toString()}`
+        );
+
+        return {
+            data: response.data.data.map((req) => this.mapVacationRequest(req)),
+            meta: {
+                currentPage: response.data.meta.current_page,
+                lastPage: response.data.meta.last_page,
+                perPage: response.data.meta.per_page,
+                total: response.data.meta.total,
+            },
+        };
+    }
+
+    /**
+     * Get all vacation requests history for the current tenant
+     * This is for admin users to view all company vacation history
+     */
+    async getAllHistory(filters?: VacationFilters): Promise<PaginatedVacationRequests> {
+        const params = new URLSearchParams();
+
+        if (filters?.page) params.append('page', filters.page.toString());
+        if (filters?.perPage) params.append('per_page', filters.perPage.toString());
+        if (filters?.status) params.append('status', filters.status);
+        if (filters?.year) params.append('year', filters.year.toString());
+        if (filters?.wasTaken && filters.wasTaken !== 'all') {
+            params.append('was_taken', filters.wasTaken);
+        }
+        // Request all tenant vacation history
+        params.append('scope', 'tenant');
+
+        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+            `/vacation-requests?${params.toString()}`
+        );
+
+        return {
+            data: response.data.data.map((req) => this.mapVacationRequest(req)),
+            meta: {
+                currentPage: response.data.meta.current_page,
+                lastPage: response.data.meta.last_page,
+                perPage: response.data.meta.per_page,
+                total: response.data.meta.total,
+            },
+        };
+    }
+
     // ============ Mappers ============
 
     private mapVacationRequest(data: any): VacationRequest {

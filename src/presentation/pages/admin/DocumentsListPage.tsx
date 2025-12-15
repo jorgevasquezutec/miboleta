@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Search, Filter, Eye, Trash2 } from "lucide-react";
-import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
@@ -50,7 +49,7 @@ export function DocumentsListPage() {
     } = useDocumentsStore();
 
     const [documentTypes, setDocumentTypes] = useState<any[]>([]);
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined } | undefined>(undefined);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
 
@@ -207,8 +206,11 @@ export function DocumentsListPage() {
                         <div className="md:col-span-2">
                             <label className="text-sm font-medium mb-2 block">Rango de fechas</label>
                             <DateRangePicker
-                                dateRange={dateRange}
-                                onDateRangeChange={setDateRange}
+                                initialDateFrom={dateRange?.from}
+                                initialDateTo={dateRange?.to}
+                                onUpdate={({ range }) => setDateRange(range)}
+                                showCompare={false}
+                                align="start"
                             />
                         </div>
                     </div>

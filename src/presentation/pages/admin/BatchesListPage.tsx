@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import {
     FileStack,
@@ -36,7 +35,7 @@ export function BatchesListPage() {
     const { batches, batchesMeta, fetchBatches, batchesLoading } = useDocumentsStore();
 
     const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined } | undefined>();
     const [currentPage, setCurrentPage] = useState(1);
     const [perPage, setPerPage] = useState(10);
 
@@ -109,8 +108,11 @@ export function BatchesListPage() {
                             </Select>
                         </div>
                         <DateRangePicker
-                            dateRange={dateRange}
-                            onDateRangeChange={setDateRange}
+                            initialDateFrom={dateRange?.from}
+                            initialDateTo={dateRange?.to}
+                            onUpdate={({ range }) => setDateRange(range)}
+                            showCompare={false}
+                            align="start"
                         />
                         {(statusFilter !== "all" || dateRange) && (
                             <Button variant="ghost" size="sm" onClick={clearFilters}>

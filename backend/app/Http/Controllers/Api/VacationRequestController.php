@@ -51,11 +51,14 @@ class VacationRequestController extends Controller
             'per_page' => $request->get('per_page', 15),
         ];
 
-        // Clients see their own requests, admins see all
-        if ($role === 'client') {
-            $requests = $this->vacationService->getRequestsForUser($user, $filters);
-        } else {
+        // By default, everyone sees their own requests ("Mis Vacaciones")
+        // Admin can see all tenant requests when scope=tenant (used in History page)
+        $scope = $request->get('scope', 'mine');
+
+        if ($scope === 'tenant' && in_array($role, ['root', 'admin'])) {
             $requests = $this->vacationService->getAllRequests($user, $filters);
+        } else {
+            $requests = $this->vacationService->getRequestsForUser($user, $filters);
         }
 
         return response()->json([
@@ -388,6 +391,40 @@ class VacationRequestController extends Controller
         ];
 
         $requests = $this->vacationService->getTeamRequests($user, $filters);
+
+        return response()->json([
+            'data' => VacationRequestResource::collection($requests),
+            'meta' => [
+                'current_page' => $requests->currentPage(),
+                'last_page' => $requests->lastPage(),
+                'per_page' => $requests->perPage(),
+                'total' => $requests->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/vacation-requests/my-decisions",
+     *     tags={"Vacaciones"},
+     *     summary="Historial de decisiones del supervisor",
+     *     description="Lista todas las solicitudes que el supervisor ha aprobado o rechazado",
+     *     security={{"sanctum":{}}},
+     *     @OA\Response(response=200, description="Lista de decisiones del supervisor")
+     * )
+     */
+    public function myDecisions(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+
+        $filters = [
+            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'status' => $request->status,
+            'year' => $request->year,
+            'per_page' => $request->get('per_page', 15),
+        ];
+
+        $requests = $this->vacationService->getMyDecisions($user, $filters);
 
         return response()->json([
             'data' => VacationRequestResource::collection($requests),

@@ -153,7 +153,7 @@ export function VacationRequestsListPage() {
                     </h1>
                     <p className="text-gray-600 mt-1">Gestiona tus solicitudes de vacaciones</p>
                 </div>
-                <Button onClick={handleNewRequest} className="bg-blue-600 hover:bg-blue-700">
+                <Button onClick={handleNewRequest} className="bg-blue-600 hover:bg-blue-700 text-white">
                     <Plus className="w-4 h-4 mr-2" />
                     Nueva Solicitud
                 </Button>

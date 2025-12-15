@@ -2,7 +2,7 @@
 
 **Fecha:** 2025-12-14  
 **Estimación:** 6-8 días  
-**Estado:** ⏳ Pendiente
+**Estado:** ✅ En Progreso (87% completado)
 
 ---
 
@@ -186,17 +186,17 @@ Empleado                 Supervisor                Sistema
 
 ---
 
-### FASE 5: Frontend - Páginas Empleado (Día 5)
+### FASE 5: Frontend - Páginas Empleado (Día 5) ✅
 
 #### 5.1 VacationRequestsListPage
-- [ ] Crear `src/presentation/pages/employee/VacationRequestsListPage.tsx`
+- [x] Crear `src/presentation/pages/employee/VacationRequestsListPage.tsx`
   - Tabla de mis solicitudes
   - Filtros: estado, año
   - Botón "Nueva Solicitud"
   - Estados con badges de colores
 
 #### 5.2 VacationRequestFormPage
-- [ ] Crear `src/presentation/pages/employee/VacationRequestFormPage.tsx`
+- [x] Crear `src/presentation/pages/employee/VacationRequestFormPage.tsx`
   - Date pickers (inicio/fin)
   - Cálculo automático de días
   - Campo razón (opcional)
@@ -205,16 +205,16 @@ Empleado                 Supervisor                Sistema
 
 ---
 
-### FASE 6: Frontend - Páginas Supervisor (Día 6)
+### FASE 6: Frontend - Páginas Supervisor (Día 6) ✅
 
 #### 6.1 VacationApprovalsPage
-- [ ] Crear `src/presentation/pages/admin/VacationApprovalsPage.tsx`
+- [x] Crear `src/presentation/pages/admin/VacationApprovalsPage.tsx`
   - Lista de solicitudes pendientes de MI equipo
   - Botones Aprobar/Rechazar
   - Modal de rechazo con razón
 
 #### 6.2 VacationConfirmationPage  
-- [ ] Crear `src/presentation/pages/admin/VacationConfirmationPage.tsx`
+- [x] Crear `src/presentation/pages/admin/VacationConfirmationPage.tsx`
   - Lista de vacaciones aprobadas pendientes de confirmar
   - Botones "Tomada" / "No Tomada"
 
@@ -223,18 +223,19 @@ Empleado                 Supervisor                Sistema
 
 ---
 
-### FASE 7: Frontend - Componentes (Día 6-7)
+### FASE 7: Frontend - Componentes (Día 6-7) ✅
 
 #### 7.1 Componentes UI
-- [ ] `VacationStatusBadge.tsx` - Badge con estado y sub-badge tomada/no tomada
-- [ ] `VacationRequestCard.tsx` - Card resumida
-- [ ] `VacationApprovalModal.tsx` - Modal de aprobación
-- [ ] `VacationRejectModal.tsx` - Modal de rechazo con razón
+- [x] `VacationStatusBadge.tsx` - Badge con estado y sub-badge tomada/no tomada
+- [x] `VacationRequestCard.tsx` - Card resumida
+- [x] `VacationApprovalModal.tsx` - Modal de aprobación (integrado en VacationRequestCard)
+- [x] `VacationRejectModal.tsx` - Modal de rechazo con razón
 
 #### 7.2 Sidebar
-- [ ] Agregar items en sidebar:
+- [x] Agregar items en sidebar:
   - "Mis Vacaciones" (todos)
-  - "Aprobar Vacaciones" (supervisores) con badge de pendientes
+  - "Aprobar Vacaciones" (supervisores)
+  - "Confirmar Vacaciones" (supervisores)
 
 ---
 

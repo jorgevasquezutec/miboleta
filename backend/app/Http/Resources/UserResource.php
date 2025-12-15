@@ -31,6 +31,7 @@ class UserResource extends JsonResource
             'primary_tenant' => $this->when($this->primaryTenant(), function () {
                 return new TenantResource($this->primaryTenant());
             }),
+            'immediate_supervisor_id' => $this->immediate_supervisor_id,
             'immediate_supervisor' => new UserSummaryResource($this->whenLoaded('immediateSupervisor')),
             'subordinates' => UserSummaryResource::collection($this->whenLoaded('subordinates')),
             'created_at' => $this->created_at,
