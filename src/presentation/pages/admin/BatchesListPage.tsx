@@ -267,18 +267,16 @@ export function BatchesListPage() {
                             </div>
 
                             {/* Pagination */}
-                            {batchesMeta && (
-                                <PaginationControls
-                                    currentPage={filters.page}
-                                    totalPages={batchesMeta.lastPage || 1}
-                                    total={batchesMeta.total}
-                                    perPage={filters.per_page}
-                                    onPageChange={handlePageChange}
-                                    onPerPageChange={handlePerPageChange}
-                                    disabled={batchesLoading}
-                                    className="mt-4 pt-4 border-t"
-                                />
-                            )}
+                            <PaginationControls
+                                currentPage={batchesMeta?.currentPage || filters.page}
+                                totalPages={batchesMeta?.lastPage || 1}
+                                total={batchesMeta?.total || 0}
+                                perPage={batchesMeta?.perPage || filters.per_page}
+                                onPageChange={handlePageChange}
+                                onPerPageChange={handlePerPageChange}
+                                disabled={batchesLoading}
+                                className="mt-4 pt-4 border-t"
+                            />
                         </>
                     )}
                 </CardContent>

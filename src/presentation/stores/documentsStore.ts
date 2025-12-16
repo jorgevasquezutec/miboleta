@@ -251,7 +251,12 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       const response = await documentRepository.getBatches(params);
       set({
         batches: response.data,
-        batchesMeta: response.meta,
+        batchesMeta: {
+          currentPage: response.meta.currentPage,
+          lastPage: response.meta.lastPage,
+          perPage: response.meta.perPage,
+          total: response.meta.total,
+        },
         batchesLoading: false
       });
     } catch (error) {
