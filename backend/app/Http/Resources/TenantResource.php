@@ -24,8 +24,11 @@ class TenantResource extends JsonResource
             'email' => $this->email,
             'address' => $this->address,
             'status' => $this->status,
-            'is_primary' => $this->whenPivotLoaded('tenant_user', function () {
-                return $this->pivot->is_primary ?? false;
+            'is_primary' => $this->whenPivotLoaded('user_tenants', function () {
+                return (bool) $this->pivot->is_primary;
+            }),
+            'supervisor_id' => $this->whenPivotLoaded('user_tenants', function () {
+                return $this->pivot->supervisor_id;
             }),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

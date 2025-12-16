@@ -30,7 +30,14 @@ class StoreUserRequest extends FormRequest
             'document_type' => 'nullable|string|in:dni,ruc,ce,passport',
             'document_text' => 'nullable|string|unique:users,document_text',
             'phone' => 'nullable|string|max:20',
-            'immediate_supervisor_id' => [
+            'role_id' => 'required|exists:roles,id',
+            'tenant_id' => 'required|exists:tenants,id', // Tenant principal inicial
+            'status' => 'nullable|string|in:active,inactive,pending',
+
+            // Configuración avanzada de tenants y supervisores
+            'tenants_config' => 'nullable|array',
+            'tenants_config.*.tenant_id' => 'required|exists:tenants,id',
+            'tenants_config.*.supervisor_id' => [
                 'nullable',
                 'exists:users,id',
                 function ($attribute, $value, $fail) {
@@ -42,9 +49,7 @@ class StoreUserRequest extends FormRequest
                     }
                 },
             ],
-            'role_id' => 'required|exists:roles,id',
-            'tenant_id' => 'required|exists:tenants,id',
-            'status' => 'nullable|string|in:active,inactive,pending',
+            'tenants_config.*.is_primary' => 'boolean',
         ];
     }
 

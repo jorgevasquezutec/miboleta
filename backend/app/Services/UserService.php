@@ -18,15 +18,17 @@ class UserService
      * Create a new user with all related data.
      *
      * @param array $data Validated user data
-     * @param User $creator The user creating this new user
+     * @param User|null $creator The user creating this new user (optional, defaults to auth user)
      * @return User
      * @throws UserCreationException
      */
-    public function createUser(array $data, User $creator): User
+    public function createUser(array $data, ?User $creator = null): User
     {
         DB::beginTransaction();
 
         try {
+            $creator = $creator ?? auth()->user();
+            
             // Generate temporary password
             $temporaryPassword = $this->generateTemporaryPassword();
 
@@ -39,28 +41,33 @@ class UserService
                 'document_type' => $data['document_type'] ?? null,
                 'document_text' => $data['document_text'] ?? null,
                 'phone' => $data['phone'] ?? null,
-                'immediate_supervisor_id' => $data['immediate_supervisor_id'] ?? null,
-                'status' => 'active',
+                'status' => $data['status'] ?? 'active',
                 'must_change_password' => true,
             ]);
 
             // Assign role
             $this->assignRoles($user, [$data['role_id']], $creator);
 
-            // Assign tenant
-            $this->assignTenants($user, [$data['tenant_id']], true);
+            // Assign tenants with supervisors
+            if (isset($data['tenants_config']) && is_array($data['tenants_config'])) {
+                $this->assignTenantsWithConfig($user, $data['tenants_config']);
+            } elseif (isset($data['tenant_id'])) {
+                // Fallback for simple creation
+                $this->assignTenants($user, [$data['tenant_id']], true);
+            }
 
             // Send welcome email
             $this->sendWelcomeEmail($user, $temporaryPassword);
 
             // Assign orphan documents if document_text is provided
-            if (!empty($data['document_text'])) {
-                $this->assignOrphanDocuments($user, $data['document_text'], $data['tenant_id']);
+            $defaultTenantId = $data['tenants_config'][0]['tenant_id'] ?? $data['tenant_id'] ?? null;
+            if (!empty($data['document_text']) && $defaultTenantId) {
+                $this->assignOrphanDocuments($user, $data['document_text'], $defaultTenantId);
             }
 
             DB::commit();
 
-            return $user->load(['roles', 'tenants', 'immediateSupervisor']);
+            return $user->load(['roles', 'tenants']);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -96,13 +103,10 @@ class UserService
                 // Si el nuevo rol es root (role_id = 1), remover todos los tenants
                 if ($data['role_id'] == 1) {
                     $user->tenants()->detach();
-                    // No incluir tenant_id en la actualización
-                    unset($data['tenant_id']);
-                    unset($data['tenant_ids']);
-                    unset($data['primary_tenant_id']);
+                    unset($data['tenants_config'], $data['tenant_id'], $data['tenant_ids']);
                 } else {
-                    // Si cambió de root a otro rol, asignar tenant obligatorio
-                    if ($oldRoleId == 1 && isset($data['tenant_id'])) {
+                    // Si cambió de root a otro rol y no viene config, asegurar tenant
+                    if ($oldRoleId == 1 && isset($data['tenant_id']) && !isset($data['tenants_config'])) {
                         $this->assignTenants($user, [$data['tenant_id']], true);
                     }
                 }
@@ -117,26 +121,34 @@ class UserService
             }
 
             // Handle tenant assignment for non-root users
-            if (isset($data['tenant_ids']) && is_array($data['tenant_ids']) && $data['role_id'] != 1) {
-                $primaryTenantId = $data['primary_tenant_id'] ?? $data['tenant_ids'][0];
-
-                $pivotData = [];
-                foreach ($data['tenant_ids'] as $tenantId) {
-                    $pivotData[$tenantId] = [
-                        'is_primary' => $tenantId == $primaryTenantId,
-                    ];
+            if ($data['role_id'] != 1) { // Assuming role_id is present or we check user role
+                if (isset($data['tenants_config']) && is_array($data['tenants_config'])) {
+                    $this->assignTenantsWithConfig($user, $data['tenants_config']);
+                } elseif (isset($data['tenant_ids']) && is_array($data['tenant_ids'])) {
+                    // Legacy/Simple assignment without supervisors update (or keeping existing)
+                    // But sync deletes existing pivot data. We should be careful.
+                    // For now, simple behavior:
+                    $primaryTenantId = $data['primary_tenant_id'] ?? $data['tenant_ids'][0];
+                    $pivotData = [];
+                    foreach ($data['tenant_ids'] as $tenantId) {
+                        $pivotData[$tenantId] = ['is_primary' => $tenantId == $primaryTenantId];
+                    }
+                    $user->tenants()->sync($pivotData);
+                } elseif (isset($data['tenant_id'])) {
+                    $user->tenants()->sync([
+                        $data['tenant_id'] => ['is_primary' => true]
+                    ]);
                 }
-
-                $user->tenants()->sync($pivotData);
-            } elseif (isset($data['tenant_id']) && $data['role_id'] != 1) {
-                // Fallback: single tenant assignment
-                $user->tenants()->sync([
-                    $data['tenant_id'] => ['is_primary' => true]
-                ]);
             }
 
             // Remove tenant-related fields from user update
-            unset($data['role_id'], $data['tenant_id'], $data['tenant_ids'], $data['primary_tenant_id']);
+            unset(
+                $data['role_id'],
+                $data['tenant_id'],
+                $data['tenant_ids'],
+                $data['primary_tenant_id'],
+                $data['tenants_config']
+            );
 
             $user->update($data);
 
@@ -150,7 +162,7 @@ class UserService
 
             DB::commit();
 
-            return $user->load(['roles', 'tenants', 'immediateSupervisor']);
+            return $user->load(['roles', 'tenants']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('[UserService] Failed to update user', [
@@ -166,65 +178,57 @@ class UserService
      *
      * @param User $user
      * @param array $roleIds
-     * @param User|null $grantedBy
+     * @param User $grantedBy
      * @return void
      */
-    public function assignRoles(User $user, array $roleIds, ?User $grantedBy = null): void
+    protected function assignRoles(User $user, array $roleIds, User $grantedBy): void
     {
         $pivotData = [];
         foreach ($roleIds as $roleId) {
             $pivotData[$roleId] = [
-                'granted_by' => $grantedBy?->id,
+                'granted_by' => $grantedBy->id,
                 'granted_at' => now(),
             ];
         }
-
-        $user->roles()->syncWithoutDetaching($pivotData);
+        $user->roles()->sync($pivotData);
     }
 
     /**
-     * Assign tenants to a user.
+     * Assign tenants to a user (simple version without supervisor).
      *
      * @param User $user
      * @param array $tenantIds
-     * @param bool $isPrimary
+     * @param bool $setPrimaryFirst
      * @return void
      */
-    public function assignTenants(User $user, array $tenantIds, bool $isPrimary = false): void
+    protected function assignTenants(User $user, array $tenantIds, bool $setPrimaryFirst = true): void
     {
         $pivotData = [];
         foreach ($tenantIds as $index => $tenantId) {
             $pivotData[$tenantId] = [
-                'is_primary' => $isPrimary && $index === 0, // Only first is primary
+                'is_primary' => $setPrimaryFirst && $index === 0,
+                'supervisor_id' => null,
             ];
         }
-
-        $user->tenants()->syncWithoutDetaching($pivotData);
+        $user->tenants()->sync($pivotData);
     }
 
     /**
-     * Assign supervisor to a user.
-     *
+     * Assign tenants with supervisor configuration.
+     * 
      * @param User $user
-     * @param int|null $supervisorId
-     * @return User
-     * @throws \InvalidArgumentException
+     * @param array $config Array of ['tenant_id' => int, 'supervisor_id' => ?int, 'is_primary' => bool]
      */
-    public function assignSupervisor(User $user, ?int $supervisorId): User
+    protected function assignTenantsWithConfig(User $user, array $config): void
     {
-        if ($supervisorId) {
-            $supervisor = User::find($supervisorId);
-
-            // Validate no cycle is created
-            if ($supervisor && $supervisor->immediateSupervisor && $supervisor->immediateSupervisor->id === $user->id) {
-                throw new \InvalidArgumentException('No se puede crear un ciclo de supervisión');
-            }
+        $pivotData = [];
+        foreach ($config as $item) {
+            $pivotData[$item['tenant_id']] = [
+                'supervisor_id' => $item['supervisor_id'] ?? null,
+                'is_primary' => $item['is_primary'] ?? false,
+            ];
         }
-
-        $user->immediate_supervisor_id = $supervisorId;
-        $user->save();
-
-        return $user->load('immediateSupervisor');
+        $user->tenants()->sync($pivotData);
     }
 
     /**

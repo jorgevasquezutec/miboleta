@@ -50,7 +50,7 @@ class UserController extends Controller
         $user = $request->user();
 
         // Query base
-        $query = User::with(['roles', 'tenants', 'immediateSupervisor']);
+        $query = User::with(['roles', 'tenants']);
 
         // Root ve todos los usuarios
         if (!$user->isRoot()) {
@@ -107,13 +107,8 @@ class UserController extends Controller
                         'name' => $t->name,
                         'ruc' => $t->ruc ?? '',
                         'is_primary' => $t->pivot->is_primary ?? false,
+                        'supervisor_id' => $t->pivot->supervisor_id ?? null,
                     ]),
-                    'immediate_supervisor' => $u->immediateSupervisor ? [
-                        'id' => $u->immediateSupervisor->id,
-                        'name' => $u->immediateSupervisor->name,
-                        'full_name' => $u->immediateSupervisor->full_name,
-                        'email' => $u->immediateSupervisor->email,
-                    ] : null,
                     'created_at' => $u->created_at,
                 ];
             }),
@@ -134,53 +129,7 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Post(
-     *     path="/api/users",
-     *     tags={"Usuarios"},
-     *     summary="Crear usuario",
-     *     description="Crea un nuevo usuario con contraseña aleatoria y envía email de bienvenida",
-     *     security={{"sanctum":{}}},
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\JsonContent(
-     *             required={"name","email","role_id","tenant_id"},
-     *             @OA\Property(property="name", type="string", example="Juan"),
-     *             @OA\Property(property="last_name", type="string", example="Pérez"),
-     *             @OA\Property(property="email", type="string", example="juan@example.com"),
-     *             @OA\Property(property="document_type", type="string", example="DNI"),
-     *             @OA\Property(property="document_text", type="string", example="12345678"),
-     *             @OA\Property(property="phone", type="string", example="987654321"),
-     *             @OA\Property(property="immediate_supervisor_id", type="integer", example=2),
-     *             @OA\Property(property="role_id", type="integer", example=3),
-     *             @OA\Property(property="tenant_id", type="integer", example=1)
-     *         )
-     *     ),
-     *     @OA\Response(response=201, description="Usuario creado"),
-     *     @OA\Response(response=422, description="Validación fallida")
-     * )
-     */
-    public function store(StoreUserRequest $request)
-    {
-        try {
-            $user = $this->userService->createUser(
-                $request->validated(),
-                $request->user()
-            );
-
-            return (new UserResource($user))
-                ->additional([
-                    'message' => 'Usuario creado exitosamente. Se ha enviado un correo con las credenciales.',
-                    'email_sent' => true,
-                ])
-                ->response()
-                ->setStatusCode(201);
-
-        } catch (UserCreationException $e) {
-            Log::error('[UserController] User creation failed', ['error' => $e->getMessage()]);
-            return response()->json(['error' => $e->getMessage()], 400);
-        }
-    }
+    // ... (store method is fine, uses service)
 
     /**
      * @OA\Get(
@@ -195,7 +144,7 @@ class UserController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $user = User::with(['roles', 'tenants', 'immediateSupervisor', 'subordinates'])->findOrFail($id);
+        $user = User::with(['roles', 'tenants'])->findOrFail($id);
 
         // Verificar acceso
         $currentUser = $request->user();
@@ -204,6 +153,29 @@ class UserController extends Controller
         }
 
         return new UserResource($user);
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/users",
+     *     tags={"Usuarios"},
+     *     summary="Crear usuario",
+     *     security={{"sanctum":{}}},
+     *     @OA\Response(response=201, description="Usuario creado"),
+     *     @OA\Response(response=422, description="Errores de validación")
+     * )
+     */
+    public function store(StoreUserRequest $request)
+    {
+        try {
+            $user = $this->userService->createUser($request->validated());
+            return response()->json([
+                'message' => 'Usuario creado exitosamente',
+                'data' => new UserResource($user),
+            ], 201);
+        } catch (UserCreationException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     /**
@@ -221,10 +193,18 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
+        // Verificar acceso
+        $currentUser = $request->user();
+        if (!$this->userService->canAccessUser($currentUser, $user)) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
         $updatedUser = $this->userService->updateUser($user, $request->validated());
 
-        return (new UserResource($updatedUser))
-            ->additional(['message' => 'Usuario actualizado exitosamente']);
+        return response()->json([
+            'message' => 'Usuario actualizado exitosamente',
+            'data' => new UserResource($updatedUser),
+        ]);
     }
 
     /**
@@ -238,9 +218,16 @@ class UserController extends Controller
      *     @OA\Response(response=404, description="Usuario no encontrado")
      * )
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $user = User::findOrFail($id);
+
+        // Verificar acceso
+        $currentUser = $request->user();
+        if (!$this->userService->canAccessUser($currentUser, $user)) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
         $user->delete();
 
         return response()->json([
@@ -250,50 +237,59 @@ class UserController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/api/users/{id}/subordinates",
+     *     path="/api/users/subordinates",
      *     tags={"Usuarios"},
-     *     summary="Obtener subordinados del usuario",
+     *     summary="Obtener subordinados del usuario actual o de un usuario específico",
      *     security={{"sanctum":{}}},
-     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(
+     *         name="tenant_id",
+     *         in="query",
+     *         description="ID del tenant (opcional, filtra por tenant específico)",
+     *         @OA\Schema(type="integer")
+     *     ),
      *     @OA\Response(response=200, description="Lista de subordinados")
      * )
      */
-    public function subordinates($id)
+    public function subordinates(Request $request, $id = null)
     {
-        $user = User::with('subordinates')->findOrFail($id);
-
-        return UserSummaryResource::collection($user->subordinates);
-    }
-
-    /**
-     * @OA\Put(
-     *     path="/api/users/{id}/supervisor",
-     *     tags={"Usuarios"},
-     *     summary="Asignar supervisor inmediato",
-     *     security={{"sanctum":{}}},
-     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
-     *     @OA\RequestBody(
-     *         @OA\JsonContent(
-     *             @OA\Property(property="supervisor_id", type="integer", example=2)
-     *         )
-     *     ),
-     *     @OA\Response(response=200, description="Supervisor asignado")
-     * )
-     */
-    public function assignSupervisor(UpdateTenantSettingsRequest $request, $id)
-    {
-        $validated = $request->validated();
-        $user = User::findOrFail($id);
-
-        try {
-            $updatedUser = $this->userService->assignSupervisor($user, $validated['supervisor_id']);
-
-            return response()->json([
-                'message' => 'Supervisor asignado exitosamente',
-                'user' => new UserResource($updatedUser),
-            ]);
-        } catch (\InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        // Si se proporciona un ID, obtener ese usuario, sino usar el autenticado
+        if ($id) {
+            $user = User::findOrFail($id);
+            
+            // Verificar acceso
+            $currentUser = $request->user();
+            if (!$this->userService->canAccessUser($currentUser, $user)) {
+                return response()->json(['message' => 'No autorizado'], 403);
+            }
+        } else {
+            $user = $request->user();
         }
+
+        $tenantId = $request->query('tenant_id');
+
+        if ($tenantId) {
+            // Obtener subordinados de un tenant específico
+            $subordinates = $user->subordinatesForTenant((int)$tenantId)->get();
+        } else {
+            // Obtener todos los subordinados (de todos los tenants)
+            $subordinates = $user->subordinates()->get();
+        }
+
+        return response()->json([
+            'data' => $subordinates->map(function ($subordinate) {
+                return [
+                    'id' => $subordinate->id,
+                    'name' => $subordinate->name,
+                    'last_name' => $subordinate->last_name,
+                    'full_name' => $subordinate->full_name,
+                    'email' => $subordinate->email,
+                    'status' => $subordinate->status,
+                    'role' => $subordinate->getCurrentRole(),
+                    'roles' => $subordinate->getCurrentRoles(),
+                    'tenant_id' => $subordinate->pivot->tenant_id ?? null,
+                    'is_primary' => $subordinate->pivot->is_primary ?? false,
+                ];
+            }),
+        ]);
     }
 }

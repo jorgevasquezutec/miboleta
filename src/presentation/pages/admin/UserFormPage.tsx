@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { userRepository } from '@/infrastructure/persistence/repositories';
 import { useAuthStore } from '@/presentation/stores/authStore';
@@ -39,6 +39,7 @@ export function UserFormPage() {
     const [selectedTenantIds, setSelectedTenantIds] = useState<string[]>([]);
     const [primaryTenantId, setPrimaryTenantId] = useState<string | null>(null);
     const [selectedTenants, setSelectedTenants] = useState<TenantAssociation[]>([]); // Para pasar al selector
+    const [supervisorsByTenant, setSupervisorsByTenant] = useState<Record<string, string | null>>({});
 
     const [formData, setFormData] = useState({
         name: '',
@@ -49,7 +50,6 @@ export function UserFormPage() {
         phone: '',
         role: 'client' as 'root' | 'admin' | 'client',
         status: 'active' as 'active' | 'inactive',
-        immediate_supervisor_id: null as string | null,
     });
 
     // Load user data if editing
@@ -73,24 +73,31 @@ export function UserFormPage() {
                     phone: user.phone || '',
                     role: user.role || 'client',
                     status: user.status === 'active' ? 'active' : 'inactive',
-                    immediate_supervisor_id: user.immediate_supervisor_id || null,
                 });
-                // Load user's tenants
+
+                // Load user's tenants and supervisors
                 if (user.tenants && user.tenants.length > 0) {
-                    console.log('UserFormPage - Cargando tenants:', {
-                        tenants: user.tenants,
-                        ids: user.tenants.map(t => String(t.id))
-                    });
                     setSelectedTenantIds(user.tenants.map(t => String(t.id)));
-                    setSelectedTenants(user.tenants); // Guardar tenants completos
+                    setSelectedTenants(user.tenants);
+
                     const primary = user.tenants.find(t => t.is_primary);
                     setPrimaryTenantId(primary ? String(primary.id) : String(user.tenants[0].id));
+
+                    // Load supervisors per tenant
+                    const supervisors: Record<string, string | null> = {};
+                    user.tenants.forEach(t => {
+                        if (t.supervisor_id) {
+                            supervisors[String(t.id)] = String(t.supervisor_id);
+                        }
+                    });
+                    setSupervisorsByTenant(supervisors);
                 }
             } else {
                 toast.error('Usuario no encontrado');
                 navigate('/users');
             }
         } catch (error) {
+            console.error(error);
             toast.error('Error al cargar usuario');
             navigate('/users');
         } finally {
@@ -152,6 +159,35 @@ export function UserFormPage() {
         }
     };
 
+    const handleSupervisorChange = useCallback((tenantId: string, supervisorId: string | null) => {
+        setSupervisorsByTenant(prev => ({ ...prev, [tenantId]: supervisorId }));
+    }, []);
+
+    const handleTenantSelectionChange = useCallback((ids: string[]) => {
+        setSelectedTenantIds(ids);
+        if (errors.tenants) {
+            setErrors(prev => ({ ...prev, tenants: '' }));
+        }
+
+        // Limpiar supervisores de tenants removidos
+        setSupervisorsByTenant(prev => {
+            const next = { ...prev };
+            let changed = false;
+            Object.keys(next).forEach(key => {
+                if (!ids.includes(key)) {
+                    delete next[key];
+                    changed = true;
+                }
+            });
+            return changed ? next : prev;
+        });
+    }, [errors.tenants]);
+
+    const handleTenantsChange = useCallback((tenants: any) => {
+        // Actualizamos la lista completa de tenants para tener nombres
+        setSelectedTenants(tenants as TenantAssociation[]);
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -178,19 +214,21 @@ export function UserFormPage() {
                 phone: formData.phone,
                 role_id: roleMap[formData.role], // Convertir role a role_id
                 status: formData.status,
-                immediate_supervisor_id: formData.immediate_supervisor_id,
             };
 
-            // Include tenant ID (singular) for non-root users
+            // Include tenant config for non-root users
             if (formData.role !== 'root') {
-                // Backend espera tenant_id (singular), enviar el primario
-                dataToSend.tenant_id = parseInt(primaryTenantId || selectedTenantIds[0]);
+                // Configuración detallada por tenant
+                const tenantsConfig = selectedTenantIds.map(tenantId => ({
+                    tenant_id: parseInt(tenantId),
+                    supervisor_id: supervisorsByTenant[tenantId] ? parseInt(supervisorsByTenant[tenantId]!) : null,
+                    is_primary: tenantId === primaryTenantId
+                }));
 
-                // Si hay múltiples tenants, enviarlos también para el update
-                if (isEditing) {
-                    dataToSend.tenant_ids = selectedTenantIds.map(id => parseInt(id));
-                    dataToSend.primary_tenant_id = parseInt(primaryTenantId || selectedTenantIds[0]);
-                }
+                dataToSend.tenants_config = tenantsConfig;
+
+                // Backend espera tenant_id (singular) para compatibilidad básica
+                dataToSend.tenant_id = parseInt(primaryTenantId || selectedTenantIds[0]);
             }
 
             if (isEditing && id) {
@@ -203,6 +241,7 @@ export function UserFormPage() {
 
             navigate('/users');
         } catch (error: any) {
+            console.error(error);
             toast.error(error.message || 'Error al guardar usuario');
         } finally {
             setIsSaving(false);
@@ -450,16 +489,8 @@ export function UserFormPage() {
                         <CardContent>
                             <TenantMultiSelector
                                 selectedTenantIds={selectedTenantIds}
-                                onSelectionChange={(ids) => {
-                                    setSelectedTenantIds(ids);
-                                    if (errors.tenants) {
-                                        setErrors(prev => ({ ...prev, tenants: '' }));
-                                    }
-                                    // Clear supervisor if no tenants selected
-                                    if (ids.length === 0 && formData.immediate_supervisor_id) {
-                                        handleChange('immediate_supervisor_id', null);
-                                    }
-                                }}
+                                onSelectionChange={handleTenantSelectionChange}
+                                onTenantsChange={handleTenantsChange}
                                 primaryTenantId={primaryTenantId}
                                 onPrimaryChange={setPrimaryTenantId}
                                 selectedTenants={selectedTenants}
@@ -470,24 +501,33 @@ export function UserFormPage() {
                     </Card>
                 )}
 
-                {/* Supervisor - Only for non-root users */}
-                {formData.role !== 'root' && (
+                {/* Supervisors Configuration - Per Tenant */}
+                {formData.role !== 'root' && selectedTenantIds.length > 0 && (
                     <Card>
                         <CardHeader>
-                            <CardTitle>Jefe Inmediato</CardTitle>
+                            <CardTitle>Jefes Inmediatos</CardTitle>
                             <CardDescription>
-                                {selectedTenantIds.length === 0
-                                    ? 'Primero selecciona las organizaciones para ver los supervisores disponibles'
-                                    : 'Asigna un supervisor de las organizaciones seleccionadas'}
+                                Asigna un supervisor responsable en cada organización seleccionada
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <SupervisorSelector
-                                value={formData.immediate_supervisor_id}
-                                onChange={(supervisorId) => handleChange('immediate_supervisor_id', supervisorId)}
-                                excludeUserId={id}
-                                tenantIds={selectedTenantIds}
-                            />
+                        <CardContent className="space-y-6">
+                            {selectedTenants.filter(t => selectedTenantIds.includes(String(t.id))).map(tenant => (
+                                <div key={tenant.id} className="pt-4 first:pt-0 border-b last:border-0 pb-4 last:pb-0">
+                                    <Label className="block mb-2 font-medium">
+                                        Supervisor en <span className="text-blue-600">{tenant.name}</span>
+                                        {String(tenant.id) === primaryTenantId && (
+                                            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Principal</span>
+                                        )}
+                                    </Label>
+                                    <SupervisorSelector
+                                        value={supervisorsByTenant[String(tenant.id)]}
+                                        onChange={(supervisorId) => handleSupervisorChange(String(tenant.id), supervisorId)}
+                                        excludeUserId={id}
+                                        tenantIds={[String(tenant.id)]}
+                                        placeholder={`Buscar supervisor en ${tenant.name}...`}
+                                    />
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
                 )}

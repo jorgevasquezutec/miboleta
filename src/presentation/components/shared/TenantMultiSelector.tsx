@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTenantSearch } from '@/presentation/hooks/useTenantSearch';
 import { Tenant } from '@/core/domain/entities/Tenant';
 import { TenantAssociation } from '@/core/domain/entities/User';
@@ -45,6 +45,8 @@ export interface TenantMultiSelectorProps {
   error?: string;
   /** Deshabilitado */
   disabled?: boolean;
+  /** Callback con info detallada de tenants seleccionados */
+  onTenantsChange?: (tenants: TenantInfo[]) => void;
 }
 
 /**
@@ -73,6 +75,7 @@ export function TenantMultiSelector({
   placeholder = 'Buscar organizaciones...',
   error,
   disabled = false,
+  onTenantsChange,
 }: TenantMultiSelectorProps) {
   const [open, setOpen] = useState(false);
 
@@ -91,6 +94,26 @@ export function TenantMultiSelector({
   // Actualizar cache cuando cambian selectedTenants o results (normalizar IDs a string)
   useEffect(() => {
     setTenantsCache(prev => {
+      let hasChanges = false;
+
+      // Check if we need to add selectedTenants
+      selectedTenants.forEach(tenant => {
+        if (!prev.has(String(tenant.id))) {
+          hasChanges = true;
+        }
+      });
+
+      // Check if we need to add results
+      results.forEach(tenant => {
+        if (!prev.has(String(tenant.id))) {
+          hasChanges = true;
+        }
+      });
+
+      if (!hasChanges) {
+        return prev;
+      }
+
       const newCache = new Map(prev);
 
       // Agregar selectedTenants al cache
@@ -105,7 +128,19 @@ export function TenantMultiSelector({
 
       return newCache;
     });
-  }, [selectedTenants, results]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(selectedTenants), results]);
+
+  // Notificar al padre sobre los detalles de los tenants seleccionados
+  useEffect(() => {
+    if (onTenantsChange) {
+      const selectedInfo = selectedTenantIds
+        .map(id => tenantsCache.get(String(id)))
+        .filter(Boolean) as TenantInfo[];
+      onTenantsChange(selectedInfo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTenantIds, tenantsCache]);
 
   // Combinar tenants del cache y resultados de búsqueda
   const getDisplayTenants = () => {
@@ -129,7 +164,7 @@ export function TenantMultiSelector({
 
   const displayTenants = getDisplayTenants();
 
-  const handleToggleTenant = (tenantId: string, tenant: TenantInfo) => {
+  const handleToggleTenant = (tenantId: string, _tenant: TenantInfo) => {
     const isSelected = selectedTenantIds.includes(tenantId);
 
     if (isSelected) {
@@ -242,19 +277,19 @@ export function TenantMultiSelector({
                 <CommandGroup>
                   <ScrollArea className="h-[300px]">
                     {displayTenants.map((tenant) => {
-                      const isSelected = selectedTenantIds.includes(tenant.id);
-                      const isPrimary = primaryTenantId === tenant.id;
+                      const isSelected = selectedTenantIds.includes(String(tenant.id));
+                      const isPrimary = primaryTenantId === String(tenant.id);
 
                       return (
                         <CommandItem
                           key={tenant.id}
-                          value={tenant.id}
-                          onSelect={() => handleToggleTenant(tenant.id, tenant)}
+                          value={String(tenant.id)}
+                          onSelect={() => handleToggleTenant(String(tenant.id), tenant)}
                           className="flex items-center gap-2 px-2 py-3"
                         >
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => handleToggleTenant(tenant.id, tenant)}
+                            onCheckedChange={() => handleToggleTenant(String(tenant.id), tenant)}
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -315,7 +350,7 @@ export function TenantMultiSelector({
           </p>
           <div className="space-y-2">
             {selectedTenantsInfo.map((tenant) => {
-              const isPrimary = primaryTenantId === tenant.id;
+              const isPrimary = primaryTenantId === String(tenant.id);
 
               return (
                 <div
@@ -342,12 +377,12 @@ export function TenantMultiSelector({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    {!isPrimary && selectedTenantIds.length > 1 && (
+                    {!isPrimary && selectedTenantIds.length >= 1 && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleSetPrimary(tenant.id)}
+                        onClick={() => handleSetPrimary(String(tenant.id))}
                         className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                       >
                         <Star className="h-3 w-3 mr-1" />
@@ -358,11 +393,8 @@ export function TenantMultiSelector({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleRemoveTenant(tenant.id)}
-                      disabled={
-                        disabled ||
-                        (minSelections > 0 && selectedTenantIds.length <= minSelections)
-                      }
+                      onClick={() => handleRemoveTenant(String(tenant.id))}
+                      disabled={disabled}
                       className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
                     >
                       <X className="h-4 w-4" />

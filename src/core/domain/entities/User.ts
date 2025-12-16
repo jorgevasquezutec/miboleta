@@ -39,6 +39,7 @@ export interface TenantAssociation {
   ruc: string;
   logo_url?: string;
   is_primary: boolean;
+  supervisor_id?: string | null;
 }
 
 // Información básica de tenant

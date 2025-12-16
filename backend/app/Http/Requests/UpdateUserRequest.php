@@ -43,7 +43,15 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users', 'document_text')->ignore($userId),
             ],
             'phone' => 'nullable|string|max:20',
-            'immediate_supervisor_id' => [
+            'role_id' => 'sometimes|required|exists:roles,id',
+            'status' => 'nullable|string|in:active,inactive,pending',
+            'tenant_id' => 'nullable|exists:tenants,id',
+            'tenant_ids' => 'nullable|array',
+
+            // Configuración avanzada de tenants y supervisores
+            'tenants_config' => 'nullable|array',
+            'tenants_config.*.tenant_id' => 'required|exists:tenants,id',
+            'tenants_config.*.supervisor_id' => [
                 'nullable',
                 'exists:users,id',
                 function ($attribute, $value, $fail) {
@@ -55,10 +63,8 @@ class UpdateUserRequest extends FormRequest
                     }
                 },
             ],
-            'role_id' => 'sometimes|required|exists:roles,id',
-            'status' => 'nullable|string|in:active,inactive,pending',
-            'tenant_id' => 'nullable|exists:tenants,id',
-            'tenant_ids' => 'nullable|array',
+            'tenants_config.*.is_primary' => 'boolean',
+
             'tenant_ids.*' => 'exists:tenants,id',
             'primary_tenant_id' => 'nullable|exists:tenants,id',
         ];

@@ -53,15 +53,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/upload/tenant-logo', [FileUploadController::class, 'uploadTenantLogo']);
     Route::delete('/upload/file', [FileUploadController::class, 'deleteFile']);
 
-    // Users - Resource routes (index, store, show, update, destroy)
-    Route::apiResource('users', UserController::class);
-
-    // Users - Custom routes
+    // Users - Custom routes (BEFORE resource to avoid conflicts)
+    Route::get('/users/subordinates', [UserController::class, 'subordinates']);
     Route::prefix('users/{id}')->group(function () {
         Route::get('/subordinates', [UserController::class, 'subordinates']);
-        Route::put('/supervisor', [UserController::class, 'assignSupervisor']);
         Route::post('/reset-password', [PasswordController::class, 'adminResetPassword']);
     });
+
+    // Users - Resource routes (index, store, show, update, destroy)
+    Route::apiResource('users', UserController::class);
 
     // Tenants - Resource routes (index, store, show, update, destroy)
     Route::apiResource('tenants', TenantController::class);

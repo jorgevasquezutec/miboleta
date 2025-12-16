@@ -27,13 +27,20 @@ class UserResource extends JsonResource
             'must_change_password' => $this->must_change_password,
             'role' => $this->getCurrentRole(),
             'roles' => $this->getCurrentRoles(),
-            'tenants' => TenantResource::collection($this->whenLoaded('tenants')),
+            'tenants' => $this->when($this->relationLoaded('tenants'), function () {
+                return $this->tenants->map(function ($tenant) {
+                    return [
+                        'id' => $tenant->id,
+                        'name' => $tenant->name,
+                        'ruc' => $tenant->ruc,
+                        'is_primary' => $tenant->pivot->is_primary ?? false,
+                        'supervisor_id' => $tenant->pivot->supervisor_id ?? null,
+                    ];
+                });
+            }),
             'primary_tenant' => $this->when($this->primaryTenant(), function () {
                 return new TenantResource($this->primaryTenant());
             }),
-            'immediate_supervisor_id' => $this->immediate_supervisor_id,
-            'immediate_supervisor' => new UserSummaryResource($this->whenLoaded('immediateSupervisor')),
-            'subordinates' => UserSummaryResource::collection($this->whenLoaded('subordinates')),
             'avatar_url' => $this->avatar_url,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

@@ -30,9 +30,10 @@ class VacationService
      */
     public function createRequest(array $data, User $user, int $tenantId): VacationRequest
     {
-        // Verify user has a supervisor
-        if (!$user->immediate_supervisor_id) {
-            throw new \InvalidArgumentException('No tienes un supervisor asignado. Contacta a RRHH.');
+        // Verify user has a supervisor for this tenant
+        $supervisor = $user->getSupervisorForTenant($tenantId);
+        if (!$supervisor) {
+            throw new \InvalidArgumentException('No tienes un supervisor asignado para esta empresa. Contacta a RRHH.');
         }
 
         // Validate no overlap with existing approved vacations
@@ -48,11 +49,16 @@ class VacationService
             'status' => VacationRequest::STATUS_PENDING,
         ]);
 
-        // Load relationships
-        $vacationRequest->load(['user', 'user.immediateSupervisor']);
+        // Asignar el supervisor que era válido al momento de crear la solicitud
+        // En una implementación futura, podríamos guardar el supervisor_id en la solicitud para historial
+        // $vacationRequest->supervisor_id = $supervisor->id; 
+        // $vacationRequest->save();
+
+        // Load relationships (supervisor will be loaded manually when needed)
+        $vacationRequest->load(['user']);
 
         // Notify supervisor
-        $this->notifySupervisor($vacationRequest);
+        $this->notifySupervisor($vacationRequest, $supervisor);
 
         // Audit log
         $this->auditService->logVacationRequested($vacationRequest->id, [
@@ -60,16 +66,76 @@ class VacationService
             'start_date' => $data['start_date'],
             'end_date' => $data['end_date'],
             'days_requested' => $data['days_requested'],
+            'supervisor_id' => $supervisor->id,
+            'tenant_id' => $tenantId,
         ]);
 
         Log::info('[VacationService] Vacation request created', [
             'request_id' => $vacationRequest->id,
             'user_id' => $user->id,
-            'supervisor_id' => $user->immediate_supervisor_id,
+            'supervisor_id' => $supervisor->id,
             'days' => $data['days_requested'],
         ]);
 
         return $vacationRequest;
+    }
+
+    /**
+     * Notify supervisor about new vacation request.
+     */
+    protected function notifySupervisor(VacationRequest $request, ?User $explicitSupervisor = null): void
+    {
+        // Si nos pasan el supervisor explícitamente, lo usamos (para evitar double-fetching)
+        // si no, lo buscamos basado en el tenant
+        $supervisor = $explicitSupervisor ?? $request->user->getSupervisorForTenant($request->tenant_id);
+
+        if (!$supervisor) {
+            Log::warning('[VacationService] No supervisor found for notification', [
+                'request_id' => $request->id,
+                'user_id' => $request->user_id,
+                'tenant_id' => $request->tenant_id
+            ]);
+            return;
+        }
+
+        $dateRange = "";
+        try {
+            // Ensure dates are Carbon objects before formatting
+            $start = $request->start_date instanceof \Carbon\Carbon ? $request->start_date : \Carbon\Carbon::parse($request->start_date);
+            $end = $request->end_date instanceof \Carbon\Carbon ? $request->end_date : \Carbon\Carbon::parse($request->end_date);
+            $dateRange = $start->format('d/m') . ' - ' . $end->format('d/m/Y');
+        } catch (\Exception $e) {
+            $dateRange = "Fechas inválidas";
+            Log::error("Error formatting dates for email: " . $e->getMessage());
+        }
+
+        $employeeName = $request->user->name . ' ' . $request->user->last_name;
+
+        // In-app notification
+        try {
+            $this->notificationService->notifyVacationCreated(
+                supervisorId: $supervisor->id,
+                vacationId: $request->id,
+                employeeName: $employeeName,
+                dateRange: $dateRange,
+                tenantId: $request->tenant_id
+            );
+        } catch (\Exception $e) {
+            Log::warning('[VacationService] Failed to create in-app notification', [
+                'request_id' => $request->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Email notification
+        try {
+            Mail::to($supervisor->email)->send(new VacationRequestCreatedMail($request));
+        } catch (\Exception $e) {
+            Log::warning('[VacationService] Failed to send supervisor email', [
+                'request_id' => $request->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -477,50 +543,15 @@ class VacationService
             return;
         }
 
-        if ($request->user->immediate_supervisor_id !== $supervisor->id) {
-            throw new UnauthorizedAccessException('No eres el supervisor de este empleado.');
+        // Check if user is the assigned supervisor for this tenant
+        $correctSupervisor = $request->user->getSupervisorForTenant($request->tenant_id);
+
+        if (!$correctSupervisor || $correctSupervisor->id !== $supervisor->id) {
+            throw new UnauthorizedAccessException('No eres el supervisor asignado para este empleado en esta empresa.');
         }
     }
 
-    /**
-     * Notify supervisor about new vacation request.
-     */
-    protected function notifySupervisor(VacationRequest $request): void
-    {
-        $supervisor = $request->user->immediateSupervisor;
-        if (!$supervisor) {
-            return;
-        }
 
-        $dateRange = $request->start_date->format('d/m') . ' - ' . $request->end_date->format('d/m/Y');
-        $employeeName = $request->user->name . ' ' . $request->user->last_name;
-
-        // In-app notification
-        try {
-            $this->notificationService->notifyVacationCreated(
-                supervisorId: $supervisor->id,
-                vacationId: $request->id,
-                employeeName: $employeeName,
-                dateRange: $dateRange,
-                tenantId: $request->tenant_id
-            );
-        } catch (\Exception $e) {
-            Log::warning('[VacationService] Failed to create in-app notification', [
-                'request_id' => $request->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        // Email notification
-        try {
-            Mail::to($supervisor->email)->send(new VacationRequestCreatedMail($request));
-        } catch (\Exception $e) {
-            Log::warning('[VacationService] Failed to send supervisor email', [
-                'request_id' => $request->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
 
     /**
      * Notify employee about approved request.

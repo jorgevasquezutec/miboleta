@@ -179,7 +179,6 @@ export default apiClient;
 
 // Helper para extraer mensaje de error
 export const getErrorMessage = (error: unknown): string => {
-  debugger
   if (axios.isAxiosError(error)) {
     // Error de Axios con respuesta del servidor
     if (error.response?.data?.message) {

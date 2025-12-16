@@ -16,7 +16,7 @@ class ProfileService
      */
     public function getProfile(User $user): array
     {
-        $user->load(['roles', 'tenants', 'immediateSupervisor']);
+        $user->load(['roles', 'tenants']);
 
         return [
             'id' => $user->id,
@@ -37,12 +37,8 @@ class ProfileService
                 'ruc' => $t->ruc,
                 'logo_url' => $t->logo_url,
                 'is_primary' => $t->pivot->is_primary,
+                'supervisor_id' => $t->pivot->supervisor_id ?? null,
             ]),
-            'immediate_supervisor' => $user->immediateSupervisor ? [
-                'id' => $user->immediateSupervisor->id,
-                'full_name' => $user->immediateSupervisor->full_name,
-                'email' => $user->immediateSupervisor->email,
-            ] : null,
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
         ];

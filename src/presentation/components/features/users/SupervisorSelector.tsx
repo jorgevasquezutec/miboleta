@@ -50,7 +50,7 @@ export function SupervisorSelector({
 
         setIsLoading(true);
         try {
-            // Load users for each tenant and merge results
+            // Filter out current user and merge results
             const allUsers: User[] = [];
             const seenIds = new Set<string>();
 
@@ -61,41 +61,25 @@ export function SupervisorSelector({
                     tenant_id: tenantId,
                 });
 
-                // Add unique users
                 for (const user of response.data) {
-                    if (!seenIds.has(user.id)) {
+                    if (!seenIds.has(user.id) && user.id !== excludeUserId && user.status === 'active') {
                         seenIds.add(user.id);
                         allUsers.push(user);
                     }
                 }
             }
 
-            // Filter to only show valid supervisors (only admin)
-            // Root and client cannot be supervisors
-            // and exclude the current user
-            const validSupervisors = allUsers.filter(user =>
-                user.role === 'admin' &&
-                user.status === 'active' &&
-                user.id !== excludeUserId
-            );
-
-            setUsers(validSupervisors);
+            setUsers(allUsers);
         } catch (error) {
             console.error('Error loading users:', error);
             setUsers([]);
         } finally {
             setIsLoading(false);
         }
-    }, [excludeUserId, tenantIds]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [excludeUserId, JSON.stringify(tenantIds)]);
 
-    // Load initial users when popover opens
-    useEffect(() => {
-        if (open) {
-            loadUsers(search);
-        }
-    }, [open, loadUsers]);
-
-    // Debounced search
+    // Debounced search and initial load
     useEffect(() => {
         if (!open) return;
 
@@ -213,35 +197,43 @@ export function SupervisorSelector({
                             </div>
                         ) : (
                             <div className="p-1">
-                                {users.map((user) => (
-                                    <div
-                                        key={user.id}
-                                        className={`
-                                            flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer
-                                            hover:bg-gray-100 transition-colors
+                                {users.map((user) => {
+                                    const isSelectable = user.role === 'admin';
+                                    return (
+                                        <div
+                                            key={user.id}
+                                            className={`
+                                            flex items-center gap-3 px-3 py-2 rounded-md transition-colors
+                                            ${isSelectable ? 'cursor-pointer hover:bg-gray-100' : 'opacity-50 cursor-not-allowed'}
                                             ${selectedUser?.id === user.id ? 'bg-blue-50' : ''}
                                         `}
-                                        onClick={() => handleSelect(user)}
-                                    >
-                                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                            <span className="text-blue-600 text-sm font-medium">
-                                                {(user.name || '').charAt(0).toUpperCase()}
-                                            </span>
+                                            onClick={() => isSelectable && handleSelect(user)}
+                                        >
+                                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-blue-600 text-sm font-medium">
+                                                    {(user.name || '').charAt(0).toUpperCase()}
+                                                </span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-medium text-sm truncate">
+                                                        {user.full_name || `${user.name} ${user.last_name || ''}`}
+                                                    </p>
+                                                    {!isSelectable && (
+                                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1 rounded">No Admin</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {getRoleBadge(user.role)}
+                                                {selectedUser?.id === user.id && (
+                                                    <Check className="h-4 w-4 text-blue-600" />
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm truncate">
-                                                {user.full_name || `${user.name} ${user.last_name || ''}`}
-                                            </p>
-                                            <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {getRoleBadge(user.role)}
-                                            {selectedUser?.id === user.id && (
-                                                <Check className="h-4 w-4 text-blue-600" />
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

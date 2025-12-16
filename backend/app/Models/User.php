@@ -31,7 +31,6 @@ class User extends Authenticatable
         'document_type',
         'document_text',
         'phone',
-        'immediate_supervisor_id',
         'status',
         'last_login_at',
         'must_change_password',
@@ -106,27 +105,48 @@ class User extends Authenticatable
     /**
      * Tenants a los que pertenece el usuario
      */
+    /**
+     * Tenants a los que pertenece el usuario
+     */
     public function tenants(): BelongsToMany
     {
         return $this->belongsToMany(Tenant::class, 'user_tenants')
-            ->withPivot('is_primary')
+            ->withPivot(['is_primary', 'supervisor_id'])
             ->withTimestamps();
     }
 
     /**
-     * Jefe inmediato (supervisor)
+     * Obtener el supervisor para un tenant específico
      */
-    public function immediateSupervisor(): BelongsTo
+    public function getSupervisorForTenant(int $tenantId): ?User
     {
-        return $this->belongsTo(User::class, 'immediate_supervisor_id');
+        $tenant = $this->tenants()->where('tenants.id', $tenantId)->first();
+        if ($tenant && $tenant->pivot->supervisor_id) {
+            return User::find($tenant->pivot->supervisor_id);
+        }
+        return null;
     }
 
     /**
-     * Subordinados (empleados que reportan a este usuario)
+     * Subordinados (empleados que reportan a este usuario en cualquier tenant)
+     * Warning: This returns users who have this user as supervisor in ANY tenant
      */
-    public function subordinates(): HasMany
+    public function subordinates(): BelongsToMany
     {
-        return $this->hasMany(User::class, 'immediate_supervisor_id');
+        // Relación inversa many-to-many a través de la tabla pivote user_tenants
+        // Queremos usuarios donde user_tenants.supervisor_id = $this->id
+        return $this->belongsToMany(User::class, 'user_tenants', 'supervisor_id', 'user_id')
+            ->withPivot(['is_primary', 'tenant_id'])
+            ->withTimestamps();
+    }
+    
+    /**
+     * Get subordinates for a specific tenant
+     */
+    public function subordinatesForTenant(int $tenantId): BelongsToMany
+    {
+        return $this->subordinates()
+            ->wherePivot('tenant_id', $tenantId);
     }
 
     /**
