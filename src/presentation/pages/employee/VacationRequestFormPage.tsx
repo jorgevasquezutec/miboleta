@@ -21,12 +21,13 @@ import { toast } from "sonner";
 
 export function VacationRequestFormPage() {
     const navigate = useNavigate();
-    const { createVacationRequest, error } = useVacationsStore();
+    const { createVacationRequest, error, clearError } = useVacationsStore();
     const { user } = useAuthStore();
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [reason, setReason] = useState<string>("");
     const [submitting, setSubmitting] = useState(false);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
     // Calculate days requested (excluding weekends)
     const daysRequested = useMemo(() => {
@@ -52,27 +53,60 @@ export function VacationRequestFormPage() {
         return days;
     }, [dateRange]);
 
+    // Validation errors (frontend)
+    const frontendErrors = useMemo(() => {
+        const errors: Record<string, string> = {};
+
+        if (dateRange?.from || dateRange?.to) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const start = new Date(dateRange.from!);
+            start.setHours(0, 0, 0, 0);
+
+            // Validar fecha de inicio en el pasado
+            if (start < today) {
+                errors.start_date = "La fecha de inicio debe ser hoy o una fecha futura.";
+            }
+
+            // Validar días solicitados
+            if (daysRequested <= 0) {
+                errors.days_requested = "Debes seleccionar al menos un día hábil.";
+            } else if (daysRequested > 30) {
+                errors.days_requested = "No puedes solicitar más de 30 días en una sola solicitud.";
+            }
+        }
+
+        // Validar razón (opcional pero si se ingresa debe ser válida)
+        if (reason.length > 1000) {
+            errors.reason = "El motivo no puede exceder 1000 caracteres.";
+        }
+
+        return errors;
+    }, [dateRange, daysRequested, reason]);
+
     // Validation
     const isValid = useMemo(() => {
         if (!dateRange?.from || !dateRange?.to) return false;
-        if (daysRequested <= 0) return false;
-        if (daysRequested > 30) return false;
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const start = new Date(dateRange.from);
-
-        if (start < today) return false;
-
+        if (Object.keys(frontendErrors).length > 0) return false;
         return true;
-    }, [dateRange, daysRequested]);
+    }, [dateRange, frontendErrors]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!isValid || !dateRange?.from || !dateRange?.to) return;
+        if (!isValid || !dateRange?.from || !dateRange?.to) {
+            // Si hay errores de validación frontend, mostrar un toast
+            if (Object.keys(frontendErrors).length > 0) {
+                const firstError = Object.values(frontendErrors)[0];
+                toast.error(firstError);
+            }
+            return;
+        }
 
         setSubmitting(true);
+        setFieldErrors({});
+        clearError();
+
         try {
             await createVacationRequest({
                 startDate: format(dateRange.from, 'yyyy-MM-dd'),
@@ -83,7 +117,21 @@ export function VacationRequestFormPage() {
             toast.success("Solicitud de vacaciones creada correctamente");
             navigate("/vacations");
         } catch (err: any) {
-            toast.error(err.message || "Error al crear la solicitud");
+            // Extraer errores de validación por campo si existen
+            if (err.response?.data?.errors) {
+                const errors: Record<string, string> = {};
+                Object.keys(err.response.data.errors).forEach((key) => {
+                    const errorMessages = err.response.data.errors[key];
+                    if (Array.isArray(errorMessages) && errorMessages.length > 0) {
+                        errors[key] = errorMessages[0];
+                    }
+                });
+                setFieldErrors(errors);
+            }
+
+            // Mostrar toast con el error general
+            const errorMessage = err.response?.data?.message || error || "Error al crear la solicitud";
+            toast.error(errorMessage);
         } finally {
             setSubmitting(false);
         }
@@ -154,9 +202,23 @@ export function VacationRequestFormPage() {
                                 showCompare={false}
                                 align="start"
                             />
-                            <p className="text-xs text-gray-500">
-                                Selecciona las fechas de inicio y fin de tus vacaciones
-                            </p>
+                            {(frontendErrors.start_date || fieldErrors.start_date) && (
+                                <p className="text-xs text-red-600 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {frontendErrors.start_date || fieldErrors.start_date}
+                                </p>
+                            )}
+                            {(frontendErrors.end_date || fieldErrors.end_date) && (
+                                <p className="text-xs text-red-600 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {frontendErrors.end_date || fieldErrors.end_date}
+                                </p>
+                            )}
+                            {!frontendErrors.start_date && !fieldErrors.start_date && !frontendErrors.end_date && !fieldErrors.end_date && (
+                                <p className="text-xs text-gray-500">
+                                    Selecciona las fechas de inicio y fin de tus vacaciones
+                                </p>
+                            )}
                         </div>
 
                         {/* Days Summary */}
@@ -179,12 +241,12 @@ export function VacationRequestFormPage() {
                             </div>
                         )}
 
-                        {/* Validation warnings */}
-                        {daysRequested > 30 && (
+                        {/* Days requested validation error */}
+                        {(frontendErrors.days_requested || fieldErrors.days_requested) && (
                             <Alert variant="destructive">
                                 <AlertTriangle className="w-4 h-4" />
                                 <AlertDescription>
-                                    No puedes solicitar más de 30 días en una sola solicitud.
+                                    {frontendErrors.days_requested || fieldErrors.days_requested}
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -201,9 +263,16 @@ export function VacationRequestFormPage() {
                                 maxLength={1000}
                                 className="resize-none"
                             />
-                            <p className="text-xs text-gray-500 text-right">
-                                {reason.length}/1000 caracteres
-                            </p>
+                            {(frontendErrors.reason || fieldErrors.reason) ? (
+                                <p className="text-xs text-red-600 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {frontendErrors.reason || fieldErrors.reason}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-gray-500 text-right">
+                                    {reason.length}/1000 caracteres
+                                </p>
+                            )}
                         </div>
 
                         {/* Info box */}

@@ -6,6 +6,7 @@ import {
     // RejectVacationRequestDTO,
 } from "@/core/domain/entities";
 import { vacationRepository, VacationFilters } from "@/infrastructure/persistence/repositories";
+import { getErrorMessage } from "@/infrastructure/http/apiClient";
 
 interface VacationsState {
     // Vacation Requests
@@ -150,7 +151,8 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
             }));
             return newRequest;
         } catch (error: any) {
-            set({ error: error.message || 'Error al crear la solicitud', isLoading: false });
+            const errorMessage = getErrorMessage(error);
+            set({ error: errorMessage, isLoading: false });
             throw error;
         }
     },
