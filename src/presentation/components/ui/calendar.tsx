@@ -53,27 +53,27 @@ function Calendar({
             "rdp-head_cell text-muted-foreground font-normal text-[0.65rem]",
           row: "rdp-row w-full mt-1",
           cell: cn(
-            "rdp-cell relative p-0 text-center text-xs focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-range-end)]:rounded-r-md",
+            "rdp-cell relative p-0 text-center text-xs focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-blue-500 [&:has([aria-selected].day-range-end)]:rounded-r-md",
             props.mode === "range"
               ? "[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md"
               : "[&:has([aria-selected])]:rounded-md",
           ),
           day: cn(
             buttonVariants({ variant: "ghost" }),
-            "size-7 p-0 font-normal text-xs aria-selected:opacity-100",
+            "size-7 p-0 font-normal text-xs aria-selected:opacity-100 aria-selected:text-white",
           ),
           day_range_start:
-            "day-range-start aria-selected:bg-primary aria-selected:text-primary-foreground",
+            "day-range-start aria-selected:bg-blue-600 aria-selected:text-white rounded-l-md",
           day_range_end:
-            "day-range-end aria-selected:bg-primary aria-selected:text-primary-foreground",
+            "day-range-end aria-selected:bg-blue-600 aria-selected:text-white rounded-r-md",
           day_selected:
-            "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-          day_today: "bg-accent text-accent-foreground",
+            "bg-blue-600 text-white hover:bg-blue-700 hover:text-white focus:bg-blue-600 focus:text-white",
+          day_today: "bg-blue-50 text-blue-900 font-semibold",
           day_outside:
-            "day-outside text-muted-foreground aria-selected:text-muted-foreground opacity-50",
+            "day-outside text-muted-foreground aria-selected:text-white opacity-50",
           day_disabled: "text-muted-foreground opacity-50",
           day_range_middle:
-            "aria-selected:bg-accent aria-selected:text-accent-foreground",
+            "aria-selected:bg-blue-500 aria-selected:text-white",
           day_hidden: "invisible",
           ...classNames,
         }}
