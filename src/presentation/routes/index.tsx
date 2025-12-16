@@ -34,6 +34,7 @@ const VacationRequestFormPage = lazy(() => import("@/presentation/pages/employee
 // Shared pages (lazy loaded)
 const ProfilePage = lazy(() => import("@/presentation/pages/shared/ProfilePage"));
 const NotificationsPage = lazy(() => import("@/presentation/pages/shared/NotificationsPage"));
+const NotFoundPage = lazy(() => import("@/presentation/pages/NotFoundPage"));
 
 // Suspense wrapper component
 function LazyPage({ children }: { children: React.ReactNode }) {
@@ -262,6 +263,14 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      {
+        path: "*",
+        element: <LazyPage><NotFoundPage /></LazyPage>,
+      },
     ],
+  },
+  {
+    path: "*",
+    element: <LazyPage><NotFoundPage /></LazyPage>,
   },
 ]);
