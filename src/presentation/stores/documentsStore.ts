@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { Document, DocumentType, DocumentBatch, ZipPreviewResponse } from "@/core/domain/entities";
 import { documentRepository } from "@/infrastructure/persistence/repositories";
+import { getErrorMessage } from "@/infrastructure/http/apiClient";
 
 interface DocumentsState {
   // Documents
@@ -158,8 +159,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       });
     } catch (error) {
       console.error("Error in fetchDocuments:", error);
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al cargar documentos",
+        error: errorMessage,
         isLoading: false,
       });
     }
@@ -172,8 +174,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       const document = await documentRepository.findById(id);
       set({ currentDocument: document, isLoading: false });
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al cargar documento",
+        error: errorMessage,
         isLoading: false,
       });
     }
@@ -189,8 +192,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         isLoading: false,
       }));
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al eliminar documento",
+        error: errorMessage,
         isLoading: false,
       });
       throw error;
@@ -260,8 +264,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         batchesLoading: false
       });
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al cargar cargas",
+        error: errorMessage,
         batchesLoading: false,
       });
     }
@@ -274,8 +279,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       const batch = await documentRepository.getBatchById(id);
       set({ currentBatch: batch, batchesLoading: false });
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al cargar detalle de carga",
+        error: errorMessage,
         batchesLoading: false,
       });
     }
@@ -289,8 +295,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       set({ isLoading: false });
       return result;
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al subir archivo",
+        error: errorMessage,
         isLoading: false,
       });
       throw error;
@@ -304,8 +311,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       const preview = await documentRepository.previewZip(file);
       set({ zipPreview: preview, isLoading: false });
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al previsualizar ZIP",
+        error: errorMessage,
         isLoading: false,
       });
       throw error;
@@ -323,8 +331,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       const response = await documentRepository.getOrphans({ page });
       set({ orphans: response.data, orphansLoading: false });
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al cargar huérfanos",
+        error: errorMessage,
         orphansLoading: false,
       });
     }
@@ -341,8 +350,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         isLoading: false,
       }));
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al asignar documento",
+        error: errorMessage,
         isLoading: false,
       });
       throw error;
@@ -374,8 +384,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       console.log('[documentsStore] signatureTermsAccepted set to: true');
     } catch (error) {
       console.error('[documentsStore] Error accepting signature terms:', error);
+      const errorMessage = getErrorMessage(error);
       set({
-        error: error instanceof Error ? error.message : "Error al aceptar términos",
+        error: errorMessage,
         signatureLoading: false,
       });
       throw error;
@@ -390,9 +401,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       set({ signatureLoading: false });
       return result;
     } catch (error: any) {
-      const message = error?.response?.data?.error || error.message || "Error al solicitar código";
+      const errorMessage = getErrorMessage(error);
       set({
-        error: message,
+        error: errorMessage,
         signatureLoading: false,
       });
       throw error;
@@ -418,9 +429,9 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         signatureLoading: false,
       }));
     } catch (error: any) {
-      const message = error?.response?.data?.error || error.message || "Error al firmar";
+      const errorMessage = getErrorMessage(error);
       set({
-        error: message,
+        error: errorMessage,
         signatureLoading: false,
       });
       throw error;
