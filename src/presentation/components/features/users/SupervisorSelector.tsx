@@ -15,17 +15,20 @@ interface SupervisorSelectorProps {
     value: string | null;
     onChange: (supervisorId: string | null, supervisor: User | null) => void;
     excludeUserId?: string; // User cannot be their own supervisor
+    tenantIds?: string[]; // Filter supervisors by these tenant IDs
     placeholder?: string;
     disabled?: boolean;
 }
 
 /**
  * SupervisorSelector - Combobox to search and select a supervisor
+ * Filters by role=admin and optionally by organization (tenantIds)
  */
 export function SupervisorSelector({
     value,
     onChange,
     excludeUserId,
+    tenantIds = [],
     placeholder = 'Seleccionar supervisor...',
     disabled = false
 }: SupervisorSelectorProps) {
@@ -35,19 +38,43 @@ export function SupervisorSelector({
     const [isLoading, setIsLoading] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
+    // Check if selector should be disabled (no tenants selected)
+    const isDisabled = disabled || tenantIds.length === 0;
+
     // Load users with search
     const loadUsers = useCallback(async (searchTerm: string) => {
+        if (tenantIds.length === 0) {
+            setUsers([]);
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const response = await userRepository.getUsers({
-                search: searchTerm,
-                per_page: 20,
-            });
+            // Load users for each tenant and merge results
+            const allUsers: User[] = [];
+            const seenIds = new Set<string>();
 
-            // Filter to only show valid supervisors (admin, root)
+            for (const tenantId of tenantIds) {
+                const response = await userRepository.getUsers({
+                    search: searchTerm,
+                    per_page: 50,
+                    tenant_id: tenantId,
+                });
+
+                // Add unique users
+                for (const user of response.data) {
+                    if (!seenIds.has(user.id)) {
+                        seenIds.add(user.id);
+                        allUsers.push(user);
+                    }
+                }
+            }
+
+            // Filter to only show valid supervisors (only admin)
+            // Root and client cannot be supervisors
             // and exclude the current user
-            const validSupervisors = response.data.filter(user =>
-                (user.role === 'admin' || user.role === 'root') &&
+            const validSupervisors = allUsers.filter(user =>
+                user.role === 'admin' &&
                 user.status === 'active' &&
                 user.id !== excludeUserId
             );
@@ -59,7 +86,7 @@ export function SupervisorSelector({
         } finally {
             setIsLoading(false);
         }
-    }, [excludeUserId]);
+    }, [excludeUserId, tenantIds]);
 
     // Load initial users when popover opens
     useEffect(() => {
@@ -111,11 +138,9 @@ export function SupervisorSelector({
 
     const getRoleBadge = (role: string) => {
         const variants: Record<string, string> = {
-            root: 'bg-purple-100 text-purple-800',
             admin: 'bg-blue-100 text-blue-800',
         };
         const labels: Record<string, string> = {
-            root: 'Root',
             admin: 'Admin',
         };
         return (
@@ -134,7 +159,7 @@ export function SupervisorSelector({
                         role="combobox"
                         aria-expanded={open}
                         className="w-full justify-between"
-                        disabled={disabled}
+                        disabled={isDisabled}
                     >
                         {selectedUser ? (
                             <div className="flex items-center gap-2 truncate">
@@ -145,7 +170,11 @@ export function SupervisorSelector({
                                 {getRoleBadge(selectedUser.role)}
                             </div>
                         ) : (
-                            <span className="text-gray-500">{placeholder}</span>
+                            <span className="text-gray-500">
+                                {tenantIds.length === 0
+                                    ? 'Primero selecciona las organizaciones'
+                                    : placeholder}
+                            </span>
                         )}
                         <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -219,7 +248,9 @@ export function SupervisorSelector({
 
                     {/* Footer hint */}
                     <div className="border-t px-3 py-2 text-xs text-gray-500">
-                        Solo usuarios Admin o Root pueden ser supervisores
+                        {tenantIds.length === 0
+                            ? 'Selecciona al menos una organización para ver los supervisores disponibles'
+                            : 'Solo usuarios Administradores de las organizaciones seleccionadas'}
                     </div>
                 </PopoverContent>
             </Popover>

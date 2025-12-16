@@ -336,15 +336,15 @@ export function UserFormPage() {
                                     onChange={(e) => handleChange('document_text', e.target.value)}
                                     placeholder={
                                         formData.document_type === 'dni' ? '12345678' :
-                                        formData.document_type === 'ruc' ? '20123456789' :
-                                        formData.document_type === 'ce' ? '001234567890' :
-                                        'A1234567'
+                                            formData.document_type === 'ruc' ? '20123456789' :
+                                                formData.document_type === 'ce' ? '001234567890' :
+                                                    'A1234567'
                                     }
                                     maxLength={
                                         formData.document_type === 'dni' ? 8 :
-                                        formData.document_type === 'ruc' ? 11 :
-                                        formData.document_type === 'ce' ? 12 :
-                                        20
+                                            formData.document_type === 'ruc' ? 11 :
+                                                formData.document_type === 'ce' ? 12 :
+                                                    20
                                     }
                                     className={errors.document_text ? 'border-red-500' : ''}
                                 />
@@ -435,21 +435,6 @@ export function UserFormPage() {
                     </CardContent>
                 </Card>
 
-                {/* Supervisor */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Jefe Inmediato</CardTitle>
-                        <CardDescription>Asigna un supervisor para este usuario</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <SupervisorSelector
-                            value={formData.immediate_supervisor_id}
-                            onChange={(supervisorId) => handleChange('immediate_supervisor_id', supervisorId)}
-                            excludeUserId={id}
-                        />
-                    </CardContent>
-                </Card>
-
                 {/* Tenant Assignment - Only for non-root users */}
                 {formData.role !== 'root' && (
                     <Card>
@@ -470,12 +455,38 @@ export function UserFormPage() {
                                     if (errors.tenants) {
                                         setErrors(prev => ({ ...prev, tenants: '' }));
                                     }
+                                    // Clear supervisor if no tenants selected
+                                    if (ids.length === 0 && formData.immediate_supervisor_id) {
+                                        handleChange('immediate_supervisor_id', null);
+                                    }
                                 }}
                                 primaryTenantId={primaryTenantId}
                                 onPrimaryChange={setPrimaryTenantId}
                                 selectedTenants={selectedTenants}
                                 minSelections={1}
                                 error={errors.tenants}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Supervisor - Only for non-root users */}
+                {formData.role !== 'root' && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Jefe Inmediato</CardTitle>
+                            <CardDescription>
+                                {selectedTenantIds.length === 0
+                                    ? 'Primero selecciona las organizaciones para ver los supervisores disponibles'
+                                    : 'Asigna un supervisor de las organizaciones seleccionadas'}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <SupervisorSelector
+                                value={formData.immediate_supervisor_id}
+                                onChange={(supervisorId) => handleChange('immediate_supervisor_id', supervisorId)}
+                                excludeUserId={id}
+                                tenantIds={selectedTenantIds}
                             />
                         </CardContent>
                     </Card>

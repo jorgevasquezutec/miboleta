@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -42,7 +43,18 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users', 'document_text')->ignore($userId),
             ],
             'phone' => 'nullable|string|max:20',
-            'immediate_supervisor_id' => 'nullable|exists:users,id',
+            'immediate_supervisor_id' => [
+                'nullable',
+                'exists:users,id',
+                function ($attribute, $value, $fail) {
+                    if ($value) {
+                        $supervisor = User::find($value);
+                        if ($supervisor && !$supervisor->hasRole('admin')) {
+                            $fail('El jefe inmediato debe ser un usuario con rol administrador.');
+                        }
+                    }
+                },
+            ],
             'role_id' => 'sometimes|required|exists:roles,id',
             'status' => 'nullable|string|in:active,inactive,pending',
             'tenant_id' => 'nullable|exists:tenants,id',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreUserRequest extends FormRequest
@@ -29,7 +30,18 @@ class StoreUserRequest extends FormRequest
             'document_type' => 'nullable|string|in:dni,ruc,ce,passport',
             'document_text' => 'nullable|string|unique:users,document_text',
             'phone' => 'nullable|string|max:20',
-            'immediate_supervisor_id' => 'nullable|exists:users,id',
+            'immediate_supervisor_id' => [
+                'nullable',
+                'exists:users,id',
+                function ($attribute, $value, $fail) {
+                    if ($value) {
+                        $supervisor = User::find($value);
+                        if ($supervisor && !$supervisor->hasRole('admin')) {
+                            $fail('El jefe inmediato debe ser un usuario con rol administrador.');
+                        }
+                    }
+                },
+            ],
             'role_id' => 'required|exists:roles,id',
             'tenant_id' => 'required|exists:tenants,id',
             'status' => 'nullable|string|in:active,inactive,pending',
