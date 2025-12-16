@@ -35,6 +35,7 @@ const VacationRequestFormPage = lazy(() => import("@/presentation/pages/employee
 const ProfilePage = lazy(() => import("@/presentation/pages/shared/ProfilePage"));
 const NotificationsPage = lazy(() => import("@/presentation/pages/shared/NotificationsPage"));
 const NotFoundPage = lazy(() => import("@/presentation/pages/NotFoundPage"));
+const ErrorPage = lazy(() => import("@/presentation/pages/ErrorPage"));
 
 // Suspense wrapper component
 function LazyPage({ children }: { children: React.ReactNode }) {
@@ -65,22 +66,27 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LazyPage><LoginView /></LazyPage>,
+    errorElement: <LazyPage><ErrorPage /></LazyPage>,
   },
   {
     path: "/forgot-password",
     element: <LazyPage><ForgotPasswordPage /></LazyPage>,
+    errorElement: <LazyPage><ErrorPage /></LazyPage>,
   },
   {
     path: "/reset-password",
     element: <LazyPage><ResetPasswordPage /></LazyPage>,
+    errorElement: <LazyPage><ErrorPage /></LazyPage>,
   },
   {
     path: "/force-change-password",
     element: <LazyPage><ForceChangePasswordPage /></LazyPage>,
+    errorElement: <LazyPage><ErrorPage /></LazyPage>,
   },
   {
     path: "/",
     element: <RootLayout />,
+    errorElement: <LazyPage><ErrorPage /></LazyPage>,
     children: [
       {
         index: true,
