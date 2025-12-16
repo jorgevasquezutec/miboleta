@@ -1,6 +1,6 @@
 # 📋 TODO - Sistema de Gestión Documental "MiBoleta"
 
-**Última actualización:** 2025-12-15 18:45  
+**Última actualización:** 2025-12-15 19:20  
 **Estado general del proyecto:** ~99% completado
 
 ---
@@ -104,6 +104,13 @@ src/
 └── shared/                 # Utils, config
 ```
 
+### Mejoras de UX (2025-12-15)
+- ✅ **PDFViewer con thumbnails** - Barra lateral con miniaturas de páginas, navegación por clic
+- ✅ **Página 404 personalizada** - Diseño consistente con la app, botones de navegación
+- ✅ **DateRangePicker azul** - Todos los días del rango seleccionado en azul sólido
+- ✅ **Vacaciones siempre visibles** - Sección de vacaciones siempre visible en dashboard
+- ✅ **Hora en fecha de subida** - DocumentViewer muestra fecha y hora
+
 ---
 
 ## ⏳ Módulos Pendientes
@@ -138,6 +145,8 @@ Deployment:
 ### Frontend
 - [x] ~~Persistencia de filtros en URL~~ ✅ Completado
 - [x] ~~Calendario visual de vacaciones~~ ✅ Completado (VacationCalendar en TeamVacationsPage)
+- [x] ~~Thumbnails en PDFViewer~~ ✅ Completado
+- [x] ~~Página 404 personalizada~~ ✅ Completado
 - [ ] PWA (service worker)
 - [ ] Dark mode
 - [ ] Lazy loading de rutas
@@ -171,4 +180,5 @@ Deployment:
 
 ---
 
-*Última actualización: 2025-12-15 18:45*
+*Última actualización: 2025-12-15 19:20*
+
