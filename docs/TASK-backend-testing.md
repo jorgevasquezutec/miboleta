@@ -1,8 +1,28 @@
 # TASK: Testing Backend con PHPUnit
 
-**Fecha:** 2025-12-15  
-**Estado:** Pendiente  
+**Fecha:** 2025-12-15
+**Estado:** ✅ Tests Unitarios Completados - En Progreso
 **Prioridad:** Alta
+**Última actualización:** 2025-12-15 20:30
+
+---
+
+## ✅ Estado Actual
+
+**Tests Totales:** 63 passed, 6 failed, 1 skipped (155 assertions)
+
+### Tests Unitarios ✅
+- ✅ **39 passed** - UserTest, TenantTest, DocumentTest, VacationRequestTest
+- ✅ Factories completas (User, Tenant, Document, DocumentType, VacationRequest)
+
+### Tests de Feature (API) 🟡
+- ✅ **AuthenticationTest** - 7 passed, 1 skipped (8 tests)
+- ✅ **DocumentsControllerTest** - 6 passed, 3 failed (9 tests)
+- ✅ **VacationsControllerTest** - 10 passed, 3 failed (14 tests)
+
+**Failures**: Relacionados con endpoints faltantes/diferentes en el backend:
+- Vacations: cancel, approve, reject endpoints (405/404)
+- Documents: algunos filtros necesitan ajustes
 
 ---
 
@@ -667,11 +687,11 @@ ls backend/database/factories/
 ```
 
 Factories necesarias:
-- `UserFactory.php` ✓
-- `TenantFactory.php` ✓
-- `DocumentFactory.php`
-- `VacationRequestFactory.php`
-- `DocumentTypeFactory.php`
+- ✅ `UserFactory.php`
+- ✅ `TenantFactory.php`
+- ✅ `DocumentFactory.php`
+- ✅ `VacationRequestFactory.php`
+- ✅ `DocumentTypeFactory.php`
 
 ---
 
@@ -708,13 +728,18 @@ php artisan test --parallel
 
 ## Criterios de Aceptación
 
-- [ ] PHPUnit configurado correctamente
-- [ ] Factories para todos los modelos principales
-- [ ] Tests unitarios para modelos
-- [ ] Tests de feature para endpoints de API
+- [x] PHPUnit configurado correctamente
+- [x] Factories para todos los modelos principales
+- [x] Tests unitarios para modelos (39 tests pasando)
+- [x] Tests de feature para endpoints de API (Alta prioridad completados: Auth, Documents, Vacations)
 - [ ] Tests para servicios principales
 - [ ] Al menos 70% de cobertura en código crítico
 - [ ] CI/CD ejecuta tests automáticamente
+
+### Archivos Creados
+- `backend/tests/Feature/Auth/AuthenticationTest.php` ✅
+- `backend/tests/Feature/Api/DocumentsControllerTest.php` ✅
+- `backend/tests/Feature/Api/VacationsControllerTest.php` ✅
 
 ---
 

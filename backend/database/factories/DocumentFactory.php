@@ -22,14 +22,18 @@ class DocumentFactory extends Factory
      */
     public function definition(): array
     {
+        $user = User::factory();
+
         return [
             'tenant_id' => Tenant::factory(),
-            'user_id' => User::factory(),
+            'user_id' => $user,
             'doc_type_id' => DocumentType::factory(),
             'period' => now()->format('Y-m'),
             'file_path' => 'documents/' . fake()->uuid() . '.pdf',
             'file_size' => fake()->numberBetween(10000, 500000),
             'original_name' => fake()->word() . '.pdf',
+            'employee_document_number' => fake()->numerify('########'),
+            'uploaded_by' => $user,
             'status' => 'pending',
             'requires_signature' => true,
             'notified' => false,
@@ -61,6 +65,7 @@ class DocumentFactory extends Factory
         return $this->state(fn(array $attributes) => [
             'status' => 'orphan',
             'user_id' => null,
+            'employee_document_number' => fake()->numerify('########'),
         ]);
     }
 

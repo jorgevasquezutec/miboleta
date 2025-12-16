@@ -305,14 +305,16 @@ class VacationRequest extends Model
      */
     public function getDurationTextAttribute(): string
     {
-        $days = $this->days_requested;
+        $days = (float)$this->days_requested;
 
         if ($days == 1) {
             return '1 día';
         } elseif ($days == 0.5) {
             return 'Medio día';
         } else {
-            return "{$days} días";
+            // Remove unnecessary decimals
+            $daysFormatted = $days == floor($days) ? (int)$days : $days;
+            return "{$daysFormatted} días";
         }
     }
 
