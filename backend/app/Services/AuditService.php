@@ -30,7 +30,7 @@ class AuditService
         // Get current user if not provided
         $user = Auth::user();
         $userId = $userId ?? $user?->id;
-        $tenantId = $tenantId ?? $user?->current_tenant_id;
+        $tenantId = $tenantId ?? $user?->primaryTenant()?->id;
 
         $auditLog = AuditLog::create([
             'user_id' => $userId,

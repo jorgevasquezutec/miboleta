@@ -188,6 +188,14 @@ function Sidebar({ isExpanded }: SidebarProps) {
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
     { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2 },
     { label: "Usuarios", path: "/users", icon: Users },
+    {
+      label: "Vacaciones",
+      path: "/vacations",
+      icon: Calendar,
+      children: [
+        { label: "Histórico General", path: "/vacation-history", icon: History },
+      ],
+    },
     { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
   ];
 

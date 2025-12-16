@@ -12,6 +12,7 @@ use App\Services\VacationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -44,10 +45,19 @@ class VacationRequestController extends Controller
         $user = Auth::user();
         $role = $user->getCurrentRole();
 
+        // For root users, allow tenant_id from query params
+        // For other users, use header or first tenant
+        $tenantId = ($role === 'root' && $request->query('tenant_id'))
+            ? $request->query('tenant_id')
+            : ($request->header('X-Tenant-Id') ?? $user->tenants->first()?->id);
+
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'tenant_id' => $tenantId,
             'status' => $request->status,
             'year' => $request->year,
+            'date_from' => $request->date_from,
+            'date_to' => $request->date_to,
+            'search' => $request->search,
             'per_page' => $request->get('per_page', 15),
         ];
 

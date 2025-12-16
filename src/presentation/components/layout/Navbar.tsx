@@ -79,7 +79,10 @@ export function Navbar({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-3 pl-2">
                 <Avatar>
-                  <AvatarImage src="" />
+                  <AvatarImage
+                    src={user?.avatar_url || ""}
+                    key={user?.avatar_url || 'no-avatar'}
+                  />
                   <AvatarFallback
                     className="text-white"
                     style={{ backgroundColor: brandingPrimaryColor }}

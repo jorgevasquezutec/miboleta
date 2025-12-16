@@ -136,7 +136,10 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const updatedUser = await userRepository.update(user.id, updates);
+          // Use /profile endpoint for self-update (not /users/{id} which requires admin)
+          const apiClient = (await import('@/infrastructure/http/apiClient')).default;
+          const response = await apiClient.put<{ user: User }>('/profile', updates);
+          const updatedUser = response.data.user;
 
           set({
             user: updatedUser,

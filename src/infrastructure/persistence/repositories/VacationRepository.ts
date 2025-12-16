@@ -11,6 +11,10 @@ export interface VacationFilters {
     status?: string;
     year?: number;
     wasTaken?: 'true' | 'false' | 'pending' | 'all';
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+    tenantId?: number;
 }
 
 export interface PaginatedVacationRequests {
@@ -210,6 +214,10 @@ export class VacationRepository {
         if (filters?.wasTaken && filters.wasTaken !== 'all') {
             params.append('was_taken', filters.wasTaken);
         }
+        if (filters?.dateFrom) params.append('date_from', filters.dateFrom);
+        if (filters?.dateTo) params.append('date_to', filters.dateTo);
+        if (filters?.search) params.append('search', filters.search);
+        if (filters?.tenantId) params.append('tenant_id', filters.tenantId.toString());
         // Request all tenant vacation history
         params.append('scope', 'tenant');
 

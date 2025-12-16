@@ -135,7 +135,19 @@ export class ReportsRepository {
                 responseType: 'blob',
             });
             return response.data;
-        } catch (error) {
+        } catch (error: any) {
+            // If response is a blob, try to parse it as JSON to get error message
+            if (error?.response?.data instanceof Blob) {
+                try {
+                    const text = await error.response.data.text();
+                    const json = JSON.parse(text);
+                    throw new Error(json.message || json.error || 'Error al exportar');
+                } catch (parseError) {
+                    if (parseError instanceof Error && parseError.message !== 'Error al exportar') {
+                        throw parseError;
+                    }
+                }
+            }
             throw new Error(getErrorMessage(error));
         }
     }

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { format, parse } from "date-fns";
 import {
     FileText,
     RefreshCw,
@@ -14,10 +15,9 @@ import {
     Building2,
     Calendar,
     Upload,
-    X,
 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
+import { Card, CardContent } from "@/presentation/components/ui/card";
 import {
     Table,
     TableBody,
@@ -36,6 +36,7 @@ import {
     SelectValue,
 } from "@/presentation/components/ui/select";
 import { Skeleton } from "@/presentation/components/ui/skeleton";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { useUrlFilters } from "@/presentation/hooks";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -122,6 +123,8 @@ export function AuditLogsPage() {
             action: 'all',
             category: 'all',
             tenant_id: '',
+            date_from: '',
+            date_to: '',
             page: 1,
             per_page: 20,
         }
@@ -131,6 +134,12 @@ export function AuditLogsPage() {
     const [searchInput, setSearchInput] = useState(filters.search);
     const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+    // Parse dates from URL
+    const dateRange: DateRange | undefined = filters.date_from ? {
+        from: parse(filters.date_from, 'yyyy-MM-dd', new Date()),
+        to: filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined,
+    } : undefined;
 
     // Get tenant ID - for root use selected, for admin use currentTenant
     const tenantId = isRoot
@@ -178,6 +187,8 @@ export function AuditLogsPage() {
                 per_page: filters.per_page,
                 search: filters.search || undefined,
                 action: filters.action && filters.action !== 'all' ? filters.action : undefined,
+                start_date: filters.date_from || undefined,
+                end_date: filters.date_to || undefined,
             };
 
             const response = await reportsRepository.getAuditLogs(reportFilters);
@@ -189,7 +200,7 @@ export function AuditLogsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [tenantId, filters.page, filters.per_page, filters.search, filters.action]);
+    }, [tenantId, filters.page, filters.per_page, filters.search, filters.action, filters.date_from, filters.date_to]);
 
     useEffect(() => {
         fetchLogs();
@@ -216,6 +227,14 @@ export function AuditLogsPage() {
         setFilters({ per_page: perPage, page: 1 });
     };
 
+    const handleDateRangeChange = (values: { range: DateRange }) => {
+        setFilters({
+            date_from: values.range.from ? format(values.range.from, 'yyyy-MM-dd') : '',
+            date_to: values.range.to ? format(values.range.to, 'yyyy-MM-dd') : '',
+            page: 1,
+        });
+    };
+
     // Export
     const handleExport = async () => {
         setIsExporting(true);
@@ -224,6 +243,8 @@ export function AuditLogsPage() {
                 tenant_id: tenantId,
                 search: filters.search || undefined,
                 action: filters.action && filters.action !== 'all' ? filters.action : undefined,
+                start_date: filters.date_from || undefined,
+                end_date: filters.date_to || undefined,
             });
             const filename = `auditoria_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
@@ -241,7 +262,6 @@ export function AuditLogsPage() {
         resetFilters();
     };
 
-    const hasFilters = filters.search || (filters.action && filters.action !== 'all') || (filters.category && filters.category !== 'all') || filters.tenant_id;
 
     return (
         <div className="space-y-6">
@@ -284,75 +304,105 @@ export function AuditLogsPage() {
 
             {/* Filters */}
             <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base font-medium flex items-center gap-2">
-                        <Filter className="w-4 h-4" />
-                        Filtros
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <CardContent className="p-4">
+                    <div className="flex flex-wrap gap-3 items-end">
+                        {/* Date Range Picker */}
+                        <div className="min-w-[200px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Rango de fechas
+                            </label>
+                            <DateRangePicker
+                                initialDateFrom={dateRange?.from}
+                                initialDateTo={dateRange?.to}
+                                onUpdate={handleDateRangeChange}
+                                showCompare={false}
+                                align="start"
+                                compact
+                            />
+                        </div>
+
                         {/* Tenant Filter (only for root) */}
                         {isRoot && (
-                            <div>
+                            <div className="min-w-[180px]">
+                                <label className="text-xs font-medium mb-1 block text-gray-600">
+                                    Empresa
+                                </label>
                                 <TenantAutocompleteSelector
                                     value={filters.tenant_id || null}
                                     onChange={handleTenantChange}
                                     selectedTenant={selectedTenant}
-                                    placeholder="Todas las organizaciones"
+                                    placeholder="Todas"
                                 />
                             </div>
                         )}
 
-                        {/* Search */}
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <Input
-                                placeholder="Buscar por usuario..."
-                                className="pl-9"
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                            />
+                        {/* Category Filter */}
+                        <div className="min-w-[140px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Categoría
+                            </label>
+                            <Select value={filters.category} onValueChange={handleCategoryChange}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Todas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todas</SelectItem>
+                                    <SelectItem value="user">Usuarios</SelectItem>
+                                    <SelectItem value="document">Documentos</SelectItem>
+                                    <SelectItem value="vacation">Vacaciones</SelectItem>
+                                    <SelectItem value="tenant">Organizaciones</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
-                        {/* Category Filter */}
-                        <Select value={filters.category} onValueChange={handleCategoryChange}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Todas las categorías" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todas las categorías</SelectItem>
-                                <SelectItem value="user">Usuarios</SelectItem>
-                                <SelectItem value="document">Documentos</SelectItem>
-                                <SelectItem value="vacation">Vacaciones</SelectItem>
-                                <SelectItem value="tenant">Organizaciones</SelectItem>
-                            </SelectContent>
-                        </Select>
-
                         {/* Action Filter */}
-                        <Select value={filters.action} onValueChange={handleActionChange}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Todas las acciones" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todas las acciones</SelectItem>
-                                <SelectItem value="user.login">Inicio de sesión</SelectItem>
-                                <SelectItem value="user.logout">Cierre de sesión</SelectItem>
-                                <SelectItem value="user.login_failed">Login fallido</SelectItem>
-                                <SelectItem value="document.signed">Firma de documento</SelectItem>
-                                <SelectItem value="document.viewed">Visualización</SelectItem>
-                                <SelectItem value="vacation.approved">Vacaciones aprobadas</SelectItem>
-                                <SelectItem value="vacation.rejected">Vacaciones rechazadas</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div className="min-w-[160px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Acción
+                            </label>
+                            <Select value={filters.action} onValueChange={handleActionChange}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Todas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todas las acciones</SelectItem>
+                                    <SelectItem value="user.login">Inicio de sesión</SelectItem>
+                                    <SelectItem value="user.logout">Cierre de sesión</SelectItem>
+                                    <SelectItem value="user.login_failed">Login fallido</SelectItem>
+                                    <SelectItem value="document.signed">Firma de documento</SelectItem>
+                                    <SelectItem value="document.viewed">Visualización</SelectItem>
+                                    <SelectItem value="vacation.approved">Vacaciones aprobadas</SelectItem>
+                                    <SelectItem value="vacation.rejected">Vacaciones rechazadas</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                        {/* Clear Filters */}
-                        {hasFilters && (
-                            <Button variant="ghost" onClick={clearFilters} className="gap-2">
-                                <X className="w-4 h-4" />
-                                Limpiar filtros
-                            </Button>
-                        )}
+                        {/* Search */}
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Buscar usuario
+                            </label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                <Input
+                                    placeholder="Nombre o email..."
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    className="pl-8 h-9"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Limpiar filtros */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={clearFilters}
+                            className="h-9 whitespace-nowrap"
+                        >
+                            <Filter className="w-3.5 h-3.5 mr-1.5" />
+                            Limpiar
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
@@ -388,6 +438,7 @@ export function AuditLogsPage() {
                                 <TableRow>
                                     <TableHead className="w-12"></TableHead>
                                     <TableHead>Usuario</TableHead>
+                                    {isRoot && <TableHead>Empresa</TableHead>}
                                     <TableHead>Acción</TableHead>
                                     <TableHead>Detalle</TableHead>
                                     <TableHead>IP</TableHead>
@@ -409,6 +460,11 @@ export function AuditLogsPage() {
                                                     <span className="block text-xs text-gray-500">{log.user.email}</span>
                                                 )}
                                             </TableCell>
+                                            {isRoot && (
+                                                <TableCell className="text-gray-700">
+                                                    {log.tenant?.name || '-'}
+                                                </TableCell>
+                                            )}
                                             <TableCell>
                                                 {actionDescriptions[log.action] || log.action}
                                             </TableCell>

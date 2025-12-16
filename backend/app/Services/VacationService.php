@@ -373,9 +373,13 @@ class VacationService
         $query = VacationRequest::with(['user', 'approvedByUser', 'rejectedByUser', 'confirmedByUser'])
             ->orderBy('created_at', 'desc');
 
-        // Apply tenant filter for non-root users
+        // Apply tenant filter:
+        // - Non-root users always filter by tenant
+        // - Root users only filter if they explicitly specify a tenant_id
         if ($role !== 'root' && $tenantId) {
             $query->forTenant($tenantId);
+        } elseif ($role === 'root' && !empty($filters['tenant_id'])) {
+            $query->forTenant($filters['tenant_id']);
         }
 
         if (!empty($filters['status'])) {
@@ -398,6 +402,24 @@ class VacationService
             }
         }
 
+        // Date range filters (by created_at)
+        if (!empty($filters['date_from'])) {
+            $query->where('created_at', '>=', $filters['date_from'] . ' 00:00:00');
+        }
+
+        if (!empty($filters['date_to'])) {
+            $query->where('created_at', '<=', $filters['date_to'] . ' 23:59:59');
+        }
+
+        // Search filter (by user name)
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
         return $query->paginate($filters['per_page'] ?? 15);
     }
 
@@ -519,9 +541,23 @@ class VacationService
             ]);
         }
 
-        // Email notification
+        // Email notification with CC to root users
         try {
-            Mail::to($request->user->email)->send(new VacationRequestApprovedMail($request));
+            // Get all root users emails for CC
+            $rootEmails = User::whereHas('roles', function ($query) {
+                $query->where('name', 'root');
+            })->where('status', 'active')
+                ->pluck('email')
+                ->toArray();
+
+            $mail = Mail::to($request->user->email);
+
+            // Add CC if there are root users
+            if (!empty($rootEmails)) {
+                $mail->cc($rootEmails);
+            }
+
+            $mail->send(new VacationRequestApprovedMail($request));
         } catch (\Exception $e) {
             Log::warning('[VacationService] Failed to send approval email', [
                 'request_id' => $request->id,

@@ -86,6 +86,10 @@ export interface AuditLog {
         name: string;
         email: string;
     };
+    tenant?: {
+        id: number;
+        name: string;
+    };
 }
 
 // Audit Actions grouped by category
@@ -101,6 +105,8 @@ export interface ReportFilters {
     tenant_id?: number;
     start_date?: string;
     end_date?: string;
+    date_from?: string;
+    date_to?: string;
     status?: string;
     document_type?: string;
     year?: number;

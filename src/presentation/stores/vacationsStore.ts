@@ -265,6 +265,9 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
                 perPage: params?.perPage ?? get().perPage,
                 status: params?.status,
                 year: params?.year ?? get().yearFilter ?? undefined,
+                dateFrom: params?.dateFrom,
+                dateTo: params?.dateTo,
+                search: params?.search,
             };
 
             const result = await vacationRepository.getAllHistory(filters);

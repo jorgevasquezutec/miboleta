@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { format, parse } from "date-fns";
 import {
     History,
     Loader2,
@@ -33,12 +34,15 @@ import {
     TableRow,
     TablePagination,
 } from "@/presentation/components/ui/table";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
 import { useUrlFilters } from "@/presentation/hooks";
 import { VacationStatusBadge } from "@/presentation/components/features/vacations";
 import { formatDate } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
+import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
+import { Tenant } from "@/core/domain/entities/Tenant";
 import { toast } from "sonner";
 
 // Status badge helper component
@@ -77,14 +81,17 @@ export function VacationHistoryPage() {
         error,
     } = useVacationsStore();
 
-    const { currentTenant } = useAuthStore();
+    const { currentTenant, user } = useAuthStore();
+    const isRoot = user?.role === 'root';
 
     // URL-synced filters
     const { filters, setFilters, resetFilters } = useUrlFilters({
         defaultValues: {
             status: 'all',
-            year: 'all',
             search: '',
+            tenant_id: '',
+            date_from: '',
+            date_to: '',
             page: 1,
             per_page: 10,
         }
@@ -92,12 +99,22 @@ export function VacationHistoryPage() {
 
     // Local state for search input (debounce)
     const [searchInput, setSearchInput] = useState(filters.search);
+    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Get available years for filter (current year and 4 previous)
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+    // Get tenant ID - for root use selected, for admin use currentTenant
+    const tenantId = isRoot
+        ? (filters.tenant_id ? Number(filters.tenant_id) : undefined)
+        : (currentTenant?.id ? Number(currentTenant.id) : undefined);
+
+
+
+    // Parse dates from URL
+    const dateRange: DateRange | undefined = filters.date_from ? {
+        from: parse(filters.date_from, 'yyyy-MM-dd', new Date()),
+        to: filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined,
+    } : undefined;
 
     // Debounce search
     useEffect(() => {
@@ -127,16 +144,22 @@ export function VacationHistoryPage() {
             page: filters.page,
             perPage: filters.per_page,
             status: filters.status !== 'all' ? filters.status : undefined,
-            year: filters.year !== 'all' ? parseInt(filters.year) : undefined,
+            dateFrom: filters.date_from || undefined,
+            dateTo: filters.date_to || undefined,
+            search: filters.search || undefined,
+            tenantId: tenantId,
         });
-    }, [filters.status, filters.year, filters.page, filters.per_page, currentTenant, fetchHistoryRequests]);
+    }, [filters.status, filters.page, filters.per_page, filters.date_from, filters.date_to, filters.search, filters.tenant_id, tenantId, fetchHistoryRequests]);
 
     const handleRefresh = () => {
         fetchHistoryRequests({
             page: filters.page,
             perPage: filters.per_page,
             status: filters.status !== 'all' ? filters.status : undefined,
-            year: filters.year !== 'all' ? parseInt(filters.year) : undefined,
+            dateFrom: filters.date_from || undefined,
+            dateTo: filters.date_to || undefined,
+            search: filters.search || undefined,
+            tenantId: tenantId,
         });
     };
 
@@ -144,8 +167,19 @@ export function VacationHistoryPage() {
         setFilters({ status: value, page: 1 });
     };
 
-    const handleYearChange = (value: string) => {
-        setFilters({ year: value, page: 1 });
+    const handleTenantChange = (id: string | null) => {
+        setFilters({ tenant_id: id || '', page: 1 });
+        if (!id) setSelectedTenant(null);
+    };
+
+
+
+    const handleDateRangeChange = (values: { range: DateRange }) => {
+        setFilters({
+            date_from: values.range.from ? format(values.range.from, 'yyyy-MM-dd') : '',
+            date_to: values.range.to ? format(values.range.to, 'yyyy-MM-dd') : '',
+            page: 1,
+        });
     };
 
     const handlePageChange = (newPage: number) => {
@@ -157,17 +191,23 @@ export function VacationHistoryPage() {
     const handleExport = async () => {
         setIsExporting(true);
         try {
-            const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
             const blob = await reportsRepository.exportVacations({
                 tenant_id: tenantId,
                 status: filters.status !== 'all' ? filters.status : undefined,
-                year: filters.year !== 'all' ? parseInt(filters.year) : undefined,
+                date_from: filters.date_from || undefined,
+                date_to: filters.date_to || undefined,
+                search: filters.search || undefined,
             });
             const filename = `vacaciones_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
             toast.success('Exportación completada');
-        } catch (error) {
-            toast.error('Error al exportar vacaciones');
+        } catch (error: any) {
+            // Try to get message from JSON response or error object
+            const errorMessage = error?.response?.data?.message
+                || error?.response?.data?.error
+                || error?.message
+                || 'Error al exportar vacaciones';
+            toast.error(errorMessage);
         } finally {
             setIsExporting(false);
         }
@@ -276,48 +316,87 @@ export function VacationHistoryPage() {
             {/* Filters */}
             <Card>
                 <CardContent className="p-4">
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        {/* Search */}
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <Input
-                                placeholder="Buscar por nombre o email..."
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                className="pl-10"
+                    <div className="flex flex-wrap gap-3 items-end">
+                        {/* Date Range Picker */}
+                        <div className="min-w-[200px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Rango de fechas
+                            </label>
+                            <DateRangePicker
+                                initialDateFrom={dateRange?.from}
+                                initialDateTo={dateRange?.to}
+                                onUpdate={handleDateRangeChange}
+                                showCompare={false}
+                                align="start"
+                                compact
                             />
                         </div>
 
-                        {/* Status Filter */}
-                        <Select value={filters.status} onValueChange={handleStatusChange}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
-                                <Filter className="w-4 h-4 mr-2" />
-                                <SelectValue placeholder="Estado" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos los estados</SelectItem>
-                                <SelectItem value="pending">Pendientes</SelectItem>
-                                <SelectItem value="approved">Aprobadas</SelectItem>
-                                <SelectItem value="rejected">Rechazadas</SelectItem>
-                                <SelectItem value="cancelled">Canceladas</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        {/* Tenant Filter (only for root) */}
+                        {isRoot && (
+                            <div className="min-w-[180px]">
+                                <label className="text-xs font-medium mb-1 block text-gray-600">
+                                    Empresa
+                                </label>
+                                <TenantAutocompleteSelector
+                                    value={filters.tenant_id || null}
+                                    onChange={handleTenantChange}
+                                    selectedTenant={selectedTenant}
+                                    placeholder="Todas"
+                                />
+                            </div>
+                        )}
 
-                        {/* Year Filter */}
-                        <Select value={filters.year} onValueChange={handleYearChange}>
-                            <SelectTrigger className="w-full sm:w-[140px]">
-                                <Calendar className="w-4 h-4 mr-2" />
-                                <SelectValue placeholder="Año" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos los años</SelectItem>
-                                {years.map((year) => (
-                                    <SelectItem key={year} value={year.toString()}>
-                                        {year}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        {/* Status Filter */}
+                        <div className="min-w-[160px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Estado
+                            </label>
+                            <Select value={filters.status} onValueChange={handleStatusChange}>
+                                <SelectTrigger className="h-9">
+                                    <Filter className="w-3.5 h-3.5 mr-1.5" />
+                                    <SelectValue placeholder="Estado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos</SelectItem>
+                                    <SelectItem value="pending">Pendientes</SelectItem>
+                                    <SelectItem value="approved">Aprobadas</SelectItem>
+                                    <SelectItem value="rejected">Rechazadas</SelectItem>
+                                    <SelectItem value="cancelled">Canceladas</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Search */}
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Buscar empleado
+                            </label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                <Input
+                                    placeholder="Nombre o email..."
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    className="pl-8 h-9"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Limpiar filtros */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                setSearchInput('');
+                                setSelectedTenant(null);
+                                resetFilters();
+                            }}
+                            className="h-9 whitespace-nowrap"
+                        >
+                            <Filter className="w-3.5 h-3.5 mr-1.5" />
+                            Limpiar
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
@@ -346,7 +425,7 @@ export function VacationHistoryPage() {
                                 No hay solicitudes
                             </h3>
                             <p className="text-gray-600">
-                                {filters.search || filters.status !== 'all' || filters.year !== 'all'
+                                {filters.search || filters.status !== 'all' || filters.date_from
                                     ? "No se encontraron solicitudes con los filtros seleccionados"
                                     : "Aún no hay historial de vacaciones"}
                             </p>

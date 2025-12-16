@@ -36,6 +36,7 @@ export function DocumentsListPage() {
     const { user } = useAuthStore();
     const {
         documents,
+        documentTypes,
         fetchDocuments,
         fetchDocumentTypes,
         deleteDocument,
@@ -59,7 +60,6 @@ export function DocumentsListPage() {
 
     // Local state for search input (debounce)
     const [searchInput, setSearchInput] = useState(filters.search);
-    const [documentTypes, setDocumentTypes] = useState<any[]>([]);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
     const [isExporting, setIsExporting] = useState(false);
@@ -213,29 +213,30 @@ export function DocumentsListPage() {
 
             {/* Filters */}
             <Card>
-                <CardContent className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {/* Search */}
-                        <div className="md:col-span-2">
-                            <label className="text-sm font-medium mb-2 block">Usuario</label>
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Busca por Nombre, Apellido, Documento o identidad"
-                                    value={searchInput}
-                                    onChange={(e) => setSearchInput(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                                />
-                                <Button onClick={handleSearch} disabled={isLoading}>
-                                    <Search className="w-4 h-4" />
-                                </Button>
-                            </div>
+                <CardContent className="p-4">
+                    <div className="flex flex-wrap gap-3 items-end">
+                        {/* Date Range Picker */}
+                        <div className="min-w-[200px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Rango de fechas
+                            </label>
+                            <DateRangePicker
+                                initialDateFrom={dateRange?.from}
+                                initialDateTo={dateRange?.to}
+                                onUpdate={handleDateRangeChange}
+                                showCompare={false}
+                                align="start"
+                                compact
+                            />
                         </div>
 
                         {/* Document Type Filter */}
-                        <div>
-                            <label className="text-sm font-medium mb-2 block">Tipo de documento</label>
+                        <div className="min-w-[160px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Tipo documento
+                            </label>
                             <Select value={filters.doc_type_id || 'all'} onValueChange={handleDocTypeChange}>
-                                <SelectTrigger>
+                                <SelectTrigger className="h-9">
                                     <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -250,10 +251,12 @@ export function DocumentsListPage() {
                         </div>
 
                         {/* Status Filter */}
-                        <div>
-                            <label className="text-sm font-medium mb-2 block">Estado</label>
+                        <div className="min-w-[140px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Estado
+                            </label>
                             <Select value={filters.status} onValueChange={handleStatusChange}>
-                                <SelectTrigger>
+                                <SelectTrigger className="h-9">
                                     <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -267,27 +270,32 @@ export function DocumentsListPage() {
                             </Select>
                         </div>
 
-                        {/* Date Range Picker - 2 columns */}
-                        <div className="md:col-span-2">
-                            <label className="text-sm font-medium mb-2 block">Rango de fechas</label>
-                            <DateRangePicker
-                                initialDateFrom={dateRange?.from}
-                                initialDateTo={dateRange?.to}
-                                onUpdate={handleDateRangeChange}
-                                showCompare={false}
-                                align="start"
-                                compact
-                            />
+                        {/* Search */}
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Buscar usuario
+                            </label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                <Input
+                                    placeholder="Nombre, apellido o DNI..."
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                                    className="pl-8 h-9"
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="flex justify-end mt-4">
+                        {/* Limpiar filtros */}
                         <Button
                             variant="outline"
+                            size="sm"
                             onClick={handleResetFilters}
+                            className="h-9 whitespace-nowrap"
                         >
-                            <Filter className="w-4 h-4 mr-2" />
-                            Limpiar filtros
+                            <Filter className="w-3.5 h-3.5 mr-1.5" />
+                            Limpiar
                         </Button>
                     </div>
                 </CardContent>

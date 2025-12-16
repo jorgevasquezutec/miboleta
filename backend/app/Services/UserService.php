@@ -81,23 +81,84 @@ class UserService
      */
     public function updateUser(User $user, array $data): User
     {
-        $oldDocumentText = $user->document_text;
+        DB::beginTransaction();
 
-        if (isset($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
-        }
+        try {
+            $oldDocumentText = $user->document_text;
+            $oldRoleId = $user->roles()->first()?->id;
 
-        $user->update($data);
-
-        // If document_text changed, assign orphan documents
-        if (isset($data['document_text']) && $data['document_text'] !== $oldDocumentText) {
-            $primaryTenant = $user->tenants()->wherePivot('is_primary', true)->first();
-            if ($primaryTenant) {
-                $this->assignOrphanDocuments($user, $data['document_text'], $primaryTenant->id);
+            if (isset($data['password'])) {
+                $data['password'] = Hash::make($data['password']);
             }
-        }
 
-        return $user->load(['roles', 'tenants', 'immediateSupervisor']);
+            // Handle role change
+            if (isset($data['role_id']) && $data['role_id'] != $oldRoleId) {
+                // Si el nuevo rol es root (role_id = 1), remover todos los tenants
+                if ($data['role_id'] == 1) {
+                    $user->tenants()->detach();
+                    // No incluir tenant_id en la actualización
+                    unset($data['tenant_id']);
+                    unset($data['tenant_ids']);
+                    unset($data['primary_tenant_id']);
+                } else {
+                    // Si cambió de root a otro rol, asignar tenant obligatorio
+                    if ($oldRoleId == 1 && isset($data['tenant_id'])) {
+                        $this->assignTenants($user, [$data['tenant_id']], true);
+                    }
+                }
+
+                // Actualizar el rol
+                $user->roles()->sync([
+                    $data['role_id'] => [
+                        'granted_by' => auth()->id(),
+                        'granted_at' => now(),
+                    ]
+                ]);
+            }
+
+            // Handle tenant assignment for non-root users
+            if (isset($data['tenant_ids']) && is_array($data['tenant_ids']) && $data['role_id'] != 1) {
+                $primaryTenantId = $data['primary_tenant_id'] ?? $data['tenant_ids'][0];
+
+                $pivotData = [];
+                foreach ($data['tenant_ids'] as $tenantId) {
+                    $pivotData[$tenantId] = [
+                        'is_primary' => $tenantId == $primaryTenantId,
+                    ];
+                }
+
+                $user->tenants()->sync($pivotData);
+            } elseif (isset($data['tenant_id']) && $data['role_id'] != 1) {
+                // Fallback: single tenant assignment
+                $user->tenants()->sync([
+                    $data['tenant_id'] => ['is_primary' => true]
+                ]);
+            }
+
+            // Remove tenant-related fields from user update
+            unset($data['role_id'], $data['tenant_id'], $data['tenant_ids'], $data['primary_tenant_id']);
+
+            $user->update($data);
+
+            // If document_text changed, assign orphan documents
+            if (isset($data['document_text']) && $data['document_text'] !== $oldDocumentText) {
+                $primaryTenant = $user->tenants()->wherePivot('is_primary', true)->first();
+                if ($primaryTenant) {
+                    $this->assignOrphanDocuments($user, $data['document_text'], $primaryTenant->id);
+                }
+            }
+
+            DB::commit();
+
+            return $user->load(['roles', 'tenants', 'immediateSupervisor']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[UserService] Failed to update user', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 
     /**

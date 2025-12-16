@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { format, parse } from "date-fns";
 import {
     ClipboardCheck,
     Loader2,
@@ -7,13 +8,19 @@ import {
     CheckCircle,
     Clock,
     RefreshCw,
+    Download,
+    Filter,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
 import { Badge } from "@/presentation/components/ui/badge";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { VacationRequestCard, VacationRejectModal } from "@/presentation/components/features/vacations";
 import { VacationRequest } from "@/core/domain/entities";
+import { useAuthStore } from "@/presentation/stores";
+import { useUrlFilters } from "@/presentation/hooks";
+import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
 
 export function VacationApprovalsPage() {
@@ -27,9 +34,26 @@ export function VacationApprovalsPage() {
         error,
     } = useVacationsStore();
 
+    const { currentTenant } = useAuthStore();
+
+    // URL-synced filters for date range
+    const { filters, setFilters, resetFilters } = useUrlFilters({
+        defaultValues: {
+            date_from: '',
+            date_to: '',
+        }
+    });
+
     const [rejectModalOpen, setRejectModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState<VacationRequest | null>(null);
     const [processingId, setProcessingId] = useState<number | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
+
+    // Parse dates from URL
+    const dateRange: DateRange | undefined = filters.date_from ? {
+        from: parse(filters.date_from, 'yyyy-MM-dd', new Date()),
+        to: filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined,
+    } : undefined;
 
     useEffect(() => {
         fetchPendingApprovals();
@@ -73,6 +97,46 @@ export function VacationApprovalsPage() {
         fetchPendingApprovals();
     };
 
+    const handleDateRangeChange = (values: { range: DateRange }) => {
+        setFilters({
+            date_from: values.range.from ? format(values.range.from, 'yyyy-MM-dd') : '',
+            date_to: values.range.to ? format(values.range.to, 'yyyy-MM-dd') : '',
+        });
+    };
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
+            const blob = await reportsRepository.exportVacations({
+                tenant_id: tenantId,
+                status: 'pending',
+                start_date: filters.date_from || undefined,
+                end_date: filters.date_to || undefined,
+            });
+            const filename = `vacaciones_pendientes_${new Date().toISOString().split('T')[0]}.xlsx`;
+            reportsRepository.downloadBlob(blob, filename);
+            toast.success('Exportación completada');
+        } catch (error) {
+            toast.error('Error al exportar vacaciones');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    // Filter pending approvals by date range
+    const filteredApprovals = pendingApprovals.filter((request) => {
+        if (!filters.date_from) return true;
+        const requestDate = new Date(request.startDate);
+        const fromDate = parse(filters.date_from, 'yyyy-MM-dd', new Date());
+        const toDate = filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined;
+
+        if (toDate) {
+            return requestDate >= fromDate && requestDate <= toDate;
+        }
+        return requestDate >= fromDate;
+    });
+
     if (error) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -103,11 +167,55 @@ export function VacationApprovalsPage() {
                         Gestiona las solicitudes de vacaciones de tu equipo
                     </p>
                 </div>
-                <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                    Actualizar
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleExport}
+                        disabled={isExporting || filteredApprovals.length === 0}
+                    >
+                        {isExporting ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                        )}
+                        Exportar
+                    </Button>
+                    <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+                        Actualizar
+                    </Button>
+                </div>
             </div>
+
+            {/* Filters */}
+            <Card>
+                <CardContent className="p-4">
+                    <div className="flex flex-col sm:flex-row gap-4 items-end">
+                        <div className="flex-1">
+                            <label className="text-sm font-medium mb-2 block">Filtrar por rango de fechas</label>
+                            <DateRangePicker
+                                initialDateFrom={dateRange?.from}
+                                initialDateTo={dateRange?.to}
+                                onUpdate={handleDateRangeChange}
+                                showCompare={false}
+                                align="start"
+                                compact
+                            />
+                        </div>
+                        {(filters.date_from || filters.date_to) && (
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setFilters({ date_from: '', date_to: '' });
+                                }}
+                            >
+                                <Filter className="w-4 h-4 mr-2" />
+                                Limpiar filtros
+                            </Button>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -153,10 +261,15 @@ export function VacationApprovalsPage() {
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-lg flex items-center gap-2">
                         Solicitudes Pendientes
-                        {pendingApprovalsCount > 0 && (
+                        {filteredApprovals.length > 0 && (
                             <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-                                {pendingApprovalsCount}
+                                {filteredApprovals.length}
                             </Badge>
+                        )}
+                        {filters.date_from && pendingApprovalsCount !== filteredApprovals.length && (
+                            <span className="text-sm text-gray-500 font-normal">
+                                (filtradas de {pendingApprovalsCount})
+                            </span>
                         )}
                     </CardTitle>
                 </CardHeader>
@@ -165,19 +278,21 @@ export function VacationApprovalsPage() {
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                         </div>
-                    ) : pendingApprovals.length === 0 ? (
+                    ) : filteredApprovals.length === 0 ? (
                         <div className="text-center py-12">
                             <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
                             <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                ¡Todo al día!
+                                {filters.date_from ? 'No hay solicitudes en este rango' : '¡Todo al día!'}
                             </h3>
                             <p className="text-gray-600">
-                                No tienes solicitudes pendientes de aprobar
+                                {filters.date_from
+                                    ? 'No hay solicitudes pendientes en el rango de fechas seleccionado'
+                                    : 'No tienes solicitudes pendientes de aprobar'}
                             </p>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {pendingApprovals.map((request) => (
+                            {filteredApprovals.map((request) => (
                                 <VacationRequestCard
                                     key={request.id}
                                     request={request}

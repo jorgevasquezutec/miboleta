@@ -2,10 +2,40 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $user_id
+ * @property int $tenant_id
+ * @property Carbon $start_date
+ * @property Carbon $end_date
+ * @property float $days_requested
+ * @property string|null $reason
+ * @property string $status
+ * @property int|null $approved_by
+ * @property Carbon|null $approved_at
+ * @property int|null $rejected_by
+ * @property Carbon|null $rejected_at
+ * @property string|null $rejection_reason
+ * @property bool|null $was_taken
+ * @property int|null $confirmed_by
+ * @property Carbon|null $confirmed_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property-read User $user
+ * @property-read Tenant $tenant
+ * @property-read User|null $approvedByUser
+ * @property-read User|null $rejectedByUser
+ * @property-read User|null $confirmedByUser
+ * @property-read string $status_label
+ * @property-read string|null $taken_label
+ * @property-read string $duration_text
+ * @property-read string $date_range
+ */
 class VacationRequest extends Model
 {
     use HasFactory;
@@ -305,7 +335,7 @@ class VacationRequest extends Model
      */
     public function getDurationTextAttribute(): string
     {
-        $days = (float)$this->days_requested;
+        $days = (float) $this->days_requested;
 
         if ($days == 1) {
             return '1 día';
@@ -313,7 +343,7 @@ class VacationRequest extends Model
             return 'Medio día';
         } else {
             // Remove unnecessary decimals
-            $daysFormatted = $days == floor($days) ? (int)$days : $days;
+            $daysFormatted = $days == floor($days) ? (int) $days : $days;
             return "{$daysFormatted} días";
         }
     }

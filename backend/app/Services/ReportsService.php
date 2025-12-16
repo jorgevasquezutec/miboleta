@@ -294,7 +294,7 @@ class ReportsService
      */
     public function getAuditLogs(array $filters = []): LengthAwarePaginator
     {
-        $query = AuditLog::with('user:id,name,email')
+        $query = AuditLog::with(['user:id,name,email', 'tenant:id,name'])
             ->orderBy('created_at', 'desc');
 
         if (!empty($filters['tenant_id'])) {
@@ -397,6 +397,25 @@ class ReportsService
 
         if (!empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
+        }
+
+        // Date range filters (by created_at)
+        if (!empty($filters['date_from'])) {
+            $query->where('created_at', '>=', $filters['date_from'] . ' 00:00:00');
+        }
+
+        if (!empty($filters['date_to'])) {
+            $query->where('created_at', '<=', $filters['date_to'] . ' 23:59:59');
+        }
+
+        // Search filter (by user name)
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
         }
 
         return $query->get()->map(function ($vacation) {

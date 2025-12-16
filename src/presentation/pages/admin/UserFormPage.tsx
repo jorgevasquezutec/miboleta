@@ -113,8 +113,27 @@ export function UserFormPage() {
 
         if (!formData.document_text.trim()) {
             newErrors.document_text = 'El número de documento es requerido';
-        } else if (formData.document_type === 'dni' && formData.document_text.length !== 8) {
-            newErrors.document_text = 'El DNI debe tener 8 dígitos';
+        } else {
+            // Validaciones por tipo de documento
+            if (formData.document_type === 'dni') {
+                if (formData.document_text.length !== 8) {
+                    newErrors.document_text = 'El DNI debe tener 8 dígitos';
+                } else if (!/^\d+$/.test(formData.document_text)) {
+                    newErrors.document_text = 'El DNI solo debe contener números';
+                }
+            } else if (formData.document_type === 'ruc') {
+                if (formData.document_text.length !== 11) {
+                    newErrors.document_text = 'El RUC debe tener 11 dígitos';
+                } else if (!/^\d+$/.test(formData.document_text)) {
+                    newErrors.document_text = 'El RUC solo debe contener números';
+                }
+            } else if (formData.document_type === 'ce') {
+                if (formData.document_text.length !== 12) {
+                    newErrors.document_text = 'El Carné de Extranjería debe tener 12 dígitos';
+                } else if (!/^\d+$/.test(formData.document_text)) {
+                    newErrors.document_text = 'El Carné de Extranjería solo debe contener números';
+                }
+            }
         }
 
         // Non-root users must have at least one tenant
@@ -291,7 +310,11 @@ export function UserFormPage() {
                                 <Label htmlFor="document_type">Tipo de Documento</Label>
                                 <Select
                                     value={formData.document_type}
-                                    onValueChange={(value: string) => handleChange('document_type', value)}
+                                    onValueChange={(value: string) => {
+                                        handleChange('document_type', value);
+                                        // Limpiar el campo document_text al cambiar el tipo
+                                        handleChange('document_text', '');
+                                    }}
                                 >
                                     <SelectTrigger>
                                         <SelectValue />
@@ -311,9 +334,26 @@ export function UserFormPage() {
                                     id="document_text"
                                     value={formData.document_text}
                                     onChange={(e) => handleChange('document_text', e.target.value)}
-                                    placeholder="12345678"
+                                    placeholder={
+                                        formData.document_type === 'dni' ? '12345678' :
+                                        formData.document_type === 'ruc' ? '20123456789' :
+                                        formData.document_type === 'ce' ? '001234567890' :
+                                        'A1234567'
+                                    }
+                                    maxLength={
+                                        formData.document_type === 'dni' ? 8 :
+                                        formData.document_type === 'ruc' ? 11 :
+                                        formData.document_type === 'ce' ? 12 :
+                                        20
+                                    }
                                     className={errors.document_text ? 'border-red-500' : ''}
                                 />
+                                <p className="text-xs text-gray-500">
+                                    {formData.document_type === 'dni' && 'DNI: 8 dígitos'}
+                                    {formData.document_type === 'ruc' && 'RUC: 11 dígitos'}
+                                    {formData.document_type === 'ce' && 'CE: 12 dígitos'}
+                                    {formData.document_type === 'passport' && 'Pasaporte: hasta 20 caracteres'}
+                                </p>
                                 {errors.document_text && (
                                     <p className="text-sm text-red-500">{errors.document_text}</p>
                                 )}
@@ -344,7 +384,18 @@ export function UserFormPage() {
                                 <Label htmlFor="role">Rol</Label>
                                 <Select
                                     value={formData.role}
-                                    onValueChange={(value: string) => handleChange('role', value)}
+                                    onValueChange={(value: string) => {
+                                        handleChange('role', value);
+                                        // Si cambia a root, limpiar tenants
+                                        if (value === 'root') {
+                                            setSelectedTenantIds([]);
+                                            setPrimaryTenantId(null);
+                                            setSelectedTenants([]);
+                                            if (errors.tenants) {
+                                                setErrors(prev => ({ ...prev, tenants: '' }));
+                                            }
+                                        }
+                                    }}
                                     disabled={!canChangeRole}
                                 >
                                     <SelectTrigger>

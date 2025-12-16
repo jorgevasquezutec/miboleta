@@ -202,7 +202,7 @@ class ReportsController extends Controller
      * 
      * GET /api/reports/documents/export
      */
-    public function exportDocuments(Request $request): BinaryFileResponse|Response
+    public function exportDocuments(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
@@ -225,7 +225,7 @@ class ReportsController extends Controller
      * 
      * GET /api/reports/vacations/export
      */
-    public function exportVacations(Request $request): BinaryFileResponse|Response
+    public function exportVacations(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
@@ -235,6 +235,9 @@ class ReportsController extends Controller
             'status' => $request->query('status'),
             'year' => $request->query('year'),
             'user_id' => $request->query('user_id'),
+            'date_from' => $request->query('date_from'),
+            'date_to' => $request->query('date_to'),
+            'search' => $request->query('search'),
         ];
 
         $data = $this->reportsService->getVacationReportData($filters);
@@ -247,7 +250,7 @@ class ReportsController extends Controller
      * 
      * GET /api/reports/users/export
      */
-    public function exportUsers(Request $request): BinaryFileResponse|Response
+    public function exportUsers(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
@@ -269,7 +272,7 @@ class ReportsController extends Controller
      * 
      * GET /api/reports/audit/export
      */
-    public function exportAudit(Request $request): BinaryFileResponse|Response
+    public function exportAudit(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
         $role = $user->getCurrentRole();
@@ -312,7 +315,7 @@ class ReportsController extends Controller
      * 
      * GET /api/reports/batches/export
      */
-    public function exportBatches(Request $request): BinaryFileResponse|Response
+    public function exportBatches(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
@@ -334,7 +337,7 @@ class ReportsController extends Controller
      * 
      * GET /api/reports/tenants/export
      */
-    public function exportTenants(Request $request): BinaryFileResponse|Response
+    public function exportTenants(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
         $role = $user->getCurrentRole();
@@ -386,10 +389,13 @@ class ReportsController extends Controller
     /**
      * Export data to Excel (.xlsx format) using maatwebsite/excel.
      */
-    private function exportToExcel(array $data, string $filename): BinaryFileResponse|Response
+    private function exportToExcel(array $data, string $filename): BinaryFileResponse|Response|JsonResponse
     {
         if (empty($data)) {
-            return response('No hay datos para exportar', 404);
+            return response()->json([
+                'error' => 'No hay datos para exportar',
+                'message' => 'No hay datos para exportar'
+            ], 404);
         }
 
         $collection = collect($data);
