@@ -5,6 +5,7 @@ import { useAuthStore } from '@/presentation/stores/authStore';
 import { Button } from '@/presentation/components/ui/button';
 import { Input } from '@/presentation/components/ui/input';
 import { Label } from '@/presentation/components/ui/label';
+import { Badge } from '@/presentation/components/ui/badge';
 import {
     Card,
     CardContent,
@@ -474,60 +475,121 @@ export function UserFormPage() {
                     </CardContent>
                 </Card>
 
-                {/* Tenant Assignment - Only for non-root users */}
+                {/* Tenant Assignment with Supervisors - Only for non-root users */}
                 {formData.role !== 'root' && (
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Building2 className="h-5 w-5" />
-                                Organizaciones *
+                                Organizaciones y Supervisores *
                             </CardTitle>
                             <CardDescription>
-                                Selecciona las organizaciones a las que pertenecerá el usuario (mínimo una)
+                                Busca y selecciona organizaciones. Luego asigna un supervisor para cada una.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <TenantMultiSelector
-                                selectedTenantIds={selectedTenantIds}
-                                onSelectionChange={handleTenantSelectionChange}
-                                onTenantsChange={handleTenantsChange}
-                                primaryTenantId={primaryTenantId}
-                                onPrimaryChange={setPrimaryTenantId}
-                                selectedTenants={selectedTenants}
-                                minSelections={1}
-                                error={errors.tenants}
-                            />
-                        </CardContent>
-                    </Card>
-                )}
+                        <CardContent className="space-y-4">
+                            {/* Buscador/Selector - Solo muestra el popover de búsqueda */}
+                            <div>
+                                <Label className="text-sm font-medium mb-2 block">Buscar organizaciones</Label>
+                                <TenantMultiSelector
+                                    selectedTenantIds={selectedTenantIds}
+                                    onSelectionChange={handleTenantSelectionChange}
+                                    onTenantsChange={handleTenantsChange}
+                                    primaryTenantId={primaryTenantId}
+                                    onPrimaryChange={setPrimaryTenantId}
+                                    selectedTenants={selectedTenants}
+                                    minSelections={1}
+                                    error={errors.tenants}
+                                    hideSelectedTags={true}
+                                />
+                            </div>
 
-                {/* Supervisors Configuration - Per Tenant */}
-                {formData.role !== 'root' && selectedTenantIds.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Jefes Inmediatos</CardTitle>
-                            <CardDescription>
-                                Asigna un supervisor responsable en cada organización seleccionada
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {selectedTenants.filter(t => selectedTenantIds.includes(String(t.id))).map(tenant => (
-                                <div key={tenant.id} className="pt-4 first:pt-0 border-b last:border-0 pb-4 last:pb-0">
-                                    <Label className="block mb-2 font-medium">
-                                        Supervisor en <span className="text-blue-600">{tenant.name}</span>
-                                        {String(tenant.id) === primaryTenantId && (
-                                            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Principal</span>
-                                        )}
+                            {/* Lista de organizaciones seleccionadas CON supervisor integrado */}
+                            {selectedTenantIds.length > 0 && (
+                                <div className="space-y-3">
+                                    <Label className="text-sm font-medium text-gray-700">
+                                        Organizaciones seleccionadas ({selectedTenantIds.length})
                                     </Label>
-                                    <SupervisorSelector
-                                        value={supervisorsByTenant[String(tenant.id)]}
-                                        onChange={(supervisorId) => handleSupervisorChange(String(tenant.id), supervisorId)}
-                                        excludeUserId={id}
-                                        tenantIds={[String(tenant.id)]}
-                                        placeholder={`Buscar supervisor en ${tenant.name}...`}
-                                    />
+                                    {selectedTenants.filter(t => selectedTenantIds.includes(String(t.id))).map(tenant => {
+                                        const isPrimary = String(tenant.id) === primaryTenantId;
+                                        return (
+                                            <div
+                                                key={tenant.id}
+                                                className={`p-4 rounded-lg border ${
+                                                    isPrimary ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+                                                }`}
+                                            >
+                                                {/* Header: Nombre de organización con acciones */}
+                                                <div className="flex items-start justify-between gap-3 mb-3">
+                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-medium text-gray-900">{tenant.name}</span>
+                                                                {isPrimary && (
+                                                                    <Badge className="bg-blue-600 text-white text-xs shrink-0">
+                                                                        Primaria
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 mt-0.5">RUC: {tenant.ruc}</p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        {!isPrimary && selectedTenantIds.length >= 1 && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => setPrimaryTenantId(String(tenant.id))}
+                                                                className="h-8 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                            >
+                                                                Marcar primaria
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => {
+                                                                const newIds = selectedTenantIds.filter(id => id !== String(tenant.id));
+                                                                handleTenantSelectionChange(newIds);
+                                                                if (isPrimary && newIds.length > 0) {
+                                                                    setPrimaryTenantId(newIds[0]);
+                                                                }
+                                                            }}
+                                                            className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                                        >
+                                                            ×
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Selector de Supervisor integrado */}
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs font-medium text-gray-600">
+                                                        Supervisor / Jefe inmediato
+                                                    </Label>
+                                                    <SupervisorSelector
+                                                        value={supervisorsByTenant[String(tenant.id)]}
+                                                        onChange={(supervisorId) => handleSupervisorChange(String(tenant.id), supervisorId)}
+                                                        excludeUserId={id}
+                                                        tenantIds={[String(tenant.id)]}
+                                                        placeholder="Seleccionar supervisor..."
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                            ))}
+                            )}
+
+                            {selectedTenantIds.length === 0 && (
+                                <p className="text-sm text-gray-500 text-center py-4">
+                                    No hay organizaciones seleccionadas. Usa el buscador para agregar.
+                                </p>
+                            )}
                         </CardContent>
                     </Card>
                 )}

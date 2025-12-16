@@ -47,6 +47,8 @@ export interface TenantMultiSelectorProps {
   disabled?: boolean;
   /** Callback con info detallada de tenants seleccionados */
   onTenantsChange?: (tenants: TenantInfo[]) => void;
+  /** Ocultar las tarjetas de organizaciones seleccionadas */
+  hideSelectedTags?: boolean;
 }
 
 /**
@@ -76,6 +78,7 @@ export function TenantMultiSelector({
   error,
   disabled = false,
   onTenantsChange,
+  hideSelectedTags = false,
 }: TenantMultiSelectorProps) {
   const [open, setOpen] = useState(false);
 
@@ -342,7 +345,7 @@ export function TenantMultiSelector({
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       {/* Tags de organizaciones seleccionadas */}
-      {selectedTenantsInfo.length > 0 && (
+      {!hideSelectedTags && selectedTenantsInfo.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium text-gray-700">
             Organizaciones seleccionadas ({selectedTenantsInfo.length})
