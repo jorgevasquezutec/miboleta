@@ -34,6 +34,7 @@ class UserResource extends JsonResource
             'immediate_supervisor_id' => $this->immediate_supervisor_id,
             'immediate_supervisor' => new UserSummaryResource($this->whenLoaded('immediateSupervisor')),
             'subordinates' => UserSummaryResource::collection($this->whenLoaded('subordinates')),
+            'avatar_url' => $this->avatar_url,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'last_login_at' => $this->last_login_at,

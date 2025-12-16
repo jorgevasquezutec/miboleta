@@ -63,9 +63,9 @@ apiClient.interceptors.request.use(
         const { state } = JSON.parse(authStorage);
         const currentTenantId = state?.currentTenant?.id;
 
-        // Agregar X-Tenant-ID header si hay tenant seleccionado
+        // Agregar X-Tenant-Id header si hay tenant seleccionado
         if (currentTenantId) {
-          config.headers['X-Tenant-ID'] = currentTenantId;
+          config.headers['X-Tenant-Id'] = currentTenantId;
         }
       } catch (error) {
         console.error('Error parsing auth storage:', error);

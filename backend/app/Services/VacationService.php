@@ -236,6 +236,11 @@ class VacationService
             ->forUser($user->id)
             ->orderBy('created_at', 'desc');
 
+        // Filter by tenant if provided
+        if (!empty($filters['tenant_id'])) {
+            $query->forTenant($filters['tenant_id']);
+        }
+
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }

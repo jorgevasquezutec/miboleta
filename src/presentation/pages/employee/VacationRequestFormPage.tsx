@@ -29,7 +29,7 @@ export function VacationRequestFormPage() {
     const [submitting, setSubmitting] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-    // Calculate days requested (excluding weekends)
+    // Calculate days requested (all calendar days)
     const daysRequested = useMemo(() => {
         if (!dateRange?.from || !dateRange?.to) return 0;
 
@@ -38,19 +38,11 @@ export function VacationRequestFormPage() {
 
         if (end < start) return 0;
 
-        let days = 0;
-        const current = new Date(start);
+        // Calculate difference in days (inclusive)
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-        while (current <= end) {
-            const dayOfWeek = current.getDay();
-            // Exclude weekends (0 = Sunday, 6 = Saturday)
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                days++;
-            }
-            current.setDate(current.getDate() + 1);
-        }
-
-        return days;
+        return diffDays;
     }, [dateRange]);
 
     // Validation errors (frontend)
@@ -70,7 +62,7 @@ export function VacationRequestFormPage() {
 
             // Validar días solicitados
             if (daysRequested <= 0) {
-                errors.days_requested = "Debes seleccionar al menos un día hábil.";
+                errors.days_requested = "Debes seleccionar al menos un día.";
             } else if (daysRequested > 30) {
                 errors.days_requested = "No puedes solicitar más de 30 días en una sola solicitud.";
             }
@@ -229,7 +221,7 @@ export function VacationRequestFormPage() {
                                         <Calendar className="w-5 h-5 text-blue-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm text-blue-700">Días solicitados (hábiles)</p>
+                                        <p className="text-sm text-blue-700">Días solicitados</p>
                                         <p className="text-2xl font-bold text-blue-900">
                                             {daysRequested} {daysRequested === 1 ? "día" : "días"}
                                         </p>

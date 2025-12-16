@@ -33,7 +33,7 @@ import { toast } from "sonner";
 
 export function DocumentsListPage() {
     const navigate = useNavigate();
-    const { user } = useAuthStore();
+    const { user, currentTenant } = useAuthStore();
     const {
         documents,
         documentTypes,
@@ -111,7 +111,7 @@ export function DocumentsListPage() {
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
         });
-    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments]);
+    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments, currentTenant]);
 
     const handleSearch = () => {
         setFilters({ page: 1 });

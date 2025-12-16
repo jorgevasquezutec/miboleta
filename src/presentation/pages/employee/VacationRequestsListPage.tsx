@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/presentation/components/ui/badge";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
+import { useAuthStore } from "@/presentation/stores";
 import { useUrlFilters } from "@/presentation/hooks";
 import { VacationStatus } from "@/core/domain/entities";
 import { formatDate } from "@/presentation/utils";
@@ -40,6 +41,8 @@ export function VacationRequestsListPage() {
         total,
         totalPages,
     } = useVacationsStore();
+
+    const { currentTenant } = useAuthStore();
 
     // URL-synced filters
     const { filters, setFilters } = useUrlFilters({
@@ -59,7 +62,7 @@ export function VacationRequestsListPage() {
             page: filters.page,
             perPage: filters.per_page,
         });
-    }, [fetchVacationRequests, filters.page, filters.per_page, filters.status]);
+    }, [fetchVacationRequests, filters.page, filters.per_page, filters.status, currentTenant]);
 
     const handleStatusChange = (value: string) => {
         setFilters({ status: value, page: 1 });

@@ -28,7 +28,7 @@ import {
 } from "@/presentation/components/ui/select";
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { useDocumentsStore } from "@/presentation/stores";
+import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
 import { useUrlFilters } from "@/presentation/hooks";
 import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
 import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
@@ -38,6 +38,7 @@ import { toast } from "sonner";
 export function BatchesListPage() {
     const navigate = useNavigate();
     const { batches, batchesMeta, fetchBatches, batchesLoading } = useDocumentsStore();
+    const { currentTenant } = useAuthStore();
 
     // URL-synced filters
     const { filters, setFilters, resetFilters } = useUrlFilters({
@@ -67,7 +68,7 @@ export function BatchesListPage() {
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
         });
-    }, [filters.status, filters.date_from, filters.date_to, filters.page, filters.per_page, fetchBatches]);
+    }, [filters.status, filters.date_from, filters.date_to, filters.page, filters.per_page, fetchBatches, currentTenant]);
 
     const handleStatusChange = (value: string) => {
         setFilters({ status: value, page: 1 });

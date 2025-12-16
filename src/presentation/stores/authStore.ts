@@ -141,8 +141,9 @@ export const useAuthStore = create<AuthState>()(
           const response = await apiClient.put<{ user: User }>('/profile', updates);
           const updatedUser = response.data.user;
 
+          // Merge current user with updated user to preserve fields like avatar_url
           set({
-            user: updatedUser,
+            user: { ...user, ...updatedUser },
             isLoading: false,
           });
         } catch (error) {
