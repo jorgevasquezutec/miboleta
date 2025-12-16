@@ -114,10 +114,9 @@ export function SubordinatesList({
                 {subordinates.map((user) => (
                     <div
                         key={user.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                        onClick={() => handleView(user)}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => handleView(user)}>
                             <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
                                 <span className="text-blue-600 text-sm font-medium">
                                     {(user.name || '').charAt(0).toUpperCase()}
@@ -133,6 +132,24 @@ export function SubordinatesList({
                         <div className="flex items-center gap-2">
                             {getRoleBadge(user.role)}
                             {getStatusBadge(user.status)}
+                            {showActions && (
+                                <div className="flex gap-1 ml-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleView(user)}
+                                    >
+                                        <Eye className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEdit(user)}
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}

@@ -348,6 +348,7 @@ export function UserDetailPage() {
                     <SubordinatesList
                         subordinates={subordinates}
                         compact={subordinates.length > 5}
+                        showActions={currentUser?.role === 'root'}
                     />
                 </CardContent>
             </Card>
