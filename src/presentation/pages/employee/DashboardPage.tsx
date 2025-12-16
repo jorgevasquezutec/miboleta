@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/presentation/components/ui/select";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
+import { useUrlFilters } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
@@ -33,37 +34,69 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
     totalPages,
   } = useDocumentsStore();
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [perPage, setPerPage] = useState(10);
+  // URL-synced filters
+  const { filters, setFilters, resetFilters } = useUrlFilters({
+    defaultValues: {
+      search: '',
+      status: 'all',
+      type: '',
+      page: 1,
+      per_page: 10,
+    }
+  });
+
+  // Local state for search input (debounce)
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce search
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    debounceTimer.current = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        setFilters({ search: searchInput, page: 1 });
+      }
+    }, 500);
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [searchInput, filters.search, setFilters]);
+
+  // Sync search input with URL on mount
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, []);
 
   useEffect(() => {
     fetchDocumentTypes();
   }, [fetchDocumentTypes]);
 
+  // Fetch documents when filters change
   useEffect(() => {
     fetchDocuments({
-      page: currentPage,
-      perPage: perPage,
-      search: searchTerm || undefined,
-      status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
-      docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
+      page: filters.page,
+      perPage: filters.per_page,
+      search: filters.search || undefined,
+      status: filters.status !== "all" ? (filters.status as Document['status']) : undefined,
+      docTypeId: filters.type ? parseInt(filters.type) : undefined,
       myDocuments: true, // Always show only my documents
     });
-  }, [currentPage, perPage, statusFilter, typeFilter, fetchDocuments]);
+  }, [filters.page, filters.per_page, filters.search, filters.status, filters.type, fetchDocuments]);
 
   const handleSearch = () => {
-    setCurrentPage(1);
-    fetchDocuments({
-      page: 1,
-      perPage: perPage,
-      search: searchTerm || undefined,
-      status: statusFilter !== "all" ? (statusFilter as Document['status']) : undefined,
-      docTypeId: typeFilter !== "all" ? parseInt(typeFilter) : undefined,
-      myDocuments: true, // Always show only my documents
-    });
+    setFilters({ page: 1 });
+  };
+
+  const handleStatusChange = (value: string) => {
+    setFilters({ status: value, page: 1 });
+  };
+
+  const handleTypeChange = (value: string) => {
+    setFilters({ type: value === 'all' ? '' : value, page: 1 });
   };
 
   const handleViewDocument = (id: number) => {
@@ -80,12 +113,11 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   };
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    setFilters({ page });
   };
 
   const handlePerPageChange = (newPerPage: number) => {
-    setPerPage(newPerPage);
-    setCurrentPage(1);
+    setFilters({ per_page: newPerPage, page: 1 });
   };
 
   // Estadísticas
@@ -132,7 +164,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                 <Button
                   size="sm"
                   className="bg-[#F59E0B] hover:bg-[#D97706] text-white"
-                  onClick={() => setStatusFilter("pending")}
+                  onClick={() => handleStatusChange("pending")}
                 >
                   Ver Documentos Pendientes
                 </Button>
@@ -196,12 +228,12 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
               <Input
                 placeholder="Buscar documentos..."
                 className="h-11 pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={filters.status} onValueChange={handleStatusChange}>
               <SelectTrigger className="w-full md:w-48 h-11">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
@@ -212,7 +244,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                 <SelectItem value="expired">Vencidos</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <Select value={filters.type || 'all'} onValueChange={handleTypeChange}>
               <SelectTrigger className="w-full md:w-48 h-11">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
@@ -324,10 +356,10 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
 
               {/* Pagination */}
               <PaginationControls
-                currentPage={currentPage}
+                currentPage={filters.page}
                 totalPages={totalPages || 1}
                 total={total}
-                perPage={perPage}
+                perPage={filters.per_page}
                 onPageChange={handlePageChange}
                 onPerPageChange={handlePerPageChange}
                 disabled={isLoading}
