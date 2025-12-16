@@ -147,9 +147,9 @@ Deployment:
 - [x] ~~Calendario visual de vacaciones~~ ✅ Completado (VacationCalendar en TeamVacationsPage)
 - [x] ~~Thumbnails en PDFViewer~~ ✅ Completado
 - [x] ~~Página 404 personalizada~~ ✅ Completado
+- [x] ~~Lazy loading de rutas~~ ✅ Completado (React.lazy + Suspense)
 - [ ] PWA (service worker)
 - [ ] Dark mode
-- [ ] Lazy loading de rutas
 - [ ] Tests con Vitest
 
 ### DevOps
