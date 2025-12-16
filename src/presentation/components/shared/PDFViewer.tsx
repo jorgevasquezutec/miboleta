@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
+import { cn } from '@/presentation/components/ui/utils';
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -17,6 +18,8 @@ export function PDFViewer({ url }: PDFViewerProps) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+    const [showThumbnails, setShowThumbnails] = useState(true);
+    const thumbnailsRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const fetchPdf = async () => {
@@ -26,7 +29,7 @@ export function PDFViewer({ url }: PDFViewerProps) {
 
                 const response = await fetch(url, {
                     method: 'GET',
-                    credentials: 'include', // Important: send cookies for authentication
+                    credentials: 'include',
                     headers: {
                         'Accept': 'application/pdf',
                     },
@@ -40,7 +43,6 @@ export function PDFViewer({ url }: PDFViewerProps) {
                 }
 
                 const arrayBuffer = await response.arrayBuffer();
-                // Convert to Uint8Array to avoid detached buffer issues
                 const bytes = new Uint8Array(arrayBuffer);
                 setPdfBytes(bytes);
             } catch (err) {
@@ -55,7 +57,7 @@ export function PDFViewer({ url }: PDFViewerProps) {
         }
     }, [url]);
 
-    // Memoize the file object to prevent re-renders from causing issues
+    // Memoize the file object
     const fileData = useMemo(() => {
         if (!pdfBytes) return null;
         return { data: pdfBytes };
@@ -80,6 +82,10 @@ export function PDFViewer({ url }: PDFViewerProps) {
         setPageNumber((prev) => Math.min(prev + 1, numPages));
     };
 
+    const goToPage = (page: number) => {
+        setPageNumber(page);
+    };
+
     const zoomIn = () => {
         setScale((prev) => Math.min(prev + 0.25, 2.5));
     };
@@ -87,6 +93,16 @@ export function PDFViewer({ url }: PDFViewerProps) {
     const zoomOut = () => {
         setScale((prev) => Math.max(prev - 0.25, 0.5));
     };
+
+    // Scroll thumbnail into view when page changes
+    useEffect(() => {
+        if (thumbnailsRef.current && showThumbnails) {
+            const thumbnail = thumbnailsRef.current.querySelector(`[data-page="${pageNumber}"]`);
+            if (thumbnail) {
+                thumbnail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+    }, [pageNumber, showThumbnails]);
 
     if (loading && !pdfBytes) {
         return (
@@ -110,11 +126,26 @@ export function PDFViewer({ url }: PDFViewerProps) {
         );
     }
 
+    const pageNumbers = Array.from({ length: numPages }, (_, i) => i + 1);
+
     return (
         <div className="flex flex-col h-full">
             {/* Controls */}
             <div className="flex items-center justify-between p-3 bg-gray-100 border-b">
                 <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowThumbnails(!showThumbnails)}
+                        title={showThumbnails ? "Ocultar miniaturas" : "Mostrar miniaturas"}
+                    >
+                        {showThumbnails ? (
+                            <PanelLeftClose className="w-4 h-4" />
+                        ) : (
+                            <PanelLeft className="w-4 h-4" />
+                        )}
+                    </Button>
+                    <div className="w-px h-6 bg-gray-300 mx-1" />
                     <Button
                         variant="outline"
                         size="sm"
@@ -148,26 +179,69 @@ export function PDFViewer({ url }: PDFViewerProps) {
                 </div>
             </div>
 
-            {/* PDF Document */}
-            <div className="flex-1 overflow-auto bg-gray-200 flex justify-center p-4">
+            {/* Main content area */}
+            <div className="flex-1 flex overflow-hidden">
                 {fileData && (
                     <Document
                         file={fileData}
                         onLoadSuccess={onDocumentLoadSuccess}
                         onLoadError={onDocumentLoadError}
                         loading={
-                            <div className="flex items-center justify-center h-96">
+                            <div className="flex-1 flex items-center justify-center">
                                 <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
                             </div>
                         }
+                        className="flex flex-1"
                     >
-                        <Page
-                            pageNumber={pageNumber}
-                            scale={scale}
-                            renderTextLayer={false}
-                            renderAnnotationLayer={false}
-                            className="shadow-lg"
-                        />
+                        {/* Thumbnails sidebar */}
+                        {showThumbnails && numPages > 0 && (
+                            <div
+                                ref={thumbnailsRef}
+                                className="w-28 bg-gray-100 border-r overflow-y-auto p-2 space-y-2 flex-shrink-0"
+                            >
+                                {pageNumbers.map((page) => (
+                                    <button
+                                        key={page}
+                                        data-page={page}
+                                        onClick={() => goToPage(page)}
+                                        className={cn(
+                                            "w-full p-1.5 rounded transition-all",
+                                            pageNumber === page
+                                                ? "ring-2 ring-[#2563EB] bg-blue-50"
+                                                : "hover:bg-gray-200"
+                                        )}
+                                    >
+                                        <Page
+                                            pageNumber={page}
+                                            width={80}
+                                            renderTextLayer={false}
+                                            renderAnnotationLayer={false}
+                                            className="shadow-sm rounded overflow-hidden"
+                                            loading={
+                                                <div className="h-24 w-full bg-gray-200 animate-pulse rounded" />
+                                            }
+                                        />
+                                        <p className={cn(
+                                            "text-xs mt-1 text-center",
+                                            pageNumber === page ? "text-[#2563EB] font-medium" : "text-[#64748B]"
+                                        )}>
+                                            {page}
+                                        </p>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Main PDF view */}
+                        <div className="flex-1 overflow-auto bg-gray-200 flex justify-center p-4">
+                            <Page
+                                pageNumber={pageNumber}
+                                scale={scale}
+                                renderTextLayer={false}
+                                renderAnnotationLayer={false}
+                                className="shadow-lg"
+                            />
+                        </div>
                     </Document>
                 )}
             </div>
