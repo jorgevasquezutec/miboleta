@@ -18,6 +18,7 @@ build/
 # Local configuration files
 .env.local
 .env.*.local
+.env.production
 .vscode/ # VS Code specific settings (optional, if you want to ignore all of it)
 !.vscode/extensions.json # Keep extensions.json if you want to share recommended extensions
 .idea/ # IntelliJ IDEA specific settings

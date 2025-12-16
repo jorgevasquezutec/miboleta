@@ -1,10 +1,11 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import { Tenant, CreateTenantData, UpdateTenantData } from '@/core/domain/entities/Tenant';
 import {
     tenantRepository,
-    PaginationMeta,
     GetTenantsParams,
 } from '@/infrastructure/persistence/repositories/TenantRepository';
+import { PaginationMeta } from '@/infrastructure/persistence/repositories/types';
 
 interface TenantsState {
     // State
@@ -124,10 +125,12 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
 
             return tenant;
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error al crear organización';
             set({
-                error: error instanceof Error ? error.message : 'Error al crear organización',
+                error: errorMessage,
                 isLoading: false,
             });
+            toast.error(errorMessage);
             return null;
         }
     },
@@ -147,10 +150,12 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
 
             return tenant;
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error al actualizar organización';
             set({
-                error: error instanceof Error ? error.message : 'Error al actualizar organización',
+                error: errorMessage,
                 isLoading: false,
             });
+            toast.error(errorMessage);
             return null;
         }
     },
@@ -169,10 +174,12 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
 
             return true;
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error al eliminar organización';
             set({
-                error: error instanceof Error ? error.message : 'Error al eliminar organización',
+                error: errorMessage,
                 isLoading: false,
             });
+            toast.error(errorMessage);
             return false;
         }
     },
