@@ -57,6 +57,7 @@ class ReportsService
         $signed = (clone $query)->where('status', 'signed')->count();
         $pending = (clone $query)->where('status', 'pending')->count();
         $active = (clone $query)->where('status', 'active')->count();
+        $orphan = (clone $query)->where('status', 'orphan')->count();
 
         // Documents by month (always show last 6 months for trend chart)
         $byMonth = $this->getDocumentsByMonth($tenantId, 6);
@@ -85,6 +86,7 @@ class ReportsService
             ['name' => 'Firmados', 'value' => $signed, 'color' => '#10B981'],
             ['name' => 'Pendientes', 'value' => $pending, 'color' => '#F59E0B'],
             ['name' => 'Activos', 'value' => $active, 'color' => '#3B82F6'],
+            ['name' => 'Huérfanos', 'value' => $orphan, 'color' => '#F97316'],
         ];
 
         return [
@@ -92,6 +94,7 @@ class ReportsService
             'signed' => $signed,
             'pending' => $pending,
             'active' => $active,
+            'orphan' => $orphan,
             'by_month' => $byMonth,
             'by_type' => $byType,
             'status_distribution' => $statusDistribution,

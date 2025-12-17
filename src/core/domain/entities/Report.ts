@@ -8,6 +8,7 @@ export interface DocumentStats {
     signed: number;
     pending: number;
     active: number;
+    orphan: number;
     by_month: MonthlyData[];
     by_type: Record<string, number>;
     status_distribution: ChartData[];

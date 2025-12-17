@@ -1,7 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/presentation/stores";
 import { Navbar } from "@/presentation/components/layout";
-import { Toaster } from "@/presentation/components/ui/sonner";
 import { useState, useEffect } from "react";
 import {
   Users,
@@ -316,7 +315,6 @@ export function RootLayout() {
           <Outlet />
         </main>
       </div>
-      <Toaster />
     </div>
   );
 }

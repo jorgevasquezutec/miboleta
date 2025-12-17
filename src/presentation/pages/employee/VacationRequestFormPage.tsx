@@ -225,12 +225,13 @@ export function VacationRequestFormPage() {
                 </div>
             </div>
 
-            {/* No suselectedTenant && !hasSupervisor && (
+            {/* Alerta cuando no hay supervisor asignado */}
+            {selectedTenant && !hasSupervisor && (
                 <Alert variant="destructive">
                     <AlertTriangle className="w-4 h-4" />
                     <AlertDescription>
-                        No tienes un supervisor asignado para {selectedTenant.name}
-                        No tienes un supervisor asignado. Contacta a RRHH para poder solicitar vacaciones.
+                        No tienes un supervisor asignado para <strong>{selectedTenant.name}</strong>. 
+                        Contacta a RRHH para poder solicitar vacaciones.
                     </AlertDescription>
                 </Alert>
             )}

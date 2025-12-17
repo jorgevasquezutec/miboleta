@@ -55,21 +55,21 @@ class TenantFilter
         if ($tenantIdsHeader) {
             $requestedIds = array_map('intval', array_filter(explode(',', $tenantIdsHeader)));
 
-            Log::info('🏢 [TenantFilter] Multi-tenant request', [
-                'user_id' => $user->id,
-                'user_role' => $user->getCurrentRole(),
-                'requested_tenants' => $requestedIds,
-                'count' => count($requestedIds),
-            ]);
+            // Log::info('🏢 [TenantFilter] Multi-tenant request', [
+            //     'user_id' => $user->id,
+            //     'user_role' => $user->getCurrentRole(),
+            //     'requested_tenants' => $requestedIds,
+            //     'count' => count($requestedIds),
+            // ]);
 
             // ✅ EXCEPCIÓN: Root users pueden acceder a TODOS los tenants sin validación
             if ($user->getCurrentRole() === 'root') {
                 $request->merge(['_tenant_filter_ids' => $requestedIds]);
 
-                Log::info('✅ [TenantFilter] Root user - all tenants allowed', [
-                    'user_id' => $user->id,
-                    'tenant_ids' => $requestedIds,
-                ]);
+                // Log::info('✅ [TenantFilter] Root user - all tenants allowed', [
+                //     'user_id' => $user->id,
+                //     'tenant_ids' => $requestedIds,
+                // ]);
 
                 return $next($request);
             }
@@ -81,11 +81,11 @@ class TenantFilter
             $validIds = array_intersect($requestedIds, $userTenantIds);
 
             if (empty($validIds)) {
-                Log::warning('⚠️ [TenantFilter] Invalid tenant access attempt', [
-                    'user_id' => $user->id,
-                    'requested' => $requestedIds,
-                    'allowed' => $userTenantIds,
-                ]);
+                // Log::warning('⚠️ [TenantFilter] Invalid tenant access attempt', [
+                //     'user_id' => $user->id,
+                //     'requested' => $requestedIds,
+                //     'allowed' => $userTenantIds,
+                // ]);
 
                 return response()->json([
                     'error' => 'No tienes acceso a las empresas seleccionadas',
@@ -97,11 +97,11 @@ class TenantFilter
             // Guardar IDs validados en el request para uso en controllers/scopes
             $request->merge(['_tenant_filter_ids' => $validIds]);
 
-            Log::info('✅ [TenantFilter] Filter applied', [
-                'user_id' => $user->id,
-                'tenant_ids' => $validIds,
-                'count' => count($validIds),
-            ]);
+            // Log::info('✅ [TenantFilter] Filter applied', [
+            //     'user_id' => $user->id,
+            //     'tenant_ids' => $validIds,
+            //     'count' => count($validIds),
+            // ]);
 
             return $next($request);
         }
@@ -115,11 +115,11 @@ class TenantFilter
 
             // Validar acceso
             if (!in_array($tenantId, $userTenantIds)) {
-                Log::warning('⚠️ [TenantFilter] Invalid single tenant access', [
-                    'user_id' => $user->id,
-                    'requested' => $tenantId,
-                    'allowed' => $userTenantIds,
-                ]);
+                // Log::warning('⚠️ [TenantFilter] Invalid single tenant access', [
+                //     'user_id' => $user->id,
+                //     'requested' => $tenantId,
+                //     'allowed' => $userTenantIds,
+                // ]);
 
                 return response()->json([
                     'error' => 'No tienes acceso a esta empresa',
@@ -128,10 +128,10 @@ class TenantFilter
 
             $request->merge(['_tenant_filter_ids' => [$tenantId]]);
 
-            Log::info('✅ [TenantFilter] Legacy single tenant filter', [
-                'user_id' => $user->id,
-                'tenant_id' => $tenantId,
-            ]);
+            // Log::info('✅ [TenantFilter] Legacy single tenant filter', [
+            //     'user_id' => $user->id,
+            //     'tenant_id' => $tenantId,
+            // ]);
 
             return $next($request);
         }

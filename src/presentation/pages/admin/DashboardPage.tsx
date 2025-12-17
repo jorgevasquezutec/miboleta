@@ -17,6 +17,7 @@ import {
   Eye,
   UserPlus,
   Building2,
+  AlertTriangle,
 } from "lucide-react";
 import { StatsCard } from "@/presentation/components/common";
 import { Button } from "@/presentation/components/ui/button";
@@ -228,9 +229,10 @@ export function AdminDashboardView() {
       }
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {isLoadingDashboard ? (
           <>
+            <StatsCardSkeleton />
             <StatsCardSkeleton />
             <StatsCardSkeleton />
             <StatsCardSkeleton />
@@ -261,6 +263,12 @@ export function AdminDashboardView() {
               value={documentStats?.pending?.toLocaleString() ?? '0'}
               icon={Clock}
               color="#F59E0B"
+            />
+            <StatsCard
+              title="Huérfanos"
+              value={documentStats?.orphan?.toLocaleString() ?? '0'}
+              icon={AlertTriangle}
+              color="#F97316"
             />
           </>
         )}

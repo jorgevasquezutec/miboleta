@@ -35,12 +35,12 @@ class DocumentService
         $query = $this->applyOptionalFilters($query, $filters);
 
 
-        $queryLog = $query->toSql();
-        $bindings = $query->getBindings();
-        for ($i = 0; $i < count($bindings); $i++) {
-            $queryLog = str_replace('?' . $i, $bindings[$i], $queryLog);
-        }
-        Log::info($queryLog);
+        // $queryLog = $query->toSql();
+        // $bindings = $query->getBindings();
+        // for ($i = 0; $i < count($bindings); $i++) {
+        //     $queryLog = str_replace('?' . $i, $bindings[$i], $queryLog);
+        // }
+        // Log::info($queryLog);
 
 
         $perPage = $filters['per_page'] ?? 15;
