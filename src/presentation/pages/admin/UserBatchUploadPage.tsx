@@ -134,7 +134,7 @@ export function UserBatchUploadPage() {
             toast.success(`Carga iniciada: ${result.batch.total_rows} usuarios`);
 
             // Navegar a página de detalle
-            navigate(`/users/batch/${result.batch.uuid}`);
+            navigate(`/users/batch/${result.batch.id}`);
         } catch (error: any) {
             const errorMessage = error.response?.data?.message || 'Error al iniciar la carga';
             toast.error(errorMessage);

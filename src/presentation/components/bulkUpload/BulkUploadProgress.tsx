@@ -53,35 +53,29 @@ export function BulkUploadProgress({ batch }: BulkUploadProgressProps) {
                     <div className="flex justify-between text-sm">
                         <span className="font-medium">Progreso General</span>
                         <span className={`font-bold ${getStatusColor()}`}>
-                            {batch.formatted_progress}
+                            {batch.progress.formatted}
                         </span>
                     </div>
-                    <Progress value={batch.progress_percentage} className="h-3" />
+                    <Progress value={parseFloat(batch.progress.percentage)} className="h-3" />
                     <div className="flex justify-between text-xs text-gray-500">
-                        <span>{batch.processed_rows} de {batch.total_rows} procesados</span>
-                        {batch.is_processing && batch.total_chunks > 0 && (
-                            <span>Chunk {batch.current_chunk} de {batch.total_chunks}</span>
+                        <span>{batch.progress.processed_rows} de {batch.progress.total_rows} procesados</span>
+                        {batch.is_processing && batch.progress.total_chunks > 0 && (
+                            <span>Chunk {batch.progress.current_chunk} de {batch.progress.total_chunks}</span>
                         )}
                     </div>
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                     <div className="text-center">
                         <div className="text-2xl font-bold text-green-600">
-                            {batch.created_users}
+                            {batch.progress.created_users}
                         </div>
                         <div className="text-xs text-gray-600">Creados</div>
                     </div>
                     <div className="text-center">
-                        <div className="text-2xl font-bold text-yellow-600">
-                            {batch.updated_users}
-                        </div>
-                        <div className="text-xs text-gray-600">Actualizados</div>
-                    </div>
-                    <div className="text-center">
                         <div className="text-2xl font-bold text-red-600">
-                            {batch.failed_rows}
+                            {batch.progress.failed_rows}
                         </div>
                         <div className="text-xs text-gray-600">Errores</div>
                     </div>

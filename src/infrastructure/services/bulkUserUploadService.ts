@@ -74,8 +74,8 @@ export class BulkUserUploadService {
     /**
      * Obtener detalle de un batch
      */
-    async getBatch(uuid: string): Promise<UserBatch> {
-        const response = await apiClient.get(`/user-batches/${uuid}`);
+    async getBatch(id: string | number): Promise<UserBatch> {
+        const response = await apiClient.get(`/user-batches/${id}`);
         return response.data;
     }
 
@@ -119,6 +119,7 @@ export class BulkUserUploadService {
     ): Promise<{
         message: string;
         batch: {
+            id: number;
             uuid: string;
             total_rows: number;
             status: string;
@@ -143,15 +144,15 @@ export class BulkUserUploadService {
     /**
      * Eliminar un batch
      */
-    async deleteBatch(uuid: string): Promise<void> {
-        await apiClient.delete(`/user-batches/${uuid}`);
+    async deleteBatch(id: string | number): Promise<void> {
+        await apiClient.delete(`/user-batches/${id}`);
     }
 
     /**
      * Descargar errores de un batch
      */
-    async downloadErrors(uuid: string): Promise<void> {
-        const response = await apiClient.get(`/user-batches/${uuid}/errors`, {
+    async downloadErrors(id: string | number): Promise<void> {
+        const response = await apiClient.get(`/user-batches/${id}/errors`, {
             responseType: 'blob',
         });
 
@@ -162,7 +163,7 @@ export class BulkUserUploadService {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `errores_carga_${uuid}.xlsx`;
+        link.download = `errores_carga_${id}.xlsx`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

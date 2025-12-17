@@ -3,7 +3,7 @@ import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadS
 import type { UserBatch } from '@/domain/types/bulkUserUpload.types';
 
 interface UseBatchProgressOptions {
-    uuid: string;
+    id: string | number;
     enabled?: boolean;
     pollInterval?: number; // ms
     onComplete?: (batch: UserBatch) => void;
@@ -11,7 +11,7 @@ interface UseBatchProgressOptions {
 }
 
 export function useBatchProgress({
-    uuid,
+    id,
     enabled = true,
     pollInterval = 3000,
     onComplete,
@@ -26,7 +26,7 @@ export function useBatchProgress({
 
     const fetchBatch = async () => {
         try {
-            const data = await bulkUserUploadService.getBatch(uuid);
+            const data = await bulkUserUploadService.getBatch(id);
             setBatch(data);
             setError(null);
             setIsLoading(false);
@@ -83,7 +83,7 @@ export function useBatchProgress({
                 intervalRef.current = null;
             }
         };
-    }, [uuid, enabled, pollInterval]);
+    }, [id, enabled, pollInterval]);
 
     const refresh = () => {
         fetchBatch();

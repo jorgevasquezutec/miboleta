@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Maatwebsite\Excel\Facades\Excel;
 use Generator;
+use Illuminate\Support\Facades\Auth;
 
 class BulkUserUploadService
 {
@@ -23,7 +24,8 @@ class BulkUserUploadService
      */
     public function getConfigData(): array
     {
-        $user = auth()->user();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
 
         // Obtener organizaciones accesibles
         $organizations = $user->isRoot()
@@ -105,13 +107,39 @@ class BulkUserUploadService
             // Consolidar usuarios duplicados (mismo email)
             $consolidated = $this->consolidateDuplicates($parsedData);
 
+            // Validar emails que ya existen en BD
+            $duplicateEmails = $this->checkDuplicateEmails($consolidated);
+            
+            // Agregar errores de emails duplicados
+            foreach ($duplicateEmails as $duplicate) {
+                $errors[] = [
+                    'row' => $duplicate['row'] ?? 0,
+                    'field' => 'email',
+                    'message' => "El email '{$duplicate['email']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                ];
+            }
+
+            // Validar documentos que ya existen en BD
+            $duplicateDocuments = $this->checkDuplicateDocuments($consolidated);
+            
+            // Agregar errores de documentos duplicados
+            foreach ($duplicateDocuments as $duplicate) {
+                $errors[] = [
+                    'row' => $duplicate['row'] ?? 0,
+                    'field' => 'numero_documento',
+                    'message' => "El documento '{$duplicate['document']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                ];
+            }
+
             // Generar resumen
             $summary = [
                 'total' => count($parsedData),
-                'valid' => count($consolidated),
+                'valid' => count($consolidated) - count($duplicateEmails) - count($duplicateDocuments),
                 'errors' => count($errors),
                 'warnings' => count($warnings),
                 'consolidated_users' => count($parsedData) - count($consolidated),
+                'duplicate_emails' => count($duplicateEmails),
+                'duplicate_documents' => count($duplicateDocuments),
             ];
 
             // Determinar si es válido
@@ -205,6 +233,94 @@ class BulkUserUploadService
                 );
             }
         }
+    }
+
+    /**
+     * Verificar si los emails ya existen en la base de datos
+     */
+    private function checkDuplicateEmails(array $users): array
+    {
+        $duplicates = [];
+        
+        // Extraer todos los emails
+        $emails = array_filter(array_map(function($user) {
+            return strtolower($user['email'] ?? '');
+        }, $users));
+
+        if (empty($emails)) {
+            return [];
+        }
+
+        // Buscar emails existentes en BD
+        $existingUsers = \App\Models\User::whereIn(\DB::raw('LOWER(email)'), $emails)
+            ->select('id', 'name', 'last_name', 'email', 'document_text')
+            ->get()
+            ->keyBy(fn($user) => strtolower($user->email));
+
+        // Verificar cada usuario del Excel
+        foreach ($users as $index => $user) {
+            $email = strtolower($user['email'] ?? '');
+            
+            if (!$email) {
+                continue;
+            }
+
+            if ($existingUsers->has($email)) {
+                $existingUser = $existingUsers->get($email);
+                $duplicates[] = [
+                    'row' => $index + 2, // +2 porque Excel empieza en 1 y tiene header
+                    'email' => $user['email'],
+                    'existing_user' => "{$existingUser->name} {$existingUser->last_name} ({$existingUser->email})",
+                    'new_user' => "{$user['nombre']} {$user['apellido']} ({$user['email']})",
+                ];
+            }
+        }
+
+        return $duplicates;
+    }
+
+    /**
+     * Verificar si los documentos ya existen en la base de datos
+     */
+    private function checkDuplicateDocuments(array $users): array
+    {
+        $duplicates = [];
+        
+        // Extraer todos los números de documento
+        $documents = array_filter(array_map(function($user) {
+            return $user['numero_documento'] ?? null;
+        }, $users));
+
+        if (empty($documents)) {
+            return [];
+        }
+
+        // Buscar documentos existentes en BD
+        $existingUsers = \App\Models\User::whereIn('document_text', $documents)
+            ->select('id', 'name', 'last_name', 'email', 'document_text')
+            ->get()
+            ->keyBy('document_text');
+
+        // Verificar cada usuario del Excel
+        foreach ($users as $index => $user) {
+            $document = $user['numero_documento'] ?? null;
+            
+            if (!$document) {
+                continue;
+            }
+
+            if ($existingUsers->has($document)) {
+                $existingUser = $existingUsers->get($document);
+                $duplicates[] = [
+                    'row' => $index + 2, // +2 porque Excel empieza en 1 y tiene header
+                    'document' => $document,
+                    'existing_user' => "{$existingUser->name} {$existingUser->last_name} ({$existingUser->email})",
+                    'new_user' => "{$user['nombre']} {$user['apellido']} ({$user['email']})",
+                ];
+            }
+        }
+
+        return $duplicates;
     }
 
     // ────────────────────────────────────────────────────────────

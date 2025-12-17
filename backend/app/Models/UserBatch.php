@@ -3,14 +3,19 @@
 namespace App\Models;
 
 use App\Models\Scopes\TenantFilterScope;
+use Illuminate\Bus\Batch;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Str;
+//log
+use Illuminate\Support\Facades\Log;
 
 class UserBatch extends Model
 {
     protected $fillable = [
         'uuid',
+        'batch_id',
         'tenant_id',
         'created_by_user_id',
         'original_filename',
@@ -30,6 +35,10 @@ class UserBatch extends Model
         'processing_options',
         'started_at',
         'completed_at',
+    ];
+
+    protected $hidden = [
+        'updated_users', // No usamos actualización de usuarios en bulk uploads
     ];
 
     protected $casts = [
@@ -271,5 +280,123 @@ class UserBatch extends Model
     public function scopeRecent($query, int $days = 7)
     {
         return $query->where('created_at', '>=', now()->subDays($days));
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // LARAVEL BUS BATCH TRACKING
+    // ────────────────────────────────────────────────────────────
+
+    /**
+     * Obtener el Laravel Bus Batch asociado
+     */
+    public function laravelBatch(): ?Batch
+    {
+        if (!$this->batch_id) {
+            return null;
+        }
+
+        return Bus::findBatch($this->batch_id);
+    }
+
+    /**
+     * Obtener progreso en tiempo real del batch de Laravel
+     */
+    public function getBatchProgressAttribute(): ?array
+    {
+        $laravelBatch = $this->laravelBatch();
+
+        if (!$laravelBatch) {
+            return null;
+        }
+
+        return [
+            'total_jobs' => $laravelBatch->totalJobs,
+            'pending_jobs' => $laravelBatch->pendingJobs,
+            'processed_jobs' => $laravelBatch->processedJobs(),
+            'failed_jobs' => $laravelBatch->failedJobs,
+            'progress_percentage' => $laravelBatch->progress(),
+            'finished' => $laravelBatch->finished(),
+            'cancelled' => $laravelBatch->cancelled(),
+        ];
+    }
+
+    /**
+     * Cancelar el batch en ejecución
+     */
+    public function cancelBatch(): bool
+    {
+        $laravelBatch = $this->laravelBatch();
+
+        if ($laravelBatch && !$laravelBatch->finished()) {
+            $laravelBatch->cancel();
+
+            $this->update([
+                'status' => 'failed',
+                'completed_at' => now(),
+                'error_summary' => ['message' => 'Batch cancelado por el usuario'],
+            ]);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Callback cuando el batch se completa exitosamente
+     */
+    public static function onBatchCompleted(int $batchId): void
+    {
+        $batch = self::where('id', $batchId)->first();
+        
+        if ($batch) {
+            $batch->update([
+                'status' => 'completed',
+                'completed_at' => now(),
+                'progress_percentage' => 100,
+            ]);
+
+            Log::info("✅ [BulkUserUpload] Batch completed", [
+                'batch_uuid' => $batch->uuid,
+                'batch_id' => $batch->batch_id,
+            ]);
+        }
+    }
+
+    /**
+     * Callback cuando el batch falla
+     */
+    public static function onBatchFailed(int $batchId, string $error): void
+    {
+        $batch = self::where('id', $batchId)->first();
+        
+        if ($batch) {
+            Log::error("❌ [BulkUserUpload] Batch failed", [
+                'batch_uuid' => $batch->uuid,
+                'batch_id' => $batch->batch_id,
+                'error' => $error,
+            ]);
+        }
+    }
+
+    /**
+     * Callback cuando el batch finaliza (éxito o fallo)
+     */
+    public static function onBatchFinished(int $batchId, int $failedJobs): void
+    {
+        $batch = self::where('id', $batchId)->first();
+        
+        if ($batch && !$batch->completed_at) {
+            $batch->update([
+                'status' => $failedJobs > 0 ? 'partial' : 'completed',
+                'completed_at' => now(),
+            ]);
+
+            Log::info("🏁 [BulkUserUpload] Batch finished", [
+                'batch_uuid' => $batch->uuid,
+                'batch_id' => $batch->batch_id,
+                'failed_jobs' => $failedJobs,
+            ]);
+        }
     }
 }

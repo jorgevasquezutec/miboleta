@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Illuminate\Support\Facades\Auth;
 
 class UsersTemplateExport implements WithMultipleSheets
 {
@@ -17,7 +18,8 @@ class UsersTemplateExport implements WithMultipleSheets
         $this->maxOrganizations = min($maxOrganizations, 5); // Max 5 orgs
 
         // Obtener organizaciones disponibles
-        $user = auth()->user();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
 
         if ($organizationIds) {
             // Filtrar solo las organizaciones seleccionadas

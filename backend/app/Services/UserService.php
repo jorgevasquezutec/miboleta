@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 
 class UserService
 {
@@ -19,15 +20,17 @@ class UserService
      *
      * @param array $data Validated user data
      * @param User|null $creator The user creating this new user (optional, defaults to auth user)
+     * @param bool $sendWelcomeEmail Whether to send welcome email
+     * @param int|null $emailDelay Delay in seconds before sending email (for bulk uploads to avoid rate limiting)
      * @return User
      * @throws UserCreationException
      */
-    public function createUser(array $data, ?User $creator = null): User
+    public function createUser(array $data, ?User $creator = null, bool $sendWelcomeEmail = true, ?int $emailDelay = null): User
     {
         DB::beginTransaction();
 
         try {
-            $creator = $creator ?? auth()->user();
+            $creator = $creator ?? Auth::user();
             
             // Generate temporary password
             $temporaryPassword = $this->generateTemporaryPassword();
@@ -56,9 +59,6 @@ class UserService
                 $this->assignTenants($user, [$data['tenant_id']], true);
             }
 
-            // Send welcome email
-            $this->sendWelcomeEmail($user, $temporaryPassword);
-
             // Assign orphan documents if document_text is provided
             $defaultTenantId = $data['tenants_config'][0]['tenant_id'] ?? $data['tenant_id'] ?? null;
             if (!empty($data['document_text']) && $defaultTenantId) {
@@ -66,6 +66,18 @@ class UserService
             }
 
             DB::commit();
+
+            // Send welcome email DESPUÉS del commit (evitar enviar email si falla la transacción)
+            if ($sendWelcomeEmail) {
+                if ($emailDelay !== null && $emailDelay > 0) {
+                    // Despachar job con delay para evitar rate limiting
+                    \App\Jobs\SendWelcomeEmailJob::dispatch($user->id, $temporaryPassword)
+                        ->delay(now()->addSeconds($emailDelay));
+                } else {
+                    // Enviar inmediatamente (creación individual)
+                    $this->sendWelcomeEmail($user, $temporaryPassword);
+                }
+            }
 
             return $user->load(['roles', 'tenants']);
 
@@ -93,6 +105,7 @@ class UserService
         try {
             $oldDocumentText = $user->document_text;
             $oldRoleId = $user->roles()->first()?->id;
+            $userAuth = Auth::user(); // --- IGNORE ---
 
             if (isset($data['password'])) {
                 $data['password'] = Hash::make($data['password']);
@@ -114,7 +127,7 @@ class UserService
                 // Actualizar el rol
                 $user->roles()->sync([
                     $data['role_id'] => [
-                        'granted_by' => auth()->id(),
+                        'granted_by' => $userAuth->id,
                         'granted_at' => now(),
                     ]
                 ]);
@@ -178,15 +191,15 @@ class UserService
      *
      * @param User $user
      * @param array $roleIds
-     * @param User $grantedBy
+     * @param User|null $grantedBy
      * @return void
      */
-    protected function assignRoles(User $user, array $roleIds, User $grantedBy): void
+    protected function assignRoles(User $user, array $roleIds, ?User $grantedBy): void
     {
         $pivotData = [];
         foreach ($roleIds as $roleId) {
             $pivotData[$roleId] = [
-                'granted_by' => $grantedBy->id,
+                'granted_by' => $grantedBy?->id,
                 'granted_at' => now(),
             ];
         }
@@ -223,8 +236,17 @@ class UserService
     {
         $pivotData = [];
         foreach ($config as $item) {
+            // Manejar tanto 'supervisor_id' como 'supervisors' (array)
+            $supervisorId = null;
+            if (isset($item['supervisor_id'])) {
+                $supervisorId = $item['supervisor_id'];
+            } elseif (isset($item['supervisors']) && is_array($item['supervisors']) && !empty($item['supervisors'])) {
+                // Tomar el primer supervisor si viene como array
+                $supervisorId = $item['supervisors'][0];
+            }
+
             $pivotData[$item['tenant_id']] = [
-                'supervisor_id' => $item['supervisor_id'] ?? null,
+                'supervisor_id' => $supervisorId,
                 'is_primary' => $item['is_primary'] ?? false,
             ];
         }

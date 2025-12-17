@@ -1,17 +1,15 @@
 import { Card, CardContent } from '@/presentation/components/ui/card';
-import { Users, UserPlus, UserCheck, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, AlertTriangle } from 'lucide-react';
 
 interface BulkUploadStatsProps {
     totalRows: number;
     createdUsers: number;
-    updatedUsers: number;
     failedRows: number;
 }
 
 export function BulkUploadStats({
     totalRows,
     createdUsers,
-    updatedUsers,
     failedRows,
 }: BulkUploadStatsProps) {
     const stats = [
@@ -28,13 +26,6 @@ export function BulkUploadStats({
             icon: UserPlus,
             color: 'text-green-600',
             bgColor: 'bg-green-100',
-        },
-        {
-            label: 'Usuarios Actualizados',
-            value: updatedUsers,
-            icon: UserCheck,
-            color: 'text-yellow-600',
-            bgColor: 'bg-yellow-100',
         },
         {
             label: 'Errores',

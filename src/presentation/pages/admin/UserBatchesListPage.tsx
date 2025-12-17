@@ -4,6 +4,7 @@ import { Button } from '@/presentation/components/ui/button';
 import { Card, CardContent } from '@/presentation/components/ui/card';
 import { Plus, RefreshCw } from 'lucide-react';
 import { UserBatchCard } from '@/presentation/components/bulkUpload/UserBatchCard';
+import { PaginationControls } from '@/presentation/components/shared/PaginationControls';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import type { UserBatchListItem, PaginatedBatchList } from '@/domain/types/bulkUserUpload.types';
 import { toast } from 'sonner';
@@ -14,6 +15,8 @@ export function UserBatchesListPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [totalBatches, setTotalBatches] = useState(0);
+    const [perPage, setPerPage] = useState(12);
     const [statusFilter, setStatusFilter] = useState<string>('');
 
     const fetchBatches = async () => {
@@ -21,12 +24,13 @@ export function UserBatchesListPage() {
         try {
             const data: PaginatedBatchList = await bulkUserUploadService.listBatches({
                 page: currentPage,
-                per_page: 12,
+                per_page: perPage,
                 status: statusFilter || undefined,
             });
 
             setBatches(data.data);
             setTotalPages(data.meta.last_page);
+            setTotalBatches(data.meta.total);
         } catch (error) {
             console.error('Error fetching batches:', error);
             toast.error('Error al cargar el historial');
@@ -37,27 +41,23 @@ export function UserBatchesListPage() {
 
     useEffect(() => {
         fetchBatches();
-    }, [currentPage, statusFilter]);
+    }, [currentPage, perPage, statusFilter]);
 
-    // Auto-refresh si hay batches procesando
-    useEffect(() => {
-        const hasProcessing = batches.some((b) => b.status === 'processing');
-
-        if (!hasProcessing) return;
-
-        const interval = setInterval(() => {
-            fetchBatches();
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [batches]);
-
-    const handleBatchClick = (uuid: string) => {
-        navigate(`/admin/users/batch/${uuid}`);
+    const handleBatchClick = (id: number) => {
+        navigate(`/users/batch/${id}`);
     };
 
     const handleNewUpload = () => {
-        navigate('/admin/users/batch/new');
+        navigate('/users/batch-upload');
+    };
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
+    const handlePerPageChange = (newPerPage: number) => {
+        setPerPage(newPerPage);
+        setCurrentPage(1); // Reset to first page when changing per page
     };
 
     return (
@@ -146,28 +146,18 @@ export function UserBatchesListPage() {
                         ))}
                     </div>
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex justify-center gap-2">
-                            <Button
-                                variant="outline"
-                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                            >
-                                Anterior
-                            </Button>
-                            <div className="flex items-center px-4">
-                                Página {currentPage} de {totalPages}
-                            </div>
-                            <Button
-                                variant="outline"
-                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                            >
-                                Siguiente
-                            </Button>
-                        </div>
-                    )}
+                    {/* Pagination Controls */}
+                    <PaginationControls
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        total={totalBatches}
+                        perPage={perPage}
+                        onPageChange={handlePageChange}
+                        onPerPageChange={handlePerPageChange}
+                        disabled={isLoading}
+                        perPageOptions={[6, 12, 24, 48]}
+                        className="pt-4 border-t"
+                    />
                 </>
             )}
         </div>

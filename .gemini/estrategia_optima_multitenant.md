@@ -305,6 +305,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 
+
 class TenantFilterScope implements Scope
 {
     public function apply(Builder $builder, Model $model)
@@ -313,7 +314,9 @@ class TenantFilterScope implements Scope
         
         if (empty($tenantIds)) {
             // Sin filtro - usar scope de usuario
-            $user = auth()->user();
+            // $user = auth()->user();
+               /** @var \App\Models\User $user */
+                $user = Auth::user();
             if ($user && $user->role !== 'root') {
                 $userTenantIds = $user->tenants->pluck('id')->toArray();
                 $builder->whereIn('tenant_id', $userTenantIds);

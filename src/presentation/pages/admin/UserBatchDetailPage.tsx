@@ -4,24 +4,25 @@ import { ArrowLeft, Download, Users, Loader2 } from 'lucide-react';
 import { useBatchProgress } from '@/presentation/hooks/useBatchProgress';
 import { BulkUploadProgress } from '@/presentation/components/bulkUpload/BulkUploadProgress';
 import { BulkUploadStats } from '@/presentation/components/bulkUpload/BulkUploadStats';
+import { BulkUploadErrors } from '@/presentation/components/bulkUpload/BulkUploadErrors';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import { toast } from 'sonner';
 import { useState } from 'react';
 
 export function UserBatchDetailPage() {
-    const { uuid } = useParams<{ uuid: string }>();
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [isDownloading, setIsDownloading] = useState(false);
 
     const { batch, isLoading, error } = useBatchProgress({
-        uuid: uuid!,
-        enabled: !!uuid,
+        id: id!,
+        enabled: !!id,
         pollInterval: 3000,
         onComplete: (batch) => {
             if (batch.status === 'completed') {
-                toast.success(`✅ Carga completada: ${batch.created_users} usuarios creados`);
+                toast.success(`✅ Carga completada: ${batch.progress.created_users} usuarios creados`);
             } else if (batch.status === 'partial') {
-                toast.warning(`⚠️ Carga completada con ${batch.failed_rows} errores`);
+                toast.warning(`⚠️ Carga completada con ${batch.progress.failed_rows} errores`);
             }
         },
         onError: (error) => {
@@ -30,11 +31,11 @@ export function UserBatchDetailPage() {
     });
 
     const handleDownloadErrors = async () => {
-        if (!uuid) return;
+        if (!id) return;
 
         setIsDownloading(true);
         try {
-            await bulkUserUploadService.downloadErrors(uuid);
+            await bulkUserUploadService.downloadErrors(id);
             toast.success('Archivo de errores descargado');
         } catch (error) {
             toast.error('Error al descargar errores');
@@ -44,11 +45,11 @@ export function UserBatchDetailPage() {
     };
 
     const handleViewUsers = () => {
-        navigate('/admin/users');
+        navigate('/users');
     };
 
     const handleBack = () => {
-        navigate('/admin/users/batch');
+        navigate('/users/batch');
     };
 
     if (error) {
@@ -82,7 +83,8 @@ export function UserBatchDetailPage() {
                     <div>
                         <h1 className="text-3xl font-bold">{batch.filename}</h1>
                         <p className="text-gray-600 mt-1">
-                            Empresa: {batch.tenant.name} • Creado por: {batch.created_by.name}
+                            {batch.tenant ? `Empresa: ${batch.tenant.name} • ` : ''}
+                            Creado por: {batch.created_by?.name || 'N/A'}
                         </p>
                     </div>
                 </div>
@@ -122,10 +124,9 @@ export function UserBatchDetailPage() {
 
             {/* Stats */}
             <BulkUploadStats
-                totalRows={batch.total_rows}
-                createdUsers={batch.created_users}
-                updatedUsers={batch.updated_users}
-                failedRows={batch.failed_rows}
+                totalRows={batch.progress?.total_rows || 0}
+                createdUsers={batch.progress?.created_users || 0}
+                failedRows={batch.progress?.failed_rows || 0}
             />
 
             {/* Additional Info */}
@@ -186,6 +187,11 @@ export function UserBatchDetailPage() {
                     </dl>
                 </div>
             </div>
+
+            {/* Errors Detail */}
+            {batch.errors && Array.isArray(batch.errors) && batch.errors.length > 0 && (
+                <BulkUploadErrors errors={batch.errors} />
+            )}
         </div>
     );
 }

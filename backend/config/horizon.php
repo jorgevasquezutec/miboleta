@@ -236,6 +236,31 @@ return [
             'timeout' => 120,
             'nice' => 0,
         ],
+        'emails-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['emails'],
+            'balance' => 'simple',
+            'maxProcesses' => 1, // Solo 1 proceso para enviar emails secuencialmente
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 2,
+            'timeout' => 30,
+            'nice' => 0,
+        ],
+        'bulk-uploads-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['bulk-uploads'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 3,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 256,
+            'tries' => 1,
+            'timeout' => 300, // 5 minutos por chunk
+            'nice' => 0,
+        ],
     ],
 
 

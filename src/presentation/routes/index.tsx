@@ -168,7 +168,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "users/batch/:uuid",
+        path: "users/batch/:id",
         element: (
           <ProtectedRoute allowedRoles={["root", "admin"]}>
             <LazyPage><UserBatchDetailPage /></LazyPage>

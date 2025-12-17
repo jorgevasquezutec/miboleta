@@ -7,23 +7,28 @@ import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadS
 
 interface UserBatchCardProps {
     batch: UserBatchListItem;
-    onClick: (uuid: string) => void;
+    onClick: (id: number) => void;
 }
 
 export function UserBatchCard({ batch, onClick }: UserBatchCardProps) {
     return (
         <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => onClick(batch.uuid)}
+            onClick={() => onClick(batch.id)}
         >
             <CardContent className="p-6">
                 <div className="space-y-4">
                     {/* Header */}
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                            <FileText className="h-5 w-5 text-gray-400" />
-                            <div>
-                                <h3 className="font-semibold text-lg">{batch.filename}</h3>
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                                <h3 
+                                    className="font-semibold text-lg truncate" 
+                                    title={batch.filename}
+                                >
+                                    {batch.filename}
+                                </h3>
                                 <p className="text-sm text-gray-500">
                                     {bulkUserUploadService.formatFileSize(batch.file_size)}
                                 </p>
@@ -54,12 +59,12 @@ export function UserBatchCard({ batch, onClick }: UserBatchCardProps) {
                             </div>
                             <div className="text-xs text-gray-600">Creados</div>
                         </div>
-                        <div className="text-center">
+                        {/* <div className="text-center">
                             <div className="text-lg font-bold text-yellow-600">
                                 {batch.updated_users}
                             </div>
                             <div className="text-xs text-gray-600">Actualizados</div>
-                        </div>
+                        </div> */}
                         <div className="text-center">
                             <div className="text-lg font-bold text-red-600">
                                 {batch.failed_rows}
@@ -72,7 +77,7 @@ export function UserBatchCard({ batch, onClick }: UserBatchCardProps) {
                     <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t">
                         <div className="flex items-center gap-1">
                             <User className="h-3 w-3" />
-                            {batch.created_by}
+                            {batch.created_by?.name || 'N/A'}
                         </div>
                         <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />

@@ -86,6 +86,10 @@ export const useAuthStore = create<AuthState>()(
 
           // Forzar limpieza del localStorage de Zustand
           localStorage.removeItem('auth-storage');
+          localStorage.removeItem('tenant-filter-storage');
+          localStorage.removeItem('pusherTransportNonTLS');
+          localStorage.removeItem('TanstackQueryDevtools.open');
+
         }
       },
 

@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Middleware para filtrado multi-tenant
@@ -27,7 +28,8 @@ class TenantFilter
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $user = auth()->user();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
 
         // Si no hay usuario autenticado, continuar sin filtro
         if (!$user) {
@@ -39,11 +41,11 @@ class TenantFilter
 
         // 🔍 DEBUG: Try different cases
         if (!$tenantIdsHeader) {
-            Log::debug('🔍 [TenantFilter] Trying different header cases', [
-                'X-Tenant-Ids' => $request->header('X-Tenant-Ids'),
-                'x-tenant-ids' => $request->header('x-tenant-ids'),
-                'X-tenant-ids' => $request->header('X-tenant-ids'),
-            ]);
+            // Log::debug('🔍 [TenantFilter] Trying different header cases', [
+            //     'X-Tenant-Ids' => $request->header('X-Tenant-Ids'),
+            //     'x-tenant-ids' => $request->header('x-tenant-ids'),
+            //     'X-tenant-ids' => $request->header('X-tenant-ids'),
+            // ]);
 
             // Try lowercase
             $tenantIdsHeader = $request->header('x-tenant-ids');
@@ -139,10 +141,10 @@ class TenantFilter
         $scopeHeader = $request->header('X-Tenant-Scope');
 
         if ($scopeHeader === 'all' || (!$tenantIdsHeader && !$singleTenantId)) {
-            Log::info('🏢 [TenantFilter] No filter - showing all user tenants', [
-                'user_id' => $user->id,
-                'role' => $user->getCurrentRole(),
-            ]);
+            // Log::info('🏢 [TenantFilter] No filter - showing all user tenants', [
+            //     'user_id' => $user->id,
+            //     'role' => $user->getCurrentRole(),
+            // ]);
 
             // No establecer _tenant_filter_ids para indicar "sin filtro"
             // Los scopes decidirán si filtrar por rol

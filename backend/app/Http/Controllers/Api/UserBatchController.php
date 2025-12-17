@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\ProcessBulkUserUpload;
+use App\Jobs\ProcessUserChunk;
 use App\Models\UserBatch;
 use App\Services\BulkUserUploadService;
+use Illuminate\Bus\Batch;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class UserBatchController extends Controller
 {
@@ -58,8 +62,17 @@ class UserBatchController extends Controller
             ->when($request->has('status'), function ($q) use ($request) {
                 $q->where('status', $request->status);
             })
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+            ->orderBy('created_at', 'desc');
+
+        // $sqlQuery = $batches->toSql();
+        // $sqlBindings = $batches->getBindings();
+        // for ($i = 0; $i < count($sqlBindings); $i++) {
+        //     $value = is_numeric($sqlBindings[$i]) ? $sqlBindings[$i] : "'" . $sqlBindings[$i] . "'";
+        //     $sqlQuery = preg_replace('/\?/', $value, $sqlQuery, 1);
+        // }
+        // Log::debug('[UserBatchController@index] SQL Query: ' . $sqlQuery);
+
+        $batches = $batches->paginate($perPage);
 
         return response()->json([
             'data' => $batches->map(fn($b) => [
@@ -103,14 +116,16 @@ class UserBatchController extends Controller
     }
 
     /**
-     * GET /api/user-batches/{uuid}
+     * GET /api/user-batches/{id}
      * Ver detalle de un batch específico
      */
-    public function show(string $uuid)
+    public function show(int $id)
     {
         $batch = UserBatch::with(['tenant', 'createdBy'])
-            ->where('uuid', $uuid)
-            ->firstOrFail();
+            ->findOrFail($id);
+
+        // Obtener progreso en tiempo real del Laravel Bus Batch si está disponible
+        $batchProgress = $batch->batch_progress;
 
         return response()->json([
             'id' => $batch->id,
@@ -118,16 +133,16 @@ class UserBatchController extends Controller
             'filename' => $batch->original_filename,
             'file_size' => $batch->file_size,
             'file_path' => $batch->file_path,
-            'tenant' => [
+            'tenant' => $batch->tenant ? [
                 'id' => $batch->tenant->id,
                 'name' => $batch->tenant->name,
                 'ruc' => $batch->tenant->ruc,
-            ],
-            'created_by' => [
+            ] : null,
+            'created_by' => $batch->createdBy ? [
                 'id' => $batch->createdBy->id,
                 'name' => $batch->createdBy->full_name,
                 'email' => $batch->createdBy->email,
-            ],
+            ] : null,
             'status' => $batch->status,
             'status_text' => $batch->status_text,
             'status_badge' => $batch->status_badge,
@@ -135,13 +150,13 @@ class UserBatchController extends Controller
                 'total_rows' => $batch->total_rows,
                 'processed_rows' => $batch->processed_rows,
                 'created_users' => $batch->created_users,
-                'updated_users' => $batch->updated_users,
                 'failed_rows' => $batch->failed_rows,
                 'percentage' => $batch->progress_percentage,
                 'formatted' => $batch->formatted_progress,
                 'current_chunk' => $batch->current_chunk,
                 'total_chunks' => $batch->total_chunks,
             ],
+            'batch_progress' => $batchProgress, // ✅ Progreso en tiempo real de Laravel Bus
             'errors' => $batch->error_summary,
             'summary' => $batch->success_summary,
             'processing_options' => $batch->processing_options,
@@ -224,12 +239,14 @@ class UserBatchController extends Controller
         $path = $file->store('user-batches', 'private');
 
         // 3. Obtener tenant_id (null para usuarios root)
-        $tenantId = auth()->user()->tenants->first()?->id;
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $tenantId = $user->tenants->first()?->id;
 
         // 4. Crear batch en BD
         $batch = UserBatch::create([
             'tenant_id' => $tenantId,
-            'created_by_user_id' => auth()->id(),
+            'created_by_user_id' => $user->id,
             'original_filename' => $file->getClientOriginalName(),
             'file_path' => $path,
             'file_size' => $file->getSize(),
@@ -241,12 +258,36 @@ class UserBatchController extends Controller
             ],
         ]);
 
-        // 4. Despachar Job asíncrono
-        ProcessBulkUserUpload::dispatch($batch->uuid, $validation['data']);
+        // 5. Dividir usuarios en chunks y crear jobs
+        $chunkSize = 50;
+        $userChunks = array_chunk($validation['data'], $chunkSize);
+        $jobs = [];
+
+        foreach ($userChunks as $index => $chunk) {
+            $jobs[] = new ProcessUserChunk($batch->uuid, $chunk, $index + 1);
+        }
+
+        // 6. Despachar batch de jobs con callbacks
+        $laravelBatch = Bus::batch($jobs)
+            ->name("Bulk User Upload: {$batch->original_filename}")
+            ->then(fn(Batch $lb) => UserBatch::onBatchCompleted($batch->id))
+            ->catch(fn(Batch $lb, \Throwable $e) => UserBatch::onBatchFailed($batch->id, $e->getMessage()))
+            ->finally(fn(Batch $lb) => UserBatch::onBatchFinished($batch->id, $lb->failedJobs))
+            ->onQueue('bulk-uploads')
+            ->dispatch();
+
+        // 7. Guardar batch_id en el registro
+        $batch->update([
+            'batch_id' => $laravelBatch->id,
+            'status' => 'processing',
+            'started_at' => now(),
+            'total_chunks' => count($userChunks),
+        ]);
 
         return response()->json([
             'message' => 'Carga masiva iniciada exitosamente',
             'batch' => [
+                'id' => $batch->id,
                 'uuid' => $batch->uuid,
                 'total_rows' => $batch->total_rows,
                 'status' => $batch->status,
@@ -257,12 +298,12 @@ class UserBatchController extends Controller
     }
 
     /**
-     * GET /api/user-batches/{uuid}/errors
+     * GET /api/user-batches/{id}/errors
      * Descargar archivo Excel con errores del batch
      */
-    public function downloadErrors(string $uuid)
+    public function downloadErrors(int $id)
     {
-        $batch = UserBatch::where('uuid', $uuid)->firstOrFail();
+        $batch = UserBatch::findOrFail($id);
 
         if (!$batch->hasErrors()) {
             return response()->json([
@@ -280,17 +321,25 @@ class UserBatchController extends Controller
     }
 
     /**
-     * DELETE /api/user-batches/{uuid}
+     * DELETE /api/user-batches/{id}
      * Cancelar/eliminar un batch
      */
-    public function destroy(string $uuid)
+    public function destroy(int $id)
     {
-        $batch = UserBatch::where('uuid', $uuid)->firstOrFail();
+        $batch = UserBatch::findOrFail($id);
 
-        // Solo permitir eliminar si NO está en procesamiento
+        // Si está en procesamiento, intentar cancelar el batch
         if ($batch->isProcessing()) {
+            $cancelled = $batch->cancelBatch();
+
+            if ($cancelled) {
+                return response()->json([
+                    'message' => 'Batch cancelado exitosamente',
+                ]);
+            }
+
             return response()->json([
-                'message' => 'No se puede eliminar un batch que está en procesamiento',
+                'message' => 'No se pudo cancelar el batch',
             ], 409); // Conflict
         }
 

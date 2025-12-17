@@ -15,6 +15,7 @@ import {
   LucideIcon,
   History,
   ClipboardList,
+  Upload,
 } from "lucide-react";
 import { USER_ROLE_DISPLAY_LABELS, NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
@@ -188,6 +189,7 @@ function Sidebar({ isExpanded }: SidebarProps) {
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
     { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2 },
     { label: "Usuarios", path: "/users", icon: Users },
+    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
     {
       label: "Vacaciones",
       path: "/vacations",

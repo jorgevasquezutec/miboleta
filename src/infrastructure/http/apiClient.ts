@@ -85,12 +85,16 @@ apiClient.interceptors.request.use(
       }
 
       // ✅ Si no hay X-Tenant-Ids configurado, usar el tenant del usuario autenticado
-      if (!config.headers['X-Tenant-Ids'] && authStorage) {
+      // PERO solo si el usuario NO es root (root debe ver TODO sin filtro)
+      if (!config.headers['X-Tenant-Ids'] && !config.headers['X-Tenant-Scope'] && authStorage) {
         const { state } = JSON.parse(authStorage);
         const user = state?.user;
 
-        if (user?.tenants && user.tenants.length > 0) {
-          // Usar todos los tenants del usuario como fallback
+        // ⚠️ Si es usuario root SIN filtro explícito, NO enviar header (verá todo)
+        if (user?.role === 'root') {
+          console.log(`🏢 [API] Root user without filter - showing ALL tenants`);
+        } else if (user?.tenants && user.tenants.length > 0) {
+          // Usuarios no-root: usar sus tenants como fallback
           const tenantIds = user.tenants.map((t: any) => t.id).join(',');
           config.headers['X-Tenant-Ids'] = tenantIds;
           console.log(`🏢 [API] Using user's tenants: ${tenantIds}`);
