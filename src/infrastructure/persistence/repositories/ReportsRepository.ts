@@ -9,12 +9,13 @@ import {
     ReportFilters,
     PaginatedAuditResponse,
 } from '@/core/domain/entities';
+import { IReportsRepository } from '@/core/domain/repositories/IReportsRepository';
 
 /**
  * Reports Repository
  * Handles API calls for dashboard statistics, reports, and exports.
  */
-export class ReportsRepository {
+export class ReportsRepository implements IReportsRepository {
     /**
      * Get complete dashboard statistics
      */

@@ -1,19 +1,13 @@
 import { Tenant, CreateTenantData, UpdateTenantData } from '@/core/domain/entities';
+import { ITenantRepository, GetTenantsParams } from '@/core/domain/repositories/ITenantRepository';
 import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
 import { PaginatedResponse } from './types';
-
-export interface GetTenantsParams {
-  page?: number;
-  per_page?: number;
-  search?: string;
-  status?: string;
-}
 
 /**
  * Implementación del repositorio de tenants
  * Conecta con la API de Laravel para gestión de organizaciones
  */
-export class TenantRepository {
+export class TenantRepository implements ITenantRepository {
   /**
    * Obtener lista de tenants con paginación
    */

@@ -55,6 +55,7 @@ export interface CreateVacationRequestDTO {
     endDate: string;
     daysRequested: number;
     reason?: string;
+    tenantId?: number; // Para usuarios multi-tenant
 }
 
 export interface RejectVacationRequestDTO {

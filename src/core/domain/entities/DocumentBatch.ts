@@ -74,6 +74,7 @@ export interface BatchUploadRequest {
     period: string;
     notifyEmployees: boolean;
     requiresSignature: boolean;
+    tenantId?: number;
 }
 
 // Preview response

@@ -6,7 +6,7 @@ import {
   RequestCodeResponse,
   SignDocumentResponse,
   SignatureStatusResponse
-} from '@/core/domain/repositories';
+} from '@/core/domain/repositories/IDocumentRepository';
 import { Document } from '@/core/domain/entities/Document';
 import { DocumentType } from '@/core/domain/entities/DocumentType';
 import { DocumentBatch, BatchUploadRequest, ZipPreviewResponse } from '@/core/domain/entities/DocumentBatch';

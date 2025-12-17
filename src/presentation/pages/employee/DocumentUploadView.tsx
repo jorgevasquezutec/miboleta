@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, FileArchive, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, FileArchive, CheckCircle, AlertTriangle, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Label } from "@/presentation/components/ui/label";
@@ -22,7 +22,7 @@ import {
   TableRow,
 } from "@/presentation/components/ui/table";
 import { MonthYearPicker } from "@/presentation/components/ui/month-year-picker";
-import { useDocumentsStore } from "@/presentation/stores";
+import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
 import { formatFileSize } from "@/presentation/utils";
 import { toast } from "sonner";
 
@@ -54,10 +54,17 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     clearError,
   } = useDocumentsStore();
 
+  const { user } = useAuthStore();
+
+  // Get user's tenants
+  const userTenants = user?.tenants || [];
+  const hasMultipleTenants = userTenants.length > 1;
+
   // Form state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [typeId, setTypeId] = useState<string>("");
   const [period, setPeriod] = useState<string>("");
+  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [notifyEmployees, setNotifyEmployees] = useState(false);
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<{ batchId: number } | null>(null);
@@ -74,9 +81,20 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     clearZipPreview();
     clearError();
 
+    // Auto-select tenant if user has only one
+    if (userTenants.length === 1) {
+      setSelectedTenantId(String(userTenants[0].id));
+    } else if (userTenants.length > 1) {
+      // Auto-select primary tenant for multi-tenant users
+      const primaryTenant = userTenants.find(t => t.is_primary);
+      if (primaryTenant) {
+        setSelectedTenantId(String(primaryTenant.id));
+      }
+    }
+
     // Load document types
     fetchDocumentTypes();
-  }, [fetchDocumentTypes, clearZipPreview, clearError]);
+  }, [fetchDocumentTypes, clearZipPreview, clearError, userTenants]);
 
 
 
@@ -127,6 +145,11 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
       return;
     }
 
+    if (!selectedTenantId) {
+      toast.error("Por favor selecciona una organización");
+      return;
+    }
+
     try {
       const result = await uploadBatch({
         file: selectedFile,
@@ -134,6 +157,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
         period,
         notifyEmployees,
         requiresSignature,
+        tenantId: parseInt(selectedTenantId),
       });
 
       setUploadSuccess(result);
@@ -152,11 +176,21 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setUploadSuccess(null);
     clearZipPreview();
     clearError();
+
+    // Reset tenant selection (auto-select for single tenant)
+    if (userTenants.length === 1) {
+      setSelectedTenantId(String(userTenants[0].id));
+    } else {
+      const primaryTenant = userTenants.find(t => t.is_primary);
+      if (primaryTenant) {
+        setSelectedTenantId(String(primaryTenant.id));
+      }
+    }
   };
 
 
 
-  const canUpload = selectedFile && typeId && period && zipPreview && zipPreview.validPdfs > 0;
+  const canUpload = selectedFile && typeId && period && selectedTenantId && zipPreview && zipPreview.validPdfs > 0;
 
   return (
     <div className="space-y-6">
@@ -366,6 +400,54 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Tenant Selector - Only show if user has multiple tenants */}
+              {hasMultipleTenants && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Building2 className="h-5 w-5 text-blue-600" />
+                    <Label className="text-sm font-semibold text-blue-900 mb-0">
+                      Organización de destino *
+                    </Label>
+                  </div>
+                  <Select 
+                    value={selectedTenantId} 
+                    onValueChange={setSelectedTenantId}
+                    disabled={!zipPreview || zipPreview.validPdfs === 0}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona la organización..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {userTenants.map((tenant) => (
+                        <SelectItem key={tenant.id} value={String(tenant.id)}>
+                          <div className="flex items-center gap-2">
+                            <span>{tenant.name}</span>
+                            {tenant.is_primary && (
+                              <Badge className="bg-blue-600 text-white text-xs">
+                                Principal
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-blue-700 mt-2">
+                    Los documentos se asociarán a esta organización
+                  </p>
+                </div>
+              )}
+
+              {/* Current tenant indicator for single-tenant users */}
+              {!hasMultipleTenants && userTenants.length === 1 && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm text-gray-700">
+                    Organización: <span className="font-semibold">{userTenants[0].name}</span>
+                  </span>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="docType">Tipo de Documento *</Label>

@@ -3,34 +3,13 @@ import {
     CreateVacationRequestDTO,
     RejectVacationRequestDTO,
 } from '@/core/domain/entities/VacationRequest';
+import { IVacationRepository, VacationFilters, PaginatedVacationRequests } from '@/core/domain/repositories/IVacationRepository';
 import apiClient from '@/infrastructure/http/apiClient';
-
-export interface VacationFilters {
-    page?: number;
-    perPage?: number;
-    status?: string;
-    year?: number;
-    wasTaken?: 'true' | 'false' | 'pending' | 'all';
-    dateFrom?: string;
-    dateTo?: string;
-    search?: string;
-    tenantId?: number;
-}
-
-export interface PaginatedVacationRequests {
-    data: VacationRequest[];
-    meta: {
-        currentPage: number;
-        lastPage: number;
-        perPage: number;
-        total: number;
-    };
-}
 
 /**
  * Vacation Repository - Connected to real API
  */
-export class VacationRepository {
+export class VacationRepository implements IVacationRepository {
 
     // ============ Vacation Requests ============
 
@@ -66,12 +45,19 @@ export class VacationRepository {
     }
 
     async create(data: CreateVacationRequestDTO): Promise<VacationRequest> {
-        const response = await apiClient.post<{ data: VacationRequest }>('/vacation-requests', {
+        const payload: any = {
             start_date: data.startDate,
             end_date: data.endDate,
             days_requested: data.daysRequested,
             reason: data.reason,
-        });
+        };
+
+        // Incluir tenant_id si está especificado (usuarios multi-tenant)
+        if (data.tenantId) {
+            payload.tenant_id = data.tenantId;
+        }
+
+        const response = await apiClient.post<{ data: VacationRequest }>('/vacation-requests', payload);
         return this.mapVacationRequest(response.data.data);
     }
 

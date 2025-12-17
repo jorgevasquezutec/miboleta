@@ -4,8 +4,9 @@ import {
     NotificationFilters,
     PaginatedNotifications
 } from "@/core/domain/entities";
+import { INotificationRepository } from '@/core/domain/repositories/INotificationRepository';
 
-class NotificationRepositoryClass {
+class NotificationRepositoryClass implements INotificationRepository {
 
     async findAll(filters?: NotificationFilters): Promise<PaginatedNotifications> {
         const params = new URLSearchParams();

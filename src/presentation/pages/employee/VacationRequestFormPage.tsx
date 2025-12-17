@@ -8,6 +8,7 @@ import {
     Loader2,
     Info,
     AlertTriangle,
+    Building2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
@@ -15,6 +16,7 @@ import { Label } from "@/presentation/components/ui/label";
 import { Textarea } from "@/presentation/components/ui/textarea";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
+import { TenantSelector } from "@/presentation/components/shared/TenantSelector";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
 import { toast } from "sonner";
@@ -24,10 +26,14 @@ export function VacationRequestFormPage() {
     const { createVacationRequest, error, clearError } = useVacationsStore();
     const { user } = useAuthStore();
 
+    const [selectedTenantId, setSelectedTenantId] = useState<string>("");
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [reason, setReason] = useState<string>("");
     const [submitting, setSubmitting] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+    // Check if user has multiple tenants
+    const hasMultipleTenants = user?.tenants && user.tenants.length > 1;
 
     // Calculate days requested (all calendar days)
     const daysRequested = useMemo(() => {
@@ -79,9 +85,10 @@ export function VacationRequestFormPage() {
     // Validation
     const isValid = useMemo(() => {
         if (!dateRange?.from || !dateRange?.to) return false;
+        if (hasMultipleTenants && !selectedTenantId) return false;
         if (Object.keys(frontendErrors).length > 0) return false;
         return true;
-    }, [dateRange, frontendErrors]);
+    }, [dateRange, hasMultipleTenants, selectedTenantId, frontendErrors]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -105,6 +112,7 @@ export function VacationRequestFormPage() {
                 endDate: format(dateRange.to, 'yyyy-MM-dd'),
                 daysRequested,
                 reason: reason.trim() || undefined,
+                tenantId: hasMultipleTenants ? parseInt(selectedTenantId) : undefined,
             });
             toast.success("Solicitud de vacaciones creada correctamente");
             navigate("/vacations");
@@ -184,6 +192,25 @@ export function VacationRequestFormPage() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Tenant Selection (only if user has multiple tenants) */}
+                        {hasMultipleTenants && (
+                            <div className="space-y-2">
+                                <Label htmlFor="tenant">Empresa *</Label>
+                                <TenantSelector
+                                    value={selectedTenantId}
+                                    onValueChange={setSelectedTenantId}
+                                    placeholder="Selecciona la empresa para la solicitud"
+                                />
+                                {!selectedTenantId && (
+                                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                                        <Building2 className="w-3 h-3" />
+                                        Selecciona la empresa a la que corresponde esta solicitud
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Submit={handleSubmit} className="space-y-6">
                         {/* Date Range Selection */}
                         <div className="space-y-2">
                             <Label>Rango de Fechas *</Label>

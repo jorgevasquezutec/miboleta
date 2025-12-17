@@ -1,21 +1,7 @@
-import { IUserRepository } from '@/core/domain/repositories';
+import { IUserRepository, LoginResponse, GetUsersParams } from '@/core/domain/repositories/IUserRepository';
 import { User, CreateUserData, UpdateUserData } from '@/core/domain/entities';
 import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
 import { PaginatedResponse } from './types';
-
-// Tipos de respuesta de la API
-interface LoginResponse {
-  user: User;
-  // No incluimos token porque ahora se maneja en cookies HttpOnly
-}
-
-export interface GetUsersParams {
-  page?: number;
-  per_page?: number;
-  search?: string;
-  status?: string;
-  tenant_id?: string;
-}
 
 /**
  * Implementación del repositorio de usuarios
