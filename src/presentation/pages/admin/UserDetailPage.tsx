@@ -337,10 +337,13 @@ export function UserDetailPage() {
                                             <Building2 className="w-4 h-4 text-gray-500" />
                                             <span className="font-medium">{tenant.name}</span>
                                         </div>
-                                        {tenant.supervisor_id ? (
-                                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                                Supervisor asignado
-                                            </Badge>
+                                        {tenant.supervisor ? (
+                                            <div className="flex flex-col items-end">
+                                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 mb-1">
+                                                    Supervisor asignado
+                                                </Badge>
+                                                <span className="text-sm text-gray-600">{tenant.supervisor.full_name || tenant.supervisor.name}</span>
+                                            </div>
                                         ) : (
                                             <Badge variant="outline" className="bg-gray-100 text-gray-600">
                                                 Sin supervisor

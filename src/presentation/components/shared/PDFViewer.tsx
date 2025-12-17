@@ -57,11 +57,20 @@ export function PDFViewer({ url }: PDFViewerProps) {
         }
     }, [url]);
 
-    // Memoize the file object
+    // Memoize the file object with stable key
+    // Create a stable key based on byte array content to prevent unnecessary re-renders
+    const fileKey = useMemo(() => {
+        if (!pdfBytes) return null;
+        // Hash using first/last bytes + length for change detection
+        const start = Array.from(pdfBytes.slice(0, 50)).join(',');
+        const end = Array.from(pdfBytes.slice(-50)).join(',');
+        return `${start}-${pdfBytes.length}-${end}`;
+    }, [pdfBytes]);
+
     const fileData = useMemo(() => {
         if (!pdfBytes) return null;
         return { data: pdfBytes };
-    }, [pdfBytes]);
+    }, [fileKey]);
 
     function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
         setNumPages(numPages);
@@ -183,6 +192,7 @@ export function PDFViewer({ url }: PDFViewerProps) {
             <div className="flex-1 flex overflow-hidden">
                 {fileData && (
                     <Document
+                        key={fileKey || 'pdf-document'}
                         file={fileData}
                         onLoadSuccess={onDocumentLoadSuccess}
                         onLoadError={onDocumentLoadError}

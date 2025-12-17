@@ -432,6 +432,7 @@ export function VacationHistoryPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Empleado</TableHead>
+                                    {isRoot && <TableHead>Empresa</TableHead>}
                                     <TableHead>Fechas</TableHead>
                                     <TableHead className="text-center">Días</TableHead>
                                     <TableHead>Estado</TableHead>
@@ -459,6 +460,15 @@ export function VacationHistoryPage() {
                                                 </div>
                                             </div>
                                         </TableCell>
+
+                                        {/* Empresa (solo root) */}
+                                        {isRoot && (
+                                            <TableCell>
+                                                <span className="text-sm text-gray-700">
+                                                    {request.tenant?.name || "N/A"}
+                                                </span>
+                                            </TableCell>
+                                        )}
 
                                         {/* Fechas */}
                                         <TableCell>

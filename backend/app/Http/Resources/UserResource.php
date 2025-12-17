@@ -41,12 +41,29 @@ class UserResource extends JsonResource
                 }
 
                 return $visibleTenants->map(function ($tenant) {
+                    $supervisorId = $tenant->pivot->supervisor_id ?? null;
+                    $supervisor = null;
+                    
+                    // Cargar información del supervisor si existe
+                    if ($supervisorId) {
+                        $supervisorUser = \App\Models\User::find($supervisorId);
+                        if ($supervisorUser) {
+                            $supervisor = [
+                                'id' => $supervisorUser->id,
+                                'name' => $supervisorUser->name,
+                                'full_name' => $supervisorUser->full_name,
+                                'email' => $supervisorUser->email,
+                            ];
+                        }
+                    }
+                    
                     return [
                         'id' => $tenant->id,
                         'name' => $tenant->name,
                         'ruc' => $tenant->ruc,
                         'is_primary' => $tenant->pivot->is_primary ?? false,
-                        'supervisor_id' => $tenant->pivot->supervisor_id ?? null,
+                        'supervisor_id' => $supervisorId,
+                        'supervisor' => $supervisor,
                     ];
                 })->values();  // ✅ Reset array keys after filter
             }),

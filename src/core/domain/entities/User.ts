@@ -42,6 +42,7 @@ export interface TenantAssociation {
   logo_url?: string;
   is_primary: boolean;
   supervisor_id?: string | null;
+  supervisor?: SupervisorBasic | null;
 }
 
 // Información básica de tenant

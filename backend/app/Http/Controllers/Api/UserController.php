@@ -113,13 +113,32 @@ class UserController extends Controller
                     'status' => $u->status,
                     'role' => $u->getCurrentRole(),
                     'roles' => $u->getCurrentRoles(),
-                    'tenants' => $visibleTenants->map(fn($t) => [
-                        'id' => $t->id,
-                        'name' => $t->name,
-                        'ruc' => $t->ruc ?? '',
-                        'is_primary' => $t->pivot->is_primary ?? false,
-                        'supervisor_id' => $t->pivot->supervisor_id ?? null,
-                    ])->values(),  // ✅ Reset array keys after filter
+                    'tenants' => $visibleTenants->map(function($t) {
+                        $supervisorId = $t->pivot->supervisor_id ?? null;
+                        $supervisor = null;
+                        
+                        // Cargar información del supervisor si existe
+                        if ($supervisorId) {
+                            $supervisorUser = \App\Models\User::find($supervisorId);
+                            if ($supervisorUser) {
+                                $supervisor = [
+                                    'id' => $supervisorUser->id,
+                                    'name' => $supervisorUser->name,
+                                    'full_name' => $supervisorUser->full_name,
+                                    'email' => $supervisorUser->email,
+                                ];
+                            }
+                        }
+                        
+                        return [
+                            'id' => $t->id,
+                            'name' => $t->name,
+                            'ruc' => $t->ruc ?? '',
+                            'is_primary' => $t->pivot->is_primary ?? false,
+                            'supervisor_id' => $supervisorId,
+                            'supervisor' => $supervisor,
+                        ];
+                    })->values(),  // ✅ Reset array keys after filter
                     'created_at' => $u->created_at,
                 ];
             }),

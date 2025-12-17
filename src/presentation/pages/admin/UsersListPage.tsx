@@ -351,8 +351,8 @@ export function UsersListPage() {
                                 {user.tenants
                                   .filter(t => t.supervisor_id)
                                   .map((tenant) => (
-                                    <span key={tenant.id} className="text-xs text-gray-600">
-                                      {tenant.name}: Sí
+                                    <span key={tenant.id} className="text-sm text-gray-700">
+                                      {tenant.supervisor?.full_name || tenant.supervisor?.name || 'Asignado'}
                                     </span>
                                   ))}
                                 {user.tenants.filter(t => t.supervisor_id).length === 0 && (
