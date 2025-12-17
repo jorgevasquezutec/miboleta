@@ -32,9 +32,9 @@ class DocumentBatchController extends Controller
      *     description="Lista el historial de cargas masivas de documentos",
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(
-     *         name="X-Tenant-Id",
+     *         name="X-Tenant-Ids",
      *         in="header",
-     *         description="ID del tenant",
+     *         description="IDs de tenants (separados por coma)",
      *         required=false,
      *         @OA\Schema(type="string")
      *     ),
@@ -97,8 +97,11 @@ class DocumentBatchController extends Controller
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
+        // Obtener tenant IDs del middleware
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'tenant_ids' => $tenantIds,
             'status' => $request->status,
             'type_id' => $request->type_id,
             'date_from' => $request->date_from,
@@ -109,7 +112,7 @@ class DocumentBatchController extends Controller
         $batches = $this->batchService->getBatches($user, $filters);
 
         return response()->json([
-            'data' => $batches->getCollection()->map(fn($batch) => $this->batchService->transformBatchForList($batch)),
+            'data' => collect($batches->items())->map(fn($batch) => $this->batchService->transformBatchForList($batch)),
             'meta' => [
                 'current_page' => $batches->currentPage(),
                 'last_page' => $batches->lastPage(),
@@ -165,9 +168,9 @@ class DocumentBatchController extends Controller
      *     description="Sube un archivo ZIP con documentos PDF para procesamiento asíncrono. Los nombres de archivos deben ser el número de documento del empleado (ej: 12345678.pdf)",
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(
-     *         name="X-Tenant-Id",
+     *         name="X-Tenant-Ids",
      *         in="header",
-     *         description="ID del tenant",
+     *         description="IDs de tenants (separados por coma)",
      *         required=false,
      *         @OA\Schema(type="string")
      *     ),
@@ -205,7 +208,8 @@ class DocumentBatchController extends Controller
         $validated = $request->validated();
         $user = Auth::user();
 
-        $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;
+        // El tenant_id viene en el request validado desde el frontend
+        $tenantId = $validated['tenant_id'] ?? $user->tenants->first()?->id;
 
         if (!$tenantId) {
             return response()->json(['error' => 'Tenant no especificado'], 400);

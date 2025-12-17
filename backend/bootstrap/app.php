@@ -22,8 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
-            'tenant' => \App\Http\Middleware\TenantScope::class,
-            'tenant.filter' => \App\Http\Middleware\TenantFilter::class, // ✅ NUEVO: Multi-tenant filter
+            // 'tenant' => \App\Http\Middleware\TenantScope::class, // ❌ DEPRECADO - Use TenantFilter
+            'tenant.filter' => \App\Http\Middleware\TenantFilter::class, // ✅ Multi-tenant filter
         ]);
 
         // Configurar CORS para API

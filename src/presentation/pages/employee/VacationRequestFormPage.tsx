@@ -35,6 +35,18 @@ export function VacationRequestFormPage() {
     // Check if user has multiple tenants
     const hasMultipleTenants = user?.tenants && user.tenants.length > 1;
 
+    // Get supervisor for selected tenant (or default tenant)
+    const selectedTenant = useMemo(() => {
+        if (!user?.tenants) return null;
+        if (hasMultipleTenants && selectedTenantId) {
+            return user.tenants.find(t => String(t.id) === selectedTenantId);
+        }
+        // If single tenant, use it directly
+        return user.tenants[0];
+    }, [user?.tenants, hasMultipleTenants, selectedTenantId]);
+
+    const hasSupervisor = selectedTenant?.supervisor_id != null;
+
     // Calculate days requested (all calendar days)
     const daysRequested = useMemo(() => {
         if (!dateRange?.from || !dateRange?.to) return 0;
@@ -86,9 +98,10 @@ export function VacationRequestFormPage() {
     const isValid = useMemo(() => {
         if (!dateRange?.from || !dateRange?.to) return false;
         if (hasMultipleTenants && !selectedTenantId) return false;
+        if (!hasSupervisor) return false; // Must have supervisor for selected tenant
         if (Object.keys(frontendErrors).length > 0) return false;
         return true;
-    }, [dateRange, hasMultipleTenants, selectedTenantId, frontendErrors]);
+    }, [dateRange, hasMultipleTenants, selectedTenantId, hasSupervisor, frontendErrors]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -172,11 +185,11 @@ export function VacationRequestFormPage() {
                 </div>
             </div>
 
-            {/* No supervisor warning */}
-            {user && !user.immediate_supervisor_id && (
+            {/* No suselectedTenant && !hasSupervisor && (
                 <Alert variant="destructive">
                     <AlertTriangle className="w-4 h-4" />
                     <AlertDescription>
+                        No tienes un supervisor asignado para {selectedTenant.name}
                         No tienes un supervisor asignado. Contacta a RRHH para poder solicitar vacaciones.
                     </AlertDescription>
                 </Alert>
@@ -327,7 +340,7 @@ export function VacationRequestFormPage() {
                             </Button>
                             <Button
                                 type="submit"
-                                disabled={!isValid || submitting || !user?.immediate_supervisor_id}
+                                disabled={!isValid || submitting || !hasSupervisor}
                             >
                                 {submitting ? (
                                     <>

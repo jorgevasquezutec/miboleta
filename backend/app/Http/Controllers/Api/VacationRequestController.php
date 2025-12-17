@@ -42,17 +42,15 @@ class VacationRequestController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $role = $user->getCurrentRole();
 
-        // For root users, allow tenant_id from query params
-        // For other users, use header or first tenant
-        $tenantId = ($role === 'root' && $request->query('tenant_id'))
-            ? $request->query('tenant_id')
-            : ($request->header('X-Tenant-Id') ?? $user->tenants->first()?->id);
+        // Obtener tenant IDs del middleware o usar tenants del usuario
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
 
         $filters = [
-            'tenant_id' => $tenantId,
+            'tenant_ids' => $tenantIds,
             'status' => $request->status,
             'year' => $request->year,
             'date_from' => $request->date_from,
@@ -105,7 +103,9 @@ class VacationRequestController extends Controller
     public function store(CreateVacationRequestRequest $request): JsonResponse
     {
         $user = Auth::user();
-        $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;
+
+        // El tenant_id viene en el request validado desde el frontend
+        $tenantId = $request->validated()['tenant_id'] ?? $user->tenants->first()?->id;
 
         if (!$tenantId) {
             return response()->json(['error' => 'Tenant no especificado'], 400);
@@ -148,6 +148,7 @@ class VacationRequestController extends Controller
         ])->findOrFail($id);
 
         // Check access
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $role = $user->getCurrentRole();
 
@@ -329,8 +330,11 @@ class VacationRequestController extends Controller
     {
         $user = Auth::user();
 
+        // Obtener tenant IDs del middleware
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'tenant_ids' => $tenantIds,
             'per_page' => $request->get('per_page', 15),
         ];
 
@@ -361,8 +365,11 @@ class VacationRequestController extends Controller
     {
         $user = Auth::user();
 
+        // Obtener tenant IDs del middleware
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'tenant_ids' => $tenantIds,
             'per_page' => $request->get('per_page', 15),
         ];
 
@@ -393,8 +400,11 @@ class VacationRequestController extends Controller
     {
         $user = Auth::user();
 
+        // Obtener tenant IDs del middleware
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'tenant_ids' => $tenantIds,
             'status' => $request->status,
             'year' => $request->year,
             'per_page' => $request->get('per_page', 15),
@@ -427,8 +437,11 @@ class VacationRequestController extends Controller
     {
         $user = Auth::user();
 
+        // Obtener tenant IDs del middleware
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'tenant_ids' => $tenantIds,
             'status' => $request->status,
             'year' => $request->year,
             'per_page' => $request->get('per_page', 15),

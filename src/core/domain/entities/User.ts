@@ -19,8 +19,10 @@ export interface User {
   tenants?: TenantAssociation[];
   primary_tenant?: TenantBasic | null;
 
-  //Supervisor
+  //Supervisor (DEPRECATED - usar tenants[].supervisor_id)
+  /** @deprecated Use tenants[].supervisor_id instead */
   immediate_supervisor?: SupervisorBasic | null;
+  /** @deprecated Use tenants[].supervisor_id instead */
   immediate_supervisor_id?: string | null;
 
   // Metadata

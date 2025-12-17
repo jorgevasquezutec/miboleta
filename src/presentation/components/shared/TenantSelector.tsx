@@ -39,10 +39,7 @@ export function TenantSelector({
   return (
     <Select value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectTrigger className="w-full">
-        <div className="flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-gray-500" />
-          <SelectValue placeholder={placeholder} />
-        </div>
+        <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
         {user.tenants.map((tenant) => (

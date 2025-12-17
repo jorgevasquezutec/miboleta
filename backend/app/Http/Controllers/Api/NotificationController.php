@@ -49,8 +49,11 @@ class NotificationController extends Controller
     {
         $user = Auth::user();
 
+        // Obtener tenant IDs del header X-Tenant-Ids o usar los tenants del usuario
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            'tenant_ids' => $tenantIds,
             'unread_only' => $request->boolean('unread_only'),
             'type' => $request->type,
             'per_page' => $request->get('per_page', 15),
@@ -82,9 +85,11 @@ class NotificationController extends Controller
     public function unreadCount(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;
 
-        $count = $this->notificationService->getUnreadCount($user, $tenantId);
+        // Obtener tenant IDs del header X-Tenant-Ids o usar los tenants del usuario
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
+        $count = $this->notificationService->getUnreadCount($user, $tenantIds);
 
         return response()->json([
             'count' => $count,
@@ -143,9 +148,11 @@ class NotificationController extends Controller
     public function markAllAsRead(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $tenantId = $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id;
 
-        $count = $this->notificationService->markAllAsRead($user, $tenantId);
+        // Obtener tenant IDs del header X-Tenant-Ids o usar los tenants del usuario
+        $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
+
+        $count = $this->notificationService->markAllAsRead($user, $tenantIds);
 
         return response()->json([
             'message' => "Se marcaron {$count} notificaciones como leídas",

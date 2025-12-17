@@ -14,7 +14,7 @@ import {
     CardTitle,
 } from '@/presentation/components/ui/card';
 import {
-    SupervisorBadge,
+    // SupervisorBadge,
     SubordinatesList,
     UserTenantsManager,
     PasswordResetModal,
@@ -32,6 +32,7 @@ import {
     Power,
     Shield,
     KeyRound,
+    Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/infrastructure/http/apiClient';
@@ -319,19 +320,40 @@ export function UserDetailPage() {
                     </CardContent>
                 </Card>
 
-                {/* Supervisor */}
+                {/* Supervisores por Tenant */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Jefe Inmediato</CardTitle>
+                        <CardTitle>Supervisores Asignados</CardTitle>
                         <CardDescription>
-                            Supervisor asignado a este usuario
+                            Supervisores asignados por empresa
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <SupervisorBadge
-                            supervisor={user.immediate_supervisor}
-                            size="lg"
-                        />
+                        {user.tenants && user.tenants.length > 0 ? (
+                            <div className="space-y-3">
+                                {user.tenants.map((tenant) => (
+                                    <div key={tenant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <Building2 className="w-4 h-4 text-gray-500" />
+                                            <span className="font-medium">{tenant.name}</span>
+                                        </div>
+                                        {tenant.supervisor_id ? (
+                                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                                Supervisor asignado
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="bg-gray-100 text-gray-600">
+                                                Sin supervisor
+                                            </Badge>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                No hay empresas asignadas
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
             </div>

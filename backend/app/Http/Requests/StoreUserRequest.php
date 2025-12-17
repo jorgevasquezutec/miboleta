@@ -69,7 +69,6 @@ class StoreUserRequest extends FormRequest
             'document_type.in' => 'El tipo de documento debe ser: dni, ruc, ce o passport',
             'document_text.unique' => 'Este número de documento ya está registrado',
             'phone.max' => 'El teléfono no puede exceder 20 caracteres',
-            'immediate_supervisor_id.exists' => 'El supervisor seleccionado no existe',
             'role_id.required' => 'El rol es requerido',
             'role_id.exists' => 'El rol seleccionado no existe',
             'tenant_id.required' => 'La empresa es requerida',

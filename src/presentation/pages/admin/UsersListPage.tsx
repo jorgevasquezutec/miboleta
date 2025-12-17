@@ -346,13 +346,24 @@ export function UsersListPage() {
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap hidden lg:table-cell">
-                            {user.immediate_supervisor ? (
-                              <span className="text-sm">
-                                {user.immediate_supervisor.full_name || user.immediate_supervisor.name}
-                              </span>
+                            {user.tenants && user.tenants.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {user.tenants
+                                  .filter(t => t.supervisor_id)
+                                  .map((tenant) => (
+                                    <span key={tenant.id} className="text-xs text-gray-600">
+                                      {tenant.name}: Sí
+                                    </span>
+                                  ))}
+                                {user.tenants.filter(t => t.supervisor_id).length === 0 && (
+                                  <span className="text-muted-foreground text-sm">
+                                    Sin supervisores
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground text-sm">
-                                Sin supervisor
+                                Sin tenants
                               </span>
                             )}
                           </TableCell>
