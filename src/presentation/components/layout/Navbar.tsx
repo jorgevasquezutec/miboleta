@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/presentation/components/ui/dropdown-menu";
-import { TenantSwitcher } from "@/presentation/components/shared/TenantSwitcher";
+import { TenantMultiSwitcher } from "@/presentation/components/shared/TenantMultiSwitcher";
 import { NotificationBell } from "@/presentation/components/notifications/NotificationBell";
 import { useNavigate } from "react-router-dom";
 import { User } from "@/core/domain/entities/User";
@@ -65,8 +65,8 @@ export function Navbar({
             </button>
           )}
 
-          {/* Tenant Switcher */}
-          <TenantSwitcher />
+          {/* Tenant Multi-Switcher - Selección múltiple de empresas */}
+          <TenantMultiSwitcher />
         </div>
 
         {/* Right Section */}

@@ -47,7 +47,10 @@ function getCsrfToken(): string | null {
   return null;
 }
 
-// Interceptor de Request - Agregar tenant header, CSRF token y logging
+// ✅ OPTIMIZACIÓN: Request queue para evitar requests duplicados
+const requestQueue = new Map<string, Promise<any>>();
+
+// Interceptor de Request - Agregar tenant headers, CSRF token, y deduplicación
 apiClient.interceptors.request.use(
   (config) => {
     // Agregar CSRF token si está disponible
@@ -56,20 +59,56 @@ apiClient.interceptors.request.use(
       config.headers['X-XSRF-TOKEN'] = csrfToken;
     }
 
-    // Obtener tenant actual del localStorage
+    // ✅ NUEVO: Usar tenantFilterStore para filtrado de tenants
+    try {
+      // Importar dinámicamente para evitar circular dependency
+      const tenantFilterStorage = localStorage.getItem('tenant-filter-storage');
+      if (tenantFilterStorage) {
+        const { state } = JSON.parse(tenantFilterStorage);
+        const filter = state?.filter;
+
+        if (filter) {
+          // ✅ Filtro activo: enviar tenant IDs
+          if (filter.mode !== 'all' && filter.tenantIds && filter.tenantIds.length > 0) {
+            const tenantQuery = filter.tenantIds.join(',');
+            config.headers['X-Tenant-Ids'] = tenantQuery;
+
+            console.log(`🏢 [API] Filtering by tenants: ${tenantQuery} (mode: ${filter.mode})`);
+          } else {
+            // ✅ Modo 'all': sin filtro (mostrar todas las empresas)
+            config.headers['X-Tenant-Scope'] = 'all';
+            console.log(`🏢 [API] No tenant filter (showing all companies)`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ [API] Error parsing tenant filter storage:', error);
+    }
+
+    // ⚠️ RETROCOMPATIBILIDAD: Mantener X-Tenant-Id para backend legacy
     const authStorage = localStorage.getItem('auth-storage');
     if (authStorage) {
       try {
         const { state } = JSON.parse(authStorage);
         const currentTenantId = state?.currentTenant?.id;
 
-        // Agregar X-Tenant-Id header si hay tenant seleccionado
-        if (currentTenantId) {
+        // Solo añadir si no hay X-Tenant-Ids (nuevo header tiene prioridad)
+        if (currentTenantId && !config.headers['X-Tenant-Ids']) {
           config.headers['X-Tenant-Id'] = currentTenantId;
         }
       } catch (error) {
-        console.error('Error parsing auth storage:', error);
+        console.error('❌ [API] Error parsing auth storage:', error);
       }
+    }
+
+    // ✅ OPTIMIZACIÓN: Deduplicación de requests idénticos
+    const cacheKey = `${config.method}:${config.url}:${config.headers['X-Tenant-Ids'] || config.headers['X-Tenant-Id'] || 'none'}`;
+
+    // Si ya existe un request idéntico en progreso, reutilizarlo
+    if (requestQueue.has(cacheKey)) {
+      console.log(`🔄 [Cache] Reusing in-flight request: ${cacheKey}`);
+      // Retornar la promise existente
+      return requestQueue.get(cacheKey)!.then(() => config);
     }
 
     return config;
@@ -80,13 +119,24 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Interceptor de Response - Manejar errores y refresh token
+// Interceptor de Response - Manejar errores, refresh token, y limpiar request queue
 apiClient.interceptors.response.use(
   (response) => {
+    // ✅ Limpiar del request queue cuando completa exitosamente
+    const cacheKey = `${response.config.method}:${response.config.url}:${response.config.headers?.['X-Tenant-Ids'] || response.config.headers?.['X-Tenant-Id'] || 'none'}`;
+    requestQueue.delete(cacheKey);
+
     return response;
   },
   async (error: AxiosError) => {
+    // ✅ Limpiar del request queue cuando falla
+    if (error.config) {
+      const cacheKey = `${error.config.method}:${error.config.url}:${error.config.headers?.['X-Tenant-Ids'] || error.config.headers?.['X-Tenant-Id'] || 'none'}`;
+      requestQueue.delete(cacheKey);
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
 
     // Manejo de errores HTTP
     if (error.response) {

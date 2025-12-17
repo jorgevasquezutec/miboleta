@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parse } from "date-fns";
 import {
@@ -28,8 +28,8 @@ import {
 } from "@/presentation/components/ui/select";
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useDocumentsStore } from "@/presentation/stores";
+import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
 import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -37,8 +37,6 @@ import { toast } from "sonner";
 
 export function BatchesListPage() {
     const navigate = useNavigate();
-    const { batches, batchesMeta, fetchBatches, batchesLoading } = useDocumentsStore();
-    const { currentTenant } = useAuthStore();
 
     // URL-synced filters
     const { filters, setFilters, resetFilters } = useUrlFilters({
@@ -59,8 +57,11 @@ export function BatchesListPage() {
         to: filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined,
     } : undefined;
 
+    const { batches, batchesMeta, fetchBatches, batchesLoading } = useDocumentsStore();
+
     // Fetch batches when filters change
-    useEffect(() => {
+    // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+    useTenantAwareEffect(() => {
         fetchBatches({
             status: filters.status !== 'all' ? filters.status : undefined,
             page: filters.page,
@@ -68,7 +69,7 @@ export function BatchesListPage() {
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
         });
-    }, [filters.status, filters.date_from, filters.date_to, filters.page, filters.per_page, fetchBatches, currentTenant]);
+    }, [filters.status, filters.date_from, filters.date_to, filters.page, filters.per_page, fetchBatches]);
 
     const handleStatusChange = (value: string) => {
         setFilters({ status: value, page: 1 });

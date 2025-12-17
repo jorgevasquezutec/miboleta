@@ -9,6 +9,8 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
+//Log
+use Illuminate\Support\Facades\Log;
 
 class DocumentService
 {
@@ -31,6 +33,15 @@ class DocumentService
 
         // Apply optional filters
         $query = $this->applyOptionalFilters($query, $filters);
+
+
+        $queryLog = $query->toSql();
+        $bindings = $query->getBindings();
+        for ($i = 0; $i < count($bindings); $i++) {
+            $queryLog = str_replace('?' . $i, $bindings[$i], $queryLog);
+        }
+        Log::info($queryLog);
+
 
         $perPage = $filters['per_page'] ?? 15;
 
@@ -217,25 +228,18 @@ class DocumentService
     protected function applyRoleFilters(Builder $query, User $user, string $role, array $filters): Builder
     {
         $myDocuments = $filters['my_documents'] ?? false;
-        $tenantId = $filters['tenant_id'] ?? $user->tenants->first()?->id;
+        // ✅ tenant_id filtering removed - now handled by TenantFilterScope global scope
 
         if ($myDocuments) {
+            // Show only user's own documents
             $query->where('user_id', $user->id);
-
-            if ($role !== 'root' && $tenantId) {
-                $query->where('tenant_id', $tenantId);
-            }
+            // tenant_id filter is automatic via global scope
         } elseif ($role === 'client') {
+            // Clients only see their own documents
             $query->where('user_id', $user->id);
-
-            if ($tenantId) {
-                $query->where('tenant_id', $tenantId);
-            }
-        } else {
-            if ($tenantId && $role !== 'root') {
-                $query->where('tenant_id', $tenantId);
-            }
+            // tenant_id filter is automatic via global scope
         }
+        // For admin/root: show all documents (filtered by tenant via global scope)
 
         return $query;
     }

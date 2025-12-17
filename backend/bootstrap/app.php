@@ -23,12 +23,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'tenant' => \App\Http\Middleware\TenantScope::class,
+            'tenant.filter' => \App\Http\Middleware\TenantFilter::class, // ✅ NUEVO: Multi-tenant filter
         ]);
 
         // Configurar CORS para API
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\EnsureCookieAccessToken::class,
+        ]);
+
+        // ✅ TenantFilter debe ejecutarse DESPUÉS de Sanctum auth
+        $middleware->api(append: [
+            \App\Http\Middleware\TenantFilter::class,
         ]);
 
         // Excluir rutas de CSRF (para login público, Swagger y WebSocket auth)

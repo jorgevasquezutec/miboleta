@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
     Users,
     Clock,
@@ -16,8 +16,7 @@ import { Button } from "@/presentation/components/ui/button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/presentation/components/ui/tabs";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
-import { useAuthStore } from "@/presentation/stores";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { VacationRequestCard } from "@/presentation/components/features/vacations/VacationRequestCard";
 import { VacationRejectModal } from "@/presentation/components/features/vacations/VacationRejectModal";
 import { VacationCalendar } from "@/presentation/components/features/vacations/VacationCalendar";
@@ -55,8 +54,6 @@ export function TeamVacationsPage() {
         error,
     } = useVacationsStore();
 
-    const { currentTenant } = useAuthStore();
-
     // URL-synced tab
     const { filters, setFilters } = useUrlFilters({
         defaultValues: {
@@ -83,9 +80,10 @@ export function TeamVacationsPage() {
         userName: "",
     });
 
-    useEffect(() => {
+    // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+    useTenantAwareEffect(() => {
         loadData();
-    }, [currentTenant]);
+    }, []);
 
     const loadData = () => {
         fetchPendingApprovals();
@@ -203,7 +201,7 @@ export function TeamVacationsPage() {
                         Vacaciones del Equipo
                     </h1>
                     <p className="text-gray-600 mt-1">
-                        Gestiona las vacaciones de tu equipo - {currentTenant?.name || ""}
+                        Gestiona las vacaciones de tu equipo
                     </p>
                 </div>
             </div>

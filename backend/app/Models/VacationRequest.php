@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\TenantFilterScope;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -39,6 +40,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class VacationRequest extends Model
 {
     use HasFactory;
+
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
+    {
+        // ✅ Aplicar filtro automático de tenant
+        static::addGlobalScope(new TenantFilterScope);
+    }
+
 
     /**
      * The attributes that are mass assignable.
@@ -164,10 +175,16 @@ class VacationRequest extends Model
 
     /**
      * Scope a query to only include requests for a specific tenant.
+     * 
+     * @deprecated This scope is now handled automatically by TenantFilterScope global scope.
+     *             The global scope automatically filters by tenant_id based on X-Tenant-Ids header.
+     *             Keeping this for backward compatibility but should not be used.
      */
     public function scopeForTenant($query, int $tenantId)
     {
-        return $query->where('tenant_id', $tenantId);
+        // ⚠️ DEPRECATED: Global scope TenantFilterScope handles this automatically
+        // Do nothing - global scope will apply the filter
+        return $query;
     }
 
     /**
@@ -181,11 +198,15 @@ class VacationRequest extends Model
 
     /**
      * Scope a query for supervisor's subordinates.
+     * Uses the user_tenants pivot table where supervisor_id is stored.
      */
     public function scopeForSupervisor($query, int $supervisorId)
     {
         return $query->whereHas('user', function ($q) use ($supervisorId) {
-            $q->where('immediate_supervisor_id', $supervisorId);
+            // Supervisor relationship is in user_tenants pivot table
+            $q->whereHas('tenants', function ($tenantQuery) use ($supervisorId) {
+                $tenantQuery->where('user_tenants.supervisor_id', $supervisorId);
+            });
         });
     }
 

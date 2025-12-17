@@ -5,6 +5,14 @@
  */
 
 export { useAuthStore } from "./authStore";
+export {
+    useTenantFilterStore,
+    useTenantFilter,
+    useTenantFilterActions,
+    useTenantFilterSelectors,
+    type TenantFilterMode,
+    type TenantFilter,
+} from "./tenantFilterStore";
 export { useDocumentsStore } from "./documentsStore";
 export { useUsersStore } from "./usersStore";
 export { useTenantsStore } from "./tenantsStore";

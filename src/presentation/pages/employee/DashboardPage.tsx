@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/presentation/components/ui/select";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
@@ -76,7 +76,8 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   }, [fetchDocumentTypes]);
 
   // Fetch documents when filters change
-  useEffect(() => {
+  // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+  useTenantAwareEffect(() => {
     fetchDocuments({
       page: filters.page,
       perPage: filters.per_page,

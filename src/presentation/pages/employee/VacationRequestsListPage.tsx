@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Calendar,
@@ -23,8 +23,7 @@ import {
 import { Badge } from "@/presentation/components/ui/badge";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
-import { useAuthStore } from "@/presentation/stores";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { VacationStatus } from "@/core/domain/entities";
 import { formatDate } from "@/presentation/utils";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
@@ -42,8 +41,6 @@ export function VacationRequestsListPage() {
         totalPages,
     } = useVacationsStore();
 
-    const { currentTenant } = useAuthStore();
-
     // URL-synced filters
     const { filters, setFilters } = useUrlFilters({
         defaultValues: {
@@ -56,13 +53,14 @@ export function VacationRequestsListPage() {
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
     const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
 
-    useEffect(() => {
+    // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+    useTenantAwareEffect(() => {
         fetchVacationRequests({
             status: filters.status !== 'all' ? (filters.status as VacationStatus) : undefined,
             page: filters.page,
             perPage: filters.per_page,
         });
-    }, [fetchVacationRequests, filters.page, filters.per_page, filters.status, currentTenant]);
+    }, [fetchVacationRequests, filters.page, filters.per_page, filters.status]);
 
     const handleStatusChange = (value: string) => {
         setFilters({ status: value, page: 1 });

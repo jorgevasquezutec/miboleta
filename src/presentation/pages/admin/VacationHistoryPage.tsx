@@ -37,7 +37,7 @@ import {
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { VacationStatusBadge } from "@/presentation/components/features/vacations";
 import { formatDate } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -81,7 +81,7 @@ export function VacationHistoryPage() {
         error,
     } = useVacationsStore();
 
-    const { currentTenant, user } = useAuthStore();
+    const { user } = useAuthStore();
     const isRoot = user?.role === 'root';
 
     // URL-synced filters
@@ -103,10 +103,6 @@ export function VacationHistoryPage() {
     const [isExporting, setIsExporting] = useState(false);
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Get tenant ID - for root use selected, for admin use currentTenant
-    const tenantId = isRoot
-        ? (filters.tenant_id ? Number(filters.tenant_id) : undefined)
-        : (currentTenant?.id ? Number(currentTenant.id) : undefined);
 
 
 
@@ -139,7 +135,8 @@ export function VacationHistoryPage() {
     }, []);
 
     // Fetch data when filters change
-    useEffect(() => {
+    // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+    useTenantAwareEffect(() => {
         fetchHistoryRequests({
             page: filters.page,
             perPage: filters.per_page,
@@ -147,9 +144,9 @@ export function VacationHistoryPage() {
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
             search: filters.search || undefined,
-            tenantId: tenantId,
+            // tenantId removed - backend uses headers automatically
         });
-    }, [filters.status, filters.page, filters.per_page, filters.date_from, filters.date_to, filters.search, filters.tenant_id, tenantId, fetchHistoryRequests]);
+    }, [filters.status, filters.page, filters.per_page, filters.date_from, filters.date_to, filters.search, fetchHistoryRequests]);
 
     const handleRefresh = () => {
         fetchHistoryRequests({
@@ -159,7 +156,7 @@ export function VacationHistoryPage() {
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
             search: filters.search || undefined,
-            tenantId: tenantId,
+            // tenantId removed - backend uses headers
         });
     };
 
@@ -192,7 +189,7 @@ export function VacationHistoryPage() {
         setIsExporting(true);
         try {
             const blob = await reportsRepository.exportVacations({
-                tenant_id: tenantId,
+                // tenant_id removed - backend uses headers
                 status: filters.status !== 'all' ? filters.status : undefined,
                 date_from: filters.date_from || undefined,
                 date_to: filters.date_to || undefined,
@@ -253,7 +250,7 @@ export function VacationHistoryPage() {
                         Histórico de Vacaciones
                     </h1>
                     <p className="text-gray-600 mt-1">
-                        Todas las vacaciones de {currentTenant?.name || "la empresa"}
+                        Histórico completo de vacaciones
                     </p>
                 </div>
                 <div className="flex gap-2">

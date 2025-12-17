@@ -89,7 +89,18 @@ class UserController extends Controller
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json([
-            'data' => $users->map(function ($u) {
+            'data' => $users->map(function ($u) use ($user) {
+                // 🔒 SECURITY: Filter tenants to only show those the current admin has access to
+                $visibleTenants = $u->tenants;
+
+                if (!$user->isRoot()) {
+                    // Non-root users can only see tenants they have access to
+                    $allowedTenantIds = $user->tenants->pluck('id')->toArray();
+                    $visibleTenants = $u->tenants->filter(function ($t) use ($allowedTenantIds) {
+                        return in_array($t->id, $allowedTenantIds);
+                    });
+                }
+
                 return [
                     'id' => $u->id,
                     'name' => $u->name,
@@ -102,13 +113,13 @@ class UserController extends Controller
                     'status' => $u->status,
                     'role' => $u->getCurrentRole(),
                     'roles' => $u->getCurrentRoles(),
-                    'tenants' => $u->tenants->map(fn($t) => [
+                    'tenants' => $visibleTenants->map(fn($t) => [
                         'id' => $t->id,
                         'name' => $t->name,
                         'ruc' => $t->ruc ?? '',
                         'is_primary' => $t->pivot->is_primary ?? false,
                         'supervisor_id' => $t->pivot->supervisor_id ?? null,
-                    ]),
+                    ])->values(),  // ✅ Reset array keys after filter
                     'created_at' => $u->created_at,
                 ];
             }),
@@ -255,7 +266,7 @@ class UserController extends Controller
         // Si se proporciona un ID, obtener ese usuario, sino usar el autenticado
         if ($id) {
             $user = User::findOrFail($id);
-            
+
             // Verificar acceso
             $currentUser = $request->user();
             if (!$this->userService->canAccessUser($currentUser, $user)) {
@@ -269,7 +280,7 @@ class UserController extends Controller
 
         if ($tenantId) {
             // Obtener subordinados de un tenant específico
-            $subordinates = $user->subordinatesForTenant((int)$tenantId)->get();
+            $subordinates = $user->subordinatesForTenant((int) $tenantId)->get();
         } else {
             // Obtener todos los subordinados (de todos los tenants)
             $subordinates = $user->subordinates()->get();

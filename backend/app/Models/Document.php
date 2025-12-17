@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\TenantFilterScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,16 @@ use Illuminate\Support\Facades\Storage;
 class Document extends Model
 {
     use HasFactory, SoftDeletes;
+
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
+    {
+        // ✅ Aplicar filtro automático de tenant
+        static::addGlobalScope(new TenantFilterScope);
+    }
+
 
     protected $fillable = [
         'tenant_id',

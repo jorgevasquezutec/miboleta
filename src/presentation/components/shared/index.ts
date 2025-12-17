@@ -7,5 +7,6 @@ export { ConfirmDialog } from './ConfirmDialog';
 export { PDFViewer } from './PDFViewer';
 export { TenantMultiSelector } from './TenantMultiSelector';
 export { TenantSwitcher } from './TenantSwitcher';
+export { TenantMultiSwitcher } from './TenantMultiSwitcher';
 export { PageLoader } from './PageLoader';
 

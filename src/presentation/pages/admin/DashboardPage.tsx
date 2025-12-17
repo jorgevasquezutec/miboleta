@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTenantAwareEffect } from "@/presentation/hooks";
 import { format, subDays } from "date-fns";
 import {
   FileText,
@@ -104,7 +105,8 @@ export function AdminDashboardView() {
   const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined;
 
   // Fetch dashboard data on mount and when filters change
-  useEffect(() => {
+  // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+  useTenantAwareEffect(() => {
     fetchDashboardStats(tenantId, startDate, endDate);
   }, [tenantId, startDate, endDate, fetchDashboardStats]);
 
@@ -199,7 +201,8 @@ export function AdminDashboardView() {
               />
             </div>
           </div>
-        )}
+        )
+        }
 
         {/* Date range filter */}
         <div className="flex items-center gap-3">
@@ -213,14 +216,16 @@ export function AdminDashboardView() {
             compact
           />
         </div>
-      </div>
+      </div >
 
       {/* Error message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+      {
+        error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )
+      }
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -262,38 +267,40 @@ export function AdminDashboardView() {
       </div>
 
       {/* Vacation Stats Row */}
-      {vacationStats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="col-span-full md:col-span-4">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Vacaciones {vacationStats.current_year}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-3 bg-amber-50 rounded-lg">
-                  <p className="text-2xl font-bold text-amber-600">{vacationStats.pending}</p>
-                  <p className="text-sm text-amber-700">Pendientes</p>
+      {
+        vacationStats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card className="col-span-full md:col-span-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Vacaciones {vacationStats.current_year}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-amber-50 rounded-lg">
+                    <p className="text-2xl font-bold text-amber-600">{vacationStats.pending}</p>
+                    <p className="text-sm text-amber-700">Pendientes</p>
+                  </div>
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <p className="text-2xl font-bold text-green-600">{vacationStats.approved}</p>
+                    <p className="text-sm text-green-700">Aprobadas</p>
+                  </div>
+                  <div className="text-center p-3 bg-red-50 rounded-lg">
+                    <p className="text-2xl font-bold text-red-600">{vacationStats.rejected}</p>
+                    <p className="text-sm text-red-700">Rechazadas</p>
+                  </div>
+                  <div className="text-center p-3 bg-blue-50 rounded-lg">
+                    <p className="text-2xl font-bold text-blue-600">{vacationStats.total_days_used}</p>
+                    <p className="text-sm text-blue-700">Días Usados</p>
+                  </div>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{vacationStats.approved}</p>
-                  <p className="text-sm text-green-700">Aprobadas</p>
-                </div>
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{vacationStats.rejected}</p>
-                  <p className="text-sm text-red-700">Rechazadas</p>
-                </div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{vacationStats.total_days_used}</p>
-                  <p className="text-sm text-blue-700">Días Usados</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+              </CardContent>
+            </Card>
+          </div>
+        )
+      }
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -429,7 +436,7 @@ export function AdminDashboardView() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }
 

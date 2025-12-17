@@ -36,11 +36,11 @@ class DocumentController extends Controller
      *     description="Lista documentos según rol: Root/Admin ven todos del tenant, Client solo los suyos",
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(
-     *         name="X-Tenant-Id",
+     *         name="X-Tenant-Ids",
      *         in="header",
-     *         description="ID del tenant",
+     *         description="IDs de tenants separados por coma (ej: '1,2,3'). Si no se especifica, filtra por todos los tenants del usuario",
      *         required=false,
-     *         @OA\Schema(type="string")
+     *         @OA\Schema(type="string", example="1,2,3")
      *     ),
      *     @OA\Parameter(
      *         name="my_documents",
@@ -120,7 +120,7 @@ class DocumentController extends Controller
 
         $filters = [
             'my_documents' => $request->boolean('my_documents'),
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            // ✅ tenant_id removed - now handled automatically by TenantFilterScope
             'status' => $request->status,
             'doc_type_id' => $request->doc_type_id,
             'period' => $request->period,
@@ -265,11 +265,11 @@ class DocumentController extends Controller
      *     description="Lista documentos sin usuario asignado (solo admin/root)",
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(
-     *         name="X-Tenant-Id",
+     *         name="X-Tenant-Ids",
      *         in="header",
-     *         description="ID del tenant",
+     *         description="IDs de tenants separados por coma (ej: '1,2,3')",
      *         required=false,
-     *         @OA\Schema(type="string")
+     *         @OA\Schema(type="string", example="1,2,3")
      *     ),
      *     @OA\Parameter(
      *         name="per_page",
@@ -299,7 +299,7 @@ class DocumentController extends Controller
         }
 
         $filters = [
-            'tenant_id' => $request->header('X-Tenant-Id') ?? $user->tenants->first()?->id,
+            // ✅ tenant_id removed - handled by TenantFilterScope
             'per_page' => $request->get('per_page', 15),
         ];
 

@@ -27,8 +27,20 @@ class UserResource extends JsonResource
             'must_change_password' => $this->must_change_password,
             'role' => $this->getCurrentRole(),
             'roles' => $this->getCurrentRoles(),
-            'tenants' => $this->when($this->relationLoaded('tenants'), function () {
-                return $this->tenants->map(function ($tenant) {
+            'tenants' => $this->when($this->relationLoaded('tenants'), function () use ($request) {
+                // 🔒 SECURITY: Filter tenants to only show those the current user has access to
+                $currentUser = $request->user();
+                $visibleTenants = $this->tenants;
+
+                if ($currentUser && !$currentUser->isRoot()) {
+                    // Non-root users can only see tenants they have access to
+                    $allowedTenantIds = $currentUser->tenants->pluck('id')->toArray();
+                    $visibleTenants = $this->tenants->filter(function ($tenant) use ($allowedTenantIds) {
+                        return in_array($tenant->id, $allowedTenantIds);
+                    });
+                }
+
+                return $visibleTenants->map(function ($tenant) {
                     return [
                         'id' => $tenant->id,
                         'name' => $tenant->name,
@@ -36,7 +48,7 @@ class UserResource extends JsonResource
                         'is_primary' => $tenant->pivot->is_primary ?? false,
                         'supervisor_id' => $tenant->pivot->supervisor_id ?? null,
                     ];
-                });
+                })->values();  // ✅ Reset array keys after filter
             }),
             'primary_tenant' => $this->when($this->primaryTenant(), function () {
                 return new TenantResource($this->primaryTenant());

@@ -23,7 +23,7 @@ import {
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { useAuthStore } from "@/presentation/stores";
@@ -33,7 +33,7 @@ import { toast } from "sonner";
 
 export function DocumentsListPage() {
     const navigate = useNavigate();
-    const { user, currentTenant } = useAuthStore();
+    const { user } = useAuthStore();
     const {
         documents,
         documentTypes,
@@ -101,7 +101,8 @@ export function DocumentsListPage() {
     }, [fetchDocumentTypes]);
 
     // Fetch documents when filters change
-    useEffect(() => {
+    // ✅ MIGRATED: Now automatically refetches when tenant filter changes
+    useTenantAwareEffect(() => {
         fetchDocuments({
             page: filters.page,
             perPage: filters.per_page,
@@ -111,7 +112,7 @@ export function DocumentsListPage() {
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
         });
-    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments, currentTenant]);
+    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments]);
 
     const handleSearch = () => {
         setFilters({ page: 1 });

@@ -38,7 +38,7 @@ import {
 import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useAuthStore } from "@/presentation/stores/authStore";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
@@ -113,7 +113,7 @@ const actionDescriptions: Record<string, string> = {
 };
 
 export function AuditLogsPage() {
-    const { currentTenant, user } = useAuthStore();
+    const { user } = useAuthStore();
     const isRoot = user?.role === 'root';
 
     // URL-synced filters
@@ -141,10 +141,6 @@ export function AuditLogsPage() {
         to: filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined,
     } : undefined;
 
-    // Get tenant ID - for root use selected, for admin use currentTenant
-    const tenantId = isRoot
-        ? (filters.tenant_id ? Number(filters.tenant_id) : undefined)
-        : (currentTenant?.id ? Number(currentTenant.id) : undefined);
 
     // State
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -182,7 +178,7 @@ export function AuditLogsPage() {
         setError(null);
         try {
             const reportFilters: ReportFilters = {
-                tenant_id: tenantId,
+                // tenantId removed - backend uses headers
                 page: filters.page,
                 per_page: filters.per_page,
                 search: filters.search || undefined,
@@ -200,9 +196,10 @@ export function AuditLogsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [tenantId, filters.page, filters.per_page, filters.search, filters.action, filters.date_from, filters.date_to]);
+    }, [filters.page, filters.per_page, filters.search, filters.action, filters.date_from, filters.date_to]);
 
-    useEffect(() => {
+    // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+    useTenantAwareEffect(() => {
         fetchLogs();
     }, [fetchLogs]);
 
@@ -240,7 +237,7 @@ export function AuditLogsPage() {
         setIsExporting(true);
         try {
             const blob = await reportsRepository.exportAudit({
-                tenant_id: tenantId,
+                // tenant_id removed - backend uses headers
                 search: filters.search || undefined,
                 action: filters.action && filters.action !== 'all' ? filters.action : undefined,
                 start_date: filters.date_from || undefined,
