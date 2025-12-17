@@ -102,8 +102,8 @@ export class UserRepository implements IUserRepository {
 
   async create(data: CreateUserData): Promise<User> {
     try {
-      const response = await apiClient.post<{ user: User }>('/users', data);
-      return response.data.user;
+      const response = await apiClient.post<{ data: User }>('/users', data);
+      return response.data.data;
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }
@@ -111,8 +111,8 @@ export class UserRepository implements IUserRepository {
 
   async update(id: string, data: UpdateUserData): Promise<User> {
     try {
-      const response = await apiClient.put<{ user: User }>(`/users/${id}`, data);
-      return response.data.user;
+      const response = await apiClient.put<{ data: User }>(`/users/${id}`, data);
+      return response.data.data;
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }

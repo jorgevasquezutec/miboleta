@@ -182,10 +182,11 @@ export function ProfilePage() {
           <CardContent className="space-y-6">
             {/* Avatar */}
             <div className="flex flex-col items-center gap-4">
-              <Avatar className="w-24 h-24">
+              <Avatar className="w-24 h-24 ring-4 ring-gray-100">
                 <AvatarImage
                   src={user.avatar_url ? `${user.avatar_url}?t=${avatarTimestamp}` : ""}
                   key={user.avatar_url || 'no-avatar'}
+                  className="object-cover"
                 />
                 <AvatarFallback className="bg-[#2563EB] text-white text-2xl">
                   {(user.full_name || user.name || user.email || "U")

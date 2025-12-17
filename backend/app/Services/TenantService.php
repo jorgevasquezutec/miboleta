@@ -94,7 +94,18 @@ class TenantService
      */
     public function updateTenant(Tenant $tenant, array $data): Tenant
     {
+        $statusChanged = isset($data['status']) && $data['status'] !== $tenant->status;
+
         $tenant->update($data);
+
+        // If status changed, clear the active tenant IDs cache for all users of this tenant
+        if ($statusChanged) {
+            $userIds = $tenant->users()->pluck('users.id');
+            foreach ($userIds as $userId) {
+                cache()->forget("user:{$userId}:active_tenant_ids");
+            }
+        }
+
         return $tenant->fresh();
     }
 

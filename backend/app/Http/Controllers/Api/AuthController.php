@@ -88,6 +88,25 @@ class AuthController extends Controller
             ]);
         }
 
+        // Check for specific error codes
+        if (isset($result['error'])) {
+            if ($result['error'] === 'user_inactive') {
+                $this->auditService->logLoginFailed($validated['email'], 'User inactive');
+
+                throw ValidationException::withMessages([
+                    'email' => ['Tu cuenta se encuentra inactiva. Contacta al administrador.'],
+                ]);
+            }
+
+            if ($result['error'] === 'tenant_inactive') {
+                $this->auditService->logLoginFailed($validated['email'], 'Organization inactive');
+
+                throw ValidationException::withMessages([
+                    'email' => ['Tu organización se encuentra inactiva. Contacta al administrador.'],
+                ]);
+            }
+        }
+
         // Log successful login
         $this->auditService->logLogin($result['user']->id, $result['user']->current_tenant_id);
 

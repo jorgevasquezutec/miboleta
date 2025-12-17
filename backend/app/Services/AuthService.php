@@ -34,6 +34,26 @@ class AuthService
             return null;
         }
 
+        // Check if user is active
+        if ($user->status !== 'active') {
+            return ['error' => 'user_inactive'];
+        }
+
+        // Load tenants to check status
+        $user->load(['roles', 'tenants']);
+
+        // Check if user has access to at least one active tenant (skip for root users)
+        if ($user->getCurrentRole() !== 'root') {
+            $hasActiveTenant = $user->tenants->contains(function ($tenant) {
+                return $tenant->status === 'active';
+            });
+
+            if (!$hasActiveTenant && $user->tenants->isNotEmpty()) {
+                // All tenants are inactive - return specific error
+                return ['error' => 'tenant_inactive'];
+            }
+        }
+
         // Delete previous tokens
         $user->tokens()->delete();
 
@@ -45,9 +65,6 @@ class AuthService
 
         // Update last login
         $user->update(['last_login_at' => Carbon::now()]);
-
-        // Load relationships
-        $user->load(['roles', 'tenants']);
 
         return [
             'user' => $user,
@@ -75,14 +92,36 @@ class AuthService
 
         $user = $refreshToken->user;
 
+        // Check if user is still active
+        if ($user->status !== 'active') {
+            // User is now inactive - revoke session
+            $user->tokens()->delete();
+            RefreshToken::revokeAllForUser($user->id);
+            return null;
+        }
+
+        // Load relationships
+        $user->load(['roles', 'tenants']);
+
+        // Check if user still has access to at least one active tenant (skip for root users)
+        if ($user->getCurrentRole() !== 'root') {
+            $hasActiveTenant = $user->tenants->contains(function ($tenant) {
+                return $tenant->status === 'active';
+            });
+
+            if (!$hasActiveTenant && $user->tenants->isNotEmpty()) {
+                // All tenants are now inactive - revoke session
+                $user->tokens()->delete();
+                RefreshToken::revokeAllForUser($user->id);
+                return null;
+            }
+        }
+
         // Delete previous access tokens
         $user->tokens()->delete();
 
         // Create new access token
         $accessToken = $user->createToken('access_token', ['*'], now()->addMinutes(self::ACCESS_TOKEN_EXPIRY))->plainTextToken;
-
-        // Load relationships
-        $user->load(['roles', 'tenants']);
 
         return [
             'user' => $user,

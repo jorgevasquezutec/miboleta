@@ -78,10 +78,11 @@ export function Navbar({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-3 pl-2">
-                <Avatar>
+                <Avatar className="ring-2 ring-gray-100">
                   <AvatarImage
                     src={user?.avatar_url || ""}
                     key={user?.avatar_url || 'no-avatar'}
+                    className="object-cover"
                   />
                   <AvatarFallback
                     className="text-white"

@@ -164,11 +164,15 @@ class TenantFilter
     {
         // Cache de 1 hora para evitar queries repetitivas
         return cache()->remember(
-            "user:{$user->id}:tenant_ids",
+            "user:{$user->id}:active_tenant_ids",
             3600,
             function () use ($user) {
-                // ✅ FIX: Especificar tenants.id para evitar ambigüedad en JOIN
-                return $user->tenants()->pluck('tenants.id')->map(fn($id) => (int) $id)->toArray();
+                // ✅ Solo retornar tenants activos
+                return $user->tenants()
+                    ->where('tenants.status', 'active')
+                    ->pluck('tenants.id')
+                    ->map(fn($id) => (int) $id)
+                    ->toArray();
             }
         );
     }

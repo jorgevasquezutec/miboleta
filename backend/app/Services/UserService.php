@@ -31,7 +31,7 @@ class UserService
 
         try {
             $creator = $creator ?? Auth::user();
-            
+
             // Generate temporary password
             $temporaryPassword = $this->generateTemporaryPassword();
 
@@ -134,7 +134,8 @@ class UserService
             }
 
             // Handle tenant assignment for non-root users
-            if ($data['role_id'] != 1) { // Assuming role_id is present or we check user role
+            $currentRoleId = $data['role_id'] ?? $oldRoleId;
+            if ($currentRoleId != 1) { // Not root
                 if (isset($data['tenants_config']) && is_array($data['tenants_config'])) {
                     $this->assignTenantsWithConfig($user, $data['tenants_config']);
                 } elseif (isset($data['tenant_ids']) && is_array($data['tenant_ids'])) {
