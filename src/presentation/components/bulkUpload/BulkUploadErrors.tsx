@@ -6,6 +6,7 @@ interface ErrorDetail {
     apellido: string;
     email: string;
     documento: string;
+    rol?: string;
     error: string;
     chunk?: number;
     timestamp?: string;
@@ -36,6 +37,7 @@ export function BulkUploadErrors({ errors }: BulkUploadErrorsProps) {
                                 <th className="text-left py-2 px-3 font-medium text-gray-700">Nombre</th>
                                 <th className="text-left py-2 px-3 font-medium text-gray-700">Email</th>
                                 <th className="text-left py-2 px-3 font-medium text-gray-700">Documento</th>
+                                <th className="text-left py-2 px-3 font-medium text-gray-700">Rol</th>
                                 <th className="text-left py-2 px-3 font-medium text-gray-700">Error</th>
                             </tr>
                         </thead>
@@ -47,6 +49,15 @@ export function BulkUploadErrors({ errors }: BulkUploadErrorsProps) {
                                     </td>
                                     <td className="py-2 px-3">{error.email}</td>
                                     <td className="py-2 px-3">{error.documento}</td>
+                                    <td className="py-2 px-3">
+                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                            error.rol === 'root' ? 'bg-purple-100 text-purple-800' :
+                                            error.rol === 'admin' ? 'bg-blue-100 text-blue-800' :
+                                            'bg-gray-100 text-gray-800'
+                                        }`}>
+                                            {error.rol || '-'}
+                                        </span>
+                                    </td>
                                     <td className="py-2 px-3">
                                         <span className="text-red-600 text-xs">
                                             {error.error}

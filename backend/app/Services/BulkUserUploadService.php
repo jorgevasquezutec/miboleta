@@ -64,6 +64,57 @@ class BulkUserUploadService
     }
 
     // ────────────────────────────────────────────────────────────
+    // TRANSFORMACIÓN DE DATOS PARA PROCESAMIENTO
+    // ────────────────────────────────────────────────────────────
+
+    /**
+     * Transformar organizaciones de ruc/supervisor_email a tenant_id/supervisor_id
+     * Esto es necesario porque el frontend envía RUC y el job necesita IDs
+     */
+    public function transformOrganizationsForProcessing(array $users): array
+    {
+        return array_map(function ($user) {
+            // Si no hay organizaciones, retornar usuario sin cambios
+            if (empty($user['organizaciones'])) {
+                $user['organizaciones'] = [];
+                return $user;
+            }
+
+            $transformedOrgs = [];
+            foreach ($user['organizaciones'] as $org) {
+                // Saltar orgs vacías
+                if (empty($org['ruc'])) {
+                    continue;
+                }
+
+                // Buscar tenant por RUC
+                $tenant = Tenant::where('ruc', trim($org['ruc']))->first();
+                if (!$tenant) {
+                    continue; // Ya fue validado, pero por seguridad
+                }
+
+                $transformedOrg = [
+                    'tenant_id' => $tenant->id,
+                    'supervisor_id' => null,
+                ];
+
+                // Buscar supervisor si existe
+                if (!empty($org['supervisor_email'])) {
+                    $supervisor = User::where('email', trim($org['supervisor_email']))->first();
+                    if ($supervisor) {
+                        $transformedOrg['supervisor_id'] = $supervisor->id;
+                    }
+                }
+
+                $transformedOrgs[] = $transformedOrg;
+            }
+
+            $user['organizaciones'] = $transformedOrgs;
+            return $user;
+        }, $users);
+    }
+
+    // ────────────────────────────────────────────────────────────
     // GENERACIÓN DE TEMPLATE EXCEL
     // ────────────────────────────────────────────────────────────
 
@@ -105,7 +156,9 @@ class BulkUserUploadService
             $warnings = $import->getWarnings();
 
             // Consolidar usuarios duplicados (mismo email)
-            $consolidated = $this->consolidateDuplicates($parsedData);
+            $consolidationResult = $this->consolidateDuplicates($parsedData);
+            $consolidated = $consolidationResult['data'];
+            $errors = array_merge($errors, $consolidationResult['errors']);
 
             // Validar emails que ya existen en BD
             $duplicateEmails = $this->checkDuplicateEmails($consolidated);
@@ -147,8 +200,9 @@ class BulkUserUploadService
 
             return [
                 'valid' => $isValid,
-                'data' => $consolidated,
-                'original_data' => $parsedData,
+                // Retornar parsedData para que el usuario pueda editar, incluso si hay errores
+                'data' => count($parsedData) > 0 ? $parsedData : $consolidated,
+                'consolidated_data' => $consolidated,
                 'errors' => $errors,
                 'warnings' => $warnings,
                 'summary' => $summary,
@@ -182,31 +236,402 @@ class BulkUserUploadService
     }
 
     // ────────────────────────────────────────────────────────────
+    // VALIDACIÓN DE DATOS JSON (sin archivo)
+    // ────────────────────────────────────────────────────────────
+
+    /**
+     * Validar datos JSON (usuarios editados)
+     * Similar a validateFile pero sin parsear archivo
+     */
+    public function validateData(array $users): array
+    {
+        try {
+            $errors = [];
+            $warnings = [];
+            $validUsers = [];
+
+            // Validar cada usuario
+            foreach ($users as $index => $user) {
+                $rowNumber = $user['row_number'] ?? $index + 2;
+                $rowErrors = $this->validateUserRow($user, $rowNumber);
+                $errors = array_merge($errors, $rowErrors);
+            }
+
+            // Verificar emails duplicados dentro del mismo lote
+            $emailsInBatch = $this->checkDuplicateEmailsInBatch($users);
+            $errors = array_merge($errors, $emailsInBatch);
+
+            // Verificar documentos duplicados dentro del mismo lote
+            $documentsInBatch = $this->checkDuplicateDocumentsInBatch($users);
+            $errors = array_merge($errors, $documentsInBatch);
+
+            // Consolidar duplicados (mismo email)
+            $consolidationResult = $this->consolidateDuplicates($users);
+            $consolidated = $consolidationResult['data'];
+            $errors = array_merge($errors, $consolidationResult['errors']);
+
+            // Validar emails que ya existen en BD
+            $duplicateEmails = $this->checkDuplicateEmails($consolidated);
+            foreach ($duplicateEmails as $duplicate) {
+                $errors[] = [
+                    'row' => $duplicate['row'] ?? 0,
+                    'field' => 'email',
+                    'message' => "El email '{$duplicate['email']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                ];
+            }
+
+            // Validar documentos que ya existen en BD
+            $duplicateDocuments = $this->checkDuplicateDocuments($consolidated);
+            foreach ($duplicateDocuments as $duplicate) {
+                $errors[] = [
+                    'row' => $duplicate['row'] ?? 0,
+                    'field' => 'numero_documento',
+                    'message' => "El documento '{$duplicate['document']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                ];
+            }
+
+            // Generar resumen
+            $summary = [
+                'total' => count($users),
+                'valid' => count($consolidated) - count($duplicateEmails) - count($duplicateDocuments),
+                'errors' => count($errors),
+                'warnings' => count($warnings),
+                'duplicate_emails' => count($duplicateEmails),
+                'duplicate_documents' => count($duplicateDocuments),
+            ];
+
+            $isValid = count($errors) === 0 && count($consolidated) > 0;
+
+            return [
+                'valid' => $isValid,
+                'data' => $consolidated,
+                'errors' => $errors,
+                'warnings' => $warnings,
+                'summary' => $summary,
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Data validation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return [
+                'valid' => false,
+                'data' => [],
+                'errors' => [
+                    [
+                        'row' => 0,
+                        'field' => 'data',
+                        'message' => 'Error al validar datos: ' . $e->getMessage(),
+                    ]
+                ],
+                'warnings' => [],
+                'summary' => [
+                    'total' => count($users),
+                    'valid' => 0,
+                    'errors' => 1,
+                    'warnings' => 0,
+                ],
+            ];
+        }
+    }
+
+    /**
+     * Validar una fila de usuario
+     */
+    private function validateUserRow(array $user, int $rowNumber): array
+    {
+        $errors = [];
+
+        // Campos requeridos
+        $required = ['nombre', 'apellido', 'email', 'tipo_documento', 'numero_documento', 'rol', 'estado'];
+        foreach ($required as $field) {
+            if (empty($user[$field])) {
+                $errors[] = [
+                    'row' => $rowNumber,
+                    'field' => $field,
+                    'message' => ucfirst(str_replace('_', ' ', $field)) . ' es requerido',
+                ];
+            }
+        }
+
+        // Validar email
+        if (!empty($user['email']) && !filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors[] = [
+                'row' => $rowNumber,
+                'field' => 'email',
+                'message' => 'Email inválido',
+            ];
+        }
+
+        // Validar tipo_documento
+        if (!empty($user['tipo_documento']) && !in_array($user['tipo_documento'], ['dni', 'ce', 'passport', 'ruc'])) {
+            $errors[] = [
+                'row' => $rowNumber,
+                'field' => 'tipo_documento',
+                'message' => 'Tipo de documento inválido',
+            ];
+        }
+
+        // Validar numero_documento según tipo
+        $tipoDoc = $user['tipo_documento'] ?? '';
+        $numDoc = trim($user['numero_documento'] ?? '');
+        
+        if (!empty($numDoc) && !empty($tipoDoc)) {
+            switch ($tipoDoc) {
+                case 'dni':
+                    if (strlen($numDoc) !== 8) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El DNI debe tener 8 dígitos',
+                        ];
+                    } elseif (!ctype_digit($numDoc)) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El DNI solo debe contener números',
+                        ];
+                    }
+                    break;
+                    
+                case 'ruc':
+                    if (strlen($numDoc) !== 11) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El RUC debe tener 11 dígitos',
+                        ];
+                    } elseif (!ctype_digit($numDoc)) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El RUC solo debe contener números',
+                        ];
+                    }
+                    break;
+                    
+                case 'ce':
+                    if (strlen($numDoc) !== 12) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El Carné de Extranjería debe tener 12 caracteres',
+                        ];
+                    } elseif (!ctype_digit($numDoc)) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El Carné de Extranjería solo debe contener números',
+                        ];
+                    }
+                    break;
+                    
+                case 'passport':
+                    // Pasaporte: mínimo 6, máximo 20 caracteres alfanuméricos
+                    if (strlen($numDoc) < 6 || strlen($numDoc) > 20) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El pasaporte debe tener entre 6 y 20 caracteres',
+                        ];
+                    } elseif (!ctype_alnum($numDoc)) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => 'numero_documento',
+                            'message' => 'El pasaporte solo debe contener letras y números',
+                        ];
+                    }
+                    break;
+            }
+        }
+
+        // Validar rol
+        if (!empty($user['rol']) && !in_array($user['rol'], ['client', 'root', 'admin'])) {
+            $errors[] = [
+                'row' => $rowNumber,
+                'field' => 'rol',
+                'message' => 'Rol inválido',
+            ];
+        }
+
+        // Validar estado
+        if (!empty($user['estado']) && !in_array($user['estado'], ['active', 'inactive'])) {
+            $errors[] = [
+                'row' => $rowNumber,
+                'field' => 'estado',
+                'message' => 'Estado inválido',
+            ];
+        }
+
+        // Validar que roles client/admin tengan al menos una organización
+        $rol = $user['rol'] ?? '';
+        if (in_array($rol, ['client', 'admin'])) {
+            $hasValidOrg = false;
+            if (!empty($user['organizaciones']) && is_array($user['organizaciones'])) {
+                foreach ($user['organizaciones'] as $org) {
+                    if (!empty($org['ruc']) && is_string($org['ruc']) && trim($org['ruc']) !== '') {
+                        $hasValidOrg = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!$hasValidOrg) {
+                $errors[] = [
+                    'row' => $rowNumber,
+                    'field' => 'organizaciones',
+                    'message' => "Los usuarios con rol '{$rol}' deben tener al menos una organización asignada",
+                ];
+            }
+        }
+
+        // Validar organizaciones (si existen)
+        if (!empty($user['organizaciones'])) {
+            foreach ($user['organizaciones'] as $orgIndex => $org) {
+                if (!empty($org['ruc'])) {
+                    // Verificar que la organización existe
+                    $tenant = Tenant::where('ruc', $org['ruc'])->first();
+                    if (!$tenant) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.ruc",
+                            'message' => "Organización con RUC '{$org['ruc']}' no existe",
+                        ];
+                    } else if (!empty($org['supervisor_email'])) {
+                        // Verificar que el supervisor existe y pertenece a la org
+                        $supervisor = User::where('email', $org['supervisor_email'])
+                            ->whereHas('tenants', fn($q) => $q->where('tenants.id', $tenant->id))
+                            ->whereHas('roles', fn($q) => $q->where('name', 'admin'))
+                            ->first();
+                        
+                        if (!$supervisor) {
+                            $errors[] = [
+                                'row' => $rowNumber,
+                                'field' => "organizaciones.{$orgIndex}.supervisor_email",
+                                'message' => "Supervisor '{$org['supervisor_email']}' no existe o no pertenece a la organización",
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Verificar emails duplicados dentro del mismo lote
+     */
+    private function checkDuplicateEmailsInBatch(array $users): array
+    {
+        $errors = [];
+        $emailsSeen = [];
+
+        foreach ($users as $index => $user) {
+            $email = strtolower(trim($user['email'] ?? ''));
+            $rowNumber = $user['row_number'] ?? $index + 2;
+
+            if (empty($email)) {
+                continue;
+            }
+
+            if (isset($emailsSeen[$email])) {
+                // Email duplicado - agregar error
+                $errors[] = [
+                    'row' => $rowNumber,
+                    'field' => 'email',
+                    'message' => "Email duplicado en el archivo: '{$email}' ya aparece en la fila {$emailsSeen[$email]}",
+                ];
+            } else {
+                $emailsSeen[$email] = $rowNumber;
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Verificar documentos duplicados dentro del mismo lote
+     */
+    private function checkDuplicateDocumentsInBatch(array $users): array
+    {
+        $errors = [];
+        $documentsSeen = [];
+
+        foreach ($users as $index => $user) {
+            $tipoDoc = trim($user['tipo_documento'] ?? '');
+            $numDoc = trim($user['numero_documento'] ?? '');
+            $rowNumber = $user['row_number'] ?? $index + 2;
+
+            if (empty($numDoc)) {
+                continue;
+            }
+
+            // Clave única: tipo_documento + numero_documento
+            $docKey = strtolower($tipoDoc . ':' . $numDoc);
+
+            if (isset($documentsSeen[$docKey])) {
+                // Documento duplicado - agregar error
+                $errors[] = [
+                    'row' => $rowNumber,
+                    'field' => 'numero_documento',
+                    'message' => "Documento duplicado en el archivo: '{$tipoDoc} {$numDoc}' ya aparece en la fila {$documentsSeen[$docKey]}",
+                ];
+            } else {
+                $documentsSeen[$docKey] = $rowNumber;
+            }
+        }
+
+        return $errors;
+    }
+
+    // ────────────────────────────────────────────────────────────
     // CONSOLIDACIÓN DE DUPLICADOS
     // ────────────────────────────────────────────────────────────
 
     /**
      * Consolidar usuarios con email duplicado en el archivo
+     * Retorna array con 'data' (usuarios consolidados) y 'errors' (inconsistencias)
      */
     public function consolidateDuplicates(array $users): array
     {
         $consolidated = [];
         $emailMap = [];
+        $errors = [];
 
         foreach ($users as $user) {
-            $email = strtolower($user['email']);
+            $email = strtolower($user['email'] ?? '');
+            
+            if (empty($email)) {
+                // Usuario sin email - agregarlo como está
+                $consolidated[] = $user;
+                continue;
+            }
 
             if (isset($emailMap[$email])) {
-                // Usuario duplicado - consolidar organizaciones
+                // Usuario duplicado - verificar consistencia y consolidar organizaciones
                 $existingIndex = $emailMap[$email];
 
-                // Validar que datos básicos coincidan
-                $this->validateDuplicateConsistency($consolidated[$existingIndex], $user);
+                // Verificar que datos básicos coincidan (sin lanzar excepción)
+                $inconsistencies = $this->checkDuplicateConsistency($consolidated[$existingIndex], $user);
+                
+                if (!empty($inconsistencies)) {
+                    // Hay inconsistencias - agregar errores para ambas filas
+                    foreach ($inconsistencies as $field) {
+                        $errors[] = [
+                            'row' => $user['row_number'] ?? 0,
+                            'field' => $field,
+                            'message' => "Email duplicado '{$email}': el campo '{$field}' no coincide con la fila " . ($consolidated[$existingIndex]['row_number'] ?? '?'),
+                        ];
+                    }
+                }
 
-                // Agregar organizaciones
+                // Agregar organizaciones de todas formas (para mostrar en el editor)
                 $consolidated[$existingIndex]['organizaciones'] = array_merge(
-                    $consolidated[$existingIndex]['organizaciones'],
-                    $user['organizaciones']
+                    $consolidated[$existingIndex]['organizaciones'] ?? [],
+                    $user['organizaciones'] ?? []
                 );
             } else {
                 // Nuevo usuario
@@ -215,24 +640,31 @@ class BulkUserUploadService
             }
         }
 
-        return $consolidated;
+        return [
+            'data' => $consolidated,
+            'errors' => $errors,
+        ];
     }
 
     /**
-     * Validar consistencia de datos en usuarios duplicados
+     * Verificar consistencia de datos en usuarios duplicados
+     * Retorna array de campos que no coinciden
      */
-    private function validateDuplicateConsistency(array $existing, array $new): void
+    private function checkDuplicateConsistency(array $existing, array $new): array
     {
         $fieldsToCheck = ['nombre', 'apellido', 'tipo_documento', 'numero_documento', 'rol', 'estado'];
+        $inconsistentFields = [];
 
         foreach ($fieldsToCheck as $field) {
-            if ($existing[$field] !== $new[$field]) {
-                throw new \Exception(
-                    "Datos inconsistentes para email duplicado: {$existing['email']}. " .
-                    "Campo '{$field}' no coincide."
-                );
+            $existingValue = $existing[$field] ?? '';
+            $newValue = $new[$field] ?? '';
+            
+            if ($existingValue !== $newValue) {
+                $inconsistentFields[] = $field;
             }
         }
+
+        return $inconsistentFields;
     }
 
     /**

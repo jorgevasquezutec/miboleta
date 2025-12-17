@@ -103,7 +103,7 @@ export function useEditableUsers(): UseEditableUsersReturn {
             
             case 'numero_documento':
                 if (!value || value.trim() === '') return 'Número de documento es requerido';
-                // No validamos formato - el backend lo validará si es necesario
+                // La validación de formato se hace en validateUser porque necesita tipo_documento
                 return null;
             
             case 'rol':
@@ -151,6 +151,33 @@ export function useEditableUsers(): UseEditableUsersReturn {
             }
         }
         
+        // Validar formato de documento según tipo
+        if (user.tipo_documento && user.numero_documento) {
+            const doc = user.numero_documento.trim();
+            switch (user.tipo_documento.toUpperCase()) {
+                case 'DNI':
+                    if (!/^\d{8}$/.test(doc)) {
+                        errors['numero_documento'] = 'DNI debe tener exactamente 8 dígitos numéricos';
+                    }
+                    break;
+                case 'RUC':
+                    if (!/^\d{11}$/.test(doc)) {
+                        errors['numero_documento'] = 'RUC debe tener exactamente 11 dígitos numéricos';
+                    }
+                    break;
+                case 'CE':
+                    if (!/^\d{12}$/.test(doc)) {
+                        errors['numero_documento'] = 'CE debe tener exactamente 12 dígitos numéricos';
+                    }
+                    break;
+                case 'PASAPORTE':
+                    if (!/^[A-Za-z0-9]{6,20}$/.test(doc)) {
+                        errors['numero_documento'] = 'Pasaporte debe tener entre 6 y 20 caracteres alfanuméricos';
+                    }
+                    break;
+            }
+        }
+        
         // Validar organizaciones (solo validar formato si existen, no son requeridas)
         if (user.organizaciones && user.organizaciones.length > 0) {
             user.organizaciones.forEach((org, idx) => {
@@ -170,11 +197,40 @@ export function useEditableUsers(): UseEditableUsersReturn {
             const updatedUser = { ...user, [field]: value, _isModified: true };
             const validation = validateUser(updatedUser);
             
+            // Preservar errores originales que NO son del campo que se está editando
+            // Si el campo es 'organizaciones', eliminar todos los errores de organizaciones.*
+            const preservedErrors: Record<string, string> = {};
+            
+            // Campos que al editarse deben limpiar errores de duplicados
+            const duplicateRelatedFields = ['email', 'numero_documento', 'rol', 'nombre', 'apellido', 'tipo_documento', 'estado'];
+            const isDuplicateRelated = duplicateRelatedFields.includes(field as string);
+            
+            Object.entries(user._errors || {}).forEach(([key, msg]) => {
+                // Si estamos editando 'organizaciones', eliminar cualquier error que empiece con 'organizaciones'
+                if (field === 'organizaciones') {
+                    if (!key.startsWith('organizaciones')) {
+                        preservedErrors[key] = msg;
+                    }
+                } else if (isDuplicateRelated && (msg.toLowerCase().includes('duplicado') || msg.toLowerCase().includes('no coincide'))) {
+                    // Si editamos un campo relacionado con duplicados, eliminar errores de duplicados
+                    // No preservar este error
+                } else {
+                    // Para otros campos, solo eliminar el error del campo específico
+                    if (key !== field) {
+                        preservedErrors[key] = msg;
+                    }
+                }
+            });
+            
+            // Combinar errores preservados con los nuevos de validación
+            // Los errores de validación tienen prioridad (sobrescriben)
+            const combinedErrors = { ...preservedErrors, ...validation.errors };
+            
             return {
                 ...updatedUser,
-                _errors: validation.errors,
-                _warnings: validation.warnings,
-                _isValid: Object.keys(validation.errors).length === 0,
+                _errors: combinedErrors,
+                _warnings: { ...user._warnings, ...validation.warnings },
+                _isValid: Object.keys(combinedErrors).length === 0,
             };
         }));
     }, [validateUser]);
@@ -189,11 +245,26 @@ export function useEditableUsers(): UseEditableUsersReturn {
             const updatedUser = { ...user, organizaciones: updatedOrgs, _isModified: true };
             const validation = validateUser(updatedUser);
             
+            // Preservar errores que NO son del campo específico que se está editando
+            // Los errores de org tienen formato: "organizaciones.0.ruc", "organizaciones.0.supervisor_email"
+            const fieldKey = `organizaciones.${orgIndex}.${field}`;
+            const preservedErrors: Record<string, string> = {};
+            
+            // Copiar todos los errores EXCEPTO el del campo específico
+            Object.entries(user._errors || {}).forEach(([key, msg]) => {
+                if (key !== fieldKey) {
+                    preservedErrors[key] = msg;
+                }
+            });
+            
+            // Combinar: errores preservados + errores de validación
+            const combinedErrors = { ...preservedErrors, ...validation.errors };
+            
             return {
                 ...updatedUser,
-                _errors: validation.errors,
-                _warnings: validation.warnings,
-                _isValid: Object.keys(validation.errors).length === 0,
+                _errors: combinedErrors,
+                _warnings: { ...user._warnings, ...validation.warnings },
+                _isValid: Object.keys(combinedErrors).length === 0,
             };
         }));
     }, [validateUser]);

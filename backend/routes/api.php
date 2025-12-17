@@ -70,6 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user-batches/config', [UserBatchController::class, 'getConfig']);
     Route::post('/user-batches/template', [UserBatchController::class, 'downloadTemplate']);
     Route::post('/user-batches/validate', [UserBatchController::class, 'validate']);
+    Route::post('/user-batches/validate-data', [UserBatchController::class, 'validateData']);
     Route::post('/user-batches/upload-data', [UserBatchController::class, 'uploadData']);
     Route::get('/user-batches/{id}/errors', [UserBatchController::class, 'downloadErrors']);
 

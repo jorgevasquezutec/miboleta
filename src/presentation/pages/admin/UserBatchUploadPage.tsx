@@ -129,25 +129,51 @@ export function UserBatchUploadPage() {
     }, [deleteRow]);
 
     const handleConfirmUpload = async () => {
+        // Validación local primero
         if (errorCount > 0) {
             toast.error('Corrige los errores antes de continuar');
             return;
         }
 
-        const formattedUsers = users.map(user => ({
-            nombre: user.nombre,
-            apellido: user.apellido,
-            email: user.email,
-            tipo_documento: user.tipo_documento,
-            numero_documento: user.numero_documento,
-            rol: user.rol,
-            estado: user.estado,
-            telefono: user.telefono,
-            organizaciones: user.organizaciones,
-        }));
+        // Limpiar y formatear usuarios
+        const formattedUsers = users.map(user => {
+            // Filtrar organizaciones vacías y asegurar que ruc/supervisor sean strings
+            const cleanOrgs = (user.organizaciones || [])
+                .filter(org => org && org.ruc && String(org.ruc).trim() !== '')
+                .map(org => ({
+                    ruc: String(org.ruc || '').trim(),
+                    supervisor_email: String(org.supervisor_email || '').trim(),
+                }));
+
+            return {
+                nombre: user.nombre,
+                apellido: user.apellido,
+                email: user.email,
+                tipo_documento: user.tipo_documento,
+                numero_documento: user.numero_documento,
+                rol: user.rol,
+                estado: user.estado,
+                telefono: user.telefono || '',
+                organizaciones: cleanOrgs.length > 0 ? cleanOrgs : [],
+                row_number: user.row_number,
+            };
+        });
 
         setIsUploading(true);
         try {
+            // 1. Revalidar con el backend antes de procesar
+            toast.info('Validando datos...');
+            const validation = await bulkUserUploadService.validateData(formattedUsers);
+            
+            if (!validation.valid || validation.errors.length > 0) {
+                // Hay errores del backend - recargar con los nuevos errores
+                loadUsers(formattedUsers, validation.errors, validation.warnings);
+                toast.error(`Se encontraron ${validation.errors.length} errores. Por favor corrígelos.`);
+                setIsUploading(false);
+                return;
+            }
+
+            // 2. Si pasó la validación, proceder con la carga
             const result = await bulkUserUploadService.uploadEditedData(formattedUsers, {
                 send_welcome_emails: sendEmails,
                 update_existing: false,
@@ -354,7 +380,8 @@ export function UserBatchUploadPage() {
                                 <div className="max-h-32 overflow-y-auto space-y-1">
                                     {users.filter(u => !u._isValid).slice(0, 10).map(user => (
                                         <div key={user.id} className="text-xs text-red-700">
-                                            <span className="font-medium">Fila {user.row_number}:</span>{' '}
+                                            <span className="font-medium">Fila {user.row_number}</span>{' '}
+                                            <span className="text-red-500">({user.rol})</span>:{' '}
                                             {Object.entries(user._errors).map(([field, msg]) => (
                                                 <span key={field} className="mr-2">
                                                     {field}: {msg}
@@ -377,6 +404,7 @@ export function UserBatchUploadPage() {
                         <div className="h-125 border-t">
                             <UserDataGrid
                                 users={users}
+                                configData={configData}
                                 onCellChange={handleCellChange}
                                 onDeleteRow={handleDeleteRow}
                             />

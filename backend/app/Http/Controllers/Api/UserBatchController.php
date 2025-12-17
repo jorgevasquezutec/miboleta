@@ -298,6 +298,37 @@ class UserBatchController extends Controller
     }
 
     /**
+     * POST /api/user-batches/validate-data
+     * Validar datos editados (sin archivo) antes de procesar
+     */
+    public function validateData(Request $request)
+    {
+        $validated = $request->validate([
+            'users' => 'required|array|min:1',
+            'users.*.nombre' => 'nullable|string',
+            'users.*.apellido' => 'nullable|string',
+            'users.*.email' => 'nullable|string',
+            'users.*.tipo_documento' => 'nullable|string',
+            'users.*.numero_documento' => 'nullable|string',
+            'users.*.rol' => 'nullable|string',
+            'users.*.estado' => 'nullable|string',
+            'users.*.telefono' => 'nullable|string',
+            'users.*.organizaciones' => 'nullable|array',
+            'users.*.row_number' => 'nullable|integer',
+        ]);
+
+        $validation = $this->service->validateData($validated['users']);
+
+        return response()->json([
+            'valid' => $validation['valid'],
+            'data' => $validation['data'],
+            'errors' => $validation['errors'],
+            'warnings' => $validation['warnings'],
+            'summary' => $validation['summary'],
+        ]);
+    }
+
+    /**
      * POST /api/user-batches/upload-data
      * Iniciar carga masiva con datos editados (sin archivo)
      */
@@ -313,7 +344,9 @@ class UserBatchController extends Controller
             'users.*.rol' => 'required|in:client,root,admin',
             'users.*.estado' => 'required|in:active,inactive',
             'users.*.telefono' => 'nullable|string',
-            'users.*.organizaciones' => 'required|array',
+            'users.*.organizaciones' => 'nullable|array',
+            'users.*.organizaciones.*.ruc' => 'nullable',
+            'users.*.organizaciones.*.supervisor_email' => 'nullable',
             'send_welcome_emails' => 'boolean',
             'update_existing' => 'boolean',
         ]);
@@ -325,7 +358,10 @@ class UserBatchController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenants->first()?->id;
 
-        // 2. Crear batch en BD sin archivo
+        // 2. Transformar organizaciones: ruc → tenant_id, supervisor_email → supervisor_id
+        $users = $this->service->transformOrganizationsForProcessing($users);
+
+        // 3. Crear batch en BD sin archivo
         $batch = UserBatch::create([
             'tenant_id' => $tenantId,
             'created_by_user_id' => $user->id,
@@ -340,7 +376,7 @@ class UserBatchController extends Controller
             ],
         ]);
 
-        // 3. Dividir usuarios en chunks y crear jobs
+        // 4. Dividir usuarios en chunks y crear jobs
         $chunkSize = 50;
         $userChunks = array_chunk($users, $chunkSize);
         $jobs = [];
@@ -349,7 +385,7 @@ class UserBatchController extends Controller
             $jobs[] = new ProcessUserChunk($batch->uuid, $chunk, $index + 1);
         }
 
-        // 4. Despachar batch de jobs con callbacks
+        // 5. Despachar batch de jobs con callbacks
         $laravelBatch = Bus::batch($jobs)
             ->name("Bulk User Upload (Edited): {$batch->original_filename}")
             ->then(fn(Batch $lb) => UserBatch::onBatchCompleted($batch->id))
@@ -358,7 +394,7 @@ class UserBatchController extends Controller
             ->onQueue('bulk-uploads')
             ->dispatch();
 
-        // 5. Guardar batch_id en el registro
+        // 6. Guardar batch_id en el registro
         $batch->update([
             'batch_id' => $laravelBatch->id,
             'status' => 'processing',

@@ -17,7 +17,7 @@ import {
   ClipboardList,
   Upload,
 } from "lucide-react";
-import { USER_ROLE_DISPLAY_LABELS, NAV_LABELS, ROUTES } from "@/shared/constants";
+import { NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
 
 interface SidebarProps {

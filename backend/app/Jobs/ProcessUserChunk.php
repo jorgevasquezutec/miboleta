@@ -102,6 +102,7 @@ class ProcessUserChunk implements ShouldQueue
                         'apellido' => $userData['apellido'] ?? 'N/A',
                         'email' => $userData['email'],
                         'documento' => $userData['numero_documento'] ?? 'N/A',
+                        'rol' => $userData['rol'] ?? 'N/A',
                         'error' => $e->getMessage(),
                     ];
                 }
@@ -179,12 +180,24 @@ class ProcessUserChunk implements ShouldQueue
 
     /**
      * Formatear configuración de tenants
+     * Para rol root: puede no tener organizaciones
+     * Para rol client/admin: debe tener organizaciones con tenant_id
      */
-    private function formatTenantsConfig(array $organizaciones): array
+    private function formatTenantsConfig(?array $organizaciones): array
     {
+        // Si no hay organizaciones, retornar array vacío (válido para root)
+        if (empty($organizaciones)) {
+            return [];
+        }
+
         $config = [];
 
         foreach ($organizaciones as $org) {
+            // Saltar organizaciones vacías o sin tenant_id
+            if (empty($org) || !isset($org['tenant_id'])) {
+                continue;
+            }
+            
             $tenantId = (int) $org['tenant_id'];
             $supervisors = [];
 

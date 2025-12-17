@@ -111,6 +111,25 @@ export class BulkUserUploadService {
     }
 
     /**
+     * Validar datos editados (sin archivo) antes de procesar
+     */
+    async validateData(users: any[]): Promise<{
+        valid: boolean;
+        data: any[];
+        errors: any[];
+        warnings: any[];
+        summary: {
+            total: number;
+            valid: number;
+            errors: number;
+            warnings: number;
+        };
+    }> {
+        const response = await apiClient.post('/user-batches/validate-data', { users });
+        return response.data;
+    }
+
+    /**
      * Iniciar carga masiva (datos ya validados)
      */
     async uploadFile(

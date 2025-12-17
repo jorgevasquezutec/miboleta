@@ -1,11 +1,12 @@
-import { useCallback, useState, useRef } from 'react';
-import type { EditableUser } from '@/domain/types/bulkUserUpload.types';
+import { useCallback, useState, useRef, useMemo } from 'react';
+import type { EditableUser, BulkUploadConfigData } from '@/domain/types/bulkUserUpload.types';
 import { Trash2, AlertCircle } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
 import { cn } from '@/presentation/components/ui/utils';
 
 interface UserDataGridProps {
     users: EditableUser[];
+    configData: BulkUploadConfigData | null;
     onCellChange: (rowId: string, field: string, value: any) => void;
     onDeleteRow: (id: string) => void;
 }
@@ -17,35 +18,48 @@ interface EditingCell {
 
 export function UserDataGrid({ 
     users, 
+    configData,
     onCellChange, 
     onDeleteRow,
 }: UserDataGridProps) {
     const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // Mapas para búsqueda rápida
+    const orgByRuc = useMemo(() => {
+        if (!configData?.organizations) return new Map();
+        return new Map(configData.organizations.map(org => [org.ruc, org]));
+    }, [configData?.organizations]);
+
     const handleCellChange = useCallback((rowId: string, field: string, value: any) => {
         onCellChange(rowId, field, value);
     }, [onCellChange]);
 
-    const handleOrgFieldChange = useCallback((userId: string, orgIndex: number, field: 'ruc' | 'supervisor_email', value: string) => {
+    const handleOrgChange = useCallback((userId: string, orgIndex: number, newRuc: string) => {
         const user = users.find(u => u.id === userId);
         if (!user) return;
 
-        // Crear copia de organizaciones
         const orgs = [...(user.organizaciones || [])];
-        
-        // Asegurar que existe el índice
         while (orgs.length <= orgIndex) {
             orgs.push({ ruc: '', supervisor_email: '' });
         }
         
-        // Actualizar el campo
-        orgs[orgIndex] = { ...orgs[orgIndex], [field]: value };
+        // Cambiar RUC y limpiar supervisor (porque cambió la org)
+        orgs[orgIndex] = { ruc: newRuc, supervisor_email: '' };
         
-        // Limpiar orgs vacías al final
-        while (orgs.length > 0 && !orgs[orgs.length - 1].ruc && !orgs[orgs.length - 1].supervisor_email) {
-            orgs.pop();
+        onCellChange(userId, 'organizaciones', orgs);
+    }, [users, onCellChange]);
+
+    const handleSupervisorChange = useCallback((userId: string, orgIndex: number, supervisorEmail: string) => {
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+
+        const orgs = [...(user.organizaciones || [])];
+        while (orgs.length <= orgIndex) {
+            orgs.push({ ruc: '', supervisor_email: '' });
         }
+        
+        orgs[orgIndex] = { ...orgs[orgIndex], supervisor_email: supervisorEmail };
         
         onCellChange(userId, 'organizaciones', orgs);
     }, [users, onCellChange]);
@@ -137,38 +151,104 @@ export function UserDataGrid({
         );
     };
 
-    const renderOrgCell = (user: EditableUser, orgIndex: number, field: 'ruc' | 'supervisor_email') => {
+    // Renderizar select de organización
+    const renderOrgSelect = (user: EditableUser, orgIndex: number) => {
         const org = user.organizaciones?.[orgIndex];
-        const value = org?.[field] || '';
-        const cellKey = `org${orgIndex}_${field}`;
-        const errorKey = `organizaciones.${orgIndex}.${field}`;
-        const error = user._errors[errorKey];
+        const currentRuc = org?.ruc || '';
+        
+        return (
+            <select
+                value={currentRuc}
+                onChange={(e) => handleOrgChange(user.id, orgIndex, e.target.value)}
+                className={cn(
+                    "w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none",
+                    currentRuc ? "border-gray-200" : "border-orange-300"
+                )}
+            >
+                <option value="">-- Seleccionar --</option>
+                {configData?.organizations.map(org => (
+                    <option key={org.ruc} value={org.ruc}>
+                        {org.name} ({org.ruc})
+                    </option>
+                ))}
+            </select>
+        );
+    };
 
-        if (isEditing(user.id, cellKey)) {
+    // Renderizar select de supervisor (filtrado por org seleccionada)
+    const renderSupervisorSelect = (user: EditableUser, orgIndex: number) => {
+        const org = user.organizaciones?.[orgIndex];
+        const currentRuc = org?.ruc || '';
+        const currentSupervisor = org?.supervisor_email || '';
+        
+        // Buscar org por RUC para obtener sus supervisores
+        // Normalizar RUC (trim y comparar como string)
+        const normalizedRuc = String(currentRuc).trim();
+        const selectedOrg = configData?.organizations.find(o => String(o.ruc).trim() === normalizedRuc);
+        
+        // Debug primera fila
+        if (user.row_number === 2 && !selectedOrg && currentRuc) {
+            console.log('DEBUG SUPERVISOR:', {
+                currentRuc,
+                normalizedRuc,
+                configOrgs: configData?.organizations?.map(o => ({ ruc: o.ruc, id: o.id })),
+                selectedOrg,
+            });
+        }
+        
+        // supervisors_by_org tiene keys como strings ("1", "2", etc.)
+        let supervisors: Array<{ id: number; email: string; full_name: string }> = [];
+        if (selectedOrg && configData?.supervisors_by_org) {
+            // Usar String() para la key porque viene como "1", "2", etc.
+            const orgKey = String(selectedOrg.id);
+            const orgSupervisors = configData.supervisors_by_org[orgKey as any];
+            if (Array.isArray(orgSupervisors)) {
+                supervisors = orgSupervisors;
+            } else if (orgSupervisors && typeof orgSupervisors === 'object') {
+                supervisors = Object.values(orgSupervisors);
+            }
+        }
+        
+        // Verificar si el supervisor actual existe en la lista
+        const supervisorExists = supervisors.some(s => s.email === currentSupervisor);
+        
+        if (!currentRuc) {
             return (
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={value}
-                    onChange={(e) => handleOrgFieldChange(user.id, orgIndex, field, e.target.value)}
-                    onBlur={handleCellBlur}
-                    onKeyDown={handleKeyDown}
-                    placeholder={field === 'ruc' ? 'RUC...' : 'Email supervisor...'}
-                    className="w-full h-full px-2 py-1 text-sm border border-blue-500 rounded outline-none bg-white"
-                    autoFocus
-                />
+                <div className="flex flex-col">
+                    <span className="text-xs text-gray-400 italic">
+                        Selecciona org primero
+                    </span>
+                    {currentSupervisor && (
+                        <span className="text-xs text-orange-500" title="Valor del Excel">
+                            Excel: {currentSupervisor}
+                        </span>
+                    )}
+                </div>
             );
         }
-
+        
         return (
-            <div
-                onClick={() => handleCellClick(user.id, cellKey)}
-                className="flex items-center gap-1 cursor-pointer min-h-7"
-            >
-                <span className={cn('truncate text-xs', !value && 'text-gray-400')}>
-                    {value || '-'}
-                </span>
-                {error && <span title={error}><AlertCircle className="h-3 w-3 text-red-500 shrink-0" /></span>}
+            <div className="flex flex-col gap-0.5">
+                <select
+                    value={supervisorExists ? currentSupervisor : ''}
+                    onChange={(e) => handleSupervisorChange(user.id, orgIndex, e.target.value)}
+                    className={cn(
+                        "w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none",
+                        !supervisorExists && currentSupervisor ? "border-orange-400" : "border-gray-200"
+                    )}
+                >
+                    <option value="">-- Sin supervisor --</option>
+                    {supervisors.map(sup => (
+                        <option key={sup.id} value={sup.email}>
+                            {sup.full_name} ({sup.email})
+                        </option>
+                    ))}
+                </select>
+                {!supervisorExists && currentSupervisor && (
+                    <span className="text-xs text-orange-500" title="Email no encontrado en supervisores de esta org">
+                        ⚠️ {currentSupervisor}
+                    </span>
+                )}
             </div>
         );
     };
@@ -188,9 +268,8 @@ export function UserDataGrid({
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-16">rol</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-16">estado</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">telefono</th>
-                        {/* Columna de organización única */}
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-28 bg-blue-50">org1_ruc</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-40 bg-blue-50">org1_supervisor</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-44 bg-blue-50">Organización</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-48 bg-blue-50">Supervisor</th>
                         <th className="px-2 py-2 text-center font-semibold text-gray-700 border-b w-12"></th>
                     </tr>
                 </thead>
@@ -200,85 +279,85 @@ export function UserDataGrid({
                         const hasErrors = errorMessages.length > 0;
                         
                         return (
-                        <tr 
-                            key={user.id} 
-                            className={cn(
-                                'hover:bg-blue-50/50',
-                                !user._isValid && 'bg-red-50/40'
-                            )}
-                        >
-                            {/* Columna de estado/errores */}
-                            <td className="px-1 py-1 border-b border-r text-center">
-                                {hasErrors ? (
-                                    <div 
-                                        className="flex items-center justify-center cursor-help"
-                                        title={errorMessages.join('\n')}
-                                    >
-                                        <AlertCircle className="h-4 w-4 text-red-500" />
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-center">
-                                        <div className="h-3 w-3 rounded-full bg-green-500" />
-                                    </div>
+                            <tr 
+                                key={user.id} 
+                                className={cn(
+                                    'hover:bg-blue-50/50',
+                                    !user._isValid && 'bg-red-50/40'
                                 )}
-                            </td>
-                            <td className="px-2 py-1.5 border-b border-r text-gray-500 font-medium">
-                                {user.row_number}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.nombre && "bg-red-50")}>
-                                {renderEditableCell(user, 'nombre')}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.apellido && "bg-red-50")}>
-                                {renderEditableCell(user, 'apellido')}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.email && "bg-red-50")}>
-                                {renderEditableCell(user, 'email')}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.tipo_documento && "bg-red-50")}>
-                                {renderSelectCell(user, 'tipo_documento', [
-                                    { value: 'dni', label: 'DNI' },
-                                    { value: 'ce', label: 'CE' },
-                                    { value: 'passport', label: 'Pasaporte' },
-                                    { value: 'ruc', label: 'RUC' },
-                                ])}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.numero_documento && "bg-red-50")}>
-                                {renderEditableCell(user, 'numero_documento')}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.rol && "bg-red-50")}>
-                                {renderSelectCell(user, 'rol', [
-                                    { value: 'client', label: 'client' },
-                                    { value: 'admin', label: 'admin' },
-                                    { value: 'root', label: 'root' },
-                                ])}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.estado && "bg-red-50")}>
-                                {renderSelectCell(user, 'estado', [
-                                    { value: 'active', label: 'active' },
-                                    { value: 'inactive', label: 'inactive' },
-                                ])}
-                            </td>
-                            <td className={cn("px-2 py-1 border-b border-r", user._errors.telefono && "bg-red-50")}>
-                                {renderEditableCell(user, 'telefono')}
-                            </td>
-                            {/* Celdas de organización 1 */}
-                            <td className="px-1 py-1 border-b border-r bg-blue-50/20">
-                                {renderOrgCell(user, 0, 'ruc')}
-                            </td>
-                            <td className="px-1 py-1 border-b border-r bg-blue-50/20">
-                                {renderOrgCell(user, 0, 'supervisor_email')}
-                            </td>
-                            <td className="px-2 py-1 border-b text-center">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                    onClick={() => onDeleteRow(user.id)}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </td>
-                        </tr>
+                            >
+                                {/* Columna de estado/errores */}
+                                <td className="px-1 py-1 border-b border-r text-center">
+                                    {hasErrors ? (
+                                        <div 
+                                            className="flex items-center justify-center cursor-help"
+                                            title={errorMessages.join('\n')}
+                                        >
+                                            <AlertCircle className="h-4 w-4 text-red-500" />
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center">
+                                            <div className="h-3 w-3 rounded-full bg-green-500" />
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="px-2 py-1.5 border-b border-r text-gray-500 font-medium">
+                                    {user.row_number}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.nombre && "bg-red-50")}>
+                                    {renderEditableCell(user, 'nombre')}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.apellido && "bg-red-50")}>
+                                    {renderEditableCell(user, 'apellido')}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.email && "bg-red-50")}>
+                                    {renderEditableCell(user, 'email')}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.tipo_documento && "bg-red-50")}>
+                                    {renderSelectCell(user, 'tipo_documento', [
+                                        { value: 'dni', label: 'DNI' },
+                                        { value: 'ce', label: 'CE' },
+                                        { value: 'passport', label: 'Pasaporte' },
+                                        { value: 'ruc', label: 'RUC' },
+                                    ])}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.numero_documento && "bg-red-50")}>
+                                    {renderEditableCell(user, 'numero_documento')}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.rol && "bg-red-50")}>
+                                    {renderSelectCell(user, 'rol', [
+                                        { value: 'client', label: 'client' },
+                                        { value: 'admin', label: 'admin' },
+                                        { value: 'root', label: 'root' },
+                                    ])}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.estado && "bg-red-50")}>
+                                    {renderSelectCell(user, 'estado', [
+                                        { value: 'active', label: 'active' },
+                                        { value: 'inactive', label: 'inactive' },
+                                    ])}
+                                </td>
+                                <td className={cn("px-2 py-1 border-b border-r", user._errors.telefono && "bg-red-50")}>
+                                    {renderEditableCell(user, 'telefono')}
+                                </td>
+                                {/* Selects de organización */}
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderOrgSelect(user, 0)}
+                                </td>
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderSupervisorSelect(user, 0)}
+                                </td>
+                                <td className="px-2 py-1 border-b text-center">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                        onClick={() => onDeleteRow(user.id)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </td>
+                            </tr>
                         );
                     })}
                 </tbody>
