@@ -16,6 +16,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
           color: "hsl(var(--popover-foreground))",
           border: "1px solid hsl(var(--border))",
         },
+        classNames: {
+          title: "text-gray-900 font-medium",
+          description: "text-gray-600",
+          actionButton: "bg-primary text-primary-foreground",
+        },
       }}
       {...props}
     />

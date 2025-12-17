@@ -107,8 +107,9 @@ class AuthController extends Controller
             }
         }
 
-        // Log successful login
-        $this->auditService->logLogin($result['user']->id, $result['user']->current_tenant_id);
+        // Log successful login - use primary tenant ID for non-root users
+        $loginTenantId = $result['user']->primaryTenant()?->id;
+        $this->auditService->logLogin($result['user']->id, $loginTenantId);
 
         return response()->json([
             'user' => $this->authService->transformAuthUser($result['user']),
