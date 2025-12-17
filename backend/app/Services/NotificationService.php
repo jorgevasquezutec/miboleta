@@ -66,8 +66,11 @@ class NotificationService
         $query = Notification::forUser($user->id)
             ->orderBy('created_at', 'desc');
 
-        // Filter by tenant if specified
-        if (!empty($filters['tenant_id'])) {
+        // Filter by tenant(s) if specified
+        if (!empty($filters['tenant_ids'])) {
+            $query->forTenant($filters['tenant_ids']);
+        } elseif (!empty($filters['tenant_id'])) {
+            // Legacy support
             $query->forTenant($filters['tenant_id']);
         }
 
@@ -87,12 +90,12 @@ class NotificationService
     /**
      * Get unread count for a user.
      */
-    public function getUnreadCount(User $user, ?int $tenantId = null): int
+    public function getUnreadCount(User $user, int|array|null $tenantIds = null): int
     {
         $query = Notification::forUser($user->id)->unread();
 
-        if ($tenantId) {
-            $query->forTenant($tenantId);
+        if ($tenantIds) {
+            $query->forTenant($tenantIds);
         }
 
         return $query->count();
@@ -110,12 +113,12 @@ class NotificationService
     /**
      * Mark all notifications as read for a user.
      */
-    public function markAllAsRead(User $user, ?int $tenantId = null): int
+    public function markAllAsRead(User $user, int|array|null $tenantIds = null): int
     {
         $query = Notification::forUser($user->id)->unread();
 
-        if ($tenantId) {
-            $query->forTenant($tenantId);
+        if ($tenantIds) {
+            $query->forTenant($tenantIds);
         }
 
         $count = $query->count();

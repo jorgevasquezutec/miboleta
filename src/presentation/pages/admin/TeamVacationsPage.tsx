@@ -10,6 +10,7 @@ import {
     XCircle,
     Check,
     CalendarDays,
+    RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
@@ -204,6 +205,15 @@ export function TeamVacationsPage() {
                         Gestiona las vacaciones de tu equipo
                     </p>
                 </div>
+                <Button
+                    onClick={loadData}
+                    disabled={isLoading}
+                    variant="outline"
+                    className="gap-2"
+                >
+                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    Refrescar
+                </Button>
             </div>
 
             {/* Stats Cards */}

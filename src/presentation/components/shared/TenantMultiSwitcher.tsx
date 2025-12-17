@@ -50,17 +50,17 @@ export function TenantMultiSwitcher() {
     const { setFilter } = useTenantFilterActions();
     const { getFilterDisplayText } = useTenantFilterSelectors();
 
+    // ✅ OPTIMIZACIÓN: Memoizar tenants disponibles (ANTES de los estados)
+    const availableTenants = useMemo(() => {
+        return user?.tenants || [];
+    }, [user?.tenants]);
+
     // Estado local para selección temporal (mientras el dropdown está abierto)
     const [tempSelection, setTempSelection] = useState<string[]>(
         filter.tenantIds
     );
     const [isOpen, setIsOpen] = useState(false);
     const [isApplying, setIsApplying] = useState(false);
-
-    // ✅ OPTIMIZACIÓN: Memoizar tenants disponibles
-    const availableTenants = useMemo(() => {
-        return user?.tenants || [];
-    }, [user?.tenants]);
 
     // ✅ OPTIMIZACIÓN: Callbacks memoizados
     const handleToggleTenant = useCallback((tenantId: string) => {
@@ -125,6 +125,24 @@ export function TenantMultiSwitcher() {
         }
     }, [filter.tenantIds]);
 
+    // ✅ OPTIMIZACIÓN: Memoizar texto de display (ANTES de los returns)
+    const displayText = useMemo(() => getFilterDisplayText(), [getFilterDisplayText]);
+    
+    const displaySubtext = useMemo(() => {
+        if (filter.mode === 'all') return `${availableTenants.length} disponibles`;
+        if (filter.mode === 'single' && filter.tenants[0]) {
+            return filter.tenants[0].is_primary ? "Principal" : "Secundario";
+        }
+        return "Selección múltiple";
+    }, [filter.mode, filter.tenants, availableTenants.length]);
+
+    // ✅ Verificar si hay cambios pendientes (ANTES de los returns)
+    const hasChanges = useMemo(() => {
+        const current = [...filter.tenantIds].sort().join(',');
+        const temp = [...tempSelection].sort().join(',');
+        return current !== temp;
+    }, [filter.tenantIds, tempSelection]);
+
     // ✅ Si no hay tenants, mostrar branding estático
     if (!availableTenants || availableTenants.length === 0) {
         return (
@@ -166,21 +184,7 @@ export function TenantMultiSwitcher() {
         );
     }
 
-    // ✅ OPTIMIZACIÓN: Memoizar texto de display
-    const displayText = getFilterDisplayText();
-    const displaySubtext = filter.mode === 'all'
-        ? `${availableTenants.length} disponibles`
-        : filter.mode === 'single' && filter.tenants[0]
-            ? (filter.tenants[0].is_primary ? "Principal" : "Secundario")
-            : "Selección múltiple";
-
-    // ✅ Verificar si hay cambios pendientes
-    const hasChanges = useMemo(() => {
-        const current = [...filter.tenantIds].sort().join(',');
-        const temp = [...tempSelection].sort().join(',');
-        return current !== temp;
-    }, [filter.tenantIds, tempSelection]);
-
+    // Continuar con el render del dropdown multi-tenant
     return (
         <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
             <DropdownMenuTrigger asChild>

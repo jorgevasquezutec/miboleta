@@ -35,6 +35,14 @@ export function VacationRequestFormPage() {
     // Check if user has multiple tenants
     const hasMultipleTenants = user?.tenants && user.tenants.length > 1;
 
+    console.log('👤 [Vacation Form] User info:', {
+        userId: user?.id,
+        userName: user?.name,
+        tenantsCount: user?.tenants?.length,
+        tenants: user?.tenants,
+        hasMultipleTenants,
+    });
+
     // Get supervisor for selected tenant (or default tenant)
     const selectedTenant = useMemo(() => {
         if (!user?.tenants) return null;
@@ -46,6 +54,12 @@ export function VacationRequestFormPage() {
     }, [user?.tenants, hasMultipleTenants, selectedTenantId]);
 
     const hasSupervisor = selectedTenant?.supervisor_id != null;
+    
+    console.log('🏢 [Vacation Form] Selected tenant:', {
+        selectedTenantId,
+        selectedTenant: selectedTenant ? { id: selectedTenant.id, name: selectedTenant.name, supervisor_id: selectedTenant.supervisor_id } : null,
+        hasSupervisor,
+    });
 
     // Calculate days requested (all calendar days)
     const daysRequested = useMemo(() => {
@@ -96,12 +110,38 @@ export function VacationRequestFormPage() {
 
     // Validation
     const isValid = useMemo(() => {
-        if (!dateRange?.from || !dateRange?.to) return false;
-        if (hasMultipleTenants && !selectedTenantId) return false;
-        if (!hasSupervisor) return false; // Must have supervisor for selected tenant
-        if (Object.keys(frontendErrors).length > 0) return false;
+        const validationLog = {
+            hasDateRange: !!(dateRange?.from && dateRange?.to),
+            hasMultipleTenants,
+            selectedTenantId,
+            selectedTenant: selectedTenant ? { id: selectedTenant.id, name: selectedTenant.name, supervisor_id: selectedTenant.supervisor_id } : null,
+            hasSupervisor,
+            frontendErrorsCount: Object.keys(frontendErrors).length,
+            frontendErrors,
+        };
+
+        console.log('🔍 [Vacation Form] Validation check:', validationLog);
+
+        if (!dateRange?.from || !dateRange?.to) {
+            console.log('❌ [Validation] Missing date range');
+            return false;
+        }
+        if (hasMultipleTenants && !selectedTenantId) {
+            console.log('❌ [Validation] Multi-tenant user needs to select tenant');
+            return false;
+        }
+        if (!hasSupervisor) {
+            console.log('❌ [Validation] No supervisor assigned to selected tenant');
+            return false;
+        }
+        if (Object.keys(frontendErrors).length > 0) {
+            console.log('❌ [Validation] Frontend errors:', frontendErrors);
+            return false;
+        }
+        
+        console.log('✅ [Validation] All checks passed');
         return true;
-    }, [dateRange, hasMultipleTenants, selectedTenantId, hasSupervisor, frontendErrors]);
+    }, [dateRange, hasMultipleTenants, selectedTenantId, hasSupervisor, frontendErrors, selectedTenant]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

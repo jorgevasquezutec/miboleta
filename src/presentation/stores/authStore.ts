@@ -95,6 +95,12 @@ export const useAuthStore = create<AuthState>()(
         try {
           const user = await userRepository.me();
 
+          console.log('👤 [AuthStore] User data from /me:', {
+            userId: user.id,
+            name: user.name,
+            tenants: user.tenants,
+          });
+
           // Actualizar tenant actual si el usuario cambió
           const currentTenant =
             user.tenants?.find(t => t.is_primary) ||

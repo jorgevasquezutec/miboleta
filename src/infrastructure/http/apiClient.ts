@@ -63,6 +63,8 @@ apiClient.interceptors.request.use(
     try {
       // Importar dinámicamente para evitar circular dependency
       const tenantFilterStorage = localStorage.getItem('tenant-filter-storage');
+      const authStorage = localStorage.getItem('auth-storage');
+
       if (tenantFilterStorage) {
         const { state } = JSON.parse(tenantFilterStorage);
         const filter = state?.filter;
@@ -74,35 +76,32 @@ apiClient.interceptors.request.use(
             config.headers['X-Tenant-Ids'] = tenantQuery;
 
             console.log(`🏢 [API] Filtering by tenants: ${tenantQuery} (mode: ${filter.mode})`);
-          } else {
+          } else if (filter.mode === 'all') {
             // ✅ Modo 'all': sin filtro (mostrar todas las empresas)
             config.headers['X-Tenant-Scope'] = 'all';
             console.log(`🏢 [API] No tenant filter (showing all companies)`);
           }
         }
       }
+
+      // ✅ Si no hay X-Tenant-Ids configurado, usar el tenant del usuario autenticado
+      if (!config.headers['X-Tenant-Ids'] && authStorage) {
+        const { state } = JSON.parse(authStorage);
+        const user = state?.user;
+
+        if (user?.tenants && user.tenants.length > 0) {
+          // Usar todos los tenants del usuario como fallback
+          const tenantIds = user.tenants.map((t: any) => t.id).join(',');
+          config.headers['X-Tenant-Ids'] = tenantIds;
+          console.log(`🏢 [API] Using user's tenants: ${tenantIds}`);
+        }
+      }
     } catch (error) {
       console.error('❌ [API] Error parsing tenant filter storage:', error);
     }
 
-    // ⚠️ RETROCOMPATIBILIDAD: Mantener X-Tenant-Id para backend legacy
-    const authStorage = localStorage.getItem('auth-storage');
-    if (authStorage) {
-      try {
-        const { state } = JSON.parse(authStorage);
-        const currentTenantId = state?.currentTenant?.id;
-
-        // Solo añadir si no hay X-Tenant-Ids (nuevo header tiene prioridad)
-        if (currentTenantId && !config.headers['X-Tenant-Ids']) {
-          config.headers['X-Tenant-Id'] = currentTenantId;
-        }
-      } catch (error) {
-        console.error('❌ [API] Error parsing auth storage:', error);
-      }
-    }
-
     // ✅ OPTIMIZACIÓN: Deduplicación de requests idénticos
-    const cacheKey = `${config.method}:${config.url}:${config.headers['X-Tenant-Ids'] || config.headers['X-Tenant-Id'] || 'none'}`;
+    const cacheKey = `${config.method}:${config.url}:${config.headers['X-Tenant-Ids'] || 'none'}`;
 
     // Si ya existe un request idéntico en progreso, reutilizarlo
     if (requestQueue.has(cacheKey)) {
@@ -123,7 +122,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     // ✅ Limpiar del request queue cuando completa exitosamente
-    const cacheKey = `${response.config.method}:${response.config.url}:${response.config.headers?.['X-Tenant-Ids'] || response.config.headers?.['X-Tenant-Id'] || 'none'}`;
+    const cacheKey = `${response.config.method}:${response.config.url}:${response.config.headers?.['X-Tenant-Ids'] || 'none'}`;
     requestQueue.delete(cacheKey);
 
     return response;
@@ -131,7 +130,7 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     // ✅ Limpiar del request queue cuando falla
     if (error.config) {
-      const cacheKey = `${error.config.method}:${error.config.url}:${error.config.headers?.['X-Tenant-Ids'] || error.config.headers?.['X-Tenant-Id'] || 'none'}`;
+      const cacheKey = `${error.config.method}:${error.config.url}:${error.config.headers?.['X-Tenant-Ids'] || 'none'}`;
       requestQueue.delete(cacheKey);
     }
 

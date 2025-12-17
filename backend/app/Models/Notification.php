@@ -59,11 +59,14 @@ class Notification extends Model
     }
 
     /**
-     * Scope to get notifications for a specific tenant.
+     * Scope to get notifications for specific tenant(s).
      */
-    public function scopeForTenant($query, int $tenantId)
+    public function scopeForTenant($query, int|array $tenantIds)
     {
-        return $query->where('tenant_id', $tenantId);
+        if (is_array($tenantIds)) {
+            return $query->whereIn('tenant_id', $tenantIds);
+        }
+        return $query->where('tenant_id', $tenantIds);
     }
 
     /**
