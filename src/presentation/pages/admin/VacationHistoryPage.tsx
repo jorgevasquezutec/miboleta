@@ -465,7 +465,7 @@ export function VacationHistoryPage() {
                                         {isRoot && (
                                             <TableCell>
                                                 <span className="text-sm text-gray-700">
-                                                    {request.tenant?.name || "N/A"}
+                                                    {request.tenantId || "N/A"}
                                                 </span>
                                             </TableCell>
                                         )}

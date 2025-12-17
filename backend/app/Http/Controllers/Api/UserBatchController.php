@@ -298,6 +298,88 @@ class UserBatchController extends Controller
     }
 
     /**
+     * POST /api/user-batches/upload-data
+     * Iniciar carga masiva con datos editados (sin archivo)
+     */
+    public function uploadData(Request $request)
+    {
+        $validated = $request->validate([
+            'users' => 'required|array|min:1',
+            'users.*.nombre' => 'required|string',
+            'users.*.apellido' => 'required|string',
+            'users.*.email' => 'required|email',
+            'users.*.tipo_documento' => 'required|in:dni,ce,passport,ruc',
+            'users.*.numero_documento' => 'required|string',
+            'users.*.rol' => 'required|in:client,root,admin',
+            'users.*.estado' => 'required|in:active,inactive',
+            'users.*.telefono' => 'nullable|string',
+            'users.*.organizaciones' => 'required|array',
+            'send_welcome_emails' => 'boolean',
+            'update_existing' => 'boolean',
+        ]);
+
+        $users = $validated['users'];
+        
+        // 1. Obtener tenant_id (null para usuarios root)
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $tenantId = $user->tenants->first()?->id;
+
+        // 2. Crear batch en BD sin archivo
+        $batch = UserBatch::create([
+            'tenant_id' => $tenantId,
+            'created_by_user_id' => $user->id,
+            'original_filename' => 'datos_editados_' . now()->format('YmdHis') . '.json',
+            'file_path' => null, // Sin archivo físico
+            'file_size' => 0,
+            'status' => 'pending',
+            'total_rows' => count($users),
+            'processing_options' => [
+                'send_welcome_emails' => $validated['send_welcome_emails'] ?? false,
+                'update_existing' => $validated['update_existing'] ?? true,
+            ],
+        ]);
+
+        // 3. Dividir usuarios en chunks y crear jobs
+        $chunkSize = 50;
+        $userChunks = array_chunk($users, $chunkSize);
+        $jobs = [];
+
+        foreach ($userChunks as $index => $chunk) {
+            $jobs[] = new ProcessUserChunk($batch->uuid, $chunk, $index + 1);
+        }
+
+        // 4. Despachar batch de jobs con callbacks
+        $laravelBatch = Bus::batch($jobs)
+            ->name("Bulk User Upload (Edited): {$batch->original_filename}")
+            ->then(fn(Batch $lb) => UserBatch::onBatchCompleted($batch->id))
+            ->catch(fn(Batch $lb, \Throwable $e) => UserBatch::onBatchFailed($batch->id, $e->getMessage()))
+            ->finally(fn(Batch $lb) => UserBatch::onBatchFinished($batch->id, $lb->failedJobs))
+            ->onQueue('bulk-uploads')
+            ->dispatch();
+
+        // 5. Guardar batch_id en el registro
+        $batch->update([
+            'batch_id' => $laravelBatch->id,
+            'status' => 'processing',
+            'started_at' => now(),
+            'total_chunks' => count($userChunks),
+        ]);
+
+        return response()->json([
+            'message' => 'Carga masiva iniciada exitosamente',
+            'batch' => [
+                'id' => $batch->id,
+                'uuid' => $batch->uuid,
+                'total_rows' => $batch->total_rows,
+                'status' => $batch->status,
+                'status_text' => $batch->status_text,
+            ],
+            'warnings' => [],
+        ], 201);
+    }
+
+    /**
      * GET /api/user-batches/{id}/errors
      * Descargar archivo Excel con errores del batch
      */

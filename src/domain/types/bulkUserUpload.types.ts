@@ -6,16 +6,28 @@ export type BatchStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'p
 
 export type BatchStatusBadge = 'secondary' | 'warning' | 'success' | 'danger' | 'info';
 
+export interface BatchProgress {
+    total_rows: number;
+    processed_rows: number;
+    created_users: number;
+    failed_rows: number;
+    percentage: string;
+    formatted: string;
+    current_chunk: number;
+    total_chunks: number;
+}
+
 export interface UserBatch {
     id: number;
     uuid: string;
     filename: string;
     file_size: number;
+    file_path: string;
     tenant: {
         id: number;
         name: string;
         ruc?: string;
-    };
+    } | null;
     created_by: {
         id: number;
         name: string;
@@ -24,17 +36,19 @@ export interface UserBatch {
     status: BatchStatus;
     status_text: string;
     status_badge: BatchStatusBadge;
-    total_rows: number;
-    processed_rows: number;
-    created_users: number;
-    updated_users: number;
-    failed_rows: number;
-    progress_percentage: number;
-    formatted_progress: string;
-    current_chunk: number;
-    total_chunks: number;
-    error_summary?: any;
-    success_summary?: any;
+    progress: BatchProgress;
+    batch_progress?: {
+        total_jobs: number;
+        pending_jobs: number;
+        processed_jobs: number;
+        failed_jobs: number;
+        progress_percentage: number;
+        finished: boolean;
+        cancelled: boolean;
+    };
+    errors?: any;
+    summary?: any;
+    processing_options?: any;
     duration: number | null;
     has_errors: boolean;
     is_processing: boolean;
@@ -50,14 +64,19 @@ export interface UserBatchListItem {
     uuid: string;
     filename: string;
     file_size: number;
-    tenant: string;
-    created_by: string;
+    tenant: {
+        id: number;
+        name: string;
+    } | null;
+    created_by: {
+        id: number;
+        name: string;
+    } | null;
     status: BatchStatus;
     status_text: string;
     status_badge: BatchStatusBadge;
     total_rows: number;
     created_users: number;
-    updated_users: number;
     failed_rows: number;
     progress_percentage: number;
     formatted_progress: string;
@@ -113,7 +132,7 @@ export interface BulkUploadOptions {
     update_existing: boolean;
 }
 
-export interface BatchProgress {
+export interface BatchProgressEvent {
     type: 'progress' | 'error' | 'complete';
     chunk?: number;
     total_chunks?: number;
@@ -137,4 +156,40 @@ export interface PaginatedBatchList {
         from: number;
         to: number;
     };
+}
+
+// ============================================================
+// EDITABLE PREVIEW TYPES
+// ============================================================
+
+export interface EditableOrganization {
+    ruc: string;
+    tenant_id?: string;
+    supervisor_email?: string;
+}
+
+export interface EditableUser {
+    id: string; // UUID temporal
+    row_number: number;
+    nombre: string;
+    apellido: string;
+    email: string;
+    tipo_documento: 'dni' | 'ce' | 'passport' | 'ruc';
+    numero_documento: string;
+    rol: 'client' | 'root' | 'admin';
+    estado: 'active' | 'inactive';
+    telefono?: string;
+    organizaciones: EditableOrganization[];
+    // Metadatos de validación
+    _errors: Record<string, string>; // { email: "Email inválido" }
+    _warnings: Record<string, string>;
+    _isValid: boolean;
+    _isNew: boolean; // Agregado manualmente
+    _isModified: boolean; // Editado desde el Excel
+    _originalData?: any; // Datos originales antes de editar
+}
+
+export interface CellPosition {
+    rowId: string;
+    columnKey: string;
 }

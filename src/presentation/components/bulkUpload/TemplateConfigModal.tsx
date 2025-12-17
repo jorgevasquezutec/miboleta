@@ -25,16 +25,14 @@ export function TemplateConfigModal({
     onDownload,
     configData,
 }: TemplateConfigModalProps) {
-    const [maxOrganizations, setMaxOrganizations] = useState(1);
-    const [selectedOrgs, setSelectedOrgs] = useState<number[]>([]);
     const [isDownloading, setIsDownloading] = useState(false);
 
     const handleDownload = async () => {
         setIsDownloading(true);
         try {
             await onDownload({
-                max_organizations: maxOrganizations,
-                organization_ids: selectedOrgs.length > 0 ? selectedOrgs : undefined,
+                max_organizations: 1, // Siempre 1 organización
+                organization_ids: undefined, // Sin filtro
             });
             onClose();
         } catch (error) {
@@ -44,98 +42,51 @@ export function TemplateConfigModal({
         }
     };
 
-    const toggleOrg = (orgId: number) => {
-        setSelectedOrgs((prev) =>
-            prev.includes(orgId)
-                ? prev.filter((id) => id !== orgId)
-                : [...prev, orgId]
-        );
-    };
-
     if (!configData) {
         return null;
     }
 
-    const orgOptions = [1, 2, 3];
-
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>Configurar Template</DialogTitle>
+                    <DialogTitle>Descargar Template</DialogTitle>
                     <DialogDescription>
-                        Personaliza el template Excel según tus necesidades
+                        El template incluirá las columnas para cargar usuarios masivamente
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
-                    {/* Número de organizaciones */}
-                    <div className="space-y-2">
-                        <Label>Número máximo de organizaciones por usuario</Label>
-                        <div className="flex gap-2">
-                            {orgOptions.map((num) => (
-                                <Button
-                                    key={num}
-                                    variant={maxOrganizations === num ? 'default' : 'outline'}
-                                    onClick={() => setMaxOrganizations(num)}
-                                    className="flex-1"
-                                >
-                                    {num} {num === 1 ? 'organización' : 'organizaciones'}
-                                </Button>
-                            ))}
-                        </div>
-                        <p className="text-xs text-gray-500">
-                            Usuarios con más organizaciones pueden repetirse en múltiples filas
-                        </p>
-                    </div>
-
+                <div className="space-y-4 py-4">
                     {/* Preview de columnas */}
                     <div className="space-y-2">
                         <Label>Columnas del template</Label>
                         <div className="bg-gray-50 p-4 rounded-lg border">
-                            <div className="text-sm space-y-1 font-mono">
-                                <div className="text-gray-600">Campos básicos:</div>
-                                <div className="text-xs text-gray-500 ml-2">
-                                    nombre, apellido, email, tipo_documento, numero_documento, rol, estado, teléfono
+                            <div className="text-sm space-y-2 font-mono">
+                                <div className="text-gray-600 font-semibold">Datos del usuario:</div>
+                                <div className="text-xs text-gray-500 ml-2 grid grid-cols-2 gap-1">
+                                    <span>• nombre</span>
+                                    <span>• apellido</span>
+                                    <span>• email</span>
+                                    <span>• tipo_documento</span>
+                                    <span>• numero_documento</span>
+                                    <span>• rol</span>
+                                    <span>• estado</span>
+                                    <span>• telefono</span>
                                 </div>
-                                <div className="text-gray-600 mt-2">Organizaciones:</div>
-                                {Array.from({ length: maxOrganizations }).map((_, i) => (
-                                    <div key={i} className="text-xs text-gray-500 ml-2">
-                                        org{i + 1}_ruc, org{i + 1}_supervisor_email
-                                    </div>
-                                ))}
+                                <div className="text-gray-600 font-semibold mt-3">Organización:</div>
+                                <div className="text-xs text-gray-500 ml-2">
+                                    <span>• org1_ruc</span>
+                                    <span className="ml-4">• org1_supervisor_email</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Filtrar por organizaciones (opcional) */}
+                    {/* Info de organizaciones disponibles */}
                     <div className="space-y-2">
-                        <Label>Filtrar por organizaciones (opcional)</Label>
-                        <div className="max-h-48 overflow-y-auto border rounded-lg p-3 space-y-2">
-                            {configData.organizations.map((org) => (
-                                <label
-                                    key={org.id}
-                                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedOrgs.includes(org.id)}
-                                        onChange={() => toggleOrg(org.id)}
-                                        className="rounded"
-                                    />
-                                    <span className="text-sm flex-1">
-                                        <span className="font-medium">{org.ruc}</span> - {org.name}
-                                    </span>
-                                    <span className="text-xs text-gray-500">
-                                        {org.supervisors_count} supervisores
-                                    </span>
-                                </label>
-                            ))}
-                        </div>
+                        <Label>Organizaciones disponibles: {configData.organizations.length}</Label>
                         <p className="text-xs text-gray-500">
-                            {selectedOrgs.length > 0
-                                ? `${selectedOrgs.length} organizaciones seleccionadas`
-                                : 'Sin filtro - todas las organizaciones disponibles'}
+                            En el Excel podrás asignar cualquier organización usando su RUC
                         </p>
                     </div>
                 </div>
@@ -153,7 +104,7 @@ export function TemplateConfigModal({
                         ) : (
                             <>
                                 <Download className="mr-2 h-4 w-4" />
-                                Generar y Descargar
+                                Descargar Template
                             </>
                         )}
                     </Button>

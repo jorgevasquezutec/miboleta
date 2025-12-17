@@ -252,7 +252,7 @@ class BulkUserUploadService
         }
 
         // Buscar emails existentes en BD
-        $existingUsers = \App\Models\User::whereIn(\DB::raw('LOWER(email)'), $emails)
+        $existingUsers = User::whereIn(DB::raw('LOWER(email)'), $emails)
             ->select('id', 'name', 'last_name', 'email', 'document_text')
             ->get()
             ->keyBy(fn($user) => strtolower($user->email));

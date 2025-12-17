@@ -142,6 +142,32 @@ export class BulkUserUploadService {
     }
 
     /**
+     * Iniciar carga masiva con datos editados (sin archivo)
+     */
+    async uploadEditedData(
+        users: any[],
+        options: BulkUploadOptions
+    ): Promise<{
+        message: string;
+        batch: {
+            id: number;
+            uuid: string;
+            total_rows: number;
+            status: string;
+            status_text: string;
+        };
+        warnings: any[];
+    }> {
+        const response = await apiClient.post('/user-batches/upload-data', {
+            users,
+            send_welcome_emails: options.send_welcome_emails,
+            update_existing: options.update_existing,
+        });
+
+        return response.data;
+    }
+
+    /**
      * Eliminar un batch
      */
     async deleteBatch(id: string | number): Promise<void> {
