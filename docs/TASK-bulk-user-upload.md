@@ -363,10 +363,10 @@ Usuario Admin → Clic "Descargar Template"
                  │  │ ☑ Tech Solutions SAC (20789012345)   │  │
                  │  └───────────────────────────────────────┘  │
                  │                                             │
-                 │  Vista previa del template:                 │
-                 │  📄 Columnas: nombre, apellido, email...   │
-                 │      + org1_ruc, org1_supervisor (con      │
-                 │        listas desplegables)                 │
+                 │  Vista previa de columnas:                  │
+                 │  📋 nombre, apellido, email, documento...  │
+                 │  📋 org1_ruc, org1_supervisor              │
+                 │  📋 org2_ruc, org2_supervisor (opcional)   │
                  │                                             │
                  │  [ Cancelar ]  [ Generar y Descargar 📥 ]  │
                  └─────────────────────────────────────────────┘
@@ -409,33 +409,56 @@ Usuario → Abre Excel generado
         → Guarda archivo "usuarios_carga_[fecha].xlsx"
 ```
 
-### 5.3 Carga y Preview
+### 5.3 Carga y Preview Editable (FASE CRÍTICA)
 
 ```
-Usuario → Sube archivo a la plataforma
+Usuario → Sube archivo Excel lleno a la plataforma
         → Backend valida estructura del archivo
-        → Backend parsea datos
+        → Backend parsea datos (lee en chunks de 100)
         → Backend valida cada registro:
            - Campos requeridos
            - Formato de datos
-           - Email único
+           - Email único (en archivo y BD)
            - Organizaciones existen
            - Supervisores existen y pertenecen a la organización
-        → Frontend muestra preview con:
-           - Tabla editable
-           - Errores marcados en rojo
-           - Warnings en amarillo
-           - Válidos en verde
+           - Consolida usuarios duplicados (método de filas repetidas)
+        
+        → Frontend muestra TABLA EDITABLE INTERACTIVA:
+        
+        ┌───────────────────────────────────────────────────────────┐
+        │  Preview de Carga - 350 usuarios detectados              │
+        │  ✅ Válidos: 289  ⚠️ Warnings: 45  ❌ Errores: 16        │
+        ├───────────────────────────────────────────────────────────┤
+        │  Filtros: [ ✅ Válidos ] [ ⚠️ Warnings ] [ ❌ Errores ]  │
+        │           [ 🔍 Buscar por email... ]                      │
+        ├───────────────────────────────────────────────────────────┤
+        │ Fila │ Nombre  │ Email          │ Orgs │ Estado         │
+        ├──────┼─────────┼────────────────┼──────┼────────────────┤
+        │  2   │ Juan P. │ juan@mail.com  │  2   │ ✅ Válido      │
+        │  5   │ María L.│ maria@mail.com │  3   │ ⚠️ Sin telef.  │
+        │ 12   │ Pedro G.│ pedro@bad.com  │  1   │ ❌ Email inv.  │ ← Editable
+        │ 15   │ Ana S.  │ ana@mail.com   │  0   │ ❌ Sin org     │ ← Editable
+        └──────┴─────────┴────────────────┴──────┴────────────────┘
+        
         → Usuario puede:
-           - Editar celdas con errores
-           - Eliminar filas
-           - Re-validar
+           1. ✏️ **Editar celdas con errores** (clic en celda)
+           2. ❌ **Eliminar filas** problemáticas
+           3. 🔄 **Re-validar** después de editar
+           4. 💾 **Exportar errores** a Excel para corregir offline
+           5. 📊 **Ver detalles** de validación por fila
+        
+        → Botones:
+           [ ❌ Cancelar ]  [ 🔄 Re-validar ]  [ ✅ Confirmar Carga (289 válidos) ]
 ```
+
+**Importante:** Esta fase permite corregir errores antes de procesar. El botón "Confirmar Carga" solo procesa las filas válidas.
 
 ### 5.4 Confirmación y Procesamiento por Chunks
 
 ```
-Usuario → Clic "Confirmar Carga"
+Usuario → Revisa preview editable
+        → Corrige errores si es necesario
+        → Clic "Confirmar Carga" (solo procesa filas válidas)
         → Backend inicia procesamiento por chunks:
         
         ┌─────────────────────────────────────────────┐

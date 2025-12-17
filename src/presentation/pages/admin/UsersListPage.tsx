@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/presentation/components/ui/select";
-import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download } from "lucide-react";
+import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Tenant } from "@/core/domain/entities/Tenant";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -215,10 +215,19 @@ export function UsersListPage() {
                 Exportar
               </Button>
               {currentUser?.role === "root" && (
-                <Button onClick={() => navigate("/users/new")}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Nuevo Usuario
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate("/users/batch-upload")}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Carga Masiva
+                  </Button>
+                  <Button onClick={() => navigate("/users/new")}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Nuevo Usuario
+                  </Button>
+                </>
               )}
             </div>
           </div>

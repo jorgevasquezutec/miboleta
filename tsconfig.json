@@ -28,6 +28,9 @@
       "@/core/*": [
         "src/core/*"
       ],
+      "@/domain/*": [
+        "src/domain/*"
+      ],
       "@/infrastructure/*": [
         "src/infrastructure/*"
       ],

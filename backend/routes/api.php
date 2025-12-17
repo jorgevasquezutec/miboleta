@@ -63,6 +63,20 @@ Route::middleware('auth:sanctum')->group(function () {
     // Users - Resource routes (index, store, show, update, destroy)
     Route::apiResource('users', UserController::class);
 
+    // ============ CARGA MASIVA DE USUARIOS ============
+
+    // User Batches - Custom routes first
+    Route::get('/user-batches/config', [App\Http\Controllers\Api\UserBatchController::class, 'getConfig']);
+    Route::post('/user-batches/template', [App\Http\Controllers\Api\UserBatchController::class, 'downloadTemplate']);
+    Route::post('/user-batches/validate', [App\Http\Controllers\Api\UserBatchController::class, 'validate']);
+    Route::get('/user-batches/{uuid}/errors', [App\Http\Controllers\Api\UserBatchController::class, 'downloadErrors']);
+
+    // User Batches - REST routes
+    Route::get('/user-batches', [App\Http\Controllers\Api\UserBatchController::class, 'index']);
+    Route::post('/user-batches', [App\Http\Controllers\Api\UserBatchController::class, 'store']);
+    Route::get('/user-batches/{uuid}', [App\Http\Controllers\Api\UserBatchController::class, 'show']);
+    Route::delete('/user-batches/{uuid}', [App\Http\Controllers\Api\UserBatchController::class, 'destroy']);
+
     // Tenants - Resource routes (index, store, show, update, destroy)
     Route::apiResource('tenants', TenantController::class);
 

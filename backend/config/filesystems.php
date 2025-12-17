@@ -69,6 +69,15 @@ return [
             'visibility' => 'private',
         ],
 
+        // Disco para archivos privados (batch uploads, etc.)
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'throw' => true,
+            'report' => true,
+            'visibility' => 'private',
+        ],
+
     ],
 
 

@@ -23,6 +23,10 @@ const DocumentsListPage = lazy(() => import("@/presentation/pages/admin/Document
 const VacationHistoryPage = lazy(() => import("@/presentation/pages/admin/VacationHistoryPage"));
 const TeamVacationsPage = lazy(() => import("@/presentation/pages/admin/TeamVacationsPage"));
 const AuditLogsPage = lazy(() => import("@/presentation/pages/admin/AuditLogsPage"));
+const UserBatchesListPage = lazy(() => import("@/presentation/pages/admin/UserBatchesListPage"));
+const UserBatchUploadPage = lazy(() => import("@/presentation/pages/admin/UserBatchUploadPage"));
+const UserBatchDetailPage = lazy(() => import("@/presentation/pages/admin/UserBatchDetailPage"));
+
 
 // Employee pages (lazy loaded)
 const EmployeeDashboardPage = lazy(() => import("@/presentation/pages/employee/DashboardPage"));
@@ -146,6 +150,32 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      // ⚠️ IMPORTANTE: Las rutas batch DEBEN ir ANTES de users/:id para evitar conflictos
+      {
+        path: "users/batch",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <LazyPage><UserBatchesListPage /></LazyPage>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "users/batch-upload",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <LazyPage><UserBatchUploadPage /></LazyPage>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "users/batch/:uuid",
+        element: (
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
+            <LazyPage><UserBatchDetailPage /></LazyPage>
+          </ProtectedRoute>
+        ),
+      },
+      // Las rutas con parámetros dinámicos van AL FINAL
       {
         path: "users/:id",
         element: (
