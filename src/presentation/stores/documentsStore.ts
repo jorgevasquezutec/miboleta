@@ -50,6 +50,7 @@ interface DocumentsState {
     search?: string;
     status?: Document['status'] | 'all';
     docTypeId?: number | null;
+    tenantId?: number | null;
     period?: string;
     dateFrom?: string;
     dateTo?: string;
@@ -140,6 +141,7 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         ? (params?.status ?? state.statusFilter) as Document['status']
         : undefined,
       docTypeId: params?.docTypeId ?? state.typeFilter ?? undefined,
+      tenantId: params?.tenantId ?? undefined,
       period: (params?.period ?? state.periodFilter) || undefined,
       dateFrom: params?.dateFrom || undefined,
       dateTo: params?.dateTo || undefined,

@@ -228,7 +228,7 @@ class DocumentService
     protected function applyRoleFilters(Builder $query, User $user, string $role, array $filters): Builder
     {
         $myDocuments = $filters['my_documents'] ?? false;
-        // ✅ tenant_id filtering removed - now handled by TenantFilterScope global scope
+        $tenantId = $filters['tenant_id'] ?? null;
 
         if ($myDocuments) {
             // Show only user's own documents
@@ -238,8 +238,11 @@ class DocumentService
             // Clients only see their own documents
             $query->where('user_id', $user->id);
             // tenant_id filter is automatic via global scope
+        } elseif ($role === 'root' && $tenantId) {
+            // Root users can manually filter by specific tenant
+            $query->where('tenant_id', $tenantId);
         }
-        // For admin/root: show all documents (filtered by tenant via global scope)
+        // For admin/root (without tenant filter): show all documents (filtered by tenant via global scope)
 
         return $query;
     }

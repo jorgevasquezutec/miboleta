@@ -6,6 +6,7 @@ export interface DocumentFilters {
   page?: number;
   perPage?: number;
   docTypeId?: number;
+  tenantId?: number;
   status?: string;
   period?: string;
   search?: string;

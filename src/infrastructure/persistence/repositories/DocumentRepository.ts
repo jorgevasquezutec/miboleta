@@ -37,6 +37,7 @@ export class DocumentRepository implements IDocumentRepository {
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.perPage) params.append('per_page', filters.perPage.toString());
     if (filters?.docTypeId) params.append('doc_type_id', filters.docTypeId.toString());
+    if (filters?.tenantId) params.append('tenant_id', filters.tenantId.toString());
     if (filters?.status) params.append('status', filters.status);
     if (filters?.period) params.append('period', filters.period);
     if (filters?.search) params.append('search', filters.search);

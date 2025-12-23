@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\Mail;
 class SignatureService
 {
     public function __construct(
-        protected AuditService $auditService
+        protected AuditService $auditService,
+        protected PdfWatermarkService $pdfWatermarkService
     ) {
     }
 
@@ -257,6 +258,20 @@ class SignatureService
         ];
 
         $document->sign($signatureData);
+
+        // Apply watermark to PDF
+        if ($document->file_path) {
+            $watermarkApplied = $this->pdfWatermarkService->addSignatureWatermark(
+                $document->file_path,
+                $signatureData
+            );
+
+            if (!$watermarkApplied) {
+                Log::warning('[SignatureService] Watermark could not be applied but document was signed', [
+                    'document_id' => $document->id,
+                ]);
+            }
+        }
 
         // Audit log
         $this->auditService->logDocumentSigned($document->id, $user->id);

@@ -253,7 +253,7 @@ export const router = createBrowserRouter([
       {
         path: "documents",
         element: (
-          <ProtectedRoute allowedRoles={["admin"]}>
+          <ProtectedRoute allowedRoles={["root", "admin"]}>
             <LazyPage><DocumentsListPage /></LazyPage>
           </ProtectedRoute>
         ),

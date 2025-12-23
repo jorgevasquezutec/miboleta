@@ -23,9 +23,11 @@ import {
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
+import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
+import { Tenant } from "@/core/domain/entities/Tenant";
 import { useAuthStore } from "@/presentation/stores";
 import { getDocumentStatusBadgeInline } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -51,6 +53,7 @@ export function DocumentsListPage() {
             search: '',
             status: 'all',
             doc_type_id: '',
+            tenant_id: '',
             date_from: '',
             date_to: '',
             page: 1,
@@ -60,6 +63,7 @@ export function DocumentsListPage() {
 
     // Local state for search input (debounce)
     const [searchInput, setSearchInput] = useState(filters.search);
+    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
     const [isExporting, setIsExporting] = useState(false);
@@ -109,17 +113,29 @@ export function DocumentsListPage() {
             search: filters.search || undefined,
             status: filters.status !== 'all' ? (filters.status as Document['status']) : undefined,
             docTypeId: filters.doc_type_id ? parseInt(filters.doc_type_id) : undefined,
+            tenantId: filters.tenant_id ? parseInt(filters.tenant_id) : undefined,
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
         });
-    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments]);
+    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.tenant_id, filters.date_from, filters.date_to, fetchDocuments]);
 
     const handleSearch = () => {
         setFilters({ page: 1 });
     };
 
+    const handleTenantFilterChange = (id: string | null) => {
+        setFilters({ tenant_id: id || '', page: 1 });
+        if (id) {
+            // Optionally set selected tenant for display
+            setSelectedTenant({ id, name: '', ruc: '' } as Tenant);
+        } else {
+            setSelectedTenant(null);
+        }
+    };
+
     const handleResetFilters = () => {
         setSearchInput('');
+        setSelectedTenant(null);
         resetFilters();
     };
 
@@ -172,6 +188,7 @@ export function DocumentsListPage() {
                 search: filters.search || undefined,
                 status: filters.status !== 'all' ? filters.status : undefined,
                 document_type: filters.doc_type_id || undefined,
+                tenant_id: filters.tenant_id ? Number(filters.tenant_id) : undefined,
                 start_date: filters.date_from || undefined,
                 end_date: filters.date_to || undefined,
             });
@@ -230,6 +247,21 @@ export function DocumentsListPage() {
                                 compact
                             />
                         </div>
+
+                        {/* Tenant Filter - Only for root users */}
+                        {user?.role === 'root' && (
+                            <div className="min-w-[160px]">
+                                <label className="text-xs font-medium mb-1 block text-gray-600">
+                                    Organización
+                                </label>
+                                <TenantAutocompleteSelector
+                                    value={filters.tenant_id || null}
+                                    onChange={handleTenantFilterChange}
+                                    selectedTenant={selectedTenant}
+                                    placeholder="Todas"
+                                />
+                            </div>
+                        )}
 
                         {/* Document Type Filter */}
                         <div className="min-w-[160px]">

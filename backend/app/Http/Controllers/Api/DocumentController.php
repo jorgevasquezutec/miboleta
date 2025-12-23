@@ -50,6 +50,13 @@ class DocumentController extends Controller
      *         @OA\Schema(type="boolean")
      *     ),
      *     @OA\Parameter(
+     *         name="tenant_id",
+     *         in="query",
+     *         description="Filtrar por organización (solo para usuarios root)",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
      *         name="status",
      *         in="query",
      *         description="Filtrar por estado",
@@ -120,7 +127,7 @@ class DocumentController extends Controller
 
         $filters = [
             'my_documents' => $request->boolean('my_documents'),
-            // ✅ tenant_id removed - now handled automatically by TenantFilterScope
+            'tenant_id' => $request->tenant_id, // Manual tenant filter for root users
             'status' => $request->status,
             'doc_type_id' => $request->doc_type_id,
             'period' => $request->period,
