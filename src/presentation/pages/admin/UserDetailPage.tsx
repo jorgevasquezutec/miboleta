@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User } from '@/core/domain/entities/User';
 import { userRepository } from '@/infrastructure/persistence/repositories';
@@ -38,6 +39,7 @@ import { toast } from 'sonner';
 import apiClient from '@/infrastructure/http/apiClient';
 
 export function UserDetailPage() {
+    useDocumentTitle('Detalle de Usuario');
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const { user: currentUser } = useAuthStore();

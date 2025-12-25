@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import {
     ClipboardList,
     Loader2,
@@ -18,6 +19,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 
 export function VacationConfirmationPage() {
+    useDocumentTitle('Confirmar Vacaciones');
     const {
         pendingConfirmations,
         pendingConfirmationsCount,

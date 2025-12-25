@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Upload, FileArchive, CheckCircle, AlertTriangle, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
@@ -31,6 +32,7 @@ interface DocumentUploadViewProps {
 }
 
 export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
+  useDocumentTitle('Carga Masiva de Documentos');
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -409,8 +411,8 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
                       Organización de destino *
                     </Label>
                   </div>
-                  <Select 
-                    value={selectedTenantId} 
+                  <Select
+                    value={selectedTenantId}
                     onValueChange={setSelectedTenantId}
                     disabled={!zipPreview || zipPreview.validPdfs === 0}
                   >

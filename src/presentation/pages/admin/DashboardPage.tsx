@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTenantAwareEffect } from "@/presentation/hooks";
+import { useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { format, subDays } from "date-fns";
 import {
   FileText,
@@ -71,6 +71,7 @@ const getActionBadge = (category: string) => {
 
 export function AdminDashboardView() {
   const navigate = useNavigate();
+  useDocumentTitle('Dashboard');
   const { currentTenant, user } = useAuthStore();
   const {
     documentStats,

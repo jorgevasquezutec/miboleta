@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { userRepository } from '@/infrastructure/persistence/repositories';
 import { useAuthStore } from '@/presentation/stores/authStore';
@@ -30,6 +31,7 @@ export function UserFormPage() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const isEditing = Boolean(id);
+    useDocumentTitle(isEditing ? 'Editar Usuario' : 'Nuevo Usuario');
     const { user: currentUser } = useAuthStore();
 
     const [isLoading, setIsLoading] = useState(false);
@@ -515,9 +517,8 @@ export function UserFormPage() {
                                         return (
                                             <div
                                                 key={tenant.id}
-                                                className={`p-4 rounded-lg border ${
-                                                    isPrimary ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
-                                                }`}
+                                                className={`p-4 rounded-lg border ${isPrimary ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+                                                    }`}
                                             >
                                                 {/* Header: Nombre de organización con acciones */}
                                                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -535,7 +536,7 @@ export function UserFormPage() {
                                                             <p className="text-xs text-gray-500 mt-0.5">RUC: {tenant.ruc}</p>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div className="flex items-center gap-1 shrink-0">
                                                         {!isPrimary && selectedTenantIds.length >= 1 && (
                                                             <Button

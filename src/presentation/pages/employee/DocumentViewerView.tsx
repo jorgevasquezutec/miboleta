@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FileText, CheckCircle, Info, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
@@ -16,6 +17,7 @@ interface DocumentViewerViewProps {
 }
 
 export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
+  useDocumentTitle('Visor de Documento');
   const navigate = useNavigate();
 
   const handleBack = () => {

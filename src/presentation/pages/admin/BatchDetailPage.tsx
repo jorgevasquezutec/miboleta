@@ -1,10 +1,10 @@
 import { useEffect } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { useParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
     FileStack,
     CheckCircle,
-    Clock,
     AlertTriangle,
     XCircle,
     RefreshCw,
@@ -26,6 +26,7 @@ import { useDocumentsStore } from "@/presentation/stores";
 import { getBatchStatusBadge, getDocumentStatusBadgeInline, formatDateTime } from "@/presentation/utils";
 
 export function BatchDetailPage() {
+    useDocumentTitle('Detalle de Lote');
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { currentBatch, fetchBatchById, batchesLoading, documents, fetchDocuments } = useDocumentsStore();
@@ -282,33 +283,33 @@ export function BatchDetailPage() {
                                 {documents
                                     .filter(d => d.batchId === currentBatch.id)
                                     .map((doc) => (
-                                            <TableRow key={doc.id}>
-                                                <TableCell>
-                                                    <div>
-                                                        <div className="font-medium">{doc.user?.name} {doc.user?.lastName}</div>
-                                                        <div className="text-sm text-[#64748B]">{doc.user?.documentText || doc.employeeDocumentNumber}</div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>{doc.documentType?.displayName || "-"}</TableCell>
-                                                <TableCell className="max-w-[200px] truncate" title={doc.originalName}>
-                                                    {doc.originalName}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {getDocumentStatusBadgeInline(doc.status)}
-                                                </TableCell>
-                                                <TableCell className="text-sm text-[#64748B]">
-                                                    {new Date(doc.createdAt).toLocaleDateString('es-PE')}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => navigate(`/viewer?id=${doc.id}`)}
-                                                    >
-                                                        Ver
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
+                                        <TableRow key={doc.id}>
+                                            <TableCell>
+                                                <div>
+                                                    <div className="font-medium">{doc.user?.name} {doc.user?.lastName}</div>
+                                                    <div className="text-sm text-[#64748B]">{doc.user?.documentText || doc.employeeDocumentNumber}</div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{doc.documentType?.displayName || "-"}</TableCell>
+                                            <TableCell className="max-w-[200px] truncate" title={doc.originalName}>
+                                                {doc.originalName}
+                                            </TableCell>
+                                            <TableCell>
+                                                {getDocumentStatusBadgeInline(doc.status)}
+                                            </TableCell>
+                                            <TableCell className="text-sm text-[#64748B]">
+                                                {new Date(doc.createdAt).toLocaleDateString('es-PE')}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => navigate(`/viewer?id=${doc.id}`)}
+                                                >
+                                                    Ver
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
                                     ))}
                             </TableBody>
                         </Table>

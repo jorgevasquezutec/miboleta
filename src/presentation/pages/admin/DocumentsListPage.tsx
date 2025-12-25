@@ -24,7 +24,7 @@ import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-ra
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
-import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { Tenant } from "@/core/domain/entities/Tenant";
@@ -34,6 +34,7 @@ import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
 
 export function DocumentsListPage() {
+    useDocumentTitle('Documentos');
     const navigate = useNavigate();
     const { user } = useAuthStore();
     const {

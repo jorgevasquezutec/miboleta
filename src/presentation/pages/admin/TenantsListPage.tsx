@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
 import { useAuthStore } from '@/presentation/stores/authStore';
-import { useUrlFilters } from '@/presentation/hooks';
+import { useUrlFilters, useDocumentTitle } from '@/presentation/hooks';
 import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 import { Tenant } from '@/core/domain/entities/Tenant';
 import { Button } from '@/presentation/components/ui/button';
@@ -38,6 +38,7 @@ import { reportsRepository } from '@/infrastructure/persistence/repositories';
 import { toast } from 'sonner';
 
 export function TenantsListPage() {
+    useDocumentTitle('Empresas');
     const navigate = useNavigate();
     const {
         tenants,

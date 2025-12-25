@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/presentation/components/ui/button';
 import { Card, CardContent } from '@/presentation/components/ui/card';
@@ -10,6 +11,7 @@ import type { UserBatchListItem, PaginatedBatchList } from '@/domain/types/bulkU
 import { toast } from 'sonner';
 
 export function UserBatchesListPage() {
+    useDocumentTitle('Historial de Cargas de Usuarios');
     const navigate = useNavigate();
     const [batches, setBatches] = useState<UserBatchListItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);

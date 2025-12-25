@@ -37,7 +37,7 @@ import {
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
-import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { VacationStatusBadge } from "@/presentation/components/features/vacations";
 import { formatDate } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -72,6 +72,7 @@ function TakenBadge({ wasTaken }: { wasTaken: boolean | null | undefined }) {
 }
 
 export function VacationHistoryPage() {
+    useDocumentTitle('Historial de Vacaciones');
     const {
         historyRequests,
         historyTotal,

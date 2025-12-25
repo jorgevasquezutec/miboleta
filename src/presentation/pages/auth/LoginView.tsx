@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate, Link } from "react-router-dom";
 import { Building2, Mail, Lock, Loader2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
@@ -10,6 +11,7 @@ import { useAuthStore } from "@/presentation/stores/authStore";
 import { toast } from "sonner";
 
 export default function LoginView() {
+  useDocumentTitle('Iniciar Sesión');
   const navigate = useNavigate();
   const { login, isLoading } = useAuth();
   const [email, setEmail] = useState("");

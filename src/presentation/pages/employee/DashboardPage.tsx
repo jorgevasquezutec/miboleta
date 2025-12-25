@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/presentation/components/ui/select";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
@@ -22,6 +22,7 @@ interface EmployeeDashboardViewProps {
 }
 
 export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewProps) {
+  useDocumentTitle('Mis Documentos');
   const navigate = useNavigate();
   const {
     documents,
@@ -35,7 +36,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   } = useDocumentsStore();
 
   // URL-synced filters
-  const { filters, setFilters, resetFilters } = useUrlFilters({
+  const { filters, setFilters } = useUrlFilters({
     defaultValues: {
       search: '',
       status: 'all',

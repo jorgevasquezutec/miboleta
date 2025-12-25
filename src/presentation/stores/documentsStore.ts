@@ -79,6 +79,7 @@ interface DocumentsState {
     period: string;
     notifyEmployees: boolean;
     requiresSignature: boolean;
+    tenantId?: number;
   }) => Promise<{ batchId: number }>;
   previewZip: (file: File) => Promise<void>;
   clearZipPreview: () => void;

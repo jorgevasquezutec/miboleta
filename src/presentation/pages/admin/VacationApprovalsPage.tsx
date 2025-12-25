@@ -19,11 +19,12 @@ import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { VacationRequestCard, VacationRejectModal } from "@/presentation/components/features/vacations";
 import { VacationRequest } from "@/core/domain/entities";
 import { useAuthStore } from "@/presentation/stores";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useDocumentTitle } from "@/presentation/hooks";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
 
 export function VacationApprovalsPage() {
+    useDocumentTitle('Aprobar Vacaciones');
     const {
         pendingApprovals,
         pendingApprovalsCount,
@@ -37,7 +38,7 @@ export function VacationApprovalsPage() {
     const { currentTenant } = useAuthStore();
 
     // URL-synced filters for date range
-    const { filters, setFilters, resetFilters } = useUrlFilters({
+    const { filters, setFilters } = useUrlFilters({
         defaultValues: {
             date_from: '',
             date_to: '',

@@ -45,13 +45,13 @@ class TestEmail extends Command
                     ->from(config('mail.from.address'), config('mail.from.name'));
             });
 
-            $this->info('✅ Email sent successfully!');
+            $this->info('Email sent successfully!');
             $this->line('Check your inbox at: ' . $email);
 
             return self::SUCCESS;
 
         } catch (\Exception $e) {
-            $this->error('❌ Failed to send email');
+            $this->error('Failed to send email');
             $this->error('Error: ' . $e->getMessage());
 
             Log::error('[TestEmail] Failed to send test email', [

@@ -1,9 +1,11 @@
 import { useNavigate } from "react-router-dom";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { Home, ArrowLeft, FileQuestion, Search } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 
 export function NotFoundPage() {
+    useDocumentTitle('Página No Encontrada');
     const navigate = useNavigate();
 
     const handleGoHome = () => {

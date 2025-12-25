@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Lock, Loader2, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
@@ -9,6 +10,7 @@ import apiClient from '@/infrastructure/http/apiClient';
 import { toast } from 'sonner';
 
 export default function ResetPasswordPage() {
+    useDocumentTitle('Restablecer Contraseña');
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 

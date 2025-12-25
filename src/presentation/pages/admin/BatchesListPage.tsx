@@ -29,13 +29,14 @@ import {
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useDocumentsStore } from "@/presentation/stores";
-import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
 import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
 
 export function BatchesListPage() {
+    useDocumentTitle('Lotes de Carga');
     const navigate = useNavigate();
 
     // URL-synced filters

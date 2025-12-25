@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate } from "react-router-dom";
 import {
     Bell,
@@ -147,6 +148,7 @@ function NotificationCard({ notification, onMarkAsRead, onDelete, onClick }: Not
 }
 
 export function NotificationsPage() {
+    useDocumentTitle('Notificaciones');
     const navigate = useNavigate();
     const {
         notifications,

@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { Button } from '@/presentation/components/ui/button';
 import { ArrowLeft, Download, Users, Loader2 } from 'lucide-react';
 import { useBatchProgress } from '@/presentation/hooks/useBatchProgress';
@@ -10,6 +11,7 @@ import { toast } from 'sonner';
 import { useState } from 'react';
 
 export function UserBatchDetailPage() {
+    useDocumentTitle('Detalle de Carga de Usuarios');
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [isDownloading, setIsDownloading] = useState(false);
@@ -25,7 +27,7 @@ export function UserBatchDetailPage() {
                 toast.warning(`⚠️ Carga completada con ${batch.progress.failed_rows} errores`);
             }
         },
-        onError: (error) => {
+        onError: () => {
             toast.error('Error al cargar el batch');
         },
     });

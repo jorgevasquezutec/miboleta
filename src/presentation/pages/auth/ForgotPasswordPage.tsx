@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { Link } from 'react-router-dom';
 import { Mail, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
@@ -9,6 +10,7 @@ import apiClient from '@/infrastructure/http/apiClient';
 import { toast } from 'sonner';
 
 export default function ForgotPasswordPage() {
+    useDocumentTitle('Recuperar Contraseña');
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isEmailSent, setIsEmailSent] = useState(false);

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { ArrowLeft, Building2, Palette, Save, Upload } from "lucide-react";
+import { useState } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
+import { ArrowLeft, Building2, Save, Upload } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
@@ -14,6 +15,7 @@ interface CompanySettingsViewProps {
 }
 
 export function CompanySettingsView({ onBack }: CompanySettingsViewProps) {
+  useDocumentTitle('Configuración');
   // Mock tenant data - replace with real store when ready
   const mockTenant = {
     name: "Mi Empresa",
@@ -27,7 +29,7 @@ export function CompanySettingsView({ onBack }: CompanySettingsViewProps) {
       logoUrl: ""
     }
   };
-  
+
   const [primaryColor, setPrimaryColor] = useState(mockTenant.branding.primaryColor);
   const [secondaryColor, setSecondaryColor] = useState(mockTenant.branding.secondaryColor);
   const [companyName, setCompanyName] = useState(mockTenant.name);
@@ -48,12 +50,12 @@ export function CompanySettingsView({ onBack }: CompanySettingsViewProps) {
       companyPhone,
       companyEmail
     });
-    
+
     toast.success("Configuración guardada exitosamente", {
       description: "Los cambios se han aplicado a toda la plataforma",
     });
   };
-  
+
   const handleLogoUpload = () => {
     // TODO: Implement logo upload with use case
     toast.success("Logo cargado exitosamente");
@@ -229,8 +231,8 @@ export function CompanySettingsView({ onBack }: CompanySettingsViewProps) {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="company-ruc">RUC / Tax ID</Label>
-                  <Input 
-                    id="company-ruc" 
+                  <Input
+                    id="company-ruc"
                     value={companyRuc}
                     onChange={(e) => setCompanyRuc(e.target.value)}
                   />
@@ -249,8 +251,8 @@ export function CompanySettingsView({ onBack }: CompanySettingsViewProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="company-phone">Teléfono</Label>
-                  <Input 
-                    id="company-phone" 
+                  <Input
+                    id="company-phone"
                     value={companyPhone}
                     onChange={(e) => setCompanyPhone(e.target.value)}
                   />

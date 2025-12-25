@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import {
@@ -22,6 +23,7 @@ import { useAuthStore } from "@/presentation/stores";
 import { toast } from "sonner";
 
 export function VacationRequestFormPage() {
+    useDocumentTitle('Nueva Solicitud de Vacaciones');
     const navigate = useNavigate();
     const { createVacationRequest, error, clearError } = useVacationsStore();
     const { user } = useAuthStore();
@@ -54,7 +56,7 @@ export function VacationRequestFormPage() {
     }, [user?.tenants, hasMultipleTenants, selectedTenantId]);
 
     const hasSupervisor = selectedTenant?.supervisor_id != null;
-    
+
     console.log('🏢 [Vacation Form] Selected tenant:', {
         selectedTenantId,
         selectedTenant: selectedTenant ? { id: selectedTenant.id, name: selectedTenant.name, supervisor_id: selectedTenant.supervisor_id } : null,
@@ -138,7 +140,7 @@ export function VacationRequestFormPage() {
             console.log('❌ [Validation] Frontend errors:', frontendErrors);
             return false;
         }
-        
+
         console.log('✅ [Validation] All checks passed');
         return true;
     }, [dateRange, hasMultipleTenants, selectedTenantId, hasSupervisor, frontendErrors, selectedTenant]);
@@ -230,7 +232,7 @@ export function VacationRequestFormPage() {
                 <Alert variant="destructive">
                     <AlertTriangle className="w-4 h-4" />
                     <AlertDescription>
-                        No tienes un supervisor asignado para <strong>{selectedTenant.name}</strong>. 
+                        No tienes un supervisor asignado para <strong>{selectedTenant.name}</strong>.
                         Contacta a RRHH para poder solicitar vacaciones.
                     </AlertDescription>
                 </Alert>

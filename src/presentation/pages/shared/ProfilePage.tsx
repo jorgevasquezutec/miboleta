@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User as UserIcon, Mail, Phone, FileText, Building2, Shield, Calendar, Save, Loader2, Upload, Trash2 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
@@ -11,6 +12,7 @@ import { toast } from "sonner";
 import { useAuthStore } from "@/presentation/stores";
 
 export function ProfilePage() {
+  useDocumentTitle('Mi Perfil');
   const navigate = useNavigate();
   const { user, me, updateProfile, uploadAvatar, deleteAvatar, isLoading } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);

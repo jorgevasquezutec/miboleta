@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
 import { Button } from '@/presentation/components/ui/button';
@@ -26,6 +27,7 @@ export function TenantFormPage() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const isEditing = Boolean(id);
+    useDocumentTitle(isEditing ? 'Editar Empresa' : 'Nueva Empresa');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { fetchTenantById, currentTenant, createTenant, updateTenant, isLoading } = useTenantsStore();

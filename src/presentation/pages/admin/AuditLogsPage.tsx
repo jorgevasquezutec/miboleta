@@ -38,7 +38,7 @@ import {
 import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { useAuthStore } from "@/presentation/stores/authStore";
-import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
@@ -113,6 +113,7 @@ const actionDescriptions: Record<string, string> = {
 };
 
 export function AuditLogsPage() {
+    useDocumentTitle('Registro de Actividad');
     const { user } = useAuthStore();
     const isRoot = user?.role === 'root';
 

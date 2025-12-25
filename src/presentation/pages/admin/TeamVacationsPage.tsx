@@ -17,7 +17,7 @@ import { Button } from "@/presentation/components/ui/button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/presentation/components/ui/tabs";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
-import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { VacationRequestCard } from "@/presentation/components/features/vacations/VacationRequestCard";
 import { VacationRejectModal } from "@/presentation/components/features/vacations/VacationRejectModal";
 import { VacationCalendar } from "@/presentation/components/features/vacations/VacationCalendar";
@@ -35,6 +35,7 @@ import {
 } from "@/presentation/components/ui/alert-dialog";
 
 export function TeamVacationsPage() {
+    useDocumentTitle('Vacaciones del Equipo');
     const {
         pendingApprovals,
         pendingApprovalsCount,

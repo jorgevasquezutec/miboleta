@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { useAuthStore } from "@/presentation/stores/authStore";
-import { useUrlFilters } from "@/presentation/hooks";
+import { useUrlFilters, useDocumentTitle } from "@/presentation/hooks";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Table,
@@ -37,6 +37,7 @@ import { Tenant } from "@/core/domain/entities/Tenant";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 
 export function UsersListPage() {
+  useDocumentTitle('Usuarios');
   const navigate = useNavigate();
   const {
     users,

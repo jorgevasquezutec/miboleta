@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* Premium Typography - Inter */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --radius-sm: 0.25rem;
@@ -86,11 +87,41 @@
     border-color: hsl(var(--border));
   }
 
+  html {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   html,
   body {
     background-color: #ffffff;
     color: hsl(var(--foreground));
   }
+}
+
+/* ===== MICRO-ANIMACIONES SUTILES ===== */
+
+/* Transiciones suaves para elementos interactivos */
+button,
+a,
+[role="button"] {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+/* Efecto sutil de press en botones */
+button:active:not(:disabled),
+[role="button"]:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Hover suave en cards */
+[data-slot="card"] {
+  transition: box-shadow 0.2s ease;
+}
+
+[data-slot="card"]:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* Override for text color on blue buttons */

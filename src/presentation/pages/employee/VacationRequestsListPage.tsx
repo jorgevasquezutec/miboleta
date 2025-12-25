@@ -23,13 +23,14 @@ import {
 import { Badge } from "@/presentation/components/ui/badge";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
-import { useUrlFilters, useTenantAwareEffect } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { VacationStatus } from "@/core/domain/entities";
 import { formatDate } from "@/presentation/utils";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { toast } from "sonner";
 
 export function VacationRequestsListPage() {
+    useDocumentTitle('Mis Vacaciones');
     const navigate = useNavigate();
     const {
         vacationRequests,

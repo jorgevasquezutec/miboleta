@@ -1,9 +1,11 @@
 import { useNavigate, useRouteError, isRouteErrorResponse } from "react-router-dom";
+import { useDocumentTitle } from "@/presentation/hooks";
 import { Home, ArrowLeft, AlertTriangle, Bug, RefreshCw } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 
 export function ErrorPage() {
+    useDocumentTitle('Error');
     const navigate = useNavigate();
     const error = useRouteError();
 

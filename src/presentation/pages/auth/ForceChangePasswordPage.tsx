@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Loader2, Shield, CheckCircle } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
@@ -10,6 +11,7 @@ import apiClient from '@/infrastructure/http/apiClient';
 import { toast } from 'sonner';
 
 export default function ForceChangePasswordPage() {
+    useDocumentTitle('Cambiar Contraseña');
     const navigate = useNavigate();
     const { user, me } = useAuthStore();
     const [isLoading, setIsLoading] = useState(false);

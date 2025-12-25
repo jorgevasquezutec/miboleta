@@ -59,6 +59,34 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: 'esnext',
     outDir: 'dist',
+    // Remove console.logs in production
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks - Core React ecosystem
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // UI Components - Radix primitives
+          'vendor-ui': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-select',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-tooltip',
+          ],
+          // Heavy libraries - separated for better caching
+          'vendor-charts': ['recharts'],
+          'vendor-pdf': ['react-pdf'],
+          'vendor-date': ['date-fns', 'react-day-picker'],
+          'vendor-forms': ['react-hook-form'],
+        },
+      },
+    },
+  },
+  esbuild: {
+    // Remove console.log and console.debug in production
+    drop: mode === 'production' ? ['console', 'debugger'] : [],
   },
   server: {
     port: 5173,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/presentation/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/presentation/components/ui/card';
@@ -11,6 +12,7 @@ import type { BulkUploadConfigData, TemplateConfig } from '@/domain/types/bulkUs
 import { toast } from 'sonner';
 
 export function UserBatchUploadPage() {
+    useDocumentTitle('Nueva Carga de Usuarios');
     const navigate = useNavigate();
     const [file, setFile] = useState<File | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -164,7 +166,7 @@ export function UserBatchUploadPage() {
             // 1. Revalidar con el backend antes de procesar
             toast.info('Validando datos...');
             const validation = await bulkUserUploadService.validateData(formattedUsers);
-            
+
             if (!validation.valid || validation.errors.length > 0) {
                 // Hay errores del backend - recargar con los nuevos errores
                 loadUsers(formattedUsers, validation.errors, validation.warnings);
@@ -346,7 +348,7 @@ export function UserBatchUploadPage() {
                                 Subir Otro Archivo
                             </Button>
                         </div>
-                        
+
                         {/* Summary Stats */}
                         <div className="flex gap-4 mt-4">
                             <div className="flex items-center gap-2 text-sm">
@@ -370,7 +372,7 @@ export function UserBatchUploadPage() {
                                 </div>
                             )}
                         </div>
-                        
+
                         {/* Panel de errores */}
                         {errorCount > 0 && (
                             <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -398,7 +400,7 @@ export function UserBatchUploadPage() {
                             </div>
                         )}
                     </CardHeader>
-                    
+
                     <CardContent className="p-0">
                         {/* DataGrid */}
                         <div className="h-125 border-t">
@@ -409,7 +411,7 @@ export function UserBatchUploadPage() {
                                 onDeleteRow={handleDeleteRow}
                             />
                         </div>
-                        
+
                         {/* Actions */}
                         <div className="p-4 border-t bg-gray-50 space-y-4">
                             {/* Info sobre comportamiento */}
@@ -420,7 +422,7 @@ export function UserBatchUploadPage() {
                                     <li>Se enviará un email de bienvenida con instrucciones de acceso</li>
                                 </ul>
                             </div>
-                            
+
                             <Button
                                 onClick={handleConfirmUpload}
                                 disabled={errorCount > 0 || isUploading || users.length === 0}

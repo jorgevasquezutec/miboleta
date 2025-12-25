@@ -3,6 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DownloadUserBatchTemplateRequest;
+use App\Http\Requests\StoreUserBatchRequest;
+use App\Http\Requests\UploadUserBatchDataRequest;
+use App\Http\Requests\ValidateUserBatchDataRequest;
+use App\Http\Requests\ValidateUserBatchFileRequest;
 use App\Jobs\ProcessUserChunk;
 use App\Models\UserBatch;
 use App\Services\BulkUserUploadService;
@@ -10,8 +15,6 @@ use Illuminate\Bus\Batch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 
 class UserBatchController extends Controller
@@ -36,13 +39,9 @@ class UserBatchController extends Controller
      * POST /api/user-batches/template
      * Generar y descargar template Excel personalizado
      */
-    public function downloadTemplate(Request $request)
+    public function downloadTemplate(DownloadUserBatchTemplateRequest $request)
     {
-        $validated = $request->validate([
-            'max_organizations' => 'required|integer|min:1|max:5',
-            'organization_ids' => 'nullable|array',
-            'organization_ids.*' => 'integer|exists:tenants,id',
-        ]);
+        $validated = $request->validated();
 
         return $this->service->generateTemplate(
             $validated['max_organizations'],
@@ -175,12 +174,8 @@ class UserBatchController extends Controller
      * POST /api/user-batches/validate
      * Validar archivo y obtener preview de datos (sin procesar)
      */
-    public function validate(Request $request)
+    public function validate(ValidateUserBatchFileRequest $request)
     {
-        $validated = $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls|max:10240', // 10MB max
-        ]);
-
         $file = $request->file('file');
 
         // Validar y parsear archivo
@@ -204,14 +199,9 @@ class UserBatchController extends Controller
      * POST /api/user-batches
      * Iniciar carga masiva de usuarios (datos ya validados)
      */
-    public function store(Request $request)
+    public function store(StoreUserBatchRequest $request)
     {
-        $validated = $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls|max:10240', // 10MB max
-            'send_welcome_emails' => 'boolean',
-            'update_existing' => 'boolean',
-        ]);
-
+        $validated = $request->validated();
         $file = $request->file('file');
 
         // 1. Validar y parsear archivo
@@ -301,21 +291,9 @@ class UserBatchController extends Controller
      * POST /api/user-batches/validate-data
      * Validar datos editados (sin archivo) antes de procesar
      */
-    public function validateData(Request $request)
+    public function validateData(ValidateUserBatchDataRequest $request)
     {
-        $validated = $request->validate([
-            'users' => 'required|array|min:1',
-            'users.*.nombre' => 'nullable|string',
-            'users.*.apellido' => 'nullable|string',
-            'users.*.email' => 'nullable|string',
-            'users.*.tipo_documento' => 'nullable|string',
-            'users.*.numero_documento' => 'nullable|string',
-            'users.*.rol' => 'nullable|string',
-            'users.*.estado' => 'nullable|string',
-            'users.*.telefono' => 'nullable|string',
-            'users.*.organizaciones' => 'nullable|array',
-            'users.*.row_number' => 'nullable|integer',
-        ]);
+        $validated = $request->validated();
 
         $validation = $this->service->validateData($validated['users']);
 
@@ -332,27 +310,12 @@ class UserBatchController extends Controller
      * POST /api/user-batches/upload-data
      * Iniciar carga masiva con datos editados (sin archivo)
      */
-    public function uploadData(Request $request)
+    public function uploadData(UploadUserBatchDataRequest $request)
     {
-        $validated = $request->validate([
-            'users' => 'required|array|min:1',
-            'users.*.nombre' => 'required|string',
-            'users.*.apellido' => 'required|string',
-            'users.*.email' => 'required|email',
-            'users.*.tipo_documento' => 'required|in:dni,ce,passport,ruc',
-            'users.*.numero_documento' => 'required|string',
-            'users.*.rol' => 'required|in:client,root,admin',
-            'users.*.estado' => 'required|in:active,inactive',
-            'users.*.telefono' => 'nullable|string',
-            'users.*.organizaciones' => 'nullable|array',
-            'users.*.organizaciones.*.ruc' => 'nullable',
-            'users.*.organizaciones.*.supervisor_email' => 'nullable',
-            'send_welcome_emails' => 'boolean',
-            'update_existing' => 'boolean',
-        ]);
+        $validated = $request->validated();
 
         $users = $validated['users'];
-        
+
         // 1. Obtener tenant_id (null para usuarios root)
         /** @var \App\Models\User $user */
         $user = Auth::user();

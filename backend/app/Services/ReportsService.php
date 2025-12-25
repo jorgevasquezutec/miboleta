@@ -155,6 +155,9 @@ class ReportsService
 
     /**
      * Get vacation statistics.
+     * 
+     * Note: Vacation stats always show the current year, regardless of date filters.
+     * Date filters are intended for document stats, but vacations are measured by year.
      */
     public function getVacationStats(?int $tenantId = null, ?string $startDate = null, ?string $endDate = null): array
     {
@@ -164,23 +167,17 @@ class ReportsService
             $query->where('tenant_id', $tenantId);
         }
 
-        // Apply date filters or default to current year
-        if ($startDate) {
-            $query->whereDate('start_date', '>=', $startDate);
-        } else {
-            $query->whereYear('start_date', Carbon::now()->year);
-        }
-
-        if ($endDate) {
-            $query->whereDate('start_date', '<=', $endDate);
-        }
+        // Always filter by current year for vacation stats
+        // Filter by created_at (when the request was made)
+        $currentYear = Carbon::now()->year;
+        $query->whereYear('created_at', $currentYear);
 
         $total = (clone $query)->count();
         $pending = (clone $query)->whereIn('status', ['pending', 'pending_confirmation'])->count();
         $approved = (clone $query)->whereIn('status', ['approved', 'confirmed'])->count();
         $rejected = (clone $query)->where('status', 'rejected')->count();
 
-        // Total days used (only approved/confirmed)
+        // Total days used (only approved/confirmed/taken)
         $totalDaysUsed = (clone $query)
             ->whereIn('status', ['approved', 'confirmed', 'taken'])
             ->sum('days_requested');
@@ -199,7 +196,7 @@ class ReportsService
             'rejected' => $rejected,
             'total_days_used' => $totalDaysUsed,
             'status_distribution' => $statusDistribution,
-            'current_year' => Carbon::now()->year,
+            'current_year' => $currentYear,
         ];
     }
 
