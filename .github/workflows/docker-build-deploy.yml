@@ -78,16 +78,37 @@ jobs:
           EOF
           
           # Conectar VPN en background
+          echo "Conectando a VPN..."
           sudo openfortivpn -c /tmp/vpn_config &
-          echo $! | sudo tee /tmp/vpn_pid
+          VPN_PID=$!
+          echo $VPN_PID | sudo tee /tmp/vpn_pid
           
-          # Esperar conexión
-          echo "Esperando conexión VPN (30s)..."
-          sleep 30
+          # Esperar conexión (hasta 60 segundos)
+          echo "Esperando conexión VPN (60s)..."
+          for i in {1..12}; do
+            sleep 5
+            if ip addr show | grep -qE "ppp|tun"; then
+              echo "✓ Interfaz VPN detectada"
+              break
+            fi
+            echo "Esperando interfaz VPN... ($((i*5))s)"
+          done
           
-          # Verificar conexión
-          echo "Verificando conexión..."
-          ip addr show | grep -E "ppp|tun" || echo "Interfaz VPN creada"
+          # Verificar interfaz
+          echo "=== Interfaces de red ==="
+          ip addr show | grep -E "inet |ppp|tun" || true
+          
+          # Verificar rutas
+          echo "=== Tabla de rutas ==="
+          ip route | head -10 || true
+          
+          # Probar conectividad al servidor
+          echo "=== Probando conectividad a ${{ secrets.SSH_HOST }} ==="
+          ping -c 3 ${{ secrets.SSH_HOST }} || echo "⚠ Ping falló (puede estar bloqueado)"
+          
+          # Verificar puerto SSH
+          echo "=== Probando puerto SSH ==="
+          nc -zv -w 5 ${{ secrets.SSH_HOST }} ${{ secrets.SSH_PORT }} 2>&1 || echo "⚠ Puerto SSH no responde"
       
       - name: Copy stack file to server
         env:
