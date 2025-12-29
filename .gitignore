@@ -16,9 +16,19 @@ dist-ssr/
 build/
 
 # Local configuration files
+.env
 .env.local
 .env.*.local
 .env.production
+.env.stack
+
+# Config directory env files (keep only .example)
+config/.env
+config/.env.local
+config/.env.*.local
+config/.env.vite.*
+!config/.env.example
+
 .vscode/ # VS Code specific settings (optional, if you want to ignore all of it)
 !.vscode/extensions.json # Keep extensions.json if you want to share recommended extensions
 .idea/ # IntelliJ IDEA specific settings
@@ -43,8 +53,9 @@ coverage/
 # Laravel backend
 /backend/vendor/
 /backend/node_modules/
-# /backend/.env
+/backend/.env
 /backend/.env.backup
+!backend/.env.example
 /backend/.phpunit.result.cache
 /backend/storage/*.key
 /backend/storage/logs/

@@ -1,0 +1,5 @@
+# Ignorar archivos .env reales (solo commitear .env.example)
+.env
+.env.*
+!.env.example
+!.env.vite.swarm

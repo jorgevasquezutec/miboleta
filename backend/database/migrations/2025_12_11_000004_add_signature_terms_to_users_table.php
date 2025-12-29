@@ -11,7 +11,8 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dateTime('signature_terms_accepted_at')->nullable()->after('must_change_password');
+            // Agregar después de 'status' en lugar de 'must_change_password' para evitar dependencias
+            $table->dateTime('signature_terms_accepted_at')->nullable()->after('status');
         });
     }
 

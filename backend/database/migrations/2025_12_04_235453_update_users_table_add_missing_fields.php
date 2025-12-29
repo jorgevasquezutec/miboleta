@@ -12,56 +12,99 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            // Campos de información personal
-            $table->string('document_type', 20)
-                ->nullable()
-                ->after('remember_token')
-                ->comment('Tipo de documento');
-            
-            $table->string('document_text', 20)
-                ->nullable()
-                ->unique()
-                ->after('document_type')
-                ->comment('Número de documento (NULL para root)');
-            
-            $table->string('last_name', 100)
-                ->nullable()
-                ->after('name')
-                ->comment('Apellidos del usuario');
-            
-            $table->string('phone', 20)
-                ->nullable()
-                ->after('last_name')
-                ->comment('Teléfono de contacto');
-            
+            // Campos de información personal (solo si no existen)
+            if (!Schema::hasColumn('users', 'document_type')) {
+                $table->string('document_type', 20)
+                    ->nullable()
+                    ->after('remember_token')
+                    ->comment('Tipo de documento');
+            }
+
+            if (!Schema::hasColumn('users', 'document_text')) {
+                $table->string('document_text', 20)
+                    ->nullable()
+                    ->unique()
+                    ->after('document_type')
+                    ->comment('Número de documento (NULL para root)');
+            }
+
+            if (!Schema::hasColumn('users', 'last_name')) {
+                $table->string('last_name', 100)
+                    ->nullable()
+                    ->after('name')
+                    ->comment('Apellidos del usuario');
+            }
+
+            if (!Schema::hasColumn('users', 'phone')) {
+                $table->string('phone', 20)
+                    ->nullable()
+                    ->after('last_name')
+                    ->comment('Teléfono de contacto');
+            }
+
             // Jerarquía organizacional
-            $table->foreignId('immediate_supervisor_id')
-                ->nullable()
-                ->after('phone')
-                ->constrained('users')
-                ->onDelete('set null')
-                ->comment('Jefe inmediato (self-reference)');
-            
+            if (!Schema::hasColumn('users', 'immediate_supervisor_id')) {
+                $table->foreignId('immediate_supervisor_id')
+                    ->nullable()
+                    ->after('phone')
+                    ->constrained('users')
+                    ->onDelete('set null')
+                    ->comment('Jefe inmediato (self-reference)');
+            }
+
             // Estado del usuario
-            $table->string('status', 20)
-                ->default('pending')
-                ->after('immediate_supervisor_id')
-                ->comment('Estado: active, inactive, terminated, pending');
-            
+            if (!Schema::hasColumn('users', 'status')) {
+                $table->string('status', 20)
+                    ->default('pending')
+                    ->after('immediate_supervisor_id')
+                    ->comment('Estado: active, inactive, terminated, pending');
+            }
+
             // Último login
-            $table->dateTime('last_login_at')
-                ->nullable()
-                ->after('status')
-                ->comment('Última fecha de inicio de sesión');
-            
+            if (!Schema::hasColumn('users', 'last_login_at')) {
+                $table->dateTime('last_login_at')
+                    ->nullable()
+                    ->after('status')
+                    ->comment('Última fecha de inicio de sesión');
+            }
+
             // Soft deletes
-            $table->dateTime('deleted_at')->nullable()->after('updated_at');
-            
-            // Índices
-            $table->index('document_type');
-            $table->index('status');
-            $table->index('immediate_supervisor_id');
+            if (!Schema::hasColumn('users', 'deleted_at')) {
+                $table->dateTime('deleted_at')->nullable()->after('updated_at');
+            }
         });
+
+        // Índices después de agregar columnas
+        // Los índices se agregan dentro de un bloque separado para evitar errores si ya existen
+        try {
+            Schema::table('users', function (Blueprint $table) {
+                if (Schema::hasColumn('users', 'document_type')) {
+                    $table->index('document_type');
+                }
+            });
+        } catch (\Exception $e) {
+            // Índice ya existe, continuar
+        }
+
+        try {
+            Schema::table('users', function (Blueprint $table) {
+                if (Schema::hasColumn('users', 'status')) {
+                    $table->index('status');
+                }
+            });
+        } catch (\Exception $e) {
+            // Índice ya existe, continuar
+        }
+
+        try {
+            Schema::table('users', function (Blueprint $table) {
+                if (Schema::hasColumn('users', 'immediate_supervisor_id')) {
+                    $table->index('immediate_supervisor_id');
+                }
+            });
+        } catch (\Exception $e) {
+            // Índice ya existe, continuar
+        }
     }
 
     /**

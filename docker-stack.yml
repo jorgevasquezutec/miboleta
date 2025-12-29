@@ -1,0 +1,166 @@
+# MiBoleta - Docker Swarm Stack
+# Adaptado de docker-compose.prod.yml para Docker Swarm
+
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/jorgevasquezutec/miboleta:${IMAGE_TAG:-latest}
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: production
+      COPY_PUBLIC_TO_VOLUME: "true"
+    env_file:
+      - ./config/.env
+    volumes:
+      - public_files:/var/www/html/public-shared
+      - storage_data:/var/www/html/storage
+      - cache_data:/var/www/html/bootstrap/cache
+    networks:
+      - miboleta_network
+
+  nginx:
+    image: nginx:1.27-alpine
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 5s
+      restart_policy:
+        condition: on-failure
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - public_files:/var/www/html/public:ro
+      - storage_data:/var/www/html/storage:ro
+      - ./config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - miboleta_network
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0.40
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE:-miboleta_prod}
+      MYSQL_USER: ${DB_USERNAME:-miboleta}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./config/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - mysql_backups:/backups
+    networks:
+      - miboleta_network
+
+  redis:
+    image: redis:7.4-alpine
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - miboleta_network
+
+  horizon:
+    image: ghcr.io/jorgevasquezutec/miboleta:${IMAGE_TAG:-latest}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+    command: php artisan horizon
+    environment:
+      SERVICE_TAGS: production
+    env_file:
+      - ./config/.env
+    volumes:
+      - storage_data:/var/www/html/storage
+      - cache_data:/var/www/html/bootstrap/cache
+    networks:
+      - miboleta_network
+
+  reverb:
+    image: ghcr.io/jorgevasquezutec/miboleta:${IMAGE_TAG:-latest}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    environment:
+      SERVICE_TAGS: production
+    env_file:
+      - ./config/.env
+    networks:
+      - miboleta_network
+
+  adminer:
+    image: adminer:4.8.1
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: nette
+    networks:
+      - miboleta_network
+    depends_on:
+      - db
+
+volumes:
+  mysql_data:
+    name: miboleta_swarm_mysql_data
+    driver: local
+  redis_data:
+    name: miboleta_swarm_redis_data
+    driver: local
+  public_files:
+    name: miboleta_swarm_public_files
+    driver: local
+  storage_data:
+    name: miboleta_swarm_storage_data
+    driver: local
+  cache_data:
+    name: miboleta_swarm_cache_data
+    driver: local
+  nginx_logs:
+    name: miboleta_swarm_nginx_logs
+    driver: local
+  mysql_backups:
+    name: miboleta_swarm_mysql_backups
+    driver: local
+
+networks:
+  miboleta_network:
+    name: miboleta_swarm_network
+    driver: overlay
+    attachable: true

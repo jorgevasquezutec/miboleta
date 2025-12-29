@@ -1,0 +1,163 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_ENV_FILE=config/.env.vite.swarm
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout (para docker-stack.yml)
+        uses: actions/checkout@v4
+      
+      - name: Install VPN and SSH tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openfortivpn sshpass
+      
+      - name: Connect to VPN
+        run: |
+          # Crear config VPN
+          cat << EOF | sudo tee /tmp/vpn_config
+          host = ${{ secrets.VPN_HOST }}
+          port = ${{ secrets.VPN_PORT }}
+          username = ${{ secrets.VPN_USER }}
+          password = ${{ secrets.VPN_PASS }}
+          trusted-cert = ${{ secrets.VPN_CERT }}
+          set-dns = 0
+          EOF
+          
+          # Conectar VPN en background
+          sudo openfortivpn -c /tmp/vpn_config &
+          echo $! | sudo tee /tmp/vpn_pid
+          
+          # Esperar conexión
+          echo "Esperando conexión VPN (30s)..."
+          sleep 30
+          
+          # Verificar conexión
+          echo "Verificando conexión..."
+          ip addr show | grep -E "ppp|tun" || echo "Interfaz VPN creada"
+      
+      - name: Copy stack file to server
+        env:
+          SSH_PASS: ${{ secrets.SSH_PASS }}
+        run: |
+          sshpass -p "${SSH_PASS}" scp \
+            -o ConnectTimeout=30 \
+            -o StrictHostKeyChecking=no \
+            -P ${{ secrets.SSH_PORT }} \
+            docker-stack.yml \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/miboleta/
+      
+      - name: Deploy via SSH
+        env:
+          SSH_PASS: ${{ secrets.SSH_PASS }}
+        run: |
+          sshpass -p "${SSH_PASS}" ssh \
+            -o ConnectTimeout=30 \
+            -o StrictHostKeyChecking=no \
+            -p ${{ secrets.SSH_PORT }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'DEPLOY_SCRIPT'
+          
+          set -e
+          cd /opt/miboleta
+          
+          echo "=== Pulling latest image ==="
+          docker pull ghcr.io/${{ github.repository }}:latest
+          
+          echo "=== Deploying stack ==="
+          docker stack deploy -c docker-stack.yml miboleta --with-registry-auth
+          
+          echo "=== Waiting for services to start ==="
+          sleep 15
+          
+          echo "=== Service status ==="
+          docker stack services miboleta
+          
+          echo "=== Running post-deploy commands ==="
+          # Esperar a que el contenedor app esté listo
+          for i in {1..10}; do
+            APP_CONTAINER=$(docker ps -qf "name=miboleta_app" | head -1)
+            if [ -n "$APP_CONTAINER" ]; then
+              echo "Container found: $APP_CONTAINER"
+              break
+            fi
+            echo "Waiting for app container... ($i/10)"
+            sleep 5
+          done
+          
+          if [ -n "$APP_CONTAINER" ]; then
+            echo "Running migrations..."
+            docker exec $APP_CONTAINER php artisan migrate --force || echo "Migrations skipped"
+            
+            echo "Clearing caches..."
+            docker exec $APP_CONTAINER php artisan optimize:clear || true
+            docker exec $APP_CONTAINER php artisan config:cache || true
+            docker exec $APP_CONTAINER php artisan route:cache || true
+            docker exec $APP_CONTAINER php artisan view:cache || true
+          fi
+          
+          echo "=== Deploy complete! ==="
+          DEPLOY_SCRIPT
+      
+      - name: Disconnect VPN
+        if: always()
+        run: |
+          echo "Disconnecting VPN..."
+          sudo kill $(cat /tmp/vpn_pid 2>/dev/null) 2>/dev/null || true
+          sudo rm -f /tmp/vpn_config /tmp/vpn_pid
+          echo "VPN disconnected"
