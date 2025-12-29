@@ -57,7 +57,6 @@ class UserSeeder extends Seeder
             'document_type' => 'dni',
             'document_text' => '87654321',
             'phone' => '+51 999 111 222',
-            'immediate_supervisor_id' => $adminABC->id,
             'status' => 'active',
             'email_verified_at' => now(),
         ]);
@@ -88,7 +87,6 @@ class UserSeeder extends Seeder
             'document_type' => 'dni',
             'document_text' => '44332211',
             'phone' => '+51 999 333 444',
-            'immediate_supervisor_id' => $adminXYZ->id,
             'status' => 'active',
             'email_verified_at' => now(),
         ]);
