@@ -54,7 +54,7 @@ services:
       - app
 
   db:
-    image: mysql:8.0.40
+    image: mysql:8.0-debian
     deploy:
       replicas: 1
       placement:
