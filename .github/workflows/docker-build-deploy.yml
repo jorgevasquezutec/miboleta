@@ -146,6 +146,9 @@ jobs:
           set -e
           cd /opt/miboleta
           
+          echo "=== Loading environment variables ==="
+          export $(cat .env.stack | grep -v '^#' | xargs)
+          
           echo "=== Pulling latest image ==="
           docker pull ghcr.io/${{ github.repository }}:latest
           
