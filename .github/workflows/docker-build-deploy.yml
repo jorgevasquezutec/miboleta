@@ -77,22 +77,34 @@ jobs:
           set-dns = 0
           EOF
           
-          # Conectar VPN en background
+          # Conectar VPN y capturar logs
           echo "Conectando a VPN..."
-          sudo openfortivpn -c /tmp/vpn_config &
+          sudo openfortivpn -c /tmp/vpn_config > /tmp/vpn.log 2>&1 &
           VPN_PID=$!
           echo $VPN_PID | sudo tee /tmp/vpn_pid
           
           # Esperar conexión (hasta 60 segundos)
           echo "Esperando conexión VPN (60s)..."
+          CONNECTED=false
           for i in {1..12}; do
             sleep 5
             if ip addr show | grep -qE "ppp|tun"; then
               echo "✓ Interfaz VPN detectada"
+              CONNECTED=true
               break
             fi
             echo "Esperando interfaz VPN... ($((i*5))s)"
+            # Mostrar últimas líneas del log
+            tail -5 /tmp/vpn.log 2>/dev/null || true
           done
+          
+          # Mostrar log completo de VPN
+          echo "=== LOG COMPLETO DE VPN ==="
+          cat /tmp/vpn.log || true
+          
+          if [ "$CONNECTED" = false ]; then
+            echo "❌ VPN no se conectó. Verificar credenciales y VPN_CERT"
+          fi
           
           # Verificar interfaz
           echo "=== Interfaces de red ==="
@@ -104,7 +116,7 @@ jobs:
           
           # Probar conectividad al servidor
           echo "=== Probando conectividad a ${{ secrets.SSH_HOST }} ==="
-          ping -c 3 ${{ secrets.SSH_HOST }} || echo "⚠ Ping falló (puede estar bloqueado)"
+          ping -c 3 ${{ secrets.SSH_HOST }} || echo "⚠ Ping falló"
           
           # Verificar puerto SSH
           echo "=== Probando puerto SSH ==="
