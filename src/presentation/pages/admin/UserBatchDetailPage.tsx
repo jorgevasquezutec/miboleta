@@ -77,14 +77,14 @@ export function UserBatchDetailPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <Button variant="outline" size="icon" onClick={handleBack}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
+                    <Button variant="outline" size="icon" onClick={handleBack} className="h-9 w-9 sm:h-10 sm:w-10">
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div>
-                        <h1 className="text-3xl font-bold">{batch.filename}</h1>
-                        <p className="text-gray-600 mt-1">
+                        <h1 className="text-xl sm:text-2xl font-bold truncate max-w-[200px] sm:max-w-none">{batch.filename}</h1>
+                        <p className="text-gray-600 mt-1 text-sm sm:text-base">
                             {batch.tenant ? `Empresa: ${batch.tenant.name} • ` : ''}
                             Creado por: {batch.created_by?.name || 'N/A'}
                         </p>

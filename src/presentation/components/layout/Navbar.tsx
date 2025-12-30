@@ -50,7 +50,7 @@ export function Navbar({
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 bg-white border-b border-[rgba(0,0,0,0.1)] px-6 py-4 z-50">
+    <nav className="fixed top-0 left-0 right-0 bg-white border-b border-[rgba(0,0,0,0.1)] px-3 sm:px-6 py-3 sm:py-4 z-50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           {/* Sidebar Toggle Button */}
@@ -77,23 +77,23 @@ export function Navbar({
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-3 pl-2">
-                <Avatar className="ring-2 ring-gray-100">
+              <Button variant="ghost" className="gap-2 sm:gap-3 pl-1 sm:pl-2">
+                <Avatar className="ring-2 ring-gray-100 h-8 w-8 sm:h-10 sm:w-10">
                   <AvatarImage
                     src={user?.avatar_url || ""}
                     key={user?.avatar_url || 'no-avatar'}
                     className="object-cover"
                   />
                   <AvatarFallback
-                    className="text-white"
+                    className="text-white text-sm sm:text-base"
                     style={{ backgroundColor: brandingPrimaryColor }}
                   >
                     {getInitials(userName)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="text-left">
-                  <p>{userName}</p>
-                  <p className="text-[#64748B] text-sm capitalize">{userRole}</p>
+                <div className="text-left hidden sm:block">
+                  <p className="text-sm">{userName}</p>
+                  <p className="text-[#64748B] text-xs capitalize">{userRole}</p>
                 </div>
               </Button>
             </DropdownMenuTrigger>

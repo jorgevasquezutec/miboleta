@@ -97,6 +97,8 @@
   body {
     background-color: #ffffff;
     color: hsl(var(--foreground));
+    overflow-x: hidden;
+    /* Prevent horizontal scroll on mobile */
   }
 }
 
@@ -129,4 +131,40 @@ button:active:not(:disabled),
 .bg-blue-700,
 .hover\:bg-blue-700:hover {
   color: white !important;
+}
+
+/* ===== CUSTOM SCROLLBAR STYLES ===== */
+
+/* Thin scrollbar utility - horizontal scroll areas */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

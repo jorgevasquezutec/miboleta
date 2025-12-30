@@ -173,16 +173,17 @@ export function TenantsListPage() {
     return (
         <div className="container mx-auto py-6 space-y-6">
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold">Organizaciones</h1>
-                    <p className="text-gray-500 mt-1">
+                    <h1 className="text-xl sm:text-2xl font-bold">Organizaciones</h1>
+                    <p className="text-gray-500 mt-1 text-sm sm:text-base">
                         Gestiona las organizaciones del sistema
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button
                         variant="outline"
+                        className="h-9 sm:h-10 px-3 sm:px-4"
                         onClick={handleExport}
                         disabled={isExporting}
                     >
@@ -194,9 +195,12 @@ export function TenantsListPage() {
                         Exportar
                     </Button>
                     {canCreateTenant && (
-                        <Button onClick={() => navigate('/tenants/new')}>
+                        <Button
+                            className="h-9 sm:h-10 px-3 sm:px-4"
+                            onClick={() => navigate('/tenants/new')}
+                        >
                             <Building2 className="mr-2 h-4 w-4" />
-                            Crear Organización
+                            <span className="hidden xs:inline">Crear </span>Organización
                         </Button>
                     )}
                 </div>
@@ -272,13 +276,13 @@ export function TenantsListPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[50px]"></TableHead>
-                                    <TableHead>Nombre</TableHead>
-                                    <TableHead>RUC</TableHead>
-                                    <TableHead className="hidden md:table-cell">Razón Social</TableHead>
-                                    <TableHead className="hidden lg:table-cell">Teléfono</TableHead>
-                                    <TableHead>Estado</TableHead>
-                                    <TableHead className="text-center">Acciones</TableHead>
+                                    <TableHead className="w-[50px] min-w-[50px]"></TableHead>
+                                    <TableHead className="min-w-[120px]">Nombre</TableHead>
+                                    <TableHead className="min-w-[100px]">RUC</TableHead>
+                                    <TableHead className="hidden md:table-cell min-w-[150px]">Razón Social</TableHead>
+                                    <TableHead className="hidden lg:table-cell min-w-[100px]">Teléfono</TableHead>
+                                    <TableHead className="min-w-[80px]">Estado</TableHead>
+                                    <TableHead className="text-center min-w-[100px]">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

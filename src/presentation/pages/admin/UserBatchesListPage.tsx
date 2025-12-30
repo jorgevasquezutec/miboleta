@@ -63,34 +63,35 @@ export function UserBatchesListPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold">Historial de Cargas Masivas</h1>
-                    <p className="text-gray-600 mt-1">
+                    <h1 className="text-xl sm:text-2xl font-bold">Historial de Cargas Masivas</h1>
+                    <p className="text-gray-600 mt-1 text-sm sm:text-base">
                         Revisa el historial de todas las cargas masivas de usuarios
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={fetchBatches} size="icon">
+                    <Button variant="outline" onClick={fetchBatches} size="icon" className="h-9 w-9 sm:h-10 sm:w-10">
                         <RefreshCw className="h-4 w-4" />
                     </Button>
-                    <Button onClick={handleNewUpload}>
+                    <Button onClick={handleNewUpload} className="h-9 sm:h-10 px-3 sm:px-4">
                         <Plus className="h-4 w-4 mr-2" />
                         Nueva Carga
                     </Button>
                 </div>
             </div>
 
-            {/* Filters */}
+            {/* Filters - scrollable on mobile, wraps on larger screens */}
             <Card>
-                <CardContent className="p-4">
-                    <div className="flex gap-2">
+                <CardContent className="p-3 sm:p-4">
+                    <div className="flex gap-2 overflow-x-auto sm:overflow-x-visible sm:flex-wrap pb-3 sm:pb-1 -mb-2 sm:-mb-1 scrollbar-thin">
                         <Button
                             variant={statusFilter === '' ? 'default' : 'outline'}
                             onClick={() => setStatusFilter('')}
                             size="sm"
+                            className="flex-shrink-0"
                         >
                             Todos
                         </Button>
@@ -98,6 +99,7 @@ export function UserBatchesListPage() {
                             variant={statusFilter === 'processing' ? 'default' : 'outline'}
                             onClick={() => setStatusFilter('processing')}
                             size="sm"
+                            className="flex-shrink-0"
                         >
                             En Proceso
                         </Button>
@@ -105,6 +107,7 @@ export function UserBatchesListPage() {
                             variant={statusFilter === 'completed' ? 'default' : 'outline'}
                             onClick={() => setStatusFilter('completed')}
                             size="sm"
+                            className="flex-shrink-0"
                         >
                             Completados
                         </Button>
@@ -112,6 +115,7 @@ export function UserBatchesListPage() {
                             variant={statusFilter === 'failed' ? 'default' : 'outline'}
                             onClick={() => setStatusFilter('failed')}
                             size="sm"
+                            className="flex-shrink-0"
                         >
                             Fallidos
                         </Button>

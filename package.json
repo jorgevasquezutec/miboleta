@@ -79,6 +79,8 @@
       "scripts": {
             "dev": "concurrently -c \"cyan,magenta\" -n \"Laravel,Vite\" \"echo 'Laravel ya está corriendo en Docker (localhost:80)'\" \"vite\"",
             "dev:vite": "vite",
+            "dev:mobile": "./scripts/dev-mobile.sh && npx vite --host",
+            "dev:local": "./scripts/dev-local.sh && npm run dev",
             "watch": "./watch.sh",
             "build": "vite build",
             "build:copy": "npm run build && cp -r dist/* backend/public/",

@@ -141,11 +141,11 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Mis Documentos</h1>
-        <p className="text-[#64748B]">
+        <h1 className="text-xl sm:text-2xl font-bold">Mis Documentos</h1>
+        <p className="text-[#64748B] text-sm sm:text-base">
           Gestiona y visualiza todos tus documentos laborales
         </p>
       </div>
@@ -247,7 +247,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
               </SelectContent>
             </Select>
             <Select value={filters.type || 'all'} onValueChange={handleTypeChange}>
-              <SelectTrigger className="w-full md:w-48 h-11">
+              <SelectTrigger className="w-full md:w-40 h-11">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
@@ -259,9 +259,9 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleSearch} className="h-11">
+            <Button onClick={handleSearch} size="sm" className="h-11 w-full xs:w-auto">
               <Search className="w-4 h-4 mr-2" />
-              Buscar
+              <span className="hidden xs:inline">Buscar</span>
             </Button>
           </div>
         </CardContent>
@@ -297,27 +297,27 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
             </div>
           ) : (
             <>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {documents.map((doc) => (
                   <Card key={doc.id} className="hover:shadow-md transition-shadow duration-200">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-4">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                         {/* Icon */}
-                        <div className="w-12 h-12 bg-[#F1F5F9] rounded-lg flex items-center justify-center flex-shrink-0">
+                        <div className="hidden sm:flex w-12 h-12 bg-[#F1F5F9] rounded-lg items-center justify-center flex-shrink-0">
                           <FileText className="w-6 h-6 text-[#2563EB]" />
                         </div>
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-1">
-                            <h3 className="font-semibold truncate">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+                            <h3 className="font-semibold text-sm sm:text-base truncate">
                               {doc.documentType?.displayName || "Documento"}
                             </h3>
                             {getDocumentStatusBadge(doc.status)}
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-[#64748B]">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-[#64748B]">
                             <span className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
+                              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
                               {doc.period}
                             </span>
                             <span>{formatDate(doc.createdAt)}</span>
@@ -325,11 +325,12 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                         </div>
 
                         {/* Actions */}
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0">
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleViewDocument(doc.id)}
+                            className="flex-1 sm:flex-initial"
                           >
                             Ver
                           </Button>
@@ -343,7 +344,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                           {doc.status === "pending" && (doc.requiresSignature || doc.documentType?.requiresSignature) && (
                             <Button
                               size="sm"
-                              className="bg-[#2563EB] hover:bg-[#1E40AF]"
+                              className="bg-[#2563EB] hover:bg-[#1E40AF] flex-1 sm:flex-initial"
                               onClick={() => handleViewDocument(doc.id)}
                             >
                               Firmar

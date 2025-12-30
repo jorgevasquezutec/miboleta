@@ -287,10 +287,10 @@ export function UserFormPage() {
                     )}
                 </div>
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
                         {isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}
                     </h1>
-                    <p className="text-gray-500">
+                    <p className="text-gray-500 text-sm sm:text-base">
                         {isEditing
                             ? 'Actualiza la información del usuario'
                             : 'Completa los datos para crear un nuevo usuario'}

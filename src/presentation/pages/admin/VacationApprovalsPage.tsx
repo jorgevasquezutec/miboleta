@@ -156,34 +156,40 @@ export function VacationApprovalsPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <ClipboardCheck className="w-7 h-7 text-blue-600" />
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                        <ClipboardCheck className="w-6 h-6 sm:w-7 sm:h-7 text-blue-600" />
                         Aprobar Vacaciones
                     </h1>
-                    <p className="text-gray-600 mt-1">
+                    <p className="text-gray-600 text-sm sm:text-base mt-1">
                         Gestiona las solicitudes de vacaciones de tu equipo
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button
                         variant="outline"
+                        className="h-9 sm:h-10 px-3 sm:px-4"
                         onClick={handleExport}
                         disabled={isExporting || filteredApprovals.length === 0}
                     >
                         {isExporting ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                            <Download className="w-4 h-4 mr-2" />
+                            <Download className="w-4 h-4" />
                         )}
-                        Exportar
+                        <span className="hidden xs:inline ml-2">Exportar</span>
                     </Button>
-                    <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
-                        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                        Actualizar
+                    <Button
+                        variant="outline"
+                        className="h-9 sm:h-10 px-3 sm:px-4"
+                        onClick={handleRefresh}
+                        disabled={isLoading}
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+                        <span className="hidden xs:inline ml-2">Actualizar</span>
                     </Button>
                 </div>
             </div>

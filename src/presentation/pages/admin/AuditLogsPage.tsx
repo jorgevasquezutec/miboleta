@@ -262,33 +262,33 @@ export function AuditLogsPage() {
 
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div>
-                    <h1>Registro de Actividad</h1>
-                    <p className="text-[#64748B]">
+                    <h1 className="text-xl sm:text-2xl font-bold">Registro de Actividad</h1>
+                    <p className="text-[#64748B] text-sm sm:text-base">
                         Historial de acciones realizadas en el sistema
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3">
                     <Button
                         variant="outline"
-                        className="gap-2"
+                        className="h-9 sm:h-10 px-3 sm:px-4 gap-2"
                         onClick={fetchLogs}
                         disabled={isLoading}
                     >
                         <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                        Actualizar
+                        <span className="hidden xs:inline">Actualizar</span>
                     </Button>
                     <Button
                         variant="outline"
-                        className="gap-2"
+                        className="h-9 sm:h-10 px-3 sm:px-4 gap-2"
                         onClick={handleExport}
                         disabled={isExporting}
                     >
                         <Download className="w-4 h-4" />
-                        Exportar Excel
+                        <span className="hidden xs:inline">Exportar</span>
                     </Button>
                 </div>
             </div>
@@ -302,10 +302,10 @@ export function AuditLogsPage() {
 
             {/* Filters */}
             <Card>
-                <CardContent className="p-4">
-                    <div className="flex flex-wrap gap-3 items-end">
+                <CardContent className="p-3 sm:p-4">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
                         {/* Date Range Picker */}
-                        <div className="min-w-[200px]">
+                        <div className="xs:col-span-2 md:col-span-1">
                             <label className="text-xs font-medium mb-1 block text-gray-600">
                                 Rango de fechas
                             </label>
@@ -321,7 +321,7 @@ export function AuditLogsPage() {
 
                         {/* Tenant Filter (only for root) */}
                         {isRoot && (
-                            <div className="min-w-[180px]">
+                            <div>
                                 <label className="text-xs font-medium mb-1 block text-gray-600">
                                     Empresa
                                 </label>
@@ -335,7 +335,7 @@ export function AuditLogsPage() {
                         )}
 
                         {/* Category Filter */}
-                        <div className="min-w-[140px]">
+                        <div>
                             <label className="text-xs font-medium mb-1 block text-gray-600">
                                 Categoría
                             </label>
@@ -354,7 +354,7 @@ export function AuditLogsPage() {
                         </div>
 
                         {/* Action Filter */}
-                        <div className="min-w-[160px]">
+                        <div>
                             <label className="text-xs font-medium mb-1 block text-gray-600">
                                 Acción
                             </label>
@@ -376,7 +376,7 @@ export function AuditLogsPage() {
                         </div>
 
                         {/* Search */}
-                        <div className="flex-1 min-w-[200px]">
+                        <div className="xs:col-span-2 md:col-span-1">
                             <label className="text-xs font-medium mb-1 block text-gray-600">
                                 Buscar usuario
                             </label>
@@ -396,7 +396,7 @@ export function AuditLogsPage() {
                             variant="outline"
                             size="sm"
                             onClick={clearFilters}
-                            className="h-9 whitespace-nowrap"
+                            className="h-9 whitespace-nowrap w-full xs:w-auto"
                         >
                             <Filter className="w-3.5 h-3.5 mr-1.5" />
                             Limpiar
@@ -418,7 +418,7 @@ export function AuditLogsPage() {
             <Card>
                 <CardContent className="p-0">
                     {isLoading ? (
-                        <div className="p-6 space-y-4">
+                        <div className="p-4 sm:p-6 space-y-4">
                             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                                 <div key={i} className="flex items-center gap-4">
                                     <Skeleton className="h-8 w-8 rounded-full" />
@@ -431,66 +431,68 @@ export function AuditLogsPage() {
                             ))}
                         </div>
                     ) : logs.length > 0 ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-12"></TableHead>
-                                    <TableHead>Usuario</TableHead>
-                                    {isRoot && <TableHead>Empresa</TableHead>}
-                                    <TableHead>Acción</TableHead>
-                                    <TableHead>Detalle</TableHead>
-                                    <TableHead>IP</TableHead>
-                                    <TableHead>Fecha</TableHead>
-                                    <TableHead>Categoría</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {logs.map((log) => {
-                                    const category = log.action?.split('.')[0] || 'other';
-                                    return (
-                                        <TableRow key={log.id}>
-                                            <TableCell>
-                                                {getActionIcon(log.action)}
-                                            </TableCell>
-                                            <TableCell className="font-medium">
-                                                {log.user?.name || 'Sistema'}
-                                                {log.user?.email && (
-                                                    <span className="block text-xs text-gray-500">{log.user.email}</span>
-                                                )}
-                                            </TableCell>
-                                            {isRoot && (
-                                                <TableCell className="text-gray-700">
-                                                    {log.tenant?.name || '-'}
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-10 sm:w-12"></TableHead>
+                                        <TableHead className="min-w-[120px]">Usuario</TableHead>
+                                        {isRoot && <TableHead className="min-w-[100px] hidden sm:table-cell">Empresa</TableHead>}
+                                        <TableHead className="min-w-[100px]">Acción</TableHead>
+                                        <TableHead className="min-w-[80px] hidden md:table-cell">Detalle</TableHead>
+                                        <TableHead className="min-w-[100px] hidden lg:table-cell">IP</TableHead>
+                                        <TableHead className="min-w-[140px]">Fecha</TableHead>
+                                        <TableHead className="min-w-[80px] hidden sm:table-cell">Categoría</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {logs.map((log) => {
+                                        const category = log.action?.split('.')[0] || 'other';
+                                        return (
+                                            <TableRow key={log.id}>
+                                                <TableCell>
+                                                    {getActionIcon(log.action)}
                                                 </TableCell>
-                                            )}
-                                            <TableCell>
-                                                {actionDescriptions[log.action] || log.action}
-                                            </TableCell>
-                                            <TableCell className="text-gray-500 text-sm">
-                                                {log.entity_type && log.entity_id && (
-                                                    <span>{log.entity_type} #{log.entity_id}</span>
+                                                <TableCell className="font-medium">
+                                                    <span className="truncate max-w-[120px] block">{log.user?.name || 'Sistema'}</span>
+                                                    {log.user?.email && (
+                                                        <span className="block text-xs text-gray-500 truncate max-w-[120px]">{log.user.email}</span>
+                                                    )}
+                                                </TableCell>
+                                                {isRoot && (
+                                                    <TableCell className="text-gray-700 hidden sm:table-cell">
+                                                        {log.tenant?.name || '-'}
+                                                    </TableCell>
                                                 )}
-                                                {!log.entity_type && '-'}
-                                            </TableCell>
-                                            <TableCell className="text-gray-500 text-sm font-mono">
-                                                {log.ip_address || '-'}
-                                            </TableCell>
-                                            <TableCell className="text-gray-500 text-sm">
-                                                {log.created_at ? new Date(log.created_at).toLocaleString('es-PE') : '-'}
-                                            </TableCell>
-                                            <TableCell>
-                                                {getCategoryBadge(category)}
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
+                                                <TableCell className="text-sm">
+                                                    {actionDescriptions[log.action] || log.action}
+                                                </TableCell>
+                                                <TableCell className="text-gray-500 text-sm hidden md:table-cell">
+                                                    {log.entity_type && log.entity_id && (
+                                                        <span>{log.entity_type} #{log.entity_id}</span>
+                                                    )}
+                                                    {!log.entity_type && '-'}
+                                                </TableCell>
+                                                <TableCell className="text-gray-500 text-sm font-mono hidden lg:table-cell">
+                                                    {log.ip_address || '-'}
+                                                </TableCell>
+                                                <TableCell className="text-gray-500 text-xs sm:text-sm">
+                                                    {log.created_at ? new Date(log.created_at).toLocaleString('es-PE') : '-'}
+                                                </TableCell>
+                                                <TableCell className="hidden sm:table-cell">
+                                                    {getCategoryBadge(category)}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
                     ) : (
-                        <div className="py-12 text-center text-gray-500">
-                            <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                            <p className="font-medium">No hay registros de actividad</p>
-                            <p className="text-sm mt-1">Las acciones del sistema aparecerán aquí cuando los usuarios realicen operaciones</p>
+                        <div className="py-8 sm:py-12 text-center text-gray-500 px-4">
+                            <FileText className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
+                            <p className="font-medium text-sm sm:text-base">No hay registros de actividad</p>
+                            <p className="text-xs sm:text-sm mt-1">Las acciones del sistema aparecerán aquí</p>
                         </div>
                     )}
                 </CardContent>

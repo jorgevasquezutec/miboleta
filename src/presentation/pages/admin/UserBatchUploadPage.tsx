@@ -198,13 +198,13 @@ export function UserBatchUploadPage() {
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             {/* Header */}
-            <div className="flex items-center gap-4">
-                <Button variant="outline" size="icon" onClick={handleBack}>
+            <div className="flex items-center gap-3 sm:gap-4">
+                <Button variant="outline" size="icon" onClick={handleBack} className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0">
                     <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div>
-                    <h1 className="text-3xl font-bold">Nueva Carga Masiva de Usuarios</h1>
-                    <p className="text-gray-600 mt-1">
+                    <h1 className="text-xl sm:text-2xl font-bold">Nueva Carga Masiva de Usuarios</h1>
+                    <p className="text-gray-600 mt-1 text-sm sm:text-base">
                         Sube un archivo Excel con los datos de usuarios a crear
                     </p>
                 </div>

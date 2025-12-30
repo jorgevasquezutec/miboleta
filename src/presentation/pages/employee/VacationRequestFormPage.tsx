@@ -212,16 +212,18 @@ export function VacationRequestFormPage() {
     return (
         <div className="max-w-2xl mx-auto space-y-6">
             {/* Header */}
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={handleBack}>
+            <div className="flex items-start gap-3 sm:gap-4">
+                <Button variant="ghost" size="icon" onClick={handleBack} className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 mt-1">
                     <ArrowLeft className="w-5 h-5" />
                 </Button>
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <Calendar className="w-7 h-7 text-blue-600" />
-                        Nueva Solicitud de Vacaciones
-                    </h1>
-                    <p className="text-gray-600 mt-1">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 flex-shrink-0" />
+                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
+                            Nueva Solicitud de Vacaciones
+                        </h1>
+                    </div>
+                    <p className="text-gray-600 mt-1 text-sm">
                         Completa el formulario para solicitar tus vacaciones
                     </p>
                 </div>
@@ -377,13 +379,14 @@ export function VacationRequestFormPage() {
                         )}
 
                         {/* Actions */}
-                        <div className="flex items-center justify-end gap-3 pt-4 border-t">
-                            <Button type="button" variant="outline" onClick={handleBack}>
+                        <div className="flex flex-col-reverse xs:flex-row items-stretch xs:items-center justify-end gap-2 xs:gap-3 pt-4 border-t">
+                            <Button type="button" variant="outline" onClick={handleBack} className="w-full xs:w-auto">
                                 Cancelar
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={!isValid || submitting || !hasSupervisor}
+                                className="w-full xs:w-auto"
                             >
                                 {submitting ? (
                                     <>

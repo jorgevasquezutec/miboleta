@@ -1,6 +1,9 @@
 name: Build & Deploy
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -39,6 +42,17 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
             type=semver,pattern={{version}}
+      
+      - name: Create Vite env file from secrets
+        run: |
+          cat << EOF > config/.env.vite.swarm
+          # Auto-generated from GitHub Secrets
+          VITE_API_URL=/api
+          VITE_REVERB_APP_KEY="${{ secrets.VITE_REVERB_APP_KEY }}"
+          VITE_REVERB_HOST="${{ secrets.VITE_REVERB_HOST }}"
+          VITE_REVERB_PORT="80"
+          VITE_REVERB_SCHEME="http"
+          EOF
       
       - name: Build and push
         uses: docker/build-push-action@v5

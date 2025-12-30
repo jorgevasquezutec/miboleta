@@ -94,27 +94,25 @@ export function PaginationControls({
     };
 
     return (
-        <div className={`flex items-center justify-between gap-4 ${className}`}>
+        <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 ${className}`}>
             {/* Left side: Info text */}
-            <div className="flex items-center gap-4">
-                {showInfo && (
-                    <div className="text-sm text-[#64748B]">
-                        Mostrando página {currentPage} de {totalPages || 1} ({total || 0} registros total)
-                    </div>
-                )}
-            </div>
+            {showInfo && (
+                <div className="text-xs sm:text-sm text-[#64748B] text-center sm:text-left">
+                    Página {currentPage} de {totalPages || 1} ({total || 0} registros)
+                </div>
+            )}
 
             {/* Right side: Per page selector + Pagination */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4">
                 {showPerPageSelector && onPerPageChange && (
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-[#64748B]">Mostrar</span>
+                        <span className="text-xs sm:text-sm text-[#64748B] hidden xs:inline">Mostrar</span>
                         <Select
                             value={perPage.toString()}
                             onValueChange={handlePerPageChange}
                             disabled={disabled}
                         >
-                            <SelectTrigger className="w-[70px] h-8">
+                            <SelectTrigger className="w-[60px] sm:w-[70px] h-8">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -125,12 +123,12 @@ export function PaginationControls({
                                 ))}
                             </SelectContent>
                         </Select>
-                        <span className="text-sm text-[#64748B]">por página</span>
+                        <span className="text-xs sm:text-sm text-[#64748B] hidden xs:inline">por pág.</span>
                     </div>
                 )}
 
-                <Pagination className="mx-0 w-auto justify-end">
-                    <PaginationContent>
+                <Pagination className="mx-0 w-auto">
+                    <PaginationContent className="gap-1">
                         <PaginationItem>
                             <PaginationPrevious
                                 onClick={(e) => {
@@ -139,40 +137,46 @@ export function PaginationControls({
                                         onPageChange(currentPage - 1);
                                     }
                                 }}
-                                className={
-                                    !canGoPrevious || disabled
+                                className={`px-2 sm:px-3 ${!canGoPrevious || disabled
                                         ? 'pointer-events-none opacity-50'
                                         : 'cursor-pointer'
-                                }
+                                    }`}
                             />
                         </PaginationItem>
 
-                        {pageNumbers.map((page, index) =>
-                            page === 'ellipsis' ? (
-                                <PaginationItem key={`ellipsis-${index}`}>
-                                    <PaginationEllipsis />
-                                </PaginationItem>
-                            ) : (
-                                <PaginationItem key={page}>
-                                    <PaginationLink
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            if (!disabled && page !== currentPage) {
-                                                onPageChange(page);
-                                            }
-                                        }}
-                                        isActive={currentPage === page}
-                                        className={
-                                            disabled
-                                                ? 'pointer-events-none opacity-50'
-                                                : 'cursor-pointer'
-                                        }
-                                    >
-                                        {page}
-                                    </PaginationLink>
-                                </PaginationItem>
-                            )
-                        )}
+                        {/* Hide page numbers on very small screens, show only on xs and up */}
+                        <div className="hidden xs:flex items-center gap-1">
+                            {pageNumbers.map((page, index) =>
+                                page === 'ellipsis' ? (
+                                    <PaginationItem key={`ellipsis-${index}`}>
+                                        <PaginationEllipsis />
+                                    </PaginationItem>
+                                ) : (
+                                    <PaginationItem key={page}>
+                                        <PaginationLink
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (!disabled && page !== currentPage) {
+                                                    onPageChange(page);
+                                                }
+                                            }}
+                                            isActive={currentPage === page}
+                                            className={`h-8 w-8 ${disabled
+                                                    ? 'pointer-events-none opacity-50'
+                                                    : 'cursor-pointer'
+                                                }`}
+                                        >
+                                            {page}
+                                        </PaginationLink>
+                                    </PaginationItem>
+                                )
+                            )}
+                        </div>
+
+                        {/* On very small screens, just show current/total */}
+                        <div className="flex xs:hidden items-center px-2 text-sm text-[#64748B]">
+                            {currentPage}/{totalPages || 1}
+                        </div>
 
                         <PaginationItem>
                             <PaginationNext
@@ -182,11 +186,10 @@ export function PaginationControls({
                                         onPageChange(currentPage + 1);
                                     }
                                 }}
-                                className={
-                                    !canGoNext || disabled
+                                className={`px-2 sm:px-3 ${!canGoNext || disabled
                                         ? 'pointer-events-none opacity-50'
                                         : 'cursor-pointer'
-                                }
+                                    }`}
                             />
                         </PaginationItem>
                     </PaginationContent>

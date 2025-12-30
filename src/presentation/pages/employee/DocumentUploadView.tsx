@@ -195,15 +195,15 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
   const canUpload = selectedFile && typeId && period && selectedTenantId && zipPreview && zipPreview.validPdfs > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack}>
+      <div className="flex items-start gap-3 sm:gap-4">
+        <Button variant="ghost" size="icon" onClick={handleBack} className="flex-shrink-0 mt-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div className="flex-1">
-          <h1>Carga Masiva de Documentos</h1>
-          <p className="text-[#64748B]">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold">Carga Masiva de Documentos</h1>
+          <p className="text-[#64748B] text-sm sm:text-base">
             Sube un archivo ZIP con los PDFs nombrados por número de documento (DNI)
           </p>
         </div>

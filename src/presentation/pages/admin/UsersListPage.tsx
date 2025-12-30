@@ -195,38 +195,43 @@ export function UsersListPage() {
     <div className="container mx-auto py-6 space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex flex-col gap-4">
             <div>
-              <CardTitle>Gestión de Usuarios</CardTitle>
+              <CardTitle className="text-xl sm:text-2xl">Gestión de Usuarios</CardTitle>
               <CardDescription>
                 Administra los usuarios del sistema
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 variant="outline"
+                className="h-9 sm:h-10 px-3 sm:px-4"
                 onClick={handleExport}
                 disabled={isExporting}
               >
                 {isExporting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Download className="mr-2 h-4 w-4" />
+                  <Download className="h-4 w-4" />
                 )}
-                Exportar
+                <span className="ml-2 hidden xs:inline">Exportar</span>
               </Button>
               {currentUser?.role === "root" && (
                 <>
                   <Button
                     variant="outline"
+                    className="h-9 sm:h-10 px-3 sm:px-4"
                     onClick={() => navigate("/users/batch-upload")}
                   >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Carga Masiva
+                    <Upload className="h-4 w-4" />
+                    <span className="ml-2 hidden xs:inline">Carga Masiva</span>
                   </Button>
-                  <Button onClick={() => navigate("/users/new")}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Nuevo Usuario
+                  <Button
+                    className="h-9 sm:h-10 px-3 sm:px-4"
+                    onClick={() => navigate("/users/new")}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    <span className="ml-2 hidden xs:inline">Nuevo Usuario</span>
                   </Button>
                 </>
               )}

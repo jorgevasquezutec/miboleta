@@ -209,7 +209,7 @@ export function NotificationsPage() {
                     <ArrowLeft className="w-5 h-5" />
                 </Button>
                 <div className="flex-1">
-                    <h1 className="text-2xl font-bold text-gray-900">Notificaciones</h1>
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Notificaciones</h1>
                     <p className="text-sm text-gray-500">
                         {unreadCount > 0
                             ? `Tienes ${unreadCount} notificación${unreadCount > 1 ? 'es' : ''} sin leer`

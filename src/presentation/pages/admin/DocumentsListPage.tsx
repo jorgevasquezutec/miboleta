@@ -204,29 +204,30 @@ export function DocumentsListPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div>
-                    <h1 className="flex items-center gap-2">
-                        <FileText className="w-6 h-6 text-[#2563EB]" />
+                    <h1 className="flex items-center gap-2 text-lg sm:text-xl font-bold">
+                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-[#2563EB]" />
                         Buscador de Documentos
                     </h1>
-                    <p className="text-[#64748B]">
+                    <p className="text-[#64748B] text-sm sm:text-base">
                         Busca y gestiona todos los documentos del sistema
                     </p>
                 </div>
                 <Button
                     variant="outline"
+                    className="h-9 sm:h-10 px-3 sm:px-4 w-full sm:w-auto"
                     onClick={handleExport}
                     disabled={isExporting}
                 >
                     {isExporting ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                        <Download className="w-4 h-4 mr-2" />
+                        <Download className="w-4 h-4" />
                     )}
-                    Exportar
+                    <span className="ml-2">Exportar</span>
                 </Button>
             </div>
 
@@ -354,73 +355,75 @@ export function DocumentsListPage() {
                         </div>
                     ) : (
                         <>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Apellido y Nombre / DNI</TableHead>
-                                        <TableHead>Tipo de documento / Período</TableHead>
-                                        <TableHead>Fecha de subida</TableHead>
-                                        <TableHead>Estado</TableHead>
-                                        <TableHead>Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {documents.map((doc) => (
-                                        <TableRow key={doc.id}>
-                                            <TableCell>
-                                                <div>
-                                                    <div className="font-medium">
-                                                        {doc.user?.name} {doc.user?.lastName}
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="min-w-[180px]">Apellido y Nombre / DNI</TableHead>
+                                            <TableHead className="min-w-[180px]">Tipo de documento / Período</TableHead>
+                                            <TableHead className="min-w-[120px] hidden sm:table-cell">Fecha de subida</TableHead>
+                                            <TableHead className="min-w-[100px]">Estado</TableHead>
+                                            <TableHead className="min-w-[80px]">Acciones</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {documents.map((doc) => (
+                                            <TableRow key={doc.id}>
+                                                <TableCell>
+                                                    <div>
+                                                        <div className="font-medium">
+                                                            {doc.user?.name} {doc.user?.lastName}
+                                                        </div>
+                                                        <div className="text-sm text-[#64748B]">
+                                                            {doc.user?.documentText || doc.employeeDocumentNumber}
+                                                        </div>
                                                     </div>
-                                                    <div className="text-sm text-[#64748B]">
-                                                        {doc.user?.documentText || doc.employeeDocumentNumber}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div>
+                                                        <div className="font-medium">
+                                                            {doc.documentType?.displayName || "-"}
+                                                        </div>
+                                                        <div className="text-sm text-[#64748B]">{doc.period}</div>
                                                     </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div>
-                                                    <div className="font-medium">
-                                                        {doc.documentType?.displayName || "-"}
-                                                    </div>
-                                                    <div className="text-sm text-[#64748B]">{doc.period}</div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-sm text-[#64748B]">
-                                                {new Date(doc.createdAt).toLocaleString('es-PE', {
-                                                    day: '2-digit',
-                                                    month: '2-digit',
-                                                    year: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit'
-                                                })}
-                                            </TableCell>
-                                            <TableCell>{getDocumentStatusBadgeInline(doc.status)}</TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => navigate(`/viewer?id=${doc.id}`)}
-                                                        title="Ver documento"
-                                                    >
-                                                        <Eye className="w-4 h-4 text-[#2563EB]" />
-                                                    </Button>
-                                                    {user?.role === "admin" && (
+                                                </TableCell>
+                                                <TableCell className="text-sm text-[#64748B] hidden sm:table-cell">
+                                                    {new Date(doc.createdAt).toLocaleString('es-PE', {
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </TableCell>
+                                                <TableCell>{getDocumentStatusBadgeInline(doc.status)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            onClick={() => handleDeleteClick(doc.id)}
-                                                            title="Eliminar documento"
+                                                            onClick={() => navigate(`/viewer?id=${doc.id}`)}
+                                                            title="Ver documento"
                                                         >
-                                                            <Trash2 className="w-4 h-4 text-red-600" />
+                                                            <Eye className="w-4 h-4 text-[#2563EB]" />
                                                         </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                                        {user?.role === "admin" && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => handleDeleteClick(doc.id)}
+                                                                title="Eliminar documento"
+                                                            >
+                                                                <Trash2 className="w-4 h-4 text-red-600" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
 
                             {/* Pagination */}
                             <PaginationControls

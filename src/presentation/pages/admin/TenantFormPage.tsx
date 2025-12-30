@@ -214,10 +214,10 @@ export function TenantFormPage() {
                         <Building2 className="h-6 w-6 text-blue-600" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold">
+                        <h1 className="text-xl sm:text-2xl font-bold">
                             {isEditing ? 'Editar Organización' : 'Nueva Organización'}
                         </h1>
-                        <p className="text-gray-500 mt-1">
+                        <p className="text-gray-500 mt-1 text-sm sm:text-base">
                             {isEditing
                                 ? 'Actualiza la información de la organización'
                                 : 'Completa los datos para crear una nueva organización'}

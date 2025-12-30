@@ -161,15 +161,15 @@ export function ProfilePage() {
   const primaryTenant = user.primary_tenant;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+      <div className="flex items-start gap-3 sm:gap-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="flex-shrink-0 mt-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-semibold text-[#1E293B]">Mi Perfil</h1>
-          <p className="text-[#64748B]">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-semibold text-[#1E293B]">Mi Perfil</h1>
+          <p className="text-[#64748B] text-sm sm:text-base">
             Gestiona tu información personal y configuración de cuenta
           </p>
         </div>

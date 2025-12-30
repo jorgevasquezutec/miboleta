@@ -14,12 +14,52 @@ interface PDFViewerProps {
 export function PDFViewer({ url }: PDFViewerProps) {
     const [numPages, setNumPages] = useState<number>(0);
     const [pageNumber, setPageNumber] = useState(1);
-    const [scale, setScale] = useState(1.0);
+    // Default to 50% zoom on mobile (< 640px), 100% on desktop
+    const [scale, setScale] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.innerWidth < 640 ? 0.5 : 1.0;
+        }
+        return 1.0;
+    });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
-    const [showThumbnails, setShowThumbnails] = useState(true);
+    // Default to hidden on mobile (< 640px)
+    const [showThumbnails, setShowThumbnails] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.innerWidth >= 640;
+        }
+        return true;
+    });
     const thumbnailsRef = useRef<HTMLDivElement>(null);
+
+    // Track previous width to detect mobile <-> desktop transitions
+    const prevWidthRef = useRef<number>(typeof window !== 'undefined' ? window.innerWidth : 640);
+
+    // Listen for window resize to adjust scale and thumbnails
+    useEffect(() => {
+        const handleResize = () => {
+            const currentWidth = window.innerWidth;
+            const prevWidth = prevWidthRef.current;
+            const BREAKPOINT = 640;
+
+            // Transitioning from mobile to desktop
+            if (prevWidth < BREAKPOINT && currentWidth >= BREAKPOINT) {
+                setScale(1.0);
+                setShowThumbnails(true);
+            }
+            // Transitioning from desktop to mobile
+            else if (prevWidth >= BREAKPOINT && currentWidth < BREAKPOINT) {
+                setScale(0.5);
+                setShowThumbnails(false);
+            }
+
+            prevWidthRef.current = currentWidth;
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         const fetchPdf = async () => {
@@ -140,13 +180,14 @@ export function PDFViewer({ url }: PDFViewerProps) {
     return (
         <div className="flex flex-col h-full">
             {/* Controls */}
-            <div className="flex items-center justify-between p-3 bg-gray-100 border-b">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between p-2 sm:p-3 bg-gray-100 border-b gap-1 sm:gap-2">
+                <div className="flex items-center gap-1 sm:gap-2">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setShowThumbnails(!showThumbnails)}
                         title={showThumbnails ? "Ocultar miniaturas" : "Mostrar miniaturas"}
+                        className="h-8 w-8 sm:h-9 sm:w-9 p-0"
                     >
                         {showThumbnails ? (
                             <PanelLeftClose className="w-4 h-4" />
@@ -154,35 +195,37 @@ export function PDFViewer({ url }: PDFViewerProps) {
                             <PanelLeft className="w-4 h-4" />
                         )}
                     </Button>
-                    <div className="w-px h-6 bg-gray-300 mx-1" />
+                    <div className="w-px h-5 sm:h-6 bg-gray-300 mx-0.5 sm:mx-1 hidden xs:block" />
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={goToPrevPage}
                         disabled={pageNumber <= 1}
+                        className="h-8 w-8 sm:h-9 sm:w-9 p-0"
                     >
                         <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm text-[#64748B] min-w-[100px] text-center">
-                        Página {pageNumber} de {numPages}
+                    <span className="text-xs sm:text-sm text-[#64748B] min-w-[70px] sm:min-w-[100px] text-center">
+                        <span className="hidden xs:inline">Página </span>{pageNumber} de {numPages}
                     </span>
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={goToNextPage}
                         disabled={pageNumber >= numPages}
+                        className="h-8 w-8 sm:h-9 sm:w-9 p-0"
                     >
                         <ChevronRight className="w-4 h-4" />
                     </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={zoomOut}>
+                <div className="flex items-center gap-1 sm:gap-2">
+                    <Button variant="outline" size="sm" onClick={zoomOut} className="h-8 w-8 sm:h-9 sm:w-9 p-0">
                         <ZoomOut className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm text-[#64748B] min-w-[60px] text-center">
+                    <span className="text-xs sm:text-sm text-[#64748B] min-w-[40px] sm:min-w-[60px] text-center">
                         {Math.round(scale * 100)}%
                     </span>
-                    <Button variant="outline" size="sm" onClick={zoomIn}>
+                    <Button variant="outline" size="sm" onClick={zoomIn} className="h-8 w-8 sm:h-9 sm:w-9 p-0">
                         <ZoomIn className="w-4 h-4" />
                     </Button>
                 </div>
@@ -242,15 +285,17 @@ export function PDFViewer({ url }: PDFViewerProps) {
                             </div>
                         )}
 
-                        {/* Main PDF view */}
-                        <div className="flex-1 overflow-auto bg-gray-200 flex justify-center p-4">
-                            <Page
-                                pageNumber={pageNumber}
-                                scale={scale}
-                                renderTextLayer={false}
-                                renderAnnotationLayer={false}
-                                className="shadow-lg"
-                            />
+                        {/* Main PDF view - allows horizontal scroll on mobile */}
+                        <div className="flex-1 overflow-x-auto overflow-y-auto bg-gray-200 p-2 sm:p-4">
+                            <div className="min-w-fit flex justify-center">
+                                <Page
+                                    pageNumber={pageNumber}
+                                    scale={scale}
+                                    renderTextLayer={false}
+                                    renderAnnotationLayer={false}
+                                    className="shadow-lg"
+                                />
+                            </div>
                         </div>
                     </Document>
                 )}

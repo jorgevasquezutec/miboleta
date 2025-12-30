@@ -14,23 +14,23 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, icon: Icon, trend, color = "#2563EB" }: StatsCardProps) {
   return (
-    <Card className="hover:shadow-md transition-shadow duration-200">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-[#64748B] mb-2">{title}</p>
-            <h2 className="mb-2">{value}</h2>
+    <Card className="hover:shadow-md transition-shadow duration-200 overflow-hidden">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[#64748B] text-sm sm:text-base mb-1 sm:mb-2 truncate">{title}</p>
+            <h2 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-2">{value}</h2>
             {trend && (
-              <p className={trend.isPositive ? "text-[#10B981]" : "text-[#EF4444]"}>
+              <p className={`text-sm ${trend.isPositive ? "text-[#10B981]" : "text-[#EF4444]"}`}>
                 {trend.isPositive ? "↑" : "↓"} {trend.value}
               </p>
             )}
           </div>
           <div
-            className="w-12 h-12 rounded-lg flex items-center justify-center"
+            className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: `${color}20` }}
           >
-            <Icon className="w-6 h-6" style={{ color }} />
+            <Icon className="w-5 h-5 sm:w-6 sm:h-6" style={{ color }} />
           </div>
         </div>
       </CardContent>

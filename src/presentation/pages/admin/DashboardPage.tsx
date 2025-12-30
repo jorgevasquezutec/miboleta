@@ -156,45 +156,45 @@ export function AdminDashboardView() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1>Panel de Administración</h1>
-            <p className="text-[#64748B]">
+            <h1 className="text-xl sm:text-2xl font-bold">Panel de Administración</h1>
+            <p className="text-[#64748B] text-sm sm:text-base">
               {isRoot
                 ? (selectedTenantId ? `Estadísticas de: ${selectedTenant?.name || 'Organización seleccionada'}` : 'Vista general de todas las organizaciones')
                 : `Estadísticas de ${currentTenant?.name || 'tu organización'}`}
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3 flex-wrap">
             <Button
               variant="outline"
-              className="gap-2"
+              className="h-9 sm:h-10 px-3 sm:px-4 gap-2"
               onClick={handleRefresh}
               disabled={isLoadingDashboard}
             >
               <RefreshCw className={`w-4 h-4 ${isLoadingDashboard ? 'animate-spin' : ''}`} />
-              Actualizar
+              <span className="hidden xs:inline">Actualizar</span>
             </Button>
             <Button
               variant="outline"
-              className="gap-2"
+              className="h-9 sm:h-10 px-3 sm:px-4 gap-2"
               onClick={handleExport}
               disabled={isExporting}
             >
               <Download className="w-4 h-4" />
-              Exportar
+              <span className="hidden xs:inline">Exportar</span>
             </Button>
           </div>
         </div>
 
         {/* Tenant selector for root users */}
         {isRoot && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
             <span className="text-sm text-gray-500">Filtrar por organización:</span>
-            <div className="w-80">
+            <div className="w-full sm:w-80">
               <TenantAutocompleteSelector
                 value={selectedTenantId}
                 onChange={handleTenantChange}
@@ -207,7 +207,7 @@ export function AdminDashboardView() {
         }
 
         {/* Date range filter */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <span className="text-sm text-gray-500">Período:</span>
           <DateRangePicker
             initialDateFrom={dateRange.from}

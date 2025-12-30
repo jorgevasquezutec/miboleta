@@ -121,36 +121,36 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={handleBack}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="flex items-start gap-3">
+          <Button variant="ghost" size="icon" onClick={handleBack} className="h-9 w-9 flex-shrink-0 mt-0.5">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold">{currentDocument.documentType?.displayName || "Documento"}</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-semibold">{currentDocument.documentType?.displayName || "Documento"}</h1>
               {getDocumentStatusBadge(currentDocument.status)}
             </div>
-            <p className="text-sm text-[#64748B]">
+            <p className="text-sm text-[#64748B] mt-1">
               {currentDocument.period} • Subido el {formatDate(currentDocument.createdAt)}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2" onClick={handleDownload}>
+        <div className="flex items-center gap-2 pl-12 sm:pl-0">
+          <Button variant="outline" className="gap-2 h-9" onClick={handleDownload}>
             <Download className="w-4 h-4" />
-            Descargar
+            <span className="hidden xs:inline">Descargar</span>
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Document Viewer */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 order-2 lg:order-1">
           <Card className="overflow-hidden">
             <CardContent className="p-0">
               {/* PDF Viewer */}
-              <div className="w-full h-[calc(100vh-200px)] min-h-[400px] max-h-[700px]">
+              <div className="w-full h-[50vh] sm:h-[60vh] lg:h-[calc(100vh-200px)] min-h-[300px] max-h-[700px]">
                 {pdfUrl ? (
                   <PDFViewer
                     url={pdfUrl}
@@ -169,7 +169,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
         </div>
 
         {/* Side Panel */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 order-1 lg:order-2">
           {/* Document Info */}
           <Card>
             <CardContent className="p-6 space-y-4">

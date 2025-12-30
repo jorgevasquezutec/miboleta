@@ -15,12 +15,16 @@ import {
   History,
   ClipboardList,
   Upload,
+  X,
 } from "lucide-react";
 import { NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
 
 interface SidebarProps {
   isExpanded: boolean;
+  isMobile: boolean;
+  onClose?: () => void;
+  onNavigate?: () => void;
 }
 
 interface NavItem {
@@ -39,6 +43,7 @@ interface CollapsibleSectionProps {
   secondaryColor: string;
   openSections: string[];
   toggleSection: (label: string) => void;
+  onNavigate?: () => void;
 }
 
 function CollapsibleSection({
@@ -50,6 +55,7 @@ function CollapsibleSection({
   secondaryColor,
   openSections,
   toggleSection,
+  onNavigate,
 }: CollapsibleSectionProps) {
   const hasChildren = item.children && item.children.length > 0;
   const Icon = item.icon;
@@ -64,6 +70,7 @@ function CollapsibleSection({
       toggleSection(item.label);
     } else {
       navigate(item.path);
+      onNavigate?.();
     }
   };
 
@@ -73,7 +80,10 @@ function CollapsibleSection({
     return (
       <button
         type="button"
-        onClick={() => navigate(item.path)}
+        onClick={() => {
+          navigate(item.path);
+          onNavigate?.();
+        }}
         className={cn(
           "w-full flex items-center gap-3 py-3 rounded-lg transition-colors",
           isExpanded ? "justify-start px-4" : "justify-center px-2",
@@ -140,7 +150,10 @@ function CollapsibleSection({
               <button
                 key={child.path}
                 type="button"
-                onClick={() => navigate(child.path)}
+                onClick={() => {
+                  navigate(child.path);
+                  onNavigate?.();
+                }}
                 className={cn(
                   "w-full flex items-center gap-3 py-3 px-4 rounded-lg transition-all duration-150 text-sm font-medium",
                   isChildItemActive
@@ -164,7 +177,7 @@ function CollapsibleSection({
   );
 }
 
-function Sidebar({ isExpanded }: SidebarProps) {
+function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
@@ -241,6 +254,68 @@ function Sidebar({ isExpanded }: SidebarProps) {
 
   const navItems = getNavItems();
 
+  // Mobile sidebar with overlay
+  if (isMobile) {
+    return (
+      <>
+        {/* Backdrop */}
+        {isExpanded && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+            onClick={onClose}
+          />
+        )}
+
+        {/* Mobile Sidebar */}
+        <aside
+          className={cn(
+            "fixed top-0 left-0 bg-white h-full w-72 z-50 transform transition-transform duration-300 ease-in-out shadow-xl",
+            isExpanded ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          {/* Mobile Sidebar Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-gray-900">MiBoleta</h2>
+                <p className="text-xs text-gray-500">Sistema de Gestión</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-80px)]">
+            {navItems.map((item) => (
+              <CollapsibleSection
+                key={item.path + item.label}
+                item={item}
+                isExpanded={true}
+                isActive={isActive}
+                navigate={navigate}
+                primaryColor={primaryColor}
+                secondaryColor={secondaryColor}
+                openSections={openSections}
+                toggleSection={toggleSection}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </nav>
+        </aside>
+      </>
+    );
+  }
+
+  // Desktop sidebar
   return (
     <aside className={cn(
       "fixed top-[73px] left-0 bg-white border-r border-[rgba(0,0,0,0.1)] h-[calc(100vh-73px)] overflow-y-auto z-40 transition-all duration-300",
@@ -270,15 +345,20 @@ export function RootLayout() {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Auto-collapse sidebar on smaller screens
+  // Handle responsive behavior
   useEffect(() => {
-    const COLLAPSE_BREAKPOINT = 1024;
+    const MOBILE_BREAKPOINT = 768; // md breakpoint
 
     const handleResize = () => {
-      if (window.innerWidth < COLLAPSE_BREAKPOINT) {
+      const mobile = window.innerWidth < MOBILE_BREAKPOINT;
+      setIsMobile(mobile);
+
+      // On mobile, sidebar starts closed; on desktop, it's open
+      if (mobile) {
         setIsSidebarExpanded(false);
-      } else {
+      } else if (window.innerWidth >= 1024) {
         setIsSidebarExpanded(true);
       }
     };
@@ -290,6 +370,13 @@ export function RootLayout() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    if (isMobile) {
+      setIsSidebarExpanded(false);
+    }
+  }, [location.pathname, isMobile]);
+
   const handleLogout = async () => {
     await logout();
     navigate("/login");
@@ -297,6 +384,10 @@ export function RootLayout() {
 
   const handleToggleSidebar = () => {
     setIsSidebarExpanded(!isSidebarExpanded);
+  };
+
+  const handleCloseSidebar = () => {
+    setIsSidebarExpanded(false);
   };
 
   return (
@@ -308,10 +399,16 @@ export function RootLayout() {
         isSidebarExpanded={isSidebarExpanded}
       />
       <div className="flex">
-        <Sidebar isExpanded={isSidebarExpanded} />
+        <Sidebar
+          isExpanded={isSidebarExpanded}
+          isMobile={isMobile}
+          onClose={handleCloseSidebar}
+          onNavigate={handleCloseSidebar}
+        />
         <main className={cn(
-          "flex-1 p-6 min-h-[calc(100vh-73px)] transition-all duration-300 bg-[#F8FAFC]",
-          isSidebarExpanded ? "ml-64" : "ml-16"
+          "flex-1 p-4 sm:p-6 min-h-[calc(100vh-73px)] transition-all duration-300 bg-[#F8FAFC] max-w-full",
+          // On mobile, no margin; on desktop, margin based on sidebar width
+          isMobile ? "ml-0" : (isSidebarExpanded ? "ml-64" : "ml-16")
         )}>
           <Outlet />
         </main>
@@ -319,3 +416,4 @@ export function RootLayout() {
     </div>
   );
 }
+
