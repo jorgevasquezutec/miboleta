@@ -19,6 +19,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Horizon Basic Auth
+    |--------------------------------------------------------------------------
+    |
+    | These credentials will be used for Basic HTTP Authentication when
+    | accessing the Horizon dashboard in non-local environments.
+    |
+    */
+
+    'basic_auth' => [
+        'user' => env('HORIZON_BASIC_AUTH_USER', 'admin'),
+        'password' => env('HORIZON_BASIC_AUTH_PASSWORD'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Horizon Domain
     |--------------------------------------------------------------------------
     |
