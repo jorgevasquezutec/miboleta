@@ -166,8 +166,8 @@ export function useEditableUsers(): UseEditableUsersReturn {
                     }
                     break;
                 case 'CE':
-                    if (!/^\d{12}$/.test(doc)) {
-                        errors['numero_documento'] = 'CE debe tener exactamente 12 dígitos numéricos';
+                    if (doc.length < 9 || doc.length > 12 || !/^[A-Za-z0-9]+$/.test(doc)) {
+                        errors['numero_documento'] = 'CE debe tener entre 9 y 12 caracteres alfanuméricos';
                     }
                     break;
                 case 'PASAPORTE':

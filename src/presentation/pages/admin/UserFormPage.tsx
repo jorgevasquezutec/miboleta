@@ -138,10 +138,8 @@ export function UserFormPage() {
                     newErrors.document_text = 'El RUC solo debe contener números';
                 }
             } else if (formData.document_type === 'ce') {
-                if (formData.document_text.length !== 12) {
-                    newErrors.document_text = 'El Carné de Extranjería debe tener 12 dígitos';
-                } else if (!/^\d+$/.test(formData.document_text)) {
-                    newErrors.document_text = 'El Carné de Extranjería solo debe contener números';
+                if (formData.document_text.length < 9 || formData.document_text.length > 12) {
+                    newErrors.document_text = 'El Carné de Extranjería debe tener entre 9 y 12 caracteres';
                 }
             }
         }
@@ -375,11 +373,24 @@ export function UserFormPage() {
                                 <Input
                                     id="document_text"
                                     value={formData.document_text}
-                                    onChange={(e) => handleChange('document_text', e.target.value)}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        // Para DNI y RUC solo permitir números
+                                        if (formData.document_type === 'dni' ||
+                                            formData.document_type === 'ruc') {
+                                            // Solo actualizar si el valor es vacío o contiene solo dígitos
+                                            if (value === '' || /^\d+$/.test(value)) {
+                                                handleChange('document_text', value);
+                                            }
+                                        } else {
+                                            // Para CE y pasaporte permitir alfanuméricos
+                                            handleChange('document_text', value);
+                                        }
+                                    }}
                                     placeholder={
                                         formData.document_type === 'dni' ? '12345678' :
                                             formData.document_type === 'ruc' ? '20123456789' :
-                                                formData.document_type === 'ce' ? '001234567890' :
+                                                formData.document_type === 'ce' ? '001234567' :
                                                     'A1234567'
                                     }
                                     maxLength={
@@ -391,10 +402,10 @@ export function UserFormPage() {
                                     className={errors.document_text ? 'border-red-500' : ''}
                                 />
                                 <p className="text-xs text-gray-500">
-                                    {formData.document_type === 'dni' && 'DNI: 8 dígitos'}
-                                    {formData.document_type === 'ruc' && 'RUC: 11 dígitos'}
-                                    {formData.document_type === 'ce' && 'CE: 12 dígitos'}
-                                    {formData.document_type === 'passport' && 'Pasaporte: hasta 20 caracteres'}
+                                    {formData.document_type === 'dni' && 'DNI: 8 dígitos numéricos'}
+                                    {formData.document_type === 'ruc' && 'RUC: 11 dígitos numéricos'}
+                                    {formData.document_type === 'ce' && 'CE: 9-12 caracteres alfanuméricos'}
+                                    {formData.document_type === 'passport' && 'Pasaporte: hasta 20 caracteres alfanuméricos'}
                                 </p>
                                 {errors.document_text && (
                                     <p className="text-sm text-red-500">{errors.document_text}</p>

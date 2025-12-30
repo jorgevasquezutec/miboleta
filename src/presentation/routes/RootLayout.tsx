@@ -201,7 +201,7 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
     { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2 },
     { label: "Usuarios", path: "/users", icon: Users },
-    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
+    // { label: "Carga Masiva", path: "/users/batch", icon: Upload },
     { label: "Documentos", path: "/documents", icon: FileText },
     {
       label: "Vacaciones",

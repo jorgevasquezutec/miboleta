@@ -108,33 +108,30 @@ jobs:
               break
             fi
             echo "Esperando interfaz VPN... ($((i*5))s)"
-            # Mostrar últimas líneas del log
             tail -5 /tmp/vpn.log 2>/dev/null || true
           done
           
-          # Mostrar log completo de VPN
-          echo "=== LOG COMPLETO DE VPN ==="
-          cat /tmp/vpn.log || true
-          
-          if [ "$CONNECTED" = false ]; then
-            echo "❌ VPN no se conectó. Verificar credenciales y VPN_CERT"
+          # Esperar a que las rutas se establezcan (15 segundos adicionales)
+          if [ "$CONNECTED" = true ]; then
+            echo "Esperando rutas VPN (15s)..."
+            sleep 15
           fi
           
-          # Verificar interfaz
-          echo "=== Interfaces de red ==="
-          ip addr show | grep -E "inet |ppp|tun" || true
+          # Mostrar log completo de VPN
+          echo "=== LOG VPN ==="
+          tail -10 /tmp/vpn.log || true
           
-          # Verificar rutas
-          echo "=== Tabla de rutas ==="
-          ip route | head -10 || true
+          if [ "$CONNECTED" = false ]; then
+            echo "❌ VPN no se conectó"
+            exit 1
+          fi
           
-          # Probar conectividad al servidor
+          # Verificar conectividad
           echo "=== Probando conectividad a ${{ secrets.SSH_HOST }} ==="
-          ping -c 3 ${{ secrets.SSH_HOST }} || echo "⚠ Ping falló"
+          ping -c 3 -W 5 ${{ secrets.SSH_HOST }} || echo "⚠ Ping falló (puede funcionar igual)"
           
-          # Verificar puerto SSH
           echo "=== Probando puerto SSH ==="
-          nc -zv -w 5 ${{ secrets.SSH_HOST }} ${{ secrets.SSH_PORT }} 2>&1 || echo "⚠ Puerto SSH no responde"
+          nc -zv -w 10 ${{ secrets.SSH_HOST }} ${{ secrets.SSH_PORT }} 2>&1 || echo "⚠ Puerto SSH timeout"
       
       - name: Copy stack file to server
         env:
@@ -169,34 +166,51 @@ jobs:
           echo "=== Deploying stack ==="
           docker stack deploy -c docker-stack.yml miboleta --with-registry-auth
           
-          echo "=== Waiting for services to start ==="
-          sleep 15
+          echo "=== Waiting for services to start (60s) ==="
+          sleep 60
           
           echo "=== Service status ==="
           docker stack services miboleta
           
           echo "=== Running post-deploy commands ==="
           # Esperar a que el contenedor app esté listo
-          for i in {1..10}; do
+          APP_CONTAINER=""
+          for i in {1..12}; do
             APP_CONTAINER=$(docker ps -qf "name=miboleta_app" | head -1)
             if [ -n "$APP_CONTAINER" ]; then
-              echo "Container found: $APP_CONTAINER"
+              echo "App container found: $APP_CONTAINER"
               break
             fi
-            echo "Waiting for app container... ($i/10)"
+            echo "Waiting for app container... ($i/12)"
             sleep 5
           done
           
-          if [ -n "$APP_CONTAINER" ]; then
-            echo "Running migrations..."
-            docker exec $APP_CONTAINER php artisan migrate --force || echo "Migrations skipped"
-            
-            echo "Clearing caches..."
-            docker exec $APP_CONTAINER php artisan optimize:clear || true
-            docker exec $APP_CONTAINER php artisan config:cache || true
-            docker exec $APP_CONTAINER php artisan route:cache || true
-            docker exec $APP_CONTAINER php artisan view:cache || true
+          if [ -z "$APP_CONTAINER" ]; then
+            echo "❌ App container not found after 60s"
+            exit 1
           fi
+          
+          # Esperar a que MySQL esté listo (hasta 90 segundos)
+          echo "=== Waiting for MySQL to be ready ==="
+          for i in {1..18}; do
+            if docker exec $APP_CONTAINER php artisan tinker --execute="DB::connection()->getPdo();" 2>/dev/null; then
+              echo "✓ MySQL is ready!"
+              break
+            fi
+            echo "Waiting for MySQL... ($i/18)"
+            sleep 5
+          done
+          
+          echo "=== Running migrations ==="
+          docker exec $APP_CONTAINER php artisan migrate --force || echo "⚠ Migrations skipped"
+          
+          echo "=== Caching configuration ==="
+          docker exec $APP_CONTAINER php artisan config:cache || true
+          docker exec $APP_CONTAINER php artisan route:cache || true
+          docker exec $APP_CONTAINER php artisan view:cache || true
+          
+          echo "=== Final service status ==="
+          docker stack services miboleta
           
           echo "=== Deploy complete! ==="
           DEPLOY_SCRIPT

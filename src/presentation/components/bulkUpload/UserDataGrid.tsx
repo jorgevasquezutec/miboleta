@@ -93,7 +93,24 @@ export function UserDataGrid({
                     ref={inputRef}
                     type="text"
                     value={value}
-                    onChange={(e) => handleCellChange(user.id, field as string, e.target.value)}
+                    onChange={(e) => {
+                        const inputValue = e.target.value;
+                        // Validar número de documento según tipo
+                        if (field === 'numero_documento') {
+                            const docType = user.tipo_documento;
+                            // Para DNI y RUC solo permitir números
+                            if (docType === 'dni' || docType === 'ruc') {
+                                if (inputValue === '' || /^\d+$/.test(inputValue)) {
+                                    handleCellChange(user.id, field as string, inputValue);
+                                }
+                            } else {
+                                // Para CE y pasaporte permitir alfanuméricos
+                                handleCellChange(user.id, field as string, inputValue);
+                            }
+                        } else {
+                            handleCellChange(user.id, field as string, inputValue);
+                        }
+                    }}
                     onBlur={handleCellBlur}
                     onKeyDown={handleKeyDown}
                     className="w-full h-full px-2 py-1 text-sm border border-blue-500 rounded outline-none bg-white"

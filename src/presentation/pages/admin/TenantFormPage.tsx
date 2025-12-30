@@ -360,11 +360,18 @@ export function TenantFormPage() {
                                 <Input
                                     id="ruc"
                                     value={formData.ruc}
-                                    onChange={(e) => handleChange('ruc', e.target.value)}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        // Solo permitir números en el RUC
+                                        if (value === '' || /^\d+$/.test(value)) {
+                                            handleChange('ruc', value);
+                                        }
+                                    }}
                                     placeholder="Ej: 20123456789"
                                     maxLength={11}
                                     className={errors.ruc ? 'border-red-500' : ''}
                                 />
+                                <p className="text-xs text-gray-500">RUC: 11 dígitos numéricos</p>
                                 {errors.ruc && (
                                     <p className="text-sm text-red-500">{errors.ruc}</p>
                                 )}

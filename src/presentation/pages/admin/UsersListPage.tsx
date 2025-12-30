@@ -218,14 +218,14 @@ export function UsersListPage() {
               </Button>
               {currentUser?.role === "root" && (
                 <>
-                  <Button
+                  {/* <Button
                     variant="outline"
                     className="h-9 sm:h-10 px-3 sm:px-4"
                     onClick={() => navigate("/users/batch-upload")}
                   >
                     <Upload className="h-4 w-4" />
                     <span className="ml-2 hidden xs:inline">Carga Masiva</span>
-                  </Button>
+                  </Button> */}
                   <Button
                     className="h-9 sm:h-10 px-3 sm:px-4"
                     onClick={() => navigate("/users/new")}
