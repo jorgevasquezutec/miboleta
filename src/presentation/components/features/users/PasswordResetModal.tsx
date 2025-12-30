@@ -75,9 +75,8 @@ export function PasswordResetModal({
                 payload.password = manualPassword;
             }
 
-            await apiClient.post(`/users/${userId}/reset-password`, payload, {
-                timeout: 60000, // 60 segundos - el envío de email puede tardar
-            });
+            // El email se envía en background via Horizon, la API responde inmediatamente
+            await apiClient.post(`/users/${userId}/reset-password`, payload);
 
             let message = '';
             switch (action) {
