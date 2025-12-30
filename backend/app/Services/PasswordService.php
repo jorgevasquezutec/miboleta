@@ -189,16 +189,30 @@ class PasswordService
         ?string $password = null,
         bool $mustChangePassword = false
     ): array {
+        Log::info('[PasswordService] adminResetPassword called', [
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'action' => $action,
+            'must_change_password' => $mustChangePassword,
+        ]);
+
         $newPassword = null;
         $emailSent = false;
 
         switch ($action) {
             case 'generate':
                 $newPassword = $this->generateTemporaryPassword();
+                Log::info('[PasswordService] Generated temporary password', [
+                    'user_id' => $user->id,
+                    'password_length' => strlen($newPassword),
+                ]);
                 $user->update([
                     'password' => Hash::make($newPassword),
                     'must_change_password' => $mustChangePassword,
                     'password_changed_at' => now(),
+                ]);
+                Log::info('[PasswordService] User password updated in database', [
+                    'user_id' => $user->id,
                 ]);
                 break;
 
@@ -209,19 +223,32 @@ class PasswordService
                     'must_change_password' => $mustChangePassword,
                     'password_changed_at' => now(),
                 ]);
+                Log::info('[PasswordService] Manual password set', [
+                    'user_id' => $user->id,
+                ]);
                 break;
 
             case 'force_change_only':
                 $user->update([
                     'must_change_password' => true,
                 ]);
+                Log::info('[PasswordService] Force change flag set', [
+                    'user_id' => $user->id,
+                ]);
                 break;
         }
 
         // Send notification email
         if ($action !== 'force_change_only') {
+            Log::info('[PasswordService] About to send admin reset email', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
             $this->sendAdminResetEmail($user, $newPassword, $mustChangePassword);
             $emailSent = true;
+            Log::info('[PasswordService] sendAdminResetEmail completed', [
+                'user_id' => $user->id,
+            ]);
         }
 
         return [
@@ -261,17 +288,34 @@ class PasswordService
      */
     public function sendAdminResetEmail(User $user, ?string $password, bool $mustChangePassword): void
     {
+        Log::info('[PasswordService] sendAdminResetEmail starting', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'has_password' => !is_null($password),
+            'must_change_password' => $mustChangePassword,
+            'smtp_host' => config('mail.mailers.smtp.host'),
+            'smtp_port' => config('mail.mailers.smtp.port'),
+            'smtp_encryption' => config('mail.mailers.smtp.encryption'),
+            'mail_from' => config('mail.from.address'),
+        ]);
+
         try {
             Mail::to($user->email)->send(new PasswordResetByAdminMail(
                 $user,
                 $password,
                 $mustChangePassword
             ));
+            Log::info('[PasswordService] Admin reset email sent successfully', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
         } catch (\Exception $e) {
-            Log::warning('[PasswordService] Failed to send admin reset email', [
+            Log::error('[PasswordService] Failed to send admin reset email', [
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'error' => $e->getMessage(),
+                'error_class' => get_class($e),
+                'trace' => $e->getTraceAsString(),
             ]);
         }
     }
