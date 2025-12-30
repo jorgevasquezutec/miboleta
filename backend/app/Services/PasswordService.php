@@ -317,6 +317,8 @@ class PasswordService
                 'error_class' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
+            // Re-throw to make the error visible in API response
+            throw $e;
         }
     }
 }

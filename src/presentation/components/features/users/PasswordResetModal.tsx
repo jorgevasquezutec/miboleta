@@ -75,7 +75,9 @@ export function PasswordResetModal({
                 payload.password = manualPassword;
             }
 
-            await apiClient.post(`/users/${userId}/reset-password`, payload);
+            await apiClient.post(`/users/${userId}/reset-password`, payload, {
+                timeout: 60000, // 60 segundos - el envío de email puede tardar
+            });
 
             let message = '';
             switch (action) {
