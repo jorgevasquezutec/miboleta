@@ -85,5 +85,7 @@ fi
 echo "✅ Container ready!"
 echo ""
 
-# Ejecutar el comando original (php-fpm, horizon, etc)
-exec "$@"
+# Ejecutar el comando como www-data para que los archivos creados tengan el owner correcto
+# php-fpm ya maneja su propio usuario, pero horizon/reverb necesitan esto
+exec su-exec www-data "$@"
+

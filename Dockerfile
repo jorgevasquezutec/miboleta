@@ -30,6 +30,7 @@ RUN apk add --no-cache \
     bash \
     git \
     curl \
+    su-exec \
     libpng-dev \
     libjpeg-turbo-dev \
     freetype-dev \
