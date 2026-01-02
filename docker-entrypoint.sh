@@ -85,7 +85,12 @@ fi
 echo "✅ Container ready!"
 echo ""
 
-# Ejecutar el comando como www-data para que los archivos creados tengan el owner correcto
-# php-fpm ya maneja su propio usuario, pero horizon/reverb necesitan esto
-exec su-exec www-data "$@"
-
+# Ejecutar el comando
+# php-fpm necesita iniciar como root (él mismo cambia a www-data)
+# horizon/reverb deben ejecutarse como www-data para que los archivos tengan el owner correcto
+if echo "$@" | grep -qE "horizon|reverb"; then
+    echo "🔄 Running as www-data: $@"
+    exec su-exec www-data "$@"
+else
+    exec "$@"
+fi
