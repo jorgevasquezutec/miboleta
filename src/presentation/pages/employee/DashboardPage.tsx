@@ -259,9 +259,9 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleSearch} size="sm" className="h-11 w-full xs:w-auto">
-              <Search className="w-4 h-4 mr-2" />
-              <span className="hidden xs:inline">Buscar</span>
+            <Button onClick={handleSearch} size="sm" className="h-11 w-full md:w-auto shrink-0">
+              <Search className="w-4 h-4" />
+              <span className="ml-2 md:hidden">Buscar</span>
             </Button>
           </div>
         </CardContent>
