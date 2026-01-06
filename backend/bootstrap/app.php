@@ -42,6 +42,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/login',
             'api/refresh',
             'api/logout',
+            'api/password/forgot',
+            'api/password/reset',
             'api/documentation',
             'api/documentation/*',
             'api/broadcasting/auth',

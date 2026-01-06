@@ -30,6 +30,7 @@ VITE_REVERB_APP_KEY="miboleta-key"
 VITE_REVERB_HOST="localhost"
 VITE_REVERB_PORT="8085"
 VITE_REVERB_SCHEME="http"
+VITE_SHOW_TEST_USERS=false
 EOF
 echo -e "${GREEN}✓ .env.local restaurado${NC}"
 
