@@ -1,0 +1,17 @@
+{
+    "name": "miboleta-pdf-generator",
+    "version": "1.0.0",
+    "description": "PDF generator for MiBoleta documentation",
+    "main": "generate-pdf.js",
+    "scripts": {
+        "generate": "node generate-pdf.js",
+        "preview": "open preview.html"
+    },
+    "dependencies": {
+        "marked": "^12.0.0",
+        "puppeteer": "^22.0.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

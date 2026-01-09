@@ -126,7 +126,7 @@ class DocumentSignatureController extends Controller
             $result = $this->signatureService->requestCode(Auth::user(), $documentId);
 
             if (!$result['success']) {
-                $response = ['error' => $result['error']];
+                $response = ['message' => $result['error']];
 
                 if (isset($result['requires_terms'])) {
                     $response['requires_terms'] = $result['requires_terms'];
@@ -145,9 +145,9 @@ class DocumentSignatureController extends Controller
             ]);
 
         } catch (DocumentNotFoundException $e) {
-            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 
@@ -215,7 +215,7 @@ class DocumentSignatureController extends Controller
             );
 
             if (!$result['success']) {
-                $response = ['error' => $result['error']];
+                $response = ['message' => $result['error']];
 
                 if (isset($result['remaining_attempts'])) {
                     $response['remaining_attempts'] = $result['remaining_attempts'];
@@ -237,9 +237,9 @@ class DocumentSignatureController extends Controller
             ]);
 
         } catch (DocumentNotFoundException $e) {
-            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 
@@ -282,9 +282,9 @@ class DocumentSignatureController extends Controller
                 $this->signatureService->getStatus(Auth::user(), $documentId)
             );
         } catch (DocumentNotFoundException $e) {
-            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 }

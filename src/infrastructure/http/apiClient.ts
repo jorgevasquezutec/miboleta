@@ -163,7 +163,7 @@ apiClient.interceptors.response.use(
 
         try {
           // Intentar refrescar el token
-          const refreshResponse = await axios.post(
+          await axios.post(
             `${API_BASE_URL}/refresh`,
             {},
             { withCredentials: true }
@@ -233,6 +233,11 @@ export default apiClient;
 // Helper para extraer mensaje de error
 export const getErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
+    // Error específico de la API (algunos endpoints retornan { "error": "mensaje" })
+    if (error.response?.data?.error) {
+      return error.response.data.error;
+    }
+
     // Error de Axios con respuesta del servidor
     if (error.response?.data?.message) {
       return error.response.data.message;

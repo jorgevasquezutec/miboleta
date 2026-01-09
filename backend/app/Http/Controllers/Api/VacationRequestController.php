@@ -108,7 +108,7 @@ class VacationRequestController extends Controller
         $tenantId = $request->validated()['tenant_id'] ?? $user->tenants->first()?->id;
 
         if (!$tenantId) {
-            return response()->json(['error' => 'Tenant no especificado'], 400);
+            return response()->json(['message' => 'Tenant no especificado'], 400);
         }
 
         try {
@@ -123,7 +123,7 @@ class VacationRequestController extends Controller
                 'data' => new VacationRequestResource($vacationRequest),
             ], 201);
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -153,7 +153,7 @@ class VacationRequestController extends Controller
         $role = $user->getCurrentRole();
 
         if ($role === 'client' && $vacationRequest->user_id !== $user->id) {
-            return response()->json(['error' => 'No autorizado'], 403);
+            return response()->json(['message' => 'No autorizado'], 403);
         }
 
         return response()->json([
@@ -184,9 +184,9 @@ class VacationRequestController extends Controller
                 'message' => 'Solicitud cancelada correctamente',
             ]);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -214,9 +214,9 @@ class VacationRequestController extends Controller
                 'data' => new VacationRequestResource($updated),
             ]);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -252,9 +252,9 @@ class VacationRequestController extends Controller
                 'data' => new VacationRequestResource($updated),
             ]);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -281,9 +281,9 @@ class VacationRequestController extends Controller
                 'data' => new VacationRequestResource($updated),
             ]);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -310,9 +310,9 @@ class VacationRequestController extends Controller
                 'data' => new VacationRequestResource($updated),
             ]);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 

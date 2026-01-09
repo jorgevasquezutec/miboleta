@@ -2,10 +2,10 @@
 
 ## Información del Documento
 
-| Atributo | Valor |
-|----------|-------|
-| **Versión** | 1.0.0 |
-| **Fecha** | Enero 2026 |
+| Atributo            | Valor                                               |
+| ------------------- | --------------------------------------------------- |
+| **Versión**  | 1.0.0                                               |
+| **Fecha**     | Enero 2026                                          |
 | **Audiencia** | Desarrolladores, DevOps, Administradores de Sistema |
 
 ---
@@ -19,28 +19,28 @@ flowchart TB
     subgraph Cliente
         Browser[Navegador Web]
     end
-    
+  
     subgraph Docker_Swarm[Docker Swarm - Servidor]
         subgraph Frontend
             Nginx[Nginx - Puerto 80 y 443]
         end
-        
+      
         subgraph Backend
             App[Laravel PHP-FPM - Puerto 9000]
             Horizon[Horizon - Queue Worker]
             Reverb[Reverb - WebSockets - Puerto 8080]
         end
-        
+      
         subgraph Data
             MySQL[(MySQL 8.0 - Puerto 3306)]
             Redis[(Redis 7.4 - Puerto 6379)]
         end
-        
+      
         subgraph Tools
             Adminer[Adminer - Puerto 8081]
         end
     end
-    
+  
     Browser --> Nginx
     Nginx --> App
     App --> MySQL
@@ -55,38 +55,38 @@ flowchart TB
 
 #### Frontend
 
-| Tecnología | Versión | Uso |
-|------------|---------|-----|
-| React | 18.3 | Framework UI |
-| TypeScript | 5.x | Tipado estático |
-| Vite | 6.3 | Build tool y dev server |
-| TailwindCSS | 4.1 | Estilos |
-| React Query | 5.x | Estado servidor |
-| React Router | 7.x | Navegación SPA |
-| Zustand | 5.x | Estado global |
-| Radix UI | 1.x | Componentes accesibles |
+| Tecnología  | Versión | Uso                     |
+| ------------ | -------- | ----------------------- |
+| React        | 18.3     | Framework UI            |
+| TypeScript   | 5.x      | Tipado estático        |
+| Vite         | 6.3      | Build tool y dev server |
+| TailwindCSS  | 4.1      | Estilos                 |
+| React Query  | 5.x      | Estado servidor         |
+| React Router | 7.x      | Navegación SPA         |
+| Zustand      | 5.x      | Estado global           |
+| Radix UI     | 1.x      | Componentes accesibles  |
 
 #### Backend
 
-| Tecnología | Versión | Uso |
-|------------|---------|-----|
-| PHP | 8.4 | Lenguaje |
-| Laravel | 11.x | Framework |
-| Laravel Sanctum | - | Autenticación API |
-| Laravel Horizon | - | Queue Dashboard |
-| Laravel Reverb | - | WebSockets |
-| MySQL | 8.0 | Base de datos |
-| Redis | 7.4 | Cache y Queues |
+| Tecnología     | Versión | Uso                |
+| --------------- | -------- | ------------------ |
+| PHP             | 8.4      | Lenguaje           |
+| Laravel         | 11.x     | Framework          |
+| Laravel Sanctum | -        | Autenticación API |
+| Laravel Horizon | -        | Queue Dashboard    |
+| Laravel Reverb  | -        | WebSockets         |
+| MySQL           | 8.0      | Base de datos      |
+| Redis           | 7.4      | Cache y Queues     |
 
 #### Infraestructura
 
-| Tecnología | Versión | Uso |
-|------------|---------|-----|
-| Docker | Latest | Contenedorización |
-| Docker Swarm | - | Orquestación |
-| Nginx | 1.27 | Reverse proxy |
-| GitHub Actions | - | CI/CD |
-| GHCR | - | Container Registry |
+| Tecnología    | Versión | Uso                |
+| -------------- | -------- | ------------------ |
+| Docker         | Latest   | Contenedorización |
+| Docker Swarm   | -        | Orquestación      |
+| Nginx          | 1.27     | Reverse proxy      |
+| GitHub Actions | -        | CI/CD              |
+| GHCR           | -        | Container Registry |
 
 ### 1.3 Estructura de Carpetas
 
@@ -140,50 +140,100 @@ miboleta/
 
 ### 2.1 Requisitos Previos
 
-| Requisito | Versión Mínima | Notas |
-|-----------|----------------|-------|
-| Node.js | 18.x | Para frontend |
-| Docker | 20.x | Para backend local |
-| Docker Compose | 2.x | Para orquestación local |
-| Git | 2.x | Control de versiones |
+| Requisito      | Versión Mínima | Notas                    |
+| -------------- | ---------------- | ------------------------ |
+| Node.js        | 18.x             | Para frontend            |
+| Docker         | 20.x             | Para backend local       |
+| Docker Compose | 2.x              | Para orquestación local |
+| Git            | 2.x              | Control de versiones     |
 
 ### 2.2 Instalación Paso a Paso
 
-#### Clonar el repositorio
+#### 1. Clonar el repositorio
+
 ```bash
 git clone https://github.com/jorgevasquezutec/miboleta.git
 cd miboleta
 ```
 
-#### Instalar dependencias de frontend
+#### 2. Configurar variables de entorno del backend
+
+```bash
+# Copiar el archivo de ejemplo
+cp backend/.env.example backend/.env
+
+# Editar el archivo con tus configuraciones (opcional para desarrollo local)
+# Las configuraciones por defecto funcionan con Docker Compose
+```
+
+**Configuraciones importantes en `backend/.env`:**
+
+| Variable | Valor Local | Descripción |
+|----------|-------------|-------------|
+| `APP_URL` | `http://localhost` | URL del backend |
+| `DB_HOST` | `db` | Host de MySQL (nombre del servicio Docker) |
+| `DB_DATABASE` | `miboleta` | Nombre de la base de datos |
+| `DB_USERNAME` | `root` | Usuario de MySQL |
+| `DB_PASSWORD` | `root` | Password de MySQL |
+| `REDIS_HOST` | `redis` | Host de Redis (nombre del servicio Docker) |
+
+#### 3. Instalar dependencias de frontend
+
 ```bash
 npm install
 ```
 
-#### Levantar el ambiente completo (Docker + Vite)
+#### 4. Levantar el ambiente completo
+
 ```bash
 npm run dev:local
 ```
 
-Este script:
-1. Inicia Docker Compose con Laravel, MySQL, Redis
-2. Ejecuta migraciones y seeders
-3. Inicia Vite dev server para hot-reload
+Este script automáticamente:
+
+1. ✅ Configura `.env.local` para Vite (frontend)
+2. ✅ Actualiza variables de `backend/.env` para localhost
+3. ✅ Inicia Docker Compose (Laravel, MySQL, Redis, Nginx, Horizon, Reverb)
+4. ✅ Espera a que la base de datos esté lista
+5. ✅ El `docker-entrypoint.sh` ejecuta migraciones automáticamente
+6. ✅ Inicia Vite dev server con hot-reload
+
+#### 5. Acceder al sistema
+
+Una vez iniciado, tendrás acceso a:
+
+| Servicio | URL | Descripción |
+|----------|-----|-------------|
+| **Frontend** | http://localhost:5173 | React con hot-reload |
+| **API** | http://localhost/api | Laravel API |
+| **WebSocket** | ws://localhost:8085 | Reverb para notificaciones |
+| **Adminer** | http://localhost:8080 | Administrador de BD |
+
+#### Primera vez: Ejecutar seeders (opcional)
+
+Si necesitas datos de prueba:
+
+```bash
+npm run laravel:fresh
+```
+
+Esto resetea la base de datos y carga los usuarios de prueba.
 
 ### 2.3 Scripts NPM Disponibles
 
-| Script | Comando | Descripción |
-|--------|---------|-------------|
-| `dev:local` | `npm run dev:local` | Ambiente completo (Docker + Vite) |
-| `dev` | `npm run dev` | Solo Vite (requiere Docker up) |
-| `build` | `npm run build` | Build de producción |
-| `laravel:migrate` | `npm run laravel:migrate` | Ejecutar migraciones |
-| `laravel:fresh` | `npm run laravel:fresh` | Reset DB con seeders |
-| `laravel:shell` | `npm run laravel:shell` | Shell en contenedor |
+| Script              | Comando                     | Descripción                      |
+| ------------------- | --------------------------- | --------------------------------- |
+| `dev:local`       | `npm run dev:local`       | Ambiente completo (Docker + Vite) |
+| `dev`             | `npm run dev`             | Solo Vite (requiere Docker up)    |
+| `build`           | `npm run build`           | Build de producción              |
+| `laravel:migrate` | `npm run laravel:migrate` | Ejecutar migraciones              |
+| `laravel:fresh`   | `npm run laravel:fresh`   | Reset DB con seeders              |
+| `laravel:shell`   | `npm run laravel:shell`   | Shell en contenedor               |
 
 ### 2.4 Variables de Entorno
 
 #### Frontend (.env.local)
+
 ```env
 VITE_API_URL=http://localhost:80/api
 VITE_REVERB_APP_KEY=miboleta-local-key
@@ -194,6 +244,7 @@ VITE_SHOW_TEST_USERS=false
 ```
 
 #### Backend (backend/.env)
+
 ```env
 APP_NAME=MiBoleta
 APP_ENV=local
@@ -234,21 +285,21 @@ REVERB_PORT=8080
 
 ### 2.5 Puertos Locales
 
-| Servicio | Puerto | URL |
-|----------|--------|-----|
-| Vite (Frontend) | 5173 | http://localhost:5173 |
-| Laravel (API) | 80 | http://localhost/api |
-| Reverb (WebSocket) | 6001 | ws://localhost:6001 |
-| MySQL | 3306 | localhost:3306 |
-| Redis | 6379 | localhost:6379 |
-| Adminer | 8080 | http://localhost:8080 |
+| Servicio           | Puerto | URL                   |
+| ------------------ | ------ | --------------------- |
+| Vite (Frontend)    | 5173   | http://localhost:5173 |
+| Laravel (API)      | 80     | http://localhost/api  |
+| Reverb (WebSocket) | 6001   | ws://localhost:6001   |
+| MySQL              | 3306   | localhost:3306        |
+| Redis              | 6379   | localhost:6379        |
+| Adminer            | 8080   | http://localhost:8080 |
 
 ### 2.6 Usuarios de Prueba
 
-| Rol | Email | Password |
-|-----|-------|----------|
-| Root | root@miboleta.com | password |
-| Admin | admin@corporacionabc.com | password |
+| Rol      | Email                         | Password |
+| -------- | ----------------------------- | -------- |
+| Root     | root@miboleta.com             | password |
+| Admin    | admin@corporacionabc.com      | password |
 | Employee | juan.perez@corporacionabc.com | password |
 
 ---
@@ -263,14 +314,14 @@ El sistema usa **Laravel Sanctum** en modo **SPA** con cookies HttpOnly:
 sequenceDiagram
     participant Browser
     participant Laravel
-    
+  
     Browser->>Laravel: GET csrf-cookie
     Laravel-->>Browser: Set-Cookie XSRF-TOKEN
-    
+  
     Browser->>Laravel: POST api-login
     Laravel-->>Browser: Set-Cookie laravel_session
     Laravel-->>Browser: JSON user y token
-    
+  
     Browser->>Laravel: GET api-user con cookies
     Laravel-->>Browser: JSON user data
 ```
@@ -285,11 +336,11 @@ El sistema soporta múltiples organizaciones (tenants):
 
 ### 3.3 Roles y Permisos
 
-| Rol | Permisos |
-|-----|----------|
-| **root** | Acceso total, gestión de tenants |
-| **admin** | Gestión de usuarios/documentos de su tenant |
-| **client** | Ver sus documentos, solicitar vacaciones |
+| Rol              | Permisos                                     |
+| ---------------- | -------------------------------------------- |
+| **root**   | Acceso total, gestión de tenants            |
+| **admin**  | Gestión de usuarios/documentos de su tenant |
+| **client** | Ver sus documentos, solicitar vacaciones     |
 
 ---
 
@@ -300,6 +351,7 @@ El sistema soporta múltiples organizaciones (tenants):
 El workflow `.github/workflows/docker-build-deploy.yml` tiene dos jobs:
 
 #### Job 1: Build and Push
+
 1. Checkout del código
 2. Setup Docker Buildx (para cache)
 3. Login a GitHub Container Registry
@@ -308,6 +360,7 @@ El workflow `.github/workflows/docker-build-deploy.yml` tiene dos jobs:
 6. Push a `ghcr.io/jorgevasquezutec/miboleta`
 
 #### Job 2: Deploy
+
 1. Conectar a VPN corporativa
 2. Copiar `docker-stack.yml` al servidor
 3. Ejecutar deploy via SSH
@@ -316,40 +369,44 @@ El workflow `.github/workflows/docker-build-deploy.yml` tiene dos jobs:
 
 ### 4.2 Triggers
 
-| Trigger | Acción |
-|---------|--------|
-| Push a `main` | Build + Deploy automático |
+| Trigger               | Acción                       |
+| --------------------- | ----------------------------- |
+| Push a `main`       | Build + Deploy automático    |
 | `workflow_dispatch` | Deploy manual desde GitHub UI |
 
 ### 4.3 GitHub Secrets Necesarios
 
 #### Autenticación y Build
-| Secret | Descripción |
-|--------|-------------|
+
+| Secret           | Descripción            |
+| ---------------- | ----------------------- |
 | `GITHUB_TOKEN` | Automático (para GHCR) |
 
 #### VPN
-| Secret | Descripción |
-|--------|-------------|
+
+| Secret       | Descripción                |
+| ------------ | --------------------------- |
 | `VPN_HOST` | IP/dominio del servidor VPN |
-| `VPN_PORT` | Puerto FortiVPN (443) |
-| `VPN_USER` | Usuario VPN |
-| `VPN_PASS` | Password VPN |
-| `VPN_CERT` | Certificado trusted (hash) |
+| `VPN_PORT` | Puerto FortiVPN (443)       |
+| `VPN_USER` | Usuario VPN                 |
+| `VPN_PASS` | Password VPN                |
+| `VPN_CERT` | Certificado trusted (hash)  |
 
 #### SSH/Servidor
-| Secret | Descripción |
-|--------|-------------|
+
+| Secret       | Descripción            |
+| ------------ | ----------------------- |
 | `SSH_HOST` | IP del servidor destino |
-| `SSH_PORT` | Puerto SSH (22) |
-| `SSH_USER` | Usuario SSH |
-| `SSH_PASS` | Password SSH |
+| `SSH_PORT` | Puerto SSH (22)         |
+| `SSH_USER` | Usuario SSH             |
+| `SSH_PASS` | Password SSH            |
 
 #### Frontend (Vite)
-| Secret | Descripción |
-|--------|-------------|
-| `VITE_REVERB_APP_KEY` | Key de WebSocket |
-| `VITE_REVERB_HOST` | Host público de WebSocket |
+
+| Secret                  | Descripción               |
+| ----------------------- | -------------------------- |
+| `VITE_REVERB_APP_KEY` | Key de WebSocket           |
+| `VITE_REVERB_HOST`    | Host público de WebSocket |
 
 ---
 
@@ -357,13 +414,13 @@ El workflow `.github/workflows/docker-build-deploy.yml` tiene dos jobs:
 
 ### 5.1 Requisitos del Servidor
 
-| Recurso | Mínimo | Recomendado |
-|---------|--------|-------------|
-| CPU | 2 cores | 4 cores |
-| RAM | 4 GB | 8 GB |
-| Disco | 40 GB | 100 GB |
-| OS | Ubuntu 22.04 | Ubuntu 22.04 |
-| Docker | 20.x | Latest |
+| Recurso | Mínimo      | Recomendado  |
+| ------- | ------------ | ------------ |
+| CPU     | 2 cores      | 4 cores      |
+| RAM     | 4 GB         | 8 GB         |
+| Disco   | 40 GB        | 100 GB       |
+| OS      | Ubuntu 22.04 | Ubuntu 22.04 |
+| Docker  | 20.x         | Latest       |
 
 ### 5.2 Estructura en Servidor
 
@@ -382,34 +439,34 @@ El workflow `.github/workflows/docker-build-deploy.yml` tiene dos jobs:
 
 ### 5.3 Servicios en Docker Swarm
 
-| Servicio | Imagen | Replicas | Función |
-|----------|--------|----------|---------|
-| `app` | ghcr.io/.../miboleta | 1 | Laravel PHP-FPM |
-| `nginx` | nginx:1.27-alpine | 1 | Reverse Proxy |
-| `db` | mysql:8.0-debian | 1 | Base de datos |
-| `redis` | redis:7.4-alpine | 1 | Cache/Queue |
-| `horizon` | ghcr.io/.../miboleta | 1 | Queue Worker |
-| `reverb` | ghcr.io/.../miboleta | 1 | WebSockets |
-| `adminer` | adminer:4.8.1 | 1 | DB Admin UI |
+| Servicio    | Imagen               | Replicas | Función        |
+| ----------- | -------------------- | -------- | --------------- |
+| `app`     | ghcr.io/.../miboleta | 1        | Laravel PHP-FPM |
+| `nginx`   | nginx:1.27-alpine    | 1        | Reverse Proxy   |
+| `db`      | mysql:8.0-debian     | 1        | Base de datos   |
+| `redis`   | redis:7.4-alpine     | 1        | Cache/Queue     |
+| `horizon` | ghcr.io/.../miboleta | 1        | Queue Worker    |
+| `reverb`  | ghcr.io/.../miboleta | 1        | WebSockets      |
+| `adminer` | adminer:4.8.1        | 1        | DB Admin UI     |
 
 ### 5.4 Volúmenes Persistentes
 
-| Volumen | Montaje | Datos |
-|---------|---------|-------|
-| `mysql_data` | /var/lib/mysql | Base de datos |
-| `redis_data` | /data | Cache de Redis |
-| `storage_data` | /var/www/html/storage | PDFs, logs |
-| `public_files` | /var/www/html/public | Assets públicos |
-| `nginx_logs` | /var/log/nginx | Logs de Nginx |
-| `mysql_backups` | /backups | Backups de MySQL |
+| Volumen           | Montaje               | Datos            |
+| ----------------- | --------------------- | ---------------- |
+| `mysql_data`    | /var/lib/mysql        | Base de datos    |
+| `redis_data`    | /data                 | Cache de Redis   |
+| `storage_data`  | /var/www/html/storage | PDFs, logs       |
+| `public_files`  | /var/www/html/public  | Assets públicos |
+| `nginx_logs`    | /var/log/nginx        | Logs de Nginx    |
+| `mysql_backups` | /backups              | Backups de MySQL |
 
 ### 5.5 Puertos Expuestos
 
 | Puerto | Servicio | Descripción |
-|--------|----------|-------------|
-| 80 | nginx | HTTP |
-| 443 | nginx | HTTPS |
-| 8081 | adminer | DB Admin |
+| ------ | -------- | ------------ |
+| 80     | nginx    | HTTP         |
+| 443    | nginx    | HTTPS        |
+| 8081   | adminer  | DB Admin     |
 
 ---
 
@@ -542,6 +599,7 @@ Los documentos se organizan jerárquicamente por **tenant → tipo de documento 
 ```
 
 **Ejemplo real:**
+
 ```
 storage/app/documents/
 └── 1/                                      # Tenant ID: 1 (Corporación ABC)
@@ -562,14 +620,14 @@ storage/app/documents/
 
 **Tipos de documento disponibles:**
 
-| Tipo (slug) | Nombre |
-|-------------|--------|
-| `boleta_remuneraciones` | Boleta de Remuneraciones |
-| `contrato` | Contrato de Trabajo |
-| `liquidacion` | Liquidación de Beneficios |
-| `cts` | CTS |
-| `utilidades` | Utilidades |
-| `otros` | Otros Documentos |
+| Tipo (slug)               | Nombre                     |
+| ------------------------- | -------------------------- |
+| `boleta_remuneraciones` | Boleta de Remuneraciones   |
+| `contrato`              | Contrato de Trabajo        |
+| `liquidacion`           | Liquidación de Beneficios |
+| `cts`                   | CTS                        |
+| `utilidades`            | Utilidades                 |
+| `otros`                 | Otros Documentos           |
 
 ### 7.2 Flujo de Carga de Documentos
 
@@ -616,6 +674,7 @@ volumes:
 Acceder a `/horizon` en producción (requiere autenticación admin).
 
 Muestra:
+
 - Jobs en cola
 - Jobs fallidos
 - Tiempos de procesamiento
@@ -640,6 +699,7 @@ docker exec $(docker ps -qf "name=miboleta_app" | head -1) \
 **Causa:** Permisos incorrectos en storage
 
 **Solución:**
+
 ```bash
 docker exec $(docker ps -qf "name=miboleta_app" | head -1) \
     chown -R www-data:www-data /var/www/html/storage
@@ -650,6 +710,7 @@ docker exec $(docker ps -qf "name=miboleta_app" | head -1) \
 **Causa:** Configuración incorrecta de CORS o VPN desconectada
 
 **Solución:**
+
 1. Verificar `SANCTUM_STATEFUL_DOMAINS` en `.env`
 2. Verificar configuración de Nginx
 3. Comprobar conectividad VPN
@@ -659,6 +720,7 @@ docker exec $(docker ps -qf "name=miboleta_app" | head -1) \
 **Causa:** Volúmenes corruptos
 
 **Solución:**
+
 ```bash
 # Backup antes de eliminar
 docker volume create --name backup_mysql
@@ -674,6 +736,7 @@ docker service update --force miboleta_db
 **Causa:** Cache de composer desactualizado
 
 **Solución:**
+
 ```bash
 docker exec $(docker ps -qf "name=miboleta_app" | head -1) \
     composer dump-autoload
@@ -684,6 +747,7 @@ docker exec $(docker ps -qf "name=miboleta_app" | head -1) \
 **Causa:** Horizon no está corriendo
 
 **Solución:**
+
 ```bash
 # Verificar estado de Horizon
 docker service logs miboleta_horizon --tail 50
@@ -699,12 +763,14 @@ docker service update --force miboleta_horizon
 ### 9.1 Backup de Base de Datos
 
 #### Crear backup manual
+
 ```bash
 docker exec $(docker ps -qf "name=miboleta_db" | head -1) \
     mysqldump -u root -p'$DB_ROOT_PASSWORD' miboleta_prod > /backups/backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 #### Backup automático (cron)
+
 ```bash
 # Agregar a crontab del servidor
 0 2 * * * docker exec $(docker ps -qf "name=miboleta_db" | head -1) mysqldump -u root -p'PASSWORD' miboleta_prod | gzip > /opt/miboleta/backups/db_$(date +\%Y\%m\%d).sql.gz
@@ -723,12 +789,14 @@ docker run --rm \
 ### 9.3 Restauración
 
 #### Restaurar base de datos
+
 ```bash
 docker exec -i $(docker ps -qf "name=miboleta_db" | head -1) \
     mysql -u root -p'$DB_ROOT_PASSWORD' miboleta_prod < backup.sql
 ```
 
 #### Restaurar storage
+
 ```bash
 docker run --rm \
     -v miboleta_swarm_storage_data:/target \
@@ -743,6 +811,7 @@ docker run --rm \
 ### 10.1 Variables de Entorno Sensibles
 
 **NUNCA** versionar en Git:
+
 - `APP_KEY` - Clave de encriptación de Laravel
 - `DB_PASSWORD` - Password de MySQL
 - `REDIS_PASSWORD` - Password de Redis
@@ -753,11 +822,11 @@ docker run --rm \
 
 Todas las credenciales sensibles están en **GitHub Secrets**, no en el código:
 
-| Categoría | Secrets |
-|-----------|---------|
-| VPN | `VPN_HOST`, `VPN_USER`, `VPN_PASS`, `VPN_CERT` |
-| SSH | `SSH_HOST`, `SSH_USER`, `SSH_PASS` |
-| Database | En archivo `.env` del servidor |
+| Categoría | Secrets                                                |
+| ---------- | ------------------------------------------------------ |
+| VPN        | `VPN_HOST`, `VPN_USER`, `VPN_PASS`, `VPN_CERT` |
+| SSH        | `SSH_HOST`, `SSH_USER`, `SSH_PASS`               |
+| Database   | En archivo `.env` del servidor                       |
 
 ### 10.3 Acceso SSH via VPN
 
@@ -778,6 +847,7 @@ chmod 600 /opt/miboleta/ssl/*
 ### 10.5 Headers de Seguridad (Nginx)
 
 El archivo `nginx.conf` incluye:
+
 - `X-Frame-Options: SAMEORIGIN`
 - `X-Content-Type-Options: nosniff`
 - `X-XSS-Protection: 1; mode=block`
@@ -809,24 +879,23 @@ FROM php:8.4.2-fpm-alpine
 
 ## Apéndice B: docker-stack.yml Servicios
 
-| Servicio | Comando | Healthcheck |
-|----------|---------|-------------|
-| app | `php-fpm` | TCP 9000 |
-| nginx | default | HTTP 80 |
-| db | default (mysqld) | TCP 3306 |
-| redis | `redis-server --appendonly yes` | TCP 6379 |
-| horizon | `php artisan horizon` | - |
-| reverb | `php artisan reverb:start` | - |
+| Servicio | Comando                           | Healthcheck |
+| -------- | --------------------------------- | ----------- |
+| app      | `php-fpm`                       | TCP 9000    |
+| nginx    | default                           | HTTP 80     |
+| db       | default (mysqld)                  | TCP 3306    |
+| redis    | `redis-server --appendonly yes` | TCP 6379    |
+| horizon  | `php artisan horizon`           | -           |
+| reverb   | `php artisan reverb:start`      | -           |
 
 ---
 
 ## Apéndice C: Contacto y Soporte
 
-| Tipo | Contacto |
-|------|----------|
+| Tipo        | Contacto                             |
+| ----------- | ------------------------------------ |
 | Repositorio | github.com/jorgevasquezutec/miboleta |
-| Issues | GitHub Issues |
-| Documentación Funcional | docs/FUNCTIONAL-DOCUMENTATION.md |
+| Issues      | GitHub Issues                        |
 
 ---
 

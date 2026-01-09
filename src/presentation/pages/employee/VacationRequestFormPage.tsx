@@ -185,7 +185,7 @@ export function VacationRequestFormPage() {
             }
 
             // Mostrar toast con el error general
-            const errorMessage = err.response?.data?.message || error || "Error al crear la solicitud";
+            const errorMessage = err.response?.data?.error || err.response?.data?.message || error || "Error al crear la solicitud";
             toast.error(errorMessage);
         } finally {
             setSubmitting(false);

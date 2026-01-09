@@ -95,7 +95,7 @@ class DocumentBatchController extends Controller
         $user = Auth::user();
 
         if (!$this->batchService->canAccessBatches($user)) {
-            return response()->json(['error' => 'No autorizado'], 403);
+            return response()->json(['message' => 'No autorizado'], 403);
         }
 
         // Obtener tenant IDs del middleware
@@ -157,7 +157,7 @@ class DocumentBatchController extends Controller
                 'data' => $this->batchService->transformBatchForDetail($batch)
             ]);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 
@@ -213,7 +213,7 @@ class DocumentBatchController extends Controller
         $tenantId = $validated['tenant_id'] ?? $user->tenants->first()?->id;
 
         if (!$tenantId) {
-            return response()->json(['error' => 'Tenant no especificado'], 400);
+            return response()->json(['message' => 'Tenant no especificado'], 400);
         }
 
         $batch = $this->batchService->uploadBatch(
@@ -270,7 +270,7 @@ class DocumentBatchController extends Controller
         $result = $this->batchService->previewZip($request->file('file'));
 
         if (!$result['success']) {
-            return response()->json(['error' => $result['error']], 400);
+            return response()->json(['message' => $result['error']], 400);
         }
 
         unset($result['success']);

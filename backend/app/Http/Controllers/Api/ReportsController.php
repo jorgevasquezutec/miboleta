@@ -393,7 +393,6 @@ class ReportsController extends Controller
     {
         if (empty($data)) {
             return response()->json([
-                'error' => 'No hay datos para exportar',
                 'message' => 'No hay datos para exportar'
             ], 404);
         }

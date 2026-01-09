@@ -181,9 +181,9 @@ class DocumentController extends Controller
             $document = $this->documentService->getDocument($id, Auth::user());
             return response()->json(['data' => new DocumentResource($document)]);
         } catch (DocumentNotFoundException $e) {
-            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 
@@ -219,9 +219,9 @@ class DocumentController extends Controller
                 'Content-Type' => 'application/pdf',
             ]);
         } catch (DocumentNotFoundException $e) {
-            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 
@@ -258,9 +258,9 @@ class DocumentController extends Controller
                 'Content-Disposition' => 'inline; filename="' . $result['filename'] . '"',
             ]);
         } catch (DocumentNotFoundException $e) {
-            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 
@@ -302,7 +302,7 @@ class DocumentController extends Controller
         $role = $user->getCurrentRole();
 
         if ($role === 'client') {
-            return response()->json(['error' => 'No autorizado'], 403);
+            return response()->json(['message' => 'No autorizado'], 403);
         }
 
         $filters = [
@@ -370,7 +370,7 @@ class DocumentController extends Controller
                 'data' => new DocumentResource($assignedDocument)
             ]);
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -408,9 +408,9 @@ class DocumentController extends Controller
                 'message' => 'Documento eliminado correctamente'
             ]);
         } catch (DocumentNotFoundException $e) {
-            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (UnauthorizedAccessException $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 }
