@@ -67,16 +67,50 @@ La página de login proporciona acceso seguro al sistema mediante credenciales d
 
 ## 2. Panel de Root (Super Administrador)
 
-### 2.1 Dashboard de Root
+### 2.1 Dashboard de Root (Parte Superior)
 
-![Root Dashboard](images/15_root_dashboard.png)
+![Root Dashboard Top](images/15_root_dashboard_top.png)
 
 **Descripción:**
 El dashboard de Root proporciona una vista global de todas las organizaciones del sistema, con acceso a funciones de administración multi-tenant.
 
+**Métricas principales:**
+
+| Métrica                     | Descripción                       |
+| ---------------------------- | ---------------------------------- |
+| **Total Documentos**   | Documentos en todas las empresas   |
+| **Usuarios Activos**   | Total de usuarios del sistema      |
+| **Documentos Firmados** | Documentos con firma completada    |
+| **Pendientes**         | Documentos sin firmar              |
+| **Huérfanos**         | Documentos sin usuario asignado    |
+
+**Panel de Vacaciones 2026:**
+- Pendientes de aprobación
+- Aprobadas
+- Rechazadas
+- Días usados
+
+**Gráficos:**
+- Documentos cargados por mes (últimos 6 meses)
+- Estado de documentos (circular)
+
+### 2.2 Dashboard de Root (Parte Inferior)
+
+![Root Dashboard Bottom](images/15_root_dashboard_bottom.png)
+
+**Tabla de Actividad Reciente:**
+Muestra las últimas acciones realizadas en el sistema por todos los usuarios.
+
+| Columna        | Contenido                    |
+| -------------- | ----------------------------- |
+| **Usuario** | Nombre del usuario que actuó |
+| **Acción** | Tipo de actividad             |
+| **Tiempo**  | Hace cuánto ocurrió        |
+| **Tipo**    | Categoría del evento        |
+
 **Diferencias con Admin:**
 
-| Característica                    | Root                     | Admin                 |
+| Característica                   | Root                     | Admin                 |
 | ---------------------------------- | ------------------------ | --------------------- |
 | **Alcance**                  | Todas las organizaciones | Solo su organización |
 | **Crear empresas**           | Sí                      | No                    |
@@ -85,7 +119,7 @@ El dashboard de Root proporciona una vista global de todas las organizaciones de
 
 **Secciones del sidebar exclusivas de Root:**
 
-| Sección             | Función                         |
+| Sección            | Función                         |
 | -------------------- | -------------------------------- |
 | **Empresas**   | Crear y gestionar organizaciones |
 | **Usuarios**   | Gestión global de usuarios      |
@@ -124,31 +158,54 @@ Permite al Root visualizar y gestionar todas las organizaciones registradas en e
 | **Estado**        | Badge (Activo/Inactivo)            |
 | **Acciones**      | Editar, Desactivar                 |
 
-### 3.2 Formulario de Nueva Empresa
+### 3.2 Formulario de Nueva Empresa (Parte Superior)
 
-![Company Creation Form](images/17_root_company_form.png)
+![Company Creation Form Top](images/17_root_company_form_top.png)
 
 **Descripción:**
 Formulario para crear una nueva organización en el sistema.
 
-**Campos del formulario:**
+**Sección Logo:**
 
-| Campo                | Tipo   | Requerido | Descripción                       |
-| -------------------- | ------ | --------- | ---------------------------------- |
-| **Logo**       | Imagen | No        | Logo de la empresa (drag-and-drop) |
-| **Nombre**     | Text   | Sí       | Razón social de la empresa        |
-| **RUC**        | Text   | Sí       | Identificador fiscal único        |
-| **Teléfono**  | Text   | No        | Número de contacto                |
-| **Dirección** | Text   | No        | Dirección física                 |
-| **Estado**     | Toggle | Sí       | Activo / Inactivo                  |
+| Campo                        | Tipo   | Descripción                                  |
+| ---------------------------- | ------ | --------------------------------------------- |
+| **Logo de la Organización** | Imagen | Zona drag-and-drop (JPG, PNG, GIF, WEBP 2MB) |
+
+**Sección Información Básica:**
+
+| Campo              | Tipo   | Requerido | Descripción                    |
+| ------------------ | ------ | --------- | ------------------------------- |
+| **Nombre**   | Text   | Sí       | Nombre de la organización      |
+| **RUC**      | Text   | Sí       | Identificador fiscal (11 dígitos) |
+| **Razón Social** | Text | No       | Nombre legal de la empresa      |
+| **Estado**   | Select | Sí       | Activo / Inactivo               |
+
+### 3.3 Formulario de Nueva Empresa (Parte Inferior)
+
+![Company Creation Form Bottom](images/17_root_company_form_bottom.png)
+
+**Sección Información de Contacto:**
+
+| Campo              | Tipo | Requerido | Descripción           |
+| ------------------ | ---- | --------- | ---------------------- |
+| **Dirección** | Text | No        | Dirección física    |
+| **Teléfono**  | Text | No        | Número de contacto   |
+
+**Botones de acción:**
+
+| Botón                    | Función                           |
+| -------------------------- | ---------------------------------- |
+| **Cancelar**         | Descarta los cambios y regresa     |
+| **Crear Organización** | Guarda la nueva empresa en el sistema |
 
 **Flujo de creación:**
 
 1. Root accede a Empresas > "+ Organización"
-2. Completa los datos requeridos
-3. Opcionalmente sube logo de la empresa
-4. Guarda la nueva organización
-5. La empresa queda disponible para asignar usuarios
+2. Opcionalmente sube logo de la empresa
+3. Completa información básica (Nombre, RUC)
+4. Completa información de contacto (opcional)
+5. Clic en "Crear Organización"
+6. La empresa queda disponible para asignar usuarios
 
 ---
 
@@ -303,14 +360,20 @@ Vista principal del administrador con métricas globales de la organización.
 
 ## 6. Carga Masiva de Documentos
 
-### 6.1 Interfaz de Carga
+### 6.1 Interfaz de Carga (Estado Inicial)
 
-![Admin Upload](images/09_admin_upload.png)
+![Admin Upload Empty](images/09_admin_upload_empty.png)
 
 **Descripción:**
 Permite al administrador cargar múltiples documentos simultáneamente mediante un archivo ZIP.
 
-**Flujo de carga:**
+**Secciones de la interfaz:**
+
+| Sección                       | Descripción                              |
+| ------------------------------ | ----------------------------------------- |
+| **Seleccionar Archivo ZIP** | Zona drag-and-drop para subir el archivo |
+| **Resultado del Análisis** | Muestra el resultado una vez procesado   |
+| **Configuración de Carga** | Tipo de documento y período             |
 
 **Paso 1 - Seleccionar Archivo ZIP:**
 
@@ -318,11 +381,43 @@ Permite al administrador cargar múltiples documentos simultáneamente mediante 
 - Requisito: archivo ZIP conteniendo PDFs
 - Los PDFs deben estar nombrados con el DNI del empleado
 
-**Paso 2 - Resultado del Análisis:**
+### 6.2 Interfaz de Carga (Con Archivo Procesado)
 
-- Preview de documentos encontrados
-- Identificación automática de empleados por DNI
-- Alertas de documentos sin coincidencia
+![Admin Upload Filled](images/09_admin_upload_filled.png)
+
+**Descripción:**
+Una vez subido el archivo ZIP, el sistema analiza su contenido y muestra los resultados.
+
+**Resultado del Análisis:**
+
+| Métrica               | Descripción                        |
+| ---------------------- | ----------------------------------- |
+| **Total archivos** | Cantidad de archivos en el ZIP      |
+| **PDFs válidos**  | Archivos con formato correcto       |
+| **Nombres inválidos** | Archivos con nombre incorrecto   |
+| **Formatos inválidos** | Archivos que no son PDF         |
+
+**Lista de archivos:**
+
+| Columna         | Contenido                    |
+| --------------- | ----------------------------- |
+| **Archivo** | Nombre del PDF                |
+| **Nro. Documento** | DNI extraído del nombre |
+| **Tamaño** | Peso del archivo              |
+| **Estado** | Badge verde (válido) o rojo (error) |
+
+**Configuración de Carga:**
+
+| Campo                      | Descripción                       |
+| --------------------------- | ---------------------------------- |
+| **Organización**     | Empresa destino (auto-seleccionada) |
+| **Tipo de Documento** | Boleta, Contrato, Liquidación, etc. |
+| **Período**          | Mes y año del documento           |
+
+**Opciones adicionales:**
+
+- **Notificar a empleados:** Envía email cuando estén disponibles
+- **Requiere firma digital:** Activa flujo de firma 2FA
 
 **Estructura esperada del ZIP:**
 
@@ -335,9 +430,120 @@ carga_documentos.zip
 
 ---
 
-## 7. Gestión de Usuarios (Admin)
+## 7. Lotes de Carga
 
-### 7.1 Lista de Usuarios
+### 7.1 Historial de Lotes
+
+![Admin Batch List](images/21_admin_batch_list.png)
+
+**Descripción:**
+Vista que muestra el historial de todas las cargas masivas realizadas, permitiendo consultar el estado y detalle de cada lote.
+
+**Cards de métricas:**
+
+| Métrica               | Descripción                    |
+| ---------------------- | ------------------------------- |
+| **Total Lotes**  | Cantidad de cargas realizadas   |
+| **Exitosos**     | Lotes procesados correctamente  |
+| **Con Errores**  | Lotes con documentos fallidos   |
+| **En Proceso**   | Lotes en cola de procesamiento  |
+
+**Columnas de la tabla:**
+
+| Columna                      | Contenido                          |
+| ----------------------------- | ---------------------------------- |
+| **ID Lote**            | Identificador único del lote      |
+| **Fecha de Carga**      | Timestamp de creación             |
+| **Total Documentos**    | Cantidad de PDFs en el lote        |
+| **Asignados**           | Documentos vinculados a empleados  |
+| **Huérfanos**          | Documentos sin coincidencia de DNI |
+| **Estado**              | Badge (Procesado, Error, Pendiente)|
+| **Acciones**            | Ver detalle, Descargar reporte     |
+
+### 7.2 Detalle de Lote (Parte Superior)
+
+![Admin Batch Detail Top](images/22_admin_batch_detail_top.png)
+
+**Descripción:**
+Vista detallada de un lote específico mostrando información general y métricas de procesamiento.
+
+**Cards de métricas:**
+
+| Métrica              | Descripción                    |
+| --------------------- | ------------------------------- |
+| **Total Archivos** | Cantidad de PDFs procesados     |
+| **Exitosos**      | Documentos cargados correctamente |
+| **Huérfanos**    | Sin coincidencia de DNI         |
+| **Errores**       | Documentos con problemas        |
+
+**Información del lote:**
+
+| Campo                     | Contenido                             |
+| ------------------------- | -------------------------------------- |
+| **Tipo de Documento** | Categoría asignada (Boleta, Contrato) |
+| **Período**         | Mes y año del documento               |
+| **Cargado por**       | Administrador que realizó la carga   |
+| **Fecha de carga**    | Timestamp de creación                |
+| **Iniciado**          | Inicio del procesamiento              |
+| **Completado**        | Fin del procesamiento                 |
+
+**Resumen de Procesamiento:**
+
+| Campo                          | Valor                |
+| ------------------------------- | -------------------- |
+| **Archivos procesados**   | Cantidad procesada    |
+| **Documentos creados**    | Nuevos documentos     |
+| **Documentos reemplazados** | Actualizados        |
+| **Documentos huérfanos** | Sin usuario asignado |
+| **Total documentos**      | Total en el lote      |
+| **Pendientes**            | Sin firma             |
+| **Firmados**              | Con firma completada  |
+
+### 7.3 Detalle de Lote (Lista de Documentos)
+
+![Admin Batch Detail Bottom](images/22_admin_batch_detail_bottom.png)
+
+**Descripción:**
+Lista de todos los documentos cargados en el lote con sus estados individuales.
+
+**Columnas de la tabla:**
+
+| Columna           | Contenido                       |
+| ------------------ | ------------------------------- |
+| **Usuario**   | Nombre del empleado asignado    |
+| **Documento** | Tipo de documento               |
+| **Archivo**   | Nombre del PDF                  |
+| **Estado**    | Badge (Pendiente Firma/Firmado) |
+| **Fecha**     | Fecha de carga                  |
+| **Acciones**  | Botón "Ver" documento          |
+
+### 7.4 Vista de Documento desde el Lote
+
+![Admin Batch Document View](images/22_admin_batch_document_view.png)
+
+**Descripción:**
+Al hacer clic en "Ver" desde la lista de documentos del lote, se abre el visor de documento con toda la información.
+
+**Componentes del visor:**
+
+| Componente                  | Función                                  |
+| ---------------------------- | ----------------------------------------- |
+| **Visor PDF**          | Renderiza el documento embebido           |
+| **Miniaturas**          | Navegación rápida entre páginas        |
+| **Panel de información** | Tipo, período, estado, fecha de subida |
+| **Firma Digital**        | Botón para iniciar proceso de firma    |
+
+**Acciones disponibles:**
+
+- **Firmar Documento**: Inicia el flujo de firma 2FA (solo para pendientes)
+- **Descargar**: Obtiene copia del documento
+- **Volver**: Regresa a la lista de documentos del lote
+
+---
+
+## 8. Gestión de Usuarios (Admin)
+
+### 8.1 Lista de Usuarios
 
 ![Admin Users](images/10_admin_users.png)
 
@@ -367,9 +573,9 @@ Permite visualizar, buscar y gestionar los usuarios de la organización.
 
 ---
 
-## 8. Buscador de Documentos
+## 9. Buscador de Documentos
 
-### 8.1 Lista de Documentos
+### 9.1 Lista de Documentos
 
 ![Admin Documents](images/11_admin_documents.png)
 
@@ -403,9 +609,9 @@ Permite al administrador buscar y gestionar todos los documentos de la organizac
 
 ---
 
-## 9. Registro de Auditoría
+## 10. Registro de Auditoría
 
-### 9.1 Log de Actividad
+### 10.1 Log de Actividad
 
 ![Admin Audit](images/12_admin_audit.png)
 
@@ -444,44 +650,122 @@ Registro completo de todas las acciones realizadas en el sistema para cumplimien
 
 ---
 
-## 10. Gestión de Vacaciones del Equipo
+## 11. Gestión de Vacaciones del Equipo
 
-### 10.1 Vacaciones del Equipo (Supervisor)
-
-![Admin Team Vacations](images/13_admin_team_vacations.png)
+### 11.1 Vista General
 
 **Descripción:**
-Permite al supervisor gestionar las solicitudes de vacaciones de sus subordinados directos.
+Permite al supervisor gestionar las solicitudes de vacaciones de sus subordinados directos. La interfaz está organizada en 4 pestañas para facilitar la gestión según el estado de cada solicitud.
 
 **Cards de métricas:**
 
-| Métrica                | Descripción            |
-| ----------------------- | ----------------------- |
-| **Pendientes**    | Solicitudes por aprobar |
-| **Por Confirmar** | En estado intermedio    |
-| **Mi Historial**  | Solicitudes procesadas  |
-| **Calendario**    | Eventos de vacaciones   |
-
-**Pestañas:**
-
-| Pestaña             | Contenido                         |
-| -------------------- | --------------------------------- |
-| **Pendientes** | Solicitudes que requieren acción |
-| **Confirmar**  | Solicitudes pre-aprobadas         |
-| **Historial**  | Solicitudes ya procesadas         |
-| **Calendario** | Vista de calendario               |
-
-**Acciones por solicitud:**
-
-- **Aprobar:** Concede las vacaciones
-- **Rechazar:** Deniega la solicitud (requiere motivo)
-- **Ver detalle:** Información completa
+| Métrica               | Descripción                      |
+| ----------------------- | --------------------------------- |
+| **Pendientes**    | Solicitudes por aprobar           |
+| **Por Confirmar** | Vacaciones aprobadas sin confirmar |
+| **Mi Historial**  | Solicitudes procesadas            |
+| **Calendario**    | Vista visual de eventos           |
 
 ---
 
-## 11. Histórico General de Vacaciones
+### 11.2 Pestaña: Pendientes
 
-### 11.1 Histórico Completo
+![Admin Vacaciones Pendientes](images/23_admin_vacaciones_pendientes.png)
+
+**Descripción:**
+Lista de solicitudes de vacaciones que están pendientes de aprobación por parte del supervisor.
+
+**Información mostrada:**
+
+| Campo                | Descripción                        |
+| -------------------- | ----------------------------------- |
+| **Empleado**   | Nombre y foto del solicitante       |
+| **Estado**     | Badge "Pendiente"                   |
+| **Fechas**     | Rango de inicio a fin               |
+| **Días**      | Cantidad de días solicitados       |
+| **Solicitado** | Fecha de creación de la solicitud |
+| **Motivo**     | Razón proporcionada por el empleado |
+
+**Acciones disponibles:**
+
+- **Aprobar:** Concede las vacaciones solicitadas
+- **Rechazar:** Deniega la solicitud (requiere ingresar motivo)
+
+---
+
+### 11.3 Pestaña: Por Confirmar
+
+![Admin Vacaciones Por Confirmar](images/24_admin_vacaciones_confirmar.png)
+
+**Descripción:**
+Lista de vacaciones que ya fueron aprobadas pero el período ya pasó y se debe confirmar si el empleado las tomó efectivamente.
+
+**Información mostrada:**
+
+| Campo                | Descripción                   |
+| -------------------- | ------------------------------ |
+| **Empleado**   | Nombre del empleado            |
+| **Estado**     | Badge "Aprobada"               |
+| **Fechas**     | Rango de las vacaciones        |
+| **Días**      | Cantidad de días              |
+| **Solicitado** | Fecha de la solicitud          |
+| **Aprobado**   | Fecha de aprobación           |
+
+**Acciones disponibles:**
+
+- **Sí, la tomó:** Confirma que el empleado gozó las vacaciones
+- **No la tomó:** Indica que el empleado no tomó las vacaciones
+
+---
+
+### 11.4 Pestaña: Historial
+
+![Admin Vacaciones Historial](images/25_admin_vacaciones_historial.png)
+
+**Descripción:**
+Registro histórico de todas las decisiones tomadas por el supervisor sobre las solicitudes de su equipo.
+
+**Información mostrada:**
+
+| Campo                | Descripción                     |
+| -------------------- | -------------------------------- |
+| **Empleado**   | Nombre y documento               |
+| **Estado**     | Badge (Aprobada, Rechazada)      |
+| **Fechas**     | Rango de vacaciones              |
+| **Días**      | Cantidad de días               |
+| **Solicitado** | Fecha de creación              |
+| **Aprobado**   | Fecha y responsable de decisión |
+
+---
+
+### 11.5 Pestaña: Calendario
+
+![Admin Vacaciones Calendario](images/26_admin_vacaciones_calendario.png)
+
+**Descripción:**
+Vista de calendario mensual que muestra de forma visual todas las vacaciones programadas, aprobadas y tomadas del equipo.
+
+**Leyenda de colores:**
+
+| Color           | Significado                      |
+| --------------- | --------------------------------- |
+| **Verde** | Vacaciones aprobadas/tomadas      |
+| **Amarillo** | Vacaciones pendientes de aprobación |
+| **Rojo**  | Vacaciones rechazadas             |
+| **Gris**  | Días no laborables               |
+
+**Funcionalidades:**
+
+- Navegación por meses (anterior/siguiente)
+- Ir a fecha actual (botón "Hoy")
+- Visualización de eventos por día
+- Click en evento para ver detalle
+
+---
+
+## 12. Histórico General de Vacaciones
+
+### 12.1 Histórico Completo
 
 ![Admin Vacation History](images/14_admin_vacation_history.png)
 
@@ -520,9 +804,9 @@ Vista centralizada de todas las solicitudes de vacaciones de la organización.
 
 ---
 
-## 12. Dashboard de Empleado (Rol: Client)
+## 13. Dashboard de Empleado (Rol: Client)
 
-### 12.1 Vista Principal del Empleado
+### 13.1 Vista Principal del Empleado
 
 ![Employee Dashboard](images/02_employee_dashboard.png)
 
@@ -552,9 +836,9 @@ El dashboard del empleado presenta un resumen de sus documentos pendientes y fir
 
 ---
 
-## 13. Visor de Documentos
+## 14. Visor de Documentos
 
-### 13.1 Visualización de Documento PDF
+### 14.1 Visualización de Documento PDF
 
 ![Document Viewer](images/03_document_viewer.png)
 
@@ -575,9 +859,9 @@ El visor de documentos permite al empleado revisar el contenido completo del doc
 
 ---
 
-## 14. Proceso de Firma Digital
+## 15. Proceso de Firma Digital
 
-### 14.1 Modal de Verificación en Dos Pasos (Paso 1)
+### 15.1 Modal de Verificación en Dos Pasos (Paso 1)
 
 ![Signature Modal Step 1](images/04_signature_modal_step1.png)
 
@@ -601,7 +885,7 @@ El primer paso del proceso de firma solicita al usuario confirmar que desea firm
 3. Usuario confirma enviando código
 4. Sistema envía código de 6 dígitos al email registrado
 
-### 14.2 Modal de Ingreso de Código (Paso 2)
+### 15.2 Modal de Ingreso de Código (Paso 2)
 
 ![Signature Modal Step 2](images/05_signature_modal_step2.png)
 
@@ -629,9 +913,9 @@ El segundo paso solicita al usuario ingresar el código de 6 dígitos recibido p
 
 ---
 
-## 15. Gestión de Vacaciones (Empleado)
+## 16. Gestión de Vacaciones (Empleado)
 
-### 15.1 Lista de Mis Vacaciones
+### 16.1 Lista de Mis Vacaciones
 
 ![Employee Vacations](images/06_employee_vacations.png)
 
@@ -658,7 +942,7 @@ Vista que permite al empleado consultar el estado de sus solicitudes de vacacion
 | **Fecha de aprobación** | Cuándo fue procesada                  |
 | **Motivo**               | Razón opcional                        |
 
-### 15.2 Formulario de Nueva Solicitud
+### 16.2 Formulario de Nueva Solicitud
 
 ![Vacation Request Form](images/07_vacation_request_form.png)
 

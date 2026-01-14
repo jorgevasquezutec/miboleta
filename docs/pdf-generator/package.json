@@ -1,13 +1,18 @@
 {
     "name": "miboleta-pdf-generator",
     "version": "1.0.0",
-    "description": "PDF generator for MiBoleta documentation",
+    "description": "PDF and Word generator for MiBoleta documentation",
     "main": "generate-pdf.js",
     "scripts": {
         "generate": "node generate-pdf.js",
+        "generate:pdf": "node generate-pdf.js",
+        "generate:word": "node generate-word.js",
+        "generate:all": "npm run generate:pdf && npm run generate:word",
         "preview": "open preview.html"
     },
     "dependencies": {
+        "docx": "^9.5.1",
+        "html-to-docx": "^1.8.0",
         "marked": "^12.0.0",
         "puppeteer": "^22.0.0"
     },

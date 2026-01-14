@@ -38,7 +38,7 @@ services:
     image: mysql:8.0
     container_name: miboleta_mysql
     tty: true
-    restart: unless-stopped
+    # restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: miboleta
@@ -72,7 +72,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: miboleta_horizon
-    restart: unless-stopped
+    # restart: unless-stopped
     working_dir: /var/www/html
     command: php artisan horizon
     volumes:
@@ -90,7 +90,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: miboleta_reverb
-    restart: unless-stopped
+    # restart: unless-stopped
     working_dir: /var/www/html
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     ports:
