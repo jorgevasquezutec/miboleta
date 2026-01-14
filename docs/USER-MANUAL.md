@@ -30,6 +30,47 @@
 | **Admin**  | Administrador de organización | Gestión de usuarios, documentos, vacaciones |
 | **Client** | Empleado                       | Ver documentos, firmar, solicitar vacaciones |
 
+### Matriz de Roles vs Actividades
+
+| Actividad / Función                        | Root | Admin | Client |
+| ------------------------------------------- | :--: | :---: | :----: |
+| **GESTIÓN DE EMPRESAS**                |      |       |        |
+| Crear nuevas organizaciones                 | ✅   | ❌    | ❌     |
+| Editar organizaciones                       | ✅   | ❌    | ❌     |
+| Desactivar organizaciones                   | ✅   | ❌    | ❌     |
+| Ver lista de todas las organizaciones       | ✅   | ❌    | ❌     |
+| **GESTIÓN DE USUARIOS**                |      |       |        |
+| Crear usuarios de cualquier rol             | ✅   | ❌    | ❌     |
+| Ver lista de usuarios de su organización   | ✅   | ✅    | ❌     |
+| Editar usuarios                             | ✅   | ❌    | ❌     |
+| Desactivar usuarios                         | ✅   | ❌    | ❌     |
+| Resetear contraseñas                       | ✅   | ❌    | ❌     |
+| Carga masiva de usuarios (Excel)            | ✅   | ❌    | ❌     |
+| **GESTIÓN DE DOCUMENTOS**              |      |       |        |
+| Ver todos los documentos (multi-empresa)    | ✅   | ❌    | ❌     |
+| Ver documentos de su organización          | ✅   | ✅    | ❌     |
+| Ver mis documentos personales               | ❌   | ✅    | ✅     |
+| Cargar documentos masivamente (ZIP)         | ❌   | ✅    | ❌     |
+| Ver lotes de carga                          | ❌   | ✅    | ❌     |
+| Exportar documentos                         | ✅   | ✅    | ❌     |
+| Descargar mis documentos                    | ❌   | ✅    | ✅     |
+| Firmar documentos (con 2FA)                 | ❌   | ✅    | ✅     |
+| **GESTIÓN DE VACACIONES**              |      |       |        |
+| Solicitar vacaciones propias                | ❌   | ✅    | ✅     |
+| Ver mis solicitudes de vacaciones           | ❌   | ✅    | ✅     |
+| Cancelar mis solicitudes pendientes         | ❌   | ✅    | ✅     |
+| Aprobar/Rechazar vacaciones del equipo      | ❌   | ✅    | ❌     |
+| Confirmar vacaciones pre-aprobadas          | ❌   | ✅    | ❌     |
+| Ver calendario de vacaciones del equipo     | ❌   | ✅    | ❌     |
+| Ver historial de vacaciones                 | ✅   | ✅    | ✅     |
+| **AUDITORÍA Y REPORTES**              |      |       |        |
+| Ver registro de auditoría                  | ✅   | ✅    | ❌     |
+| Exportar reportes                           | ✅   | ✅    | ❌     |
+| **DASHBOARD**                          |      |       |        |
+| Ver métricas globales (todas las empresas) | ✅   | ❌    | ❌     |
+| Ver métricas de su organización           | ❌   | ✅    | ❌     |
+| Ver resumen personal                        | ❌   | ✅    | ✅     |
+
 ---
 
 ## 1. Autenticación
