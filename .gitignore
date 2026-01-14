@@ -67,3 +67,11 @@ coverage/
 # Docker volumes
 /docker/mysql/
 /scripts/.env.deploy
+
+# Generated documentation (can be regenerated with: cd docs/pdf-generator && npm run generate:all)
+/docs/*.pdf
+/docs/*.docx
+/docs/pdf-generator/*.html
+/docs/pdf-generator/*.png
+/docs/pdf-generator/mermaid-diagram-*.png
+/docs/pdf-generator/cover-*.png
