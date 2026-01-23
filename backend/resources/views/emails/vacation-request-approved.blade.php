@@ -69,6 +69,11 @@
         'icon' => '🎉',
         'message' => '<strong>¡Disfruta tus vacaciones!</strong> Recuerda coordinar con tu equipo antes de ausentarte.'
     ])
+
+    <p style="color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+        Haz clic en el siguiente botón para ver los detalles de tus vacaciones:
+    </p>
+
     @include('emails.components.button', [
         'url' => config('app.frontend_url', 'http://localhost:5173') . '/vacations',
         'text' => 'Ver Mis Vacaciones'

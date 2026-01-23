@@ -71,10 +71,15 @@
         'icon' => '⏳',
         'message' => '<strong>Acción requerida:</strong> Por favor, ingresa al portal para aprobar o rechazar esta solicitud.'
     ])
-        @include('emails.components.button', [
-            'url' => config('app.frontend_url', 'http://localhost:5173') . '/team-vacations',
-            'text' => 'Revisar Solicitud'
-        ])
+
+    <p style="color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+        Haz clic en el siguiente botón para revisar la solicitud:
+    </p>
+
+    @include('emails.components.button', [
+        'url' => config('app.frontend_url', 'http://localhost:5173') . '/team-vacations',
+        'text' => 'Revisar Solicitud'
+    ])
 
             <p style="color: #94A3B8; font-size: 14px; margin: 0; text-align: center;">
                 Si tienes dudas, contacta al área de Recursos Humanos.

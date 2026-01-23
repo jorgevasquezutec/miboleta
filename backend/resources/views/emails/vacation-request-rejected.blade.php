@@ -79,6 +79,11 @@
         'icon' => '💡',
         'message' => 'Puedes crear una nueva solicitud con fechas diferentes o contactar a tu supervisor para más información.'
     ])
+
+    <p style="color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+        Haz clic en el siguiente botón para crear una nueva solicitud:
+    </p>
+
     @include('emails.components.button', [
         'url' => config('app.frontend_url', 'http://localhost:5173') . '/vacations/new',
         'text' => 'Nueva Solicitud'

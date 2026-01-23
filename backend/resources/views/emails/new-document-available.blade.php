@@ -61,6 +61,11 @@
             'message' => '<strong>Acción requerida:</strong> Este documento requiere tu firma digital. Por favor, ingresa al portal para revisar y firmar el documento.'
         ])
     @endif
+
+    <p style="color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+        Haz clic en el siguiente botón para ver tu documento:
+    </p>
+
     @include('emails.components.button', [
         'url' => config('app.frontend_url', 'http://localhost:5173') . '/documents',
         'text' => 'Ver Documento'

@@ -23,13 +23,17 @@
             'message' => '<strong>Cambio requerido:</strong> Deberás establecer una nueva contraseña cuando inicies sesión.'
         ])
     @else
-            @include('emails.components.alert-success', [
-                'icon' => '💡',
-                'message' => '<strong>Recomendación:</strong> Te sugerimos cambiar tu contraseña después de iniciar sesión para mayor seguridad.'
-            ])
-        @endif
+        @include('emails.components.alert-success', [
+            'icon' => '💡',
+            'message' => '<strong>Recomendación:</strong> Te sugerimos cambiar tu contraseña después de iniciar sesión para mayor seguridad.'
+        ])
+    @endif
 
-        @include('emails.components.button', ['url' => $loginUrl, 'text' => 'Iniciar Sesión'])
+    <p style="color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+        Haz clic en el siguiente botón para acceder a tu cuenta:
+    </p>
+
+    @include('emails.components.button', ['url' => $loginUrl, 'text' => 'Iniciar Sesión'])
 
         <p style="color: #94A3B8; font-size: 14px; line-height: 1.6; margin: 30px 0 0 0; padding-top: 20px; border-top: 1px solid #E2E8F0;">
             Si no reconoces esta actividad, contacta inmediatamente a tu administrador.
