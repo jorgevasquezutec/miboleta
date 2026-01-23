@@ -6,12 +6,12 @@ Optional: @include('emails.components.button', ['url' => $url, 'text' => 'Click 
 <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
     <tr>
         <td align="center">
-            <table cellpadding="0" cellspacing="0" bgcolor="#1E40AF"
-                style="background-color: #1E40AF; background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); border-radius: 8px;">
+            <table cellpadding="0" cellspacing="0" bgcolor="#EFF6FF"
+                style="background-color: #EFF6FF; border: 2px solid #2563EB; border-radius: 8px;">
                 <tr>
                     <td style="padding: 16px 40px;">
                         <a href="{{ $url }}"
-                            style="color: #FFFFFF; text-decoration: none; font-size: 16px; font-weight: 600; display: inline-block;">
+                            style="color: #1E40AF; text-decoration: none; font-size: 16px; font-weight: 600; display: inline-block;">
                             {{ $text }}
                         </a>
                     </td>

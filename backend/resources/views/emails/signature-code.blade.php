@@ -28,18 +28,16 @@
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
         <tr>
             <td align="center">
-                <table cellpadding="0" cellspacing="0" bgcolor="#1E40AF"
-                    style="background-color: #1E40AF; background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); border-radius: 12px;">
+                <table cellpadding="0" cellspacing="0" bgcolor="#EFF6FF"
+                    style="background-color: #EFF6FF; border: 2px solid #2563EB; border-radius: 12px;">
                     <tr>
-                        <td style="padding: 30px 50px;">
-            <p
-                style="color: rgba(255,255,255,0.8); font-size: 12px; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 2px;">
-                Tu código de verificación
-            </p>
-            <p
-                style="color: #ffffff; font-size: 42px; font-weight: 700; margin: 0; letter-spacing: 8px; font-family: 'Courier New', monospace;">
-                {{ $code }}
-            </p>
+                        <td style="padding: 30px 50px; text-align: center;">
+                            <p style="color: #64748B; font-size: 12px; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 2px;">
+                                Tu código de verificación
+                            </p>
+                            <p style="color: #1E40AF; font-size: 42px; font-weight: 700; margin: 0; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                                {{ $code }}
+                            </p>
                         </td>
                     </tr>
                 </table>
@@ -48,17 +46,20 @@
     </table>
 
     {{-- Warning Box --}}
-    <div
-        style="background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 0 8px 8px 0; padding: 16px; margin-bottom: 24px;">
-        <p style="color: #92400E; font-size: 14px; margin: 0 0 8px 0; line-height: 1.5;">
-            <strong>⚠️ Importante:</strong>
-        </p>
-        <ul style="color: #92400E; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
-            <li>Este código expira en <strong>5 minutos</strong></li>
-            <li>Tienes máximo <strong>3 intentos</strong></li>
-            <li><strong>No compartas</strong> este código con nadie</li>
-        </ul>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+        <tr>
+            <td bgcolor="#FEF3C7" style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 0 8px 8px 0; padding: 16px;">
+                <p style="color: #92400E; font-size: 14px; margin: 0 0 8px 0; line-height: 1.5;">
+                    <strong>⚠️ Importante:</strong>
+                </p>
+                <p style="color: #92400E; font-size: 14px; margin: 0; line-height: 1.8;">
+                    • Este código expira en <strong>5 minutos</strong><br>
+                    • Tienes máximo <strong>3 intentos</strong><br>
+                    • <strong>No compartas</strong> este código con nadie
+                </p>
+            </td>
+        </tr>
+    </table>
 
     @include('emails.components.alert-danger', [
         'icon' => '🛡️',
