@@ -256,6 +256,10 @@ class DocumentController extends Controller
             return response()->file($result['path'], [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'inline; filename="' . $result['filename'] . '"',
+                // Prevent browser caching to ensure signed documents show updated watermark
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
             ]);
         } catch (DocumentNotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);

@@ -14,55 +14,65 @@
     </p>
 
     {{-- Vacation Details Box --}}
-    <div style="background: #F8FAFC; border-radius: 12px; padding: 24px; margin-bottom: 30px; border: 1px solid #E2E8F0;">
-        <table width="100%" cellspacing="0" cellpadding="0">
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px; width: 40%;">Fechas solicitadas:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
-                    {{ $vacationRequest->date_range }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Días:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px;">
-                    {{ $vacationRequest->duration_text }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Rechazado por:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
-                    {{ $vacationRequest->rejectedByUser->full_name ?? 'Supervisor' }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Fecha:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px;">
-                    {{ $vacationRequest->rejected_at->format('d/m/Y H:i') }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Estado:</td>
-                <td style="padding: 8px 0;">
-                    <span
-                        style="background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); color: #991B1B; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600; display: inline-block;">
-                        ❌ Rechazada
-                    </span>
-                </td>
-            </tr>
-        </table>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
+        <tr>
+            <td bgcolor="#F8FAFC" style="background-color: #F8FAFC; border-radius: 12px; padding: 24px; border: 1px solid #E2E8F0;">
+                <table width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px; width: 40%;">Fechas solicitadas:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
+                            {{ $vacationRequest->date_range }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Días:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px;">
+                            {{ $vacationRequest->duration_text }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Rechazado por:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
+                            {{ $vacationRequest->rejectedByUser->full_name ?? 'Supervisor' }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Fecha:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px;">
+                            {{ $vacationRequest->rejected_at->format('d/m/Y H:i') }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Estado:</td>
+                        <td style="padding: 8px 0;">
+                            <table cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td bgcolor="#FEE2E2" style="background-color: #FEE2E2; background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); color: #991B1B; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600;">
+                                        ❌ Rechazada
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 
     {{-- Rejection Reason Box --}}
     @if($vacationRequest->rejection_reason)
-        <div
-            style="background: #FEF2F2; border-left: 4px solid #DC2626; border-radius: 0 8px 8px 0; padding: 16px; margin-bottom: 30px;">
-            <p style="color: #991B1B; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">
-                📝 Motivo del rechazo:
-            </p>
-            <p style="color: #7F1D1D; font-size: 14px; margin: 0; line-height: 1.6;">
-                {{ $vacationRequest->rejection_reason }}
-            </p>
-        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
+            <tr>
+                <td bgcolor="#FEF2F2" style="background-color: #FEF2F2; border-left: 4px solid #DC2626; border-radius: 0 8px 8px 0; padding: 16px;">
+                    <p style="color: #991B1B; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">
+                        📝 Motivo del rechazo:
+                    </p>
+                    <p style="color: #7F1D1D; font-size: 14px; margin: 0; line-height: 1.6;">
+                        {{ $vacationRequest->rejection_reason }}
+                    </p>
+                </td>
+            </tr>
+        </table>
     @endif
 
     @include('emails.components.alert-warning', [

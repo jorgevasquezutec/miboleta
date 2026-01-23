@@ -28,9 +28,15 @@
         'content' => '<p style="color: #64748B; font-size: 14px; margin: 0;">🛡️ Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p><p style="color: #94A3B8; font-size: 13px; margin: 8px 0 0 0;">Tu contraseña actual permanecerá sin cambios.</p>'
     ])
     <p style="color: #94A3B8; font-size: 13px; margin: 0 0 10px 0;">
-            Si el botón no funciona, copia y pega este enlace en tu navegador:
-        </p>
-        <p style="word-break: break-all; font-size: 12px; color: #64748B; background: #F1F5F9; padding: 12px; border-radius: 8px; margin: 0;">
-            {{ $resetUrl }}
-        </p>
+        Si el botón no funciona, copia y pega este enlace en tu navegador:
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+            <td bgcolor="#F1F5F9" style="background-color: #F1F5F9; padding: 12px; border-radius: 8px;">
+                <p style="word-break: break-all; font-size: 12px; color: #64748B; margin: 0;">
+                    {{ $resetUrl }}
+                </p>
+            </td>
+        </tr>
+    </table>
 @endsection

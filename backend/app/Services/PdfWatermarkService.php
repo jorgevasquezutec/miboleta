@@ -102,31 +102,97 @@ class PdfWatermarkService
         $pageWidth = $pageSize['width'];
         $pageHeight = $pageSize['height'];
 
-        // Watermark configuration - simple text without box
-        $textWidth = 50;
+        // Watermark configuration
+        $textWidth = 60;
         $margin = 10;
-        $totalTextHeight = 10; // Total height needed for both lines
+        $totalTextHeight = 18; // Height needed for signature + date
 
-        // Position: bottom right corner with enough space for both lines
+        // Position: bottom right corner
         $x = $pageWidth - $textWidth - $margin;
-        $y = $pageHeight - $margin - $totalTextHeight;
+        $y = $pageHeight - $margin - $totalTextHeight - 5; // Slightly raised to avoid page edge
 
         // Format timestamp
         $timestamp = $signatureData['timestamp'] ?? now()->toISOString();
         $formattedDate = $this->formatTimestamp($timestamp);
 
+        // Get user name for signature
+        $userName = $signatureData['user_name'] ?? 'FIRMADO CONFORME';
+
         // Set text color to black
         $pdf->SetTextColor(0, 0, 0);
 
-        // Add "FIRMADO CONFORME" text (top line, bold)
-        $pdf->SetFont('helvetica', 'B', 9);
-        $pdf->SetXY($x, $y);
-        $pdf->Cell($textWidth, 4, 'FIRMADO CONFORME', 0, 0, 'C', false, '', 0, false, 'T', 'M');
+        // Add signature name with italic slant effect (simulating handwritten signature)
+        $this->addSignatureText($pdf, $userName, $x, $y, $textWidth);
 
-        // Add date text (bottom line, smaller)
+        // Add date text (below signature, smaller, black)
+        $pdf->SetTextColor(0, 0, 0);
         $pdf->SetFont('helvetica', '', 7);
-        $pdf->SetXY($x, $y + 5);
+        $pdf->SetXY($x, $y + 6);
         $pdf->Cell($textWidth, 4, $formattedDate, 0, 0, 'C', false, '', 0, false, 'T', 'M');
+    }
+
+    /**
+     * Add signature text with elegant cursive style
+     *
+     * @param Fpdi $pdf
+     * @param string $name
+     * @param float $x
+     * @param float $y
+     * @param float $width
+     * @return void
+     */
+    protected function addSignatureText(Fpdi $pdf, string $name, float $x, float $y, float $width): void
+    {
+        // Load cursive signature font
+        $this->loadSignatureFont($pdf);
+
+        // Draw the signature text centered
+        $pdf->SetXY($x, $y);
+        $pdf->Cell($width, 8, $name, 0, 0, 'C', false, '', 0, false, 'T', 'M');
+    }
+
+    /**
+     * Load signature font (Segoe Script)
+     *
+     * @param Fpdi $pdf
+     * @param bool $italic Apply italic style
+     * @return void
+     */
+    protected function loadSignatureFont(Fpdi $pdf, bool $italic = false): void
+    {
+        $fontPath = resource_path('fonts/segoesc.ttf');
+        $tcpdfFontsDir = base_path('vendor/tecnickcom/tcpdf/fonts/');
+        $style = $italic ? 'I' : '';
+
+        // Check if font is already converted in TCPDF fonts directory
+        if (file_exists($tcpdfFontsDir . 'segoesc.php')) {
+            $pdf->SetFont('segoesc', $style, 12);
+            return;
+        }
+
+        if (file_exists($fontPath)) {
+            try {
+                // Convert font and save directly to TCPDF fonts directory
+                $fontName = \TCPDF_FONTS::addTTFfont($fontPath, 'TrueTypeUnicode', '', 32, $tcpdfFontsDir);
+
+                if ($fontName) {
+                    $pdf->SetFont($fontName, $style, 12);
+                    return;
+                } else {
+                    Log::warning('[PdfWatermarkService] addTTFfont returned false', ['fontPath' => $fontPath]);
+                }
+            } catch (\Exception $e) {
+                Log::warning('[PdfWatermarkService] Could not load signature font', [
+                    'error' => $e->getMessage(),
+                    'fontPath' => $fontPath
+                ]);
+            }
+        } else {
+            Log::warning('[PdfWatermarkService] Font file not found', ['fontPath' => $fontPath]);
+        }
+
+        // Fallback to Times Italic
+        $pdf->SetFont('times', 'I', 11);
     }
 
     /**

@@ -77,6 +77,9 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
     // Refresh document to get updated status
     if (documentId) {
       await fetchDocumentById(parseInt(documentId));
+      // Force PDF viewer to reload by adding cache-busting timestamp
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
+      setPdfUrl(`${baseUrl}/documents/${documentId}/preview?t=${Date.now()}`);
     }
   };
 

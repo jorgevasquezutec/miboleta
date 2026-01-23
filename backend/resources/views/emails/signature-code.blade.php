@@ -14,17 +14,24 @@
     </p>
 
     {{-- Document Info --}}
-    <div
-        style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border-radius: 8px; padding: 15px 20px; margin-bottom: 30px;">
-        <p style="color: #1E40AF; font-size: 14px; margin: 0; font-weight: 600;">
-            📄 {{ $documentType }} - Período {{ $period }}
-        </p>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
+        <tr>
+            <td bgcolor="#DBEAFE" style="background-color: #DBEAFE; background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border-radius: 8px; padding: 15px 20px;">
+                <p style="color: #1E40AF; font-size: 14px; margin: 0; font-weight: 600;">
+                    📄 {{ $documentType }} - Período {{ $period }}
+                </p>
+            </td>
+        </tr>
+    </table>
 
     {{-- Code Box --}}
-    <div style="text-align: center; margin-bottom: 30px;">
-        <div
-            style="background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); padding: 30px 50px; border-radius: 12px; display: inline-block;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
+        <tr>
+            <td align="center">
+                <table cellpadding="0" cellspacing="0" bgcolor="#1E40AF"
+                    style="background-color: #1E40AF; background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); border-radius: 12px;">
+                    <tr>
+                        <td style="padding: 30px 50px;">
             <p
                 style="color: rgba(255,255,255,0.8); font-size: 12px; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 2px;">
                 Tu código de verificación
@@ -33,8 +40,12 @@
                 style="color: #ffffff; font-size: 42px; font-weight: 700; margin: 0; letter-spacing: 8px; font-family: 'Courier New', monospace;">
                 {{ $code }}
             </p>
-        </div>
-    </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 
     {{-- Warning Box --}}
     <div

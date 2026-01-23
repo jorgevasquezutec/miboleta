@@ -1,14 +1,25 @@
 {{--
-Email Button Component
+Email Button Component - Compatible con Outlook, Gmail, Apple Mail
 Usage: @include('emails.components.button', ['url' => $url, 'text' => 'Click me'])
 Optional: @include('emails.components.button', ['url' => $url, 'text' => 'Click me', 'showFallback' => false])
 --}}
-<div style="text-align: center; margin: 30px 0;">
-    <a href="{{ $url }}"
-        style="display: inline-block; background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); color: #FFFFFF; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">
-        {{ $text }}
-    </a>
-</div>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+    <tr>
+        <td align="center">
+            <table cellpadding="0" cellspacing="0" bgcolor="#1E40AF"
+                style="background-color: #1E40AF; background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); border-radius: 8px;">
+                <tr>
+                    <td style="padding: 16px 40px;">
+                        <a href="{{ $url }}"
+                            style="color: #FFFFFF; text-decoration: none; font-size: 16px; font-weight: 600; display: inline-block;">
+                            {{ $text }}
+                        </a>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 
 @if(!isset($showFallback) || $showFallback !== false)
     <p style="color: #94A3B8; font-size: 12px; text-align: center; margin: 10px 0 20px 0; line-height: 1.5;">

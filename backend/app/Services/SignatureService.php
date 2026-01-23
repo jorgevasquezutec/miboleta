@@ -253,6 +253,7 @@ class SignatureService
             'user_agent' => $requestData['user_agent'] ?? null,
             'timestamp' => now()->toISOString(),
             'user_id' => $user->id,
+            'user_name' => $user->full_name,
             'verification_method' => 'email_2fa',
             'code_id' => $signatureCode->id,
         ];

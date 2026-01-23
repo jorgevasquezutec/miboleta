@@ -17,8 +17,8 @@
 
                     {{-- Header con logo y gradiente azul --}}
                     <tr>
-                        <td
-                            style="background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); padding: 32px 20px; text-align: center;">
+                        <td bgcolor="#1E40AF"
+                            style="background-color: #1E40AF; background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); padding: 32px 20px; text-align: center;">
                             {{-- Logo MiBoleta --}}
                             <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
                                 <tr>

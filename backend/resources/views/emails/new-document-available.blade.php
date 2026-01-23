@@ -14,39 +14,46 @@
     </p>
 
     {{-- Document Details Box --}}
-    <div style="background: #F8FAFC; border-radius: 12px; padding: 24px; margin-bottom: 30px; border: 1px solid #E2E8F0;">
-        <table width="100%" cellspacing="0" cellpadding="0">
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px; width: 40%;">Tipo de documento:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
-                    {{ $document->documentType->display_name ?? 'Documento' }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Período:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
-                    {{ $document->period }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Fecha de carga:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
-                    {{ $document->created_at->format('d/m/Y H:i') }}
-                </td>
-            </tr>
-            @if($document->requires_signature)
-                <tr>
-                    <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Estado:</td>
-                    <td style="padding: 8px 0;">
-                        <span
-                            style="background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); color: #92400E; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600; display: inline-block;">
-                            ⚠️ Requiere firma
-                        </span>
-                    </td>
-                </tr>
-            @endif
-        </table>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
+        <tr>
+            <td bgcolor="#F8FAFC" style="background-color: #F8FAFC; border-radius: 12px; padding: 24px; border: 1px solid #E2E8F0;">
+                <table width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px; width: 40%;">Tipo de documento:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
+                            {{ $document->documentType->display_name ?? 'Documento' }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Período:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
+                            {{ $document->period }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Fecha de carga:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
+                            {{ $document->created_at->format('d/m/Y H:i') }}
+                        </td>
+                    </tr>
+                    @if($document->requires_signature)
+                        <tr>
+                            <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Estado:</td>
+                            <td style="padding: 8px 0;">
+                                <table cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td bgcolor="#FEF3C7" style="background-color: #FEF3C7; background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); color: #92400E; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600;">
+                                            ⚠️ Requiere firma
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    @endif
+                </table>
+            </td>
+        </tr>
+    </table>
 
     @if($document->requires_signature)
         @include('emails.components.alert-warning', [

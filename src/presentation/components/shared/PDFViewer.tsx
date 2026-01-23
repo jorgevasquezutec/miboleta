@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
@@ -62,14 +62,19 @@ export function PDFViewer({ url }: PDFViewerProps) {
     }, []);
 
     useEffect(() => {
+        // Reset state when URL changes to avoid showing stale data
+        setPdfBytes(null);
+        setNumPages(0);
+        setPageNumber(1);
+        setError(null);
+        setLoading(true);
+
         const fetchPdf = async () => {
             try {
-                setLoading(true);
-                setError(null);
-
                 const response = await fetch(url, {
                     method: 'GET',
                     credentials: 'include',
+                    cache: 'no-store', // Prevent browser caching to always get fresh PDF
                     headers: {
                         'Accept': 'application/pdf',
                     },
@@ -83,7 +88,8 @@ export function PDFViewer({ url }: PDFViewerProps) {
                 }
 
                 const arrayBuffer = await response.arrayBuffer();
-                const bytes = new Uint8Array(arrayBuffer);
+                // Create a copy of the bytes to avoid detached ArrayBuffer issues
+                const bytes = new Uint8Array(arrayBuffer.slice(0));
                 setPdfBytes(bytes);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -97,20 +103,20 @@ export function PDFViewer({ url }: PDFViewerProps) {
         }
     }, [url]);
 
-    // Memoize the file object with stable key
-    // Create a stable key based on byte array content to prevent unnecessary re-renders
-    const fileKey = useMemo(() => {
-        if (!pdfBytes) return null;
-        // Hash using first/last bytes + length for change detection
-        const start = Array.from(pdfBytes.slice(0, 50)).join(',');
-        const end = Array.from(pdfBytes.slice(-50)).join(',');
-        return `${start}-${pdfBytes.length}-${end}`;
-    }, [pdfBytes]);
+    // Create stable reference for file data to prevent unnecessary re-renders
+    const fileDataRef = useRef<{ data: Uint8Array } | null>(null);
+    const prevBytesRef = useRef<Uint8Array | null>(null);
 
-    const fileData = useMemo(() => {
-        if (!pdfBytes) return null;
-        return { data: pdfBytes };
-    }, [fileKey]);
+    // Only update fileData when bytes actually change
+    if (pdfBytes !== prevBytesRef.current) {
+        prevBytesRef.current = pdfBytes;
+        fileDataRef.current = pdfBytes ? { data: pdfBytes } : null;
+    }
+
+    const fileData = fileDataRef.current;
+
+    // Use URL as key to force Document remount when URL changes
+    const fileKey = url;
 
     function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
         setNumPages(numPages);

@@ -14,46 +14,56 @@
     </p>
 
     {{-- Vacation Details Box --}}
-    <div style="background: #F8FAFC; border-radius: 12px; padding: 24px; margin-bottom: 30px; border: 1px solid #E2E8F0;">
-        <table width="100%" cellspacing="0" cellpadding="0">
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px; width: 40%;">Fechas:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
-                    {{ $vacationRequest->date_range }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Días:</td>
-                <td style="padding: 8px 0;">
-                    <span
-                        style="background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%); color: #1E40AF; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600; display: inline-block;">
-                        🏖️ {{ $vacationRequest->duration_text }}
-                    </span>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Aprobado por:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
-                    {{ $vacationRequest->approvedByUser->full_name ?? 'Supervisor' }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Fecha de aprobación:</td>
-                <td style="padding: 8px 0; color: #334155; font-size: 14px;">
-                    {{ $vacationRequest->approved_at->format('d/m/Y H:i') }}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Estado:</td>
-                <td style="padding: 8px 0;">
-                    <span
-                        style="background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); color: #065F46; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600; display: inline-block;">
-                        ✅ Aprobada
-                    </span>
-                </td>
-            </tr>
-        </table>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
+        <tr>
+            <td bgcolor="#F8FAFC" style="background-color: #F8FAFC; border-radius: 12px; padding: 24px; border: 1px solid #E2E8F0;">
+                <table width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px; width: 40%;">Fechas:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
+                            {{ $vacationRequest->date_range }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Días:</td>
+                        <td style="padding: 8px 0;">
+                            <table cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td bgcolor="#DBEAFE" style="background-color: #DBEAFE; background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%); color: #1E40AF; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600;">
+                                        🏖️ {{ $vacationRequest->duration_text }}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Aprobado por:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">
+                            {{ $vacationRequest->approvedByUser->full_name ?? 'Supervisor' }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Fecha de aprobación:</td>
+                        <td style="padding: 8px 0; color: #334155; font-size: 14px;">
+                            {{ $vacationRequest->approved_at->format('d/m/Y H:i') }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #64748B; font-size: 14px;">Estado:</td>
+                        <td style="padding: 8px 0;">
+                            <table cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td bgcolor="#ECFDF5" style="background-color: #ECFDF5; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); color: #065F46; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600;">
+                                        ✅ Aprobada
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 
     @include('emails.components.alert-success', [
         'icon' => '🎉',

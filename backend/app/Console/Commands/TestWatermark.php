@@ -54,6 +54,7 @@ class TestWatermark extends Command
         $signatureData = [
             'timestamp' => now()->toISOString(),
             'user_id' => 1,
+            'user_name' => 'Luis Alberto Bermudo Cosar',
             'ip' => '127.0.0.1',
             'verification_method' => 'test',
         ];
