@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { getCsrfToken } from '@/shared/utils';
 
 // Configuración base de la API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost/api';
@@ -32,20 +33,6 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 
   failedQueue = [];
 };
-
-/**
- * Get CSRF token from cookies
- */
-function getCsrfToken(): string | null {
-  const name = 'XSRF-TOKEN';
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    const token = parts.pop()?.split(';').shift();
-    return token ? decodeURIComponent(token) : null;
-  }
-  return null;
-}
 
 // ✅ OPTIMIZACIÓN: Request queue para evitar requests duplicados
 const requestQueue = new Map<string, Promise<any>>();

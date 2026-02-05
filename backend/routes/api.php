@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FileUploadController;
+use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\UserController;
@@ -22,6 +23,14 @@ use Illuminate\Support\Facades\Route;
 | API Routes
 |--------------------------------------------------------------------------
 */
+
+// Health Check Routes (públicas, sin autenticación)
+Route::prefix('health')->group(function () {
+    Route::get('/ping', [HealthController::class, 'ping']);      // Simple ping
+    Route::get('/check', [HealthController::class, 'check']);    // Detailed health
+    Route::get('/ready', [HealthController::class, 'ready']);    // Kubernetes readiness
+    Route::get('/live', [HealthController::class, 'live']);      // Kubernetes liveness
+});
 
 // Rutas públicas
 Route::post('/login', [AuthController::class, 'login']);

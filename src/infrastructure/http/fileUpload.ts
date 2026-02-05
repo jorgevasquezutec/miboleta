@@ -1,24 +1,11 @@
 import apiClient from '../http/apiClient';
+import { getCsrfToken } from '@/shared/utils';
 
 export interface UploadResponse {
     success: boolean;
     url?: string;
     path?: string;
     message: string;
-}
-
-/**
- * Get CSRF token from cookies
- */
-function getCsrfToken(): string | null {
-    const name = 'XSRF-TOKEN';
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) {
-        const token = parts.pop()?.split(';').shift();
-        return token ? decodeURIComponent(token) : null;
-    }
-    return null;
 }
 
 /**

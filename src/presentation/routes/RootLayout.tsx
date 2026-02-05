@@ -347,6 +347,18 @@ export function RootLayout() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate("/login", { replace: true });
+    }
+  }, [user, navigate]);
+
+  // Don't render the layout if not authenticated (prevents flash)
+  if (!user) {
+    return null;
+  }
+
   // Handle responsive behavior
   useEffect(() => {
     const MOBILE_BREAKPOINT = 768; // md breakpoint

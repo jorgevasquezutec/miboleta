@@ -85,21 +85,35 @@ class UserTest extends TestCase
 
     public function test_user_can_have_supervisor(): void
     {
+        $tenant = Tenant::factory()->create();
         $supervisor = User::factory()->create();
-        $employee = User::factory()->create([
-            'immediate_supervisor_id' => $supervisor->id,
+        $employee = User::factory()->create();
+
+        // Attach supervisor to employee through the pivot table
+        $employee->tenants()->attach($tenant->id, [
+            'is_primary' => true,
+            'supervisor_id' => $supervisor->id,
         ]);
 
-        $this->assertEquals($supervisor->id, $employee->immediateSupervisor->id);
+        $this->assertEquals($supervisor->id, $employee->getSupervisorForTenant($tenant->id)->id);
     }
 
     public function test_supervisor_can_have_subordinates(): void
     {
+        $tenant = Tenant::factory()->create();
         $supervisor = User::factory()->create();
 
-        User::factory()->count(3)->create([
-            'immediate_supervisor_id' => $supervisor->id,
-        ]);
+        // Attach supervisor to tenant first
+        $supervisor->tenants()->attach($tenant->id, ['is_primary' => true]);
+
+        // Create 3 employees with this supervisor
+        $employees = User::factory()->count(3)->create();
+        foreach ($employees as $employee) {
+            $employee->tenants()->attach($tenant->id, [
+                'is_primary' => true,
+                'supervisor_id' => $supervisor->id,
+            ]);
+        }
 
         $this->assertCount(3, $supervisor->subordinates);
     }

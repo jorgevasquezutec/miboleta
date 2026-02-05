@@ -108,8 +108,9 @@ class ProfileService
      */
     protected function deleteAvatarFile(User $user): bool
     {
-        if (!empty($user->attributes['avatar_url'])) {
-            Storage::disk('public')->delete($user->attributes['avatar_url']);
+        $avatarPath = $user->getRawOriginal('avatar_url');
+        if (!empty($avatarPath)) {
+            Storage::disk('public')->delete($avatarPath);
             return true;
         }
 

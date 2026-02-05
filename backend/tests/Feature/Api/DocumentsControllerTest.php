@@ -180,7 +180,8 @@ class DocumentsControllerTest extends TestCase
             ->deleteJson("/api/documents/{$document->id}");
 
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('documents', ['id' => $document->id]);
+        // Document model uses SoftDeletes
+        $this->assertSoftDeleted('documents', ['id' => $document->id]);
     }
 
     public function test_unauthenticated_user_cannot_access_documents(): void

@@ -85,7 +85,7 @@ class PasswordService
             ];
         }
 
-        if (now()->diffInMinutes($record->created_at) > $this->tokenExpiration) {
+        if (abs(now()->diffInMinutes($record->created_at)) > $this->tokenExpiration) {
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             return [
                 'success' => false,

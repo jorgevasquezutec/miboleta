@@ -57,10 +57,10 @@ class AuthenticationTest extends TestCase
 
     public function test_inactive_user_cannot_login(): void
     {
-        $this->markTestSkipped('Backend does not currently validate user status on login');
+        $this->seed(\Database\Seeders\RoleSeeder::class);
 
         $tenant = Tenant::factory()->create();
-        $user = User::factory()->create([
+        $user = User::factory()->client()->create([
             'email' => 'inactive@example.com',
             'password' => bcrypt('password'),
             'status' => 'inactive',
@@ -72,7 +72,9 @@ class AuthenticationTest extends TestCase
             'password' => 'password',
         ]);
 
-        $response->assertStatus(422);
+        // Backend returns 422 with validation error for inactive users
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Tu cuenta se encuentra inactiva. Contacta al administrador.']);
     }
 
     public function test_authenticated_user_can_logout(): void

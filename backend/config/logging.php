@@ -1,9 +1,13 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
+use Monolog\Processor\WebProcessor;
+use Monolog\Processor\IntrospectionProcessor;
+use Monolog\Processor\MemoryUsageProcessor;
 
 return [
 
@@ -71,6 +75,55 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+        ],
+
+        // Structured JSON logs for production
+        'json' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/app.json.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'formatter' => JsonFormatter::class,
+            'formatter_with' => [
+                'batchMode' => JsonFormatter::BATCH_MODE_JSON,
+                'appendNewline' => true,
+            ],
+        ],
+
+        // JSON to stdout for Docker/Kubernetes
+        'stdout_json' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'handler' => StreamHandler::class,
+            'handler_with' => [
+                'stream' => 'php://stdout',
+            ],
+            'formatter' => JsonFormatter::class,
+            'formatter_with' => [
+                'batchMode' => JsonFormatter::BATCH_MODE_JSON,
+                'appendNewline' => true,
+            ],
+            'processors' => [
+                PsrLogMessageProcessor::class,
+                WebProcessor::class,
+                MemoryUsageProcessor::class,
+            ],
+        ],
+
+        // Structured logs with full context (recommended for production)
+        'structured' => [
+            'driver' => 'custom',
+            'via' => \App\Logging\CreateStructuredLogger::class,
+            'path' => storage_path('logs/structured.json.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+        ],
+
+        // Structured logs to stdout (for Docker/K8s)
+        'structured_stdout' => [
+            'driver' => 'custom',
+            'via' => \App\Logging\CreateStructuredLogger::class,
+            'level' => env('LOG_LEVEL', 'debug'),
         ],
 
         'slack' => [
