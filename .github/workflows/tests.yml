@@ -47,7 +47,7 @@ jobs:
         run: php artisan key:generate
 
       - name: Run tests (SQLite in-memory)
-        run: php artisan test --parallel
+        run: php artisan test
 
   frontend-tests:
     name: Frontend Tests (Vitest)
