@@ -1,7 +1,11 @@
 name: Build & Deploy
 
 on:
-  push:
+  # Solo corre después de que Tests pase exitosamente
+  workflow_run:
+    workflows: ["Tests"]
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
@@ -12,6 +16,8 @@ env:
 
 jobs:
   build-and-push:
+    # Solo ejecutar si Tests pasó exitosamente (o si es workflow_dispatch manual)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
