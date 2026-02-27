@@ -141,13 +141,13 @@ class TenantFilter
         $scopeHeader = $request->header('X-Tenant-Scope');
 
         if ($scopeHeader === 'all' || (!$tenantIdsHeader && !$singleTenantId)) {
-            // Log::info('🏢 [TenantFilter] No filter - showing all user tenants', [
-            //     'user_id' => $user->id,
-            //     'role' => $user->getCurrentRole(),
-            // ]);
+            // Non-root users with scope=all: restrict to their own tenants
+            if ($scopeHeader === 'all' && !$user->isRoot()) {
+                $userTenantIds = $this->getUserTenantIds($user);
+                $request->merge(['_tenant_filter_ids' => $userTenantIds]);
+            }
 
-            // No establecer _tenant_filter_ids para indicar "sin filtro"
-            // Los scopes decidirán si filtrar por rol
+            // Root users or no explicit scope: no filter (scopes decide by role)
             return $next($request);
         }
 

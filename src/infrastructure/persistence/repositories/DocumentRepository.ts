@@ -142,6 +142,9 @@ export class DocumentRepository implements IDocumentRepository {
     formData.append('period', data.period);
     formData.append('notify_employees', data.notifyEmployees ? '1' : '0');
     formData.append('requires_signature', data.requiresSignature ? '1' : '0');
+    if (data.tenantId) {
+      formData.append('tenant_id', data.tenantId.toString());
+    }
 
     const response = await apiClient.post<{ data: { batch_id: number; status: string } }>(
       '/document-batches/upload',

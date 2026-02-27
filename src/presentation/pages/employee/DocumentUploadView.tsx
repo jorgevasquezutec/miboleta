@@ -67,7 +67,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
   const [typeId, setTypeId] = useState<string>("");
   const [period, setPeriod] = useState<string>("");
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
-  const [notifyEmployees, setNotifyEmployees] = useState(false);
+  const [notifyEmployees, setNotifyEmployees] = useState(true);
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<{ batchId: number } | null>(null);
 
@@ -77,7 +77,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setSelectedFile(null);
     setTypeId("");
     setPeriod("");
-    setNotifyEmployees(false);
+    setNotifyEmployees(true);
     setRequiresSignature(false);
     setUploadSuccess(null);
     clearZipPreview();
@@ -98,7 +98,15 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     fetchDocumentTypes();
   }, [fetchDocumentTypes, clearZipPreview, clearError, userTenants]);
 
-
+  // Auto-check "Requiere firma digital" when the selected document type requires it
+  useEffect(() => {
+    if (typeId) {
+      const selectedType = documentTypes.find((t) => t.id.toString() === typeId);
+      if (selectedType?.requiresSignature) {
+        setRequiresSignature(true);
+      }
+    }
+  }, [typeId, documentTypes]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -173,7 +181,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setSelectedFile(null);
     setTypeId("");
     setPeriod("");
-    setNotifyEmployees(false);
+    setNotifyEmployees(true);
     setRequiresSignature(false);
     setUploadSuccess(null);
     clearZipPreview();

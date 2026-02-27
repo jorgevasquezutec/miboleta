@@ -69,7 +69,7 @@ class TenantFilterScope implements Scope
         }
 
         // Si es usuario root sin filtro: Puede ver todo
-        if ($user->role === 'root') {
+        if ($user->isRoot()) {
             // Log::debug('🔍 [TenantFilterScope] Root user - no filter', [
             //     'model' => get_class($model),
             //     'user_id' => $user->id,

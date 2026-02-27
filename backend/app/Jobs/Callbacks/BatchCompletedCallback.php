@@ -19,6 +19,8 @@ class BatchCompletedCallback
 
     public function __invoke(Batch $laravelBatch): void
     {
+        Log::info("BatchCompletedCallback: Starting processing for batch {$this->batch->id}");
+
         // Marcar como completado
         $this->batch->markAsCompleted();
 
@@ -27,7 +29,14 @@ class BatchCompletedCallback
 
         // Si se debe notificar a empleados, disparar job de notificaciones
         if ($this->batch->notify_employees) {
-            SendBatchNotifications::dispatch($this->batch)->onQueue('notifications');
+            Log::info("BatchCompletedCallback: Dispatching notifications for batch {$this->batch->id}");
+            try {
+                SendBatchNotifications::dispatch($this->batch)->onQueue('notifications');
+            } catch (\Throwable $e) {
+                Log::error("BatchCompletedCallback: Failed to dispatch notifications for batch {$this->batch->id}: {$e->getMessage()}");
+            }
+        } else {
+            Log::info("BatchCompletedCallback: Notifications disabled for batch {$this->batch->id} (notify_employees=false)");
         }
 
         // Broadcast eventos individuales a cada usuario con documento nuevo
@@ -37,8 +46,14 @@ class BatchCompletedCallback
             ->with('documentType')
             ->get();
 
+        Log::info("BatchCompletedCallback: Broadcasting events for {$documents->count()} documents in batch {$this->batch->id}");
+
         foreach ($documents as $document) {
-            broadcast(new NewDocumentAvailable($document));
+            try {
+                broadcast(new NewDocumentAvailable($document));
+            } catch (\Throwable $e) {
+                Log::error("BatchCompletedCallback: Failed to broadcast event for document {$document->id}: {$e->getMessage()}");
+            }
         }
 
         Log::info("BatchCompletedCallback: Batch {$this->batch->id} completado - " .

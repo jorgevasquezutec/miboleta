@@ -75,3 +75,4 @@ coverage/
 /docs/pdf-generator/*.png
 /docs/pdf-generator/mermaid-diagram-*.png
 /docs/pdf-generator/cover-*.png
+CLAUDE.md

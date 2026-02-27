@@ -102,9 +102,9 @@ class PdfWatermarkService
         $pageWidth = $pageSize['width'];
         $pageHeight = $pageSize['height'];
 
-        // Watermark configuration
-        $textWidth = 60;
-        $margin = 10;
+        // Watermark configuration - proportional to page size
+        $textWidth = min(60, $pageWidth * 0.30); // 30% of width, max 60mm
+        $margin = max(5, 10 * ($pageWidth / 210)); // Scale margin relative to A4
         $totalTextHeight = 18; // Height needed for signature + date
 
         // Position: bottom right corner
@@ -117,6 +117,12 @@ class PdfWatermarkService
 
         // Get user name for signature
         $userName = $signatureData['user_name'] ?? 'FIRMADO CONFORME';
+
+        // Add semi-transparent white background behind signature to ensure legibility
+        $pdf->SetAlpha(0.85);
+        $pdf->SetFillColor(255, 255, 255);
+        $pdf->Rect($x - 2, $y - 2, $textWidth + 4, $totalTextHeight + 6, 'F');
+        $pdf->SetAlpha(1.0);
 
         // Set text color to black
         $pdf->SetTextColor(0, 0, 0);

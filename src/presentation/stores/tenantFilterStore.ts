@@ -109,9 +109,39 @@ export const useTenantFilterStore = create<TenantFilterState>()(
 
             /**
              * Limpia el filtro (mostrar todas las empresas)
+             * For non-root users, 'all' means all their assigned tenants
              */
             clearFilter: () => {
                 console.log('🏢 [TenantFilter] Clearing filter');
+
+                // Check if user is root
+                try {
+                    const authStorage = localStorage.getItem('auth-storage');
+                    if (authStorage) {
+                        const { state } = JSON.parse(authStorage);
+                        const user = state?.user;
+                        if (user?.role !== 'root' && user?.tenants && user.tenants.length > 0) {
+                            // Non-root: set mode 'all' but include their tenant IDs
+                            const tenantIds = user.tenants.map((t: any) => String(t.id));
+                            const tenants = user.tenants.map((t: any) => ({
+                                id: t.id,
+                                name: t.name,
+                                slug: t.slug,
+                            }));
+                            set({
+                                filter: {
+                                    mode: 'all',
+                                    tenantIds,
+                                    tenants,
+                                }
+                            });
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Fallback to default behavior
+                }
+
                 set({
                     filter: {
                         mode: 'all',
@@ -146,8 +176,32 @@ export const useTenantFilterStore = create<TenantFilterState>()(
              * @param availableTenants - Array de tenants disponibles del usuario
              */
             selectAll: (availableTenants: TenantAssociation[]) => {
-                const allIds = availableTenants.map(t => String(t.id));
-                get().setFilter(allIds, availableTenants);
+                // Check if user is root
+                let isRoot = false;
+                try {
+                    const authStorage = localStorage.getItem('auth-storage');
+                    if (authStorage) {
+                        const { state } = JSON.parse(authStorage);
+                        isRoot = state?.user?.role === 'root';
+                    }
+                } catch (e) {
+                    // Default to non-root behavior
+                }
+
+                if (isRoot) {
+                    // Root users: set mode 'all' without IDs (sees everything)
+                    set({
+                        filter: {
+                            mode: 'all',
+                            tenantIds: [],
+                            tenants: [],
+                        }
+                    });
+                } else {
+                    // Non-root users: select all available tenants with IDs
+                    const allIds = availableTenants.map(t => String(t.id));
+                    get().setFilter(allIds, availableTenants, 'all');
+                }
             },
 
             /**

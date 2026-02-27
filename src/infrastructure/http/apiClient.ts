@@ -64,9 +64,27 @@ apiClient.interceptors.request.use(
 
             console.log(`🏢 [API] Filtering by tenants: ${tenantQuery} (mode: ${filter.mode})`);
           } else if (filter.mode === 'all') {
-            // ✅ Modo 'all': sin filtro (mostrar todas las empresas)
-            config.headers['X-Tenant-Scope'] = 'all';
-            console.log(`🏢 [API] No tenant filter (showing all companies)`);
+            // Check user role: only root can send X-Tenant-Scope: all
+            const authStorage = localStorage.getItem('auth-storage');
+            let userRole: string | undefined;
+            if (authStorage) {
+              const authState = JSON.parse(authStorage);
+              userRole = authState?.state?.user?.role;
+            }
+
+            if (userRole === 'root') {
+              config.headers['X-Tenant-Scope'] = 'all';
+              console.log(`🏢 [API] Root user - no tenant filter (showing all companies)`);
+            } else {
+              // Non-root users: send their assigned tenant IDs instead of scope=all
+              const authData = authStorage ? JSON.parse(authStorage) : null;
+              const user = authData?.state?.user;
+              if (user?.tenants && user.tenants.length > 0) {
+                const tenantIds = user.tenants.map((t: any) => t.id).join(',');
+                config.headers['X-Tenant-Ids'] = tenantIds;
+                console.log(`🏢 [API] Non-root 'all' mode - sending user tenants: ${tenantIds}`);
+              }
+            }
           }
         }
       }

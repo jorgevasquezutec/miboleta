@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\UserCreationException;
+use App\Mail\EmailChangedNotificationMail;
 use App\Mail\WelcomeUserMail;
 use App\Models\Document;
 use App\Models\User;
@@ -107,6 +108,10 @@ class UserService
             $oldRoleId = $user->roles()->first()?->id;
             $userAuth = Auth::user(); // --- IGNORE ---
 
+            // Detect email change before update
+            $emailChanged = isset($data['email']) && $data['email'] !== $user->email;
+            $oldEmail = $user->email;
+
             if (isset($data['password'])) {
                 $data['password'] = Hash::make($data['password']);
             }
@@ -174,7 +179,29 @@ class UserService
                 }
             }
 
+            // If email changed, force password change
+            if ($emailChanged) {
+                $user->update(['must_change_password' => true]);
+            }
+
             DB::commit();
+
+            // Send email change notification AFTER commit (avoid sending if transaction fails)
+            if ($emailChanged) {
+                $newEmail = $data['email'];
+                try {
+                    $notification = new EmailChangedNotificationMail($user, $oldEmail, $newEmail);
+                    Mail::to($oldEmail)->send($notification);
+                    Mail::to($newEmail)->send($notification);
+                } catch (\Exception $e) {
+                    Log::warning('[UserService] Failed to send email change notification', [
+                        'user_id' => $user->id,
+                        'old_email' => $oldEmail,
+                        'new_email' => $newEmail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             return $user->load(['roles', 'tenants']);
         } catch (\Exception $e) {

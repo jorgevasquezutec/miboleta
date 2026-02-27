@@ -18,6 +18,7 @@ class UploadZipBatchRequest extends FormRequest
             'file' => 'required|file|mimes:zip|max:102400', // 100MB max
             'type_id' => 'required|exists:document_types,id',
             'period' => 'required|regex:/^\d{4}-\d{2}$/', // YYYY-MM format
+            'tenant_id' => 'required|exists:tenants,id',
             'notify_employees' => 'boolean',
             'requires_signature' => 'boolean',
         ];
@@ -32,6 +33,8 @@ class UploadZipBatchRequest extends FormRequest
             'file.max' => 'El archivo no puede exceder 100MB',
             'type_id.required' => 'El tipo de documento es requerido',
             'type_id.exists' => 'El tipo de documento seleccionado no existe',
+            'tenant_id.required' => 'El tenant es requerido',
+            'tenant_id.exists' => 'El tenant seleccionado no existe',
             'period.required' => 'El período es requerido',
             'period.regex' => 'El período debe tener el formato YYYY-MM',
             'notify_employees.boolean' => 'El campo debe ser verdadero o falso',
