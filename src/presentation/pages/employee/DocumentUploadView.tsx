@@ -68,7 +68,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
   const [period, setPeriod] = useState<string>("");
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [notifyEmployees, setNotifyEmployees] = useState(true);
-  const [requiresSignature, setRequiresSignature] = useState(false);
+  const [requiresSignature, setRequiresSignature] = useState(true);
   const [uploadSuccess, setUploadSuccess] = useState<{ batchId: number } | null>(null);
 
   // Reset form and load document types on mount
@@ -78,7 +78,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setTypeId("");
     setPeriod("");
     setNotifyEmployees(true);
-    setRequiresSignature(false);
+    setRequiresSignature(true);
     setUploadSuccess(null);
     clearZipPreview();
     clearError();
@@ -182,7 +182,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setTypeId("");
     setPeriod("");
     setNotifyEmployees(true);
-    setRequiresSignature(false);
+    setRequiresSignature(true);
     setUploadSuccess(null);
     clearZipPreview();
     clearError();

@@ -118,12 +118,6 @@ class PdfWatermarkService
         // Get user name for signature
         $userName = $signatureData['user_name'] ?? 'FIRMADO CONFORME';
 
-        // Add semi-transparent white background behind signature to ensure legibility
-        $pdf->SetAlpha(0.85);
-        $pdf->SetFillColor(255, 255, 255);
-        $pdf->Rect($x - 2, $y - 2, $textWidth + 4, $totalTextHeight + 6, 'F');
-        $pdf->SetAlpha(1.0);
-
         // Set text color to black
         $pdf->SetTextColor(0, 0, 0);
 

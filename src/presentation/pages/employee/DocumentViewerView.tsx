@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDocumentTitle } from "@/presentation/hooks";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FileText, CheckCircle, Info, Loader2, AlertCircle } from "lucide-react";
@@ -44,14 +44,18 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
   } = useDocumentsStore();
 
   const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfCacheBuster, setPdfCacheBuster] = useState<number | null>(null);
+
+  const pdfUrl = useMemo(() => {
+    if (!documentId) return null;
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
+    const url = `${baseUrl}/documents/${documentId}/preview`;
+    return pdfCacheBuster ? `${url}?t=${pdfCacheBuster}` : url;
+  }, [documentId, pdfCacheBuster]);
 
   useEffect(() => {
     if (documentId) {
       fetchDocumentById(parseInt(documentId));
-      // Build PDF preview URL (inline display, not download)
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
-      setPdfUrl(`${baseUrl}/documents/${documentId}/preview`);
     }
   }, [documentId, fetchDocumentById]);
 
@@ -60,15 +64,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
     checkSignatureTerms();
   }, [checkSignatureTerms]);
 
-  // Log signature terms state for debugging
-  useEffect(() => {
-    console.log('[DocumentViewerView] signatureTermsAccepted:', signatureTermsAccepted);
-  }, [signatureTermsAccepted]);
-
   const handleSign = () => {
-    console.log('[DocumentViewerView] Opening signature modal');
-    console.log('[DocumentViewerView] signatureTermsAccepted:', signatureTermsAccepted);
-    console.log('[DocumentViewerView] requiresTermsAcceptance will be:', !signatureTermsAccepted);
     setShowSignatureModal(true);
   };
 
@@ -78,8 +74,7 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
     if (documentId) {
       await fetchDocumentById(parseInt(documentId));
       // Force PDF viewer to reload by adding cache-busting timestamp
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
-      setPdfUrl(`${baseUrl}/documents/${documentId}/preview?t=${Date.now()}`);
+      setPdfCacheBuster(Date.now());
     }
   };
 
@@ -226,15 +221,6 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
             const docUserId = currentDocument.userId;
             const currentUserId = user?.id ? Number(user.id) : null;
             const isOwner = docUserId !== null && currentUserId !== null && docUserId === currentUserId;
-
-            console.log('[DocumentViewerView] Signature check:', {
-              status: currentDocument.status,
-              requiresSignature: currentDocument.requiresSignature,
-              docUserId,
-              currentUserId,
-              isOwner,
-              showSignatureSection: currentDocument.status === 'pending' && currentDocument.requiresSignature && isOwner
-            });
 
             if (currentDocument.status === 'pending' && currentDocument.requiresSignature && isOwner) {
               return (
