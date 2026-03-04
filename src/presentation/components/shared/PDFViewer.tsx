@@ -1,11 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
 import { cn } from '@/presentation/components/ui/utils';
 
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Configure PDF.js worker using local bundled file instead of CDN
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+).toString();
 
 interface PDFViewerProps {
     url: string;
@@ -69,15 +72,18 @@ export function PDFViewer({ url }: PDFViewerProps) {
         setError(null);
         setLoading(true);
 
+        const controller = new AbortController();
+
         const fetchPdf = async () => {
             try {
                 const response = await fetch(url, {
                     method: 'GET',
                     credentials: 'include',
-                    cache: 'no-store', // Prevent browser caching to always get fresh PDF
+                    cache: 'no-store',
                     headers: {
                         'Accept': 'application/pdf',
                     },
+                    signal: controller.signal,
                 });
 
                 if (!response.ok) {
@@ -88,10 +94,10 @@ export function PDFViewer({ url }: PDFViewerProps) {
                 }
 
                 const arrayBuffer = await response.arrayBuffer();
-                // Create a copy of the bytes to avoid detached ArrayBuffer issues
                 const bytes = new Uint8Array(arrayBuffer.slice(0));
                 setPdfBytes(bytes);
             } catch (err) {
+                if (err instanceof DOMException && err.name === 'AbortError') return;
                 setError(err instanceof Error ? err.message : 'Error desconocido');
             } finally {
                 setLoading(false);
@@ -101,22 +107,15 @@ export function PDFViewer({ url }: PDFViewerProps) {
         if (url) {
             fetchPdf();
         }
+
+        return () => controller.abort();
     }, [url]);
 
-    // Create stable reference for file data to prevent unnecessary re-renders
-    const fileDataRef = useRef<{ data: Uint8Array } | null>(null);
-    const prevBytesRef = useRef<Uint8Array | null>(null);
-
-    // Only update fileData when bytes actually change
-    if (pdfBytes !== prevBytesRef.current) {
-        prevBytesRef.current = pdfBytes;
-        fileDataRef.current = pdfBytes ? { data: pdfBytes } : null;
-    }
-
-    const fileData = fileDataRef.current;
-
-    // Use URL as key to force Document remount when URL changes
-    const fileKey = url;
+    // Memoize file data to prevent unnecessary Document reloads
+    const fileData = useMemo(
+        () => (pdfBytes ? { data: pdfBytes } : null),
+        [pdfBytes]
+    );
 
     function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
         setNumPages(numPages);
@@ -158,6 +157,34 @@ export function PDFViewer({ url }: PDFViewerProps) {
             }
         }
     }, [pageNumber, showThumbnails]);
+
+    // Lazy-load thumbnails: only render those near the viewport
+    const [visibleThumbnails, setVisibleThumbnails] = useState<Set<number>>(new Set());
+
+    useEffect(() => {
+        if (!showThumbnails || numPages === 0 || !thumbnailsRef.current) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                setVisibleThumbnails((prev) => {
+                    const next = new Set(prev);
+                    for (const entry of entries) {
+                        const page = Number((entry.target as HTMLElement).dataset.page);
+                        if (entry.isIntersecting) {
+                            next.add(page);
+                        }
+                    }
+                    return next;
+                });
+            },
+            { root: thumbnailsRef.current, rootMargin: '200px 0px' }
+        );
+
+        const buttons = thumbnailsRef.current.querySelectorAll('[data-page]');
+        buttons.forEach((btn) => observer.observe(btn));
+
+        return () => observer.disconnect();
+    }, [showThumbnails, numPages]);
 
     if (loading && !pdfBytes) {
         return (
@@ -241,7 +268,6 @@ export function PDFViewer({ url }: PDFViewerProps) {
             <div className="flex-1 flex overflow-hidden">
                 {fileData && (
                     <Document
-                        key={fileKey || 'pdf-document'}
                         file={fileData}
                         onLoadSuccess={onDocumentLoadSuccess}
                         onLoadError={onDocumentLoadError}
@@ -270,16 +296,20 @@ export function PDFViewer({ url }: PDFViewerProps) {
                                                 : "hover:bg-gray-200"
                                         )}
                                     >
-                                        <Page
-                                            pageNumber={page}
-                                            width={80}
-                                            renderTextLayer={false}
-                                            renderAnnotationLayer={false}
-                                            className="shadow-sm rounded overflow-hidden"
-                                            loading={
-                                                <div className="h-24 w-full bg-gray-200 animate-pulse rounded" />
-                                            }
-                                        />
+                                        {visibleThumbnails.has(page) ? (
+                                            <Page
+                                                pageNumber={page}
+                                                width={80}
+                                                renderTextLayer={false}
+                                                renderAnnotationLayer={false}
+                                                className="shadow-sm rounded overflow-hidden"
+                                                loading={
+                                                    <div className="h-24 w-full bg-gray-200 animate-pulse rounded" />
+                                                }
+                                            />
+                                        ) : (
+                                            <div className="h-24 w-full bg-gray-200 rounded" />
+                                        )}
                                         <p className={cn(
                                             "text-xs mt-1 text-center",
                                             pageNumber === page ? "text-[#2563EB] font-medium" : "text-[#64748B]"
