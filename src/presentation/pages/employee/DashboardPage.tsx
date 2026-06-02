@@ -16,6 +16,9 @@ import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/present
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
 import { getDocumentStatusBadge, formatDate } from "@/presentation/utils";
+import apiClient from "@/infrastructure/http/apiClient";
+import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
+import { format, subDays } from "date-fns";
 
 interface EmployeeDashboardViewProps {
   onViewDocument?: (id: number) => void;
@@ -49,6 +52,19 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
   // Local state for search input (debounce)
   const [searchInput, setSearchInput] = useState(filters.search);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Real per-user document stats (reflect period + search + type, NOT status)
+  const [myStats, setMyStats] = useState<{ total: number; signed: number; pending: number } | null>(null);
+
+  // Period filter (default "Todo el tiempo") — applies to the cards and the documents list
+  const [dateRange, setDateRange] = useState<DateRange>({ from: subDays(new Date(), 30), to: new Date() });
+  const [allTime, setAllTime] = useState(true);
+  const startDate = allTime || !dateRange.from ? undefined : format(dateRange.from, 'yyyy-MM-dd');
+  const endDate = allTime || !dateRange.to ? undefined : format(dateRange.to, 'yyyy-MM-dd');
+  const handleDateRangeChange = (values: { range: DateRange }) => {
+    setAllTime(false);
+    setDateRange(values.range);
+  };
 
   // Debounce search
   useEffect(() => {
@@ -85,9 +101,33 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
       search: filters.search || undefined,
       status: filters.status !== "all" ? (filters.status as Document['status']) : undefined,
       docTypeId: filters.type ? parseInt(filters.type) : undefined,
+      dateFrom: startDate,
+      dateTo: endDate,
       myDocuments: true, // Always show only my documents
     });
-  }, [filters.page, filters.per_page, filters.search, filters.status, filters.type, fetchDocuments]);
+  }, [filters.page, filters.per_page, filters.search, filters.status, filters.type, startDate, endDate, fetchDocuments]);
+
+  // Fetch real per-user stats — reflect period + search + type (NOT status), like the list
+  useTenantAwareEffect(() => {
+    let active = true;
+    const params = new URLSearchParams();
+    if (startDate) params.append('date_from', startDate);
+    if (endDate) params.append('date_to', endDate);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.type) params.append('doc_type_id', filters.type);
+    const qs = params.toString();
+    apiClient
+      .get<{ data: { total: number; signed: number; pending: number } }>(`/reports/my-stats${qs ? `?${qs}` : ''}`)
+      .then((res) => {
+        if (active) setMyStats(res.data.data);
+      })
+      .catch(() => {
+        // Silencioso: si falla, se usan los valores de respaldo
+      });
+    return () => {
+      active = false;
+    };
+  }, [startDate, endDate, filters.search, filters.type]);
 
   const handleSearch = () => {
     setFilters({ page: 1 });
@@ -122,9 +162,10 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
     setFilters({ per_page: newPerPage, page: 1 });
   };
 
-  // Estadísticas
-  const pendingCount = documents.filter(d => d.status === "pending").length;
-  const signedCount = documents.filter(d => d.status === "signed").length;
+  // Estadísticas reales del usuario (no derivadas de la página actual)
+  const totalCount = myStats?.total ?? total;
+  const signedCount = myStats?.signed ?? 0;
+  const pendingCount = myStats?.pending ?? 0;
 
   if (error) {
     return (
@@ -148,6 +189,26 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
         <p className="text-[#64748B] text-sm sm:text-base">
           Gestiona y visualiza todos tus documentos laborales
         </p>
+      </div>
+
+      {/* Period filter (top, like the admin dashboard) */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <span className="text-sm text-[#64748B]">Período:</span>
+        <Button
+          variant={allTime ? "default" : "outline"}
+          size="sm"
+          onClick={() => setAllTime(true)}
+        >
+          Todo el tiempo
+        </Button>
+        <DateRangePicker
+          initialDateFrom={dateRange.from}
+          initialDateTo={dateRange.to}
+          onUpdate={handleDateRangeChange}
+          showCompare={false}
+          align="start"
+          compact
+        />
       </div>
 
       {/* Alerts for Pending Documents */}
@@ -183,7 +244,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[#64748B] mb-1">Total Documentos</p>
-                <h2 className="text-2xl font-bold">{total}</h2>
+                <h2 className="text-2xl font-bold">{totalCount}</h2>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <FileText className="w-6 h-6 text-[#2563EB]" />

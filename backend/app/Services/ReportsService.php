@@ -39,13 +39,14 @@ class ReportsService
      */
     public function getDocumentStats(?int $tenantId = null, ?string $startDate = null, ?string $endDate = null): array
     {
+        // Summary counts respect the selected date range when one is provided. When no range
+        // is sent (default "Todo el tiempo"), they reflect the organization's all-time totals,
+        // so the cards never show 0 just because the data is older than a default window.
         $query = Document::query();
 
         if ($tenantId) {
             $query->where('tenant_id', $tenantId);
         }
-
-        // Apply date filters
         if ($startDate) {
             $query->whereDate('created_at', '>=', $startDate);
         }
@@ -59,22 +60,16 @@ class ReportsService
         $active = (clone $query)->where('status', 'active')->count();
         $orphan = (clone $query)->where('status', 'orphan')->count();
 
-        // Documents by month (always show last 6 months for trend chart)
-        $byMonth = $this->getDocumentsByMonth($tenantId, 6);
+        // Documents by month for the trend chart — driven by the selected date range
+        // (falls back to the last 6 months when no range is provided).
+        $byMonth = $this->getDocumentsByMonth($tenantId, 6, $startDate, $endDate);
 
-        // Documents by type (using document_types relationship)
-        $byTypeQuery = Document::query()
+        // Documents by type (using document_types relationship) — respects the date range
+        $byType = Document::query()
             ->join('document_types', 'documents.doc_type_id', '=', 'document_types.id')
-            ->when($tenantId, fn($q) => $q->where('documents.tenant_id', $tenantId));
-
-        if ($startDate) {
-            $byTypeQuery->whereDate('documents.created_at', '>=', $startDate);
-        }
-        if ($endDate) {
-            $byTypeQuery->whereDate('documents.created_at', '<=', $endDate);
-        }
-
-        $byType = $byTypeQuery
+            ->when($tenantId, fn($q) => $q->where('documents.tenant_id', $tenantId))
+            ->when($startDate, fn($q) => $q->whereDate('documents.created_at', '>=', $startDate))
+            ->when($endDate, fn($q) => $q->whereDate('documents.created_at', '<=', $endDate))
             ->select('document_types.name as type_name', DB::raw('count(*) as count'))
             ->groupBy('document_types.id', 'document_types.name')
             ->get()
@@ -167,8 +162,9 @@ class ReportsService
             $query->where('tenant_id', $tenantId);
         }
 
-        // Always filter by current year for vacation stats
-        // Filter by created_at (when the request was made)
+        // Vacation stats are reported per current year by design (annual record),
+        // independent of the dashboard's date-range filter. The response exposes
+        // `current_year` so the UI can label the period explicitly.
         $currentYear = Carbon::now()->year;
         $query->whereYear('created_at', $currentYear);
 

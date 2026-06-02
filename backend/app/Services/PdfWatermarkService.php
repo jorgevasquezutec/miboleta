@@ -102,14 +102,26 @@ class PdfWatermarkService
         $pageWidth = $pageSize['width'];
         $pageHeight = $pageSize['height'];
 
-        // Watermark configuration - proportional to page size
-        $textWidth = min(60, $pageWidth * 0.30); // 30% of width, max 60mm
-        $margin = max(5, 10 * ($pageWidth / 210)); // Scale margin relative to A4
-        $totalTextHeight = 18; // Height needed for signature + date
+        // Read placement/size from config (config/signature.php) — adjustable without code changes
+        $cfg = config('signature.watermark', []);
+        $textWidth = (float) ($cfg['width'] ?? 50);
+        $align = $cfg['align'] ?? 'C';
+        $nameHeight = (float) ($cfg['name_height'] ?? 8);
+        $dateOffsetY = (float) ($cfg['date_offset_y'] ?? 8);
+        $nameFontSize = (float) ($cfg['name_font_size'] ?? 12);
+        $dateFontSize = (float) ($cfg['date_font_size'] ?? 7);
 
-        // Position: bottom right corner
-        $x = $pageWidth - $textWidth - $margin;
-        $y = $pageHeight - $margin - $totalTextHeight - 5; // Slightly raised to avoid page edge
+        if (($cfg['mode'] ?? 'absolute') === 'absolute') {
+            // Fixed position (mm from top-left) — fits the boleta's signature box
+            $x = (float) ($cfg['x'] ?? ($pageWidth - $textWidth - 10));
+            $y = (float) ($cfg['name_y'] ?? ($pageHeight - 33));
+        } else {
+            // Legacy "auto": bottom-right corner, proportional to page size
+            $textWidth = min($textWidth, $pageWidth * 0.30);
+            $margin = max(5, 10 * ($pageWidth / 210));
+            $x = $pageWidth - $textWidth - $margin;
+            $y = $pageHeight - $margin - 18 - 5;
+        }
 
         // Format timestamp
         $timestamp = $signatureData['timestamp'] ?? now()->toISOString();
@@ -118,17 +130,17 @@ class PdfWatermarkService
         // Get user name for signature
         $userName = $signatureData['user_name'] ?? 'FIRMADO CONFORME';
 
-        // Set text color to black
+        // Text only, no fill/background (transparent over the boleta content)
         $pdf->SetTextColor(0, 0, 0);
 
-        // Add signature name with italic slant effect (simulating handwritten signature)
-        $this->addSignatureText($pdf, $userName, $x, $y, $textWidth);
+        // Signature name (cursive font), centered in the block
+        $this->addSignatureText($pdf, $userName, $x, $y, $textWidth, $nameHeight, $nameFontSize, $align);
 
-        // Add date text (below signature, smaller, black)
+        // Date text (below the name, smaller) — no fill
         $pdf->SetTextColor(0, 0, 0);
-        $pdf->SetFont('helvetica', '', 7);
-        $pdf->SetXY($x, $y + 6);
-        $pdf->Cell($textWidth, 4, $formattedDate, 0, 0, 'C', false, '', 0, false, 'T', 'M');
+        $pdf->SetFont('helvetica', '', $dateFontSize);
+        $pdf->SetXY($x, $y + $dateOffsetY);
+        $pdf->Cell($textWidth, 4, $formattedDate, 0, 0, $align, false, '', 0, false, 'T', 'M');
     }
 
     /**
@@ -141,14 +153,21 @@ class PdfWatermarkService
      * @param float $width
      * @return void
      */
-    protected function addSignatureText(Fpdi $pdf, string $name, float $x, float $y, float $width): void
+    protected function addSignatureText(Fpdi $pdf, string $name, float $x, float $y, float $width, float $height = 8, float $fontSize = 12, string $align = 'C'): void
     {
-        // Load cursive signature font
-        $this->loadSignatureFont($pdf);
+        // Load cursive signature font at the configured size
+        $this->loadSignatureFont($pdf, false, $fontSize);
 
-        // Draw the signature text centered
+        // Auto-shrink so long names always fit inside the block (avoid overflow)
+        $stringWidth = $pdf->GetStringWidth($name);
+        if ($stringWidth > 0 && $stringWidth > $width) {
+            $fitSize = max(5, $fontSize * ($width / $stringWidth) * 0.96);
+            $this->loadSignatureFont($pdf, false, $fitSize);
+        }
+
+        // Draw the signature text (no fill — transparent background)
         $pdf->SetXY($x, $y);
-        $pdf->Cell($width, 8, $name, 0, 0, 'C', false, '', 0, false, 'T', 'M');
+        $pdf->Cell($width, $height, $name, 0, 0, $align, false, '', 0, false, 'T', 'M');
     }
 
     /**
@@ -158,7 +177,7 @@ class PdfWatermarkService
      * @param bool $italic Apply italic style
      * @return void
      */
-    protected function loadSignatureFont(Fpdi $pdf, bool $italic = false): void
+    protected function loadSignatureFont(Fpdi $pdf, bool $italic = false, float $fontSize = 12): void
     {
         $fontPath = resource_path('fonts/segoesc.ttf');
         $tcpdfFontsDir = base_path('vendor/tecnickcom/tcpdf/fonts/');
@@ -166,7 +185,7 @@ class PdfWatermarkService
 
         // Check if font is already converted in TCPDF fonts directory
         if (file_exists($tcpdfFontsDir . 'segoesc.php')) {
-            $pdf->SetFont('segoesc', $style, 12);
+            $pdf->SetFont('segoesc', $style, $fontSize);
             return;
         }
 
@@ -176,7 +195,7 @@ class PdfWatermarkService
                 $fontName = \TCPDF_FONTS::addTTFfont($fontPath, 'TrueTypeUnicode', '', 32, $tcpdfFontsDir);
 
                 if ($fontName) {
-                    $pdf->SetFont($fontName, $style, 12);
+                    $pdf->SetFont($fontName, $style, $fontSize);
                     return;
                 } else {
                     Log::warning('[PdfWatermarkService] addTTFfont returned false', ['fontPath' => $fontPath]);
@@ -192,7 +211,7 @@ class PdfWatermarkService
         }
 
         // Fallback to Times Italic
-        $pdf->SetFont('times', 'I', 11);
+        $pdf->SetFont('times', 'I', $fontSize);
     }
 
     /**

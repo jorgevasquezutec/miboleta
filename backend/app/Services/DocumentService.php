@@ -289,4 +289,27 @@ class DocumentService
 
         return $query;
     }
+
+    /**
+     * Per-user document counts for the employee dashboard summary cards.
+     *
+     * Applies the SAME optional filters as the documents list (date range, type,
+     * search, period) EXCEPT status, so the cards show the status breakdown
+     * (total / signed / pending) within the currently filtered scope and stay
+     * consistent with the list.
+     */
+    public function getMyDocumentStats(User $user, array $filters = []): array
+    {
+        $base = Document::query()->where('user_id', $user->id);
+
+        $filtersNoStatus = $filters;
+        unset($filtersNoStatus['status']);
+        $this->applyOptionalFilters($base, $filtersNoStatus);
+
+        return [
+            'total' => (clone $base)->count(),
+            'signed' => (clone $base)->where('status', 'signed')->count(),
+            'pending' => (clone $base)->where('status', 'pending')->count(),
+        ];
+    }
 }

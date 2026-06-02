@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exports\GenericExport;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Services\DocumentService;
 use App\Services\ReportsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class ReportsController extends Controller
 {
     public function __construct(
-        private ReportsService $reportsService
+        private ReportsService $reportsService,
+        private DocumentService $documentService
     ) {
     }
 
@@ -43,8 +45,34 @@ class ReportsController extends Controller
     }
 
     /**
+     * Get the authenticated user's own document statistics (individual dashboard).
+     * Returns real totals (total / signed / pending) across all the user's documents,
+     * independent of pagination or list filters.
+     *
+     * GET /api/reports/my-stats
+     */
+    public function myStats(Request $request): JsonResponse
+    {
+        // Same scope as the documents list (date range, type, search) EXCEPT status,
+        // so the summary cards stay consistent with the filtered list.
+        $filters = [
+            'date_from' => $request->date_from,
+            'date_to' => $request->date_to,
+            'search' => $request->search,
+            'doc_type_id' => $request->doc_type_id,
+            'period' => $request->period,
+        ];
+
+        $stats = $this->documentService->getMyDocumentStats($request->user(), $filters);
+
+        return response()->json([
+            'data' => $stats,
+        ]);
+    }
+
+    /**
      * Get document statistics.
-     * 
+     *
      * GET /api/reports/documents
      */
     public function documents(Request $request): JsonResponse
@@ -381,9 +409,13 @@ class ReportsController extends Controller
             }
         }
 
-        // Default: use primary tenant
-        $primaryTenant = $user->primaryTenant();
-        return $primaryTenant?->id;
+        // Non-root: scope strictly to a tenant the user belongs to (primary, else first).
+        $tenantId = $user->primaryTenant()?->id ?? $user->tenants()->first()?->id;
+
+        // A non-root user must always be scoped to a tenant. If somehow they have none,
+        // return a non-matching id so the dashboard shows no data instead of exposing
+        // every tenant (getDashboardStats treats null as "all tenants").
+        return $tenantId ?? -1;
     }
 
     /**
