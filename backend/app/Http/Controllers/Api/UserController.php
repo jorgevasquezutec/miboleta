@@ -11,6 +11,7 @@ use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserSummaryResource;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\UserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -23,8 +24,16 @@ use Illuminate\Support\Facades\Log;
  */
 class UserController extends Controller
 {
+    /**
+     * Campos auditados al crear/editar/eliminar usuarios.
+     */
+    private const AUDITED_FIELDS = [
+        'name', 'last_name', 'email', 'document_type', 'document_text', 'phone', 'status',
+    ];
+
     public function __construct(
-        protected UserService $userService
+        protected UserService $userService,
+        protected AuditService $auditService
     ) {
     }
 
@@ -199,6 +208,9 @@ class UserController extends Controller
     {
         try {
             $user = $this->userService->createUser($request->validated());
+
+            $this->auditService->logUserCreated($user->id, $user->only(self::AUDITED_FIELDS));
+
             return response()->json([
                 'message' => 'Usuario creado exitosamente',
                 'data' => new UserResource($user),
@@ -229,7 +241,28 @@ class UserController extends Controller
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
-        $updatedUser = $this->userService->updateUser($user, $request->validated());
+        $validated = $request->validated();
+
+        // Solo el rol root puede cambiar el correo de un usuario
+        if (
+            array_key_exists('email', $validated)
+            && $validated['email'] !== $user->email
+            && $currentUser->getCurrentRole() !== 'root'
+        ) {
+            return response()->json([
+                'message' => 'Solo el rol root puede cambiar el correo de un usuario.',
+            ], 403);
+        }
+
+        $oldData = $user->only(self::AUDITED_FIELDS);
+
+        $updatedUser = $this->userService->updateUser($user, $validated);
+
+        $this->auditService->logUserUpdated(
+            $updatedUser->id,
+            $oldData,
+            $updatedUser->only(self::AUDITED_FIELDS)
+        );
 
         return response()->json([
             'message' => 'Usuario actualizado exitosamente',
@@ -258,7 +291,11 @@ class UserController extends Controller
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
+        $deletedData = $user->only(self::AUDITED_FIELDS);
+
         $user->delete();
+
+        $this->auditService->logUserDeleted($user->id, $deletedData);
 
         return response()->json([
             'message' => 'Usuario eliminado exitosamente',

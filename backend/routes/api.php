@@ -161,6 +161,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Dashboard stats
         Route::get('/dashboard', [ReportsController::class, 'dashboard']);
 
+        // Individual (per-user) stats for the employee dashboard
+        Route::get('/my-stats', [ReportsController::class, 'myStats']);
+
         // Individual stats
         Route::get('/documents', [ReportsController::class, 'documents']);
         Route::get('/vacations', [ReportsController::class, 'vacations']);

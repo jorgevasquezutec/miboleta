@@ -89,11 +89,13 @@ export function AdminDashboardView() {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
 
-  // Date range state - default to last 30 days
+  // Date range state - default last 30 days (only used when a specific range is chosen)
   const [dateRange, setDateRange] = useState<DateRange>({
     from: subDays(new Date(), 30),
     to: new Date(),
   });
+  // "Todo el tiempo" by default: cards show the organization's real totals on load.
+  const [allTime, setAllTime] = useState(true);
 
   const isRoot = user?.role === 'root';
 
@@ -102,9 +104,9 @@ export function AdminDashboardView() {
     ? (selectedTenantId ? Number(selectedTenantId) : undefined)
     : (currentTenant?.id ? Number(currentTenant.id) : undefined);
 
-  // Format dates for API
-  const startDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined;
-  const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined;
+  // Format dates for API. When "Todo el tiempo" is active, send no range (real totals).
+  const startDate = allTime || !dateRange.from ? undefined : format(dateRange.from, 'yyyy-MM-dd');
+  const endDate = allTime || !dateRange.to ? undefined : format(dateRange.to, 'yyyy-MM-dd');
 
   // Fetch dashboard data on mount and when filters change
   // ✅ MIGRATED: Now reacts automatically to tenant filter changes
@@ -136,6 +138,7 @@ export function AdminDashboardView() {
   };
 
   const handleDateRangeChange = (values: { range: DateRange }) => {
+    setAllTime(false);
     setDateRange(values.range);
   };
 
@@ -209,6 +212,13 @@ export function AdminDashboardView() {
         {/* Date range filter */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <span className="text-sm text-gray-500">Período:</span>
+          <Button
+            variant={allTime ? "default" : "outline"}
+            size="sm"
+            onClick={() => setAllTime(true)}
+          >
+            Todo el tiempo
+          </Button>
           <DateRangePicker
             initialDateFrom={dateRange.from}
             initialDateTo={dateRange.to}
