@@ -17,3 +17,4 @@ export { useDocumentsStore } from "./documentsStore";
 export { useUsersStore } from "./usersStore";
 export { useTenantsStore } from "./tenantsStore";
 export { useReportsStore } from "./reportsStore";
+export { useSignatureSettingsStore } from "./signatureSettingsStore";

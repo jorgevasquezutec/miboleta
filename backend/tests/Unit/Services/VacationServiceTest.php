@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\VacationRequest;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Services\VacationBalanceService;
 use App\Services\VacationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -34,7 +35,7 @@ class VacationServiceTest extends TestCase
         $notificationService = $this->createMock(NotificationService::class);
         $auditService = $this->createMock(AuditService::class);
 
-        $this->vacationService = new VacationService($notificationService, $auditService);
+        $this->vacationService = new VacationService($notificationService, $auditService, new VacationBalanceService());
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
 
@@ -45,6 +46,10 @@ class VacationServiceTest extends TestCase
         $this->employee->tenants()->attach($this->tenant->id, [
             'is_primary' => true,
             'supervisor_id' => $this->supervisor->id,
+            // Saldo inicial suficiente para que los tests de creación de
+            // solicitudes (p. ej. 4-5 días) no choquen con la validación de
+            // saldo disponible (VacationService::validateSufficientBalance).
+            'vacation_balance_initial' => 30,
         ]);
 
         $this->admin = User::factory()->admin()->create(['status' => 'active']);

@@ -55,10 +55,36 @@ class RoleSeeder extends Seeder
                     'view_own_vacation_requests',
                 ],
             ],
+            [
+                'name' => 'aprobador',
+                'display_name' => 'Aprobador',
+                'description' => 'Usuario con permisos para aprobar solicitudes de vacaciones dentro de su empresa',
+                'guard_name' => 'web',
+                'permissions' => [
+                    'approve_vacations',
+                    'view_reports',
+                    'view_own_documents',
+                    'sign_documents',
+                    'request_vacation',
+                    'view_own_vacation_requests',
+                ],
+            ],
+            [
+                'name' => 'administrador_clientes',
+                'display_name' => 'Administrador de clientes',
+                'description' => 'Usuario con permisos para gestionar usuarios y documentos de clientes dentro de su empresa',
+                'guard_name' => 'web',
+                'permissions' => [
+                    'manage_users',
+                    'upload_documents',
+                    'manage_documents',
+                    'view_reports',
+                ],
+            ],
         ];
 
         foreach ($roles as $roleData) {
-            Role::create($roleData);
+            Role::firstOrCreate(['name' => $roleData['name']], $roleData);
         }
     }
 }

@@ -1,0 +1,20 @@
+# Sidecar de firma digital - MiBoleta
+#
+# Versiones fijadas contra lo publicado en PyPI (consultado 2026-07-02).
+# pyHanko fija el resto de su árbol de dependencias transitivas via su propio
+# pyproject.toml; aquí solo anclamos las piezas que nos importan para poder
+# reproducir el pipeline de forma determinística.
+
+pyhanko==0.35.1
+cryptography==49.0.0
+pyhanko-certvalidator==0.31.1
+asn1crypto==1.5.1
+tzlocal==5.4.4
+requests==2.34.2
+pyyaml==6.0.3
+lxml==6.1.1
+
+# API HTTP interna (signer/app.py), consumida por el backend Laravel
+# (Job SignDocument) vía Http client, solo dentro de miboleta_network.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0

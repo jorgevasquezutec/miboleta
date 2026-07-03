@@ -26,18 +26,28 @@ export const USER_ROLES = {
   ROOT: 'root',
   ADMIN: 'admin',
   CLIENT: 'client',
+  APROBADOR: 'aprobador',
+  ADMINISTRADOR_CLIENTES: 'administrador_clientes',
 } as const;
 
 export const USER_ROLE_LABELS = {
   root: 'Root',
   admin: 'Administrador',
   client: 'Usuario',
+  aprobador: 'Aprobador',
+  administrador_clientes: 'Administrador de clientes',
 } as const;
 
+// Etiquetas de rol para mostrar en UI (RoleSwitcher, chips, encabezados).
+// Los roles operativos por empresa (admin, client, aprobador,
+// administrador_clientes) viven en user_tenant_roles; ver
+// User::ROLE_PRIORITY en el backend.
 export const USER_ROLE_DISPLAY_LABELS = {
   root: 'Administrador Plataforma',
   admin: 'Administrador',
   client: 'Cliente',
+  aprobador: 'Aprobador',
+  administrador_clientes: 'Administrador de clientes',
 } as const;
 
 // User Status

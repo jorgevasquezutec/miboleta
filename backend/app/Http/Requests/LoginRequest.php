@@ -23,7 +23,9 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => 'required|email',
+            // Acepta email o número de documento (DNI). AuthService::attemptLogin
+            // decide cuál de los dos es según el formato (filter_var FILTER_VALIDATE_EMAIL).
+            'login' => 'required|string',
             'password' => 'required|string|min:6',
         ];
     }
@@ -36,8 +38,7 @@ class LoginRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'email.required' => 'El email es requerido',
-            'email.email' => 'El email debe ser una dirección válida',
+            'login.required' => 'El correo o número de documento es requerido',
             'password.required' => 'La contraseña es requerida',
             'password.min' => 'La contraseña debe tener al menos 6 caracteres',
         ];

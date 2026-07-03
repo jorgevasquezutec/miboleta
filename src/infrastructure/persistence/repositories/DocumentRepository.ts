@@ -5,7 +5,8 @@ import {
   SignatureTermsResponse,
   RequestCodeResponse,
   SignDocumentResponse,
-  SignatureStatusResponse
+  SignatureStatusResponse,
+  VerifySignatureResponse
 } from '@/core/domain/repositories/IDocumentRepository';
 import { Document } from '@/core/domain/entities/Document';
 import { DocumentType } from '@/core/domain/entities/DocumentType';
@@ -231,6 +232,25 @@ export class DocumentRepository implements IDocumentRepository {
       message: response.data.message,
       signedAt: response.data.signed_at,
       document: response.data.document,
+    };
+  }
+
+  async verifySignature(documentId: number): Promise<VerifySignatureResponse> {
+    const response = await apiClient.get<{ data: any }>(`/documents/${documentId}/verify-signature`);
+    const data = response.data.data;
+
+    return {
+      verifiable: data.verifiable,
+      reason: data.reason,
+      message: data.message,
+      intact: data.intact,
+      valid: data.valid,
+      trusted: data.trusted,
+      coversWholeFile: data.covers_whole_file,
+      signerSubject: data.signer_subject,
+      signingTime: data.signing_time,
+      tsaApplied: data.tsa_applied,
+      tsaTime: data.tsa_time,
     };
   }
 

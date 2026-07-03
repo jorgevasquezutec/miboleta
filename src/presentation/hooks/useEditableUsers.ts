@@ -19,6 +19,10 @@ interface UseEditableUsersReturn {
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Roles operativos asignables por organización (RP1-C). 'root' es un rol
+// global y no se asigna por empresa.
+const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'administrador_clientes'];
+
 // Función helper para convertir data a EditableUser
 function convertToEditableUsers(
     data: any[],
@@ -183,6 +187,25 @@ export function useEditableUsers(): UseEditableUsersReturn {
             user.organizaciones.forEach((org, idx) => {
                 if (org.supervisor_email && !emailRegex.test(org.supervisor_email)) {
                     errors[`organizaciones.${idx}.supervisor_email`] = `Email supervisor inválido en organización ${idx + 1}`;
+                }
+
+                // RP1-C: rol(es)/fecha de ingreso/saldo de vacaciones por organización
+                if (org.roles && org.roles.length > 0) {
+                    const invalidRoles = org.roles.filter(r => !ALLOWED_ORG_ROLES.includes(r));
+                    if (invalidRoles.length > 0) {
+                        errors[`organizaciones.${idx}.roles`] = `Rol inválido en organización ${idx + 1}: ${invalidRoles.join(', ')}`;
+                    }
+                }
+
+                if (org.hire_date && isNaN(Date.parse(org.hire_date))) {
+                    errors[`organizaciones.${idx}.hire_date`] = `Fecha de ingreso inválida en organización ${idx + 1}`;
+                }
+
+                if (org.vacation_balance_initial !== undefined && org.vacation_balance_initial !== null && org.vacation_balance_initial !== '') {
+                    const balance = Number(org.vacation_balance_initial);
+                    if (isNaN(balance) || balance < 0) {
+                        errors[`organizaciones.${idx}.vacation_balance_initial`] = `Saldo de vacaciones inválido en organización ${idx + 1}`;
+                    }
                 }
             });
         }

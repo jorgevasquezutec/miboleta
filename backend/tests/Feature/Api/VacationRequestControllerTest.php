@@ -35,6 +35,9 @@ class VacationRequestControllerTest extends TestCase
         $this->employee->tenants()->attach($this->tenant->id, [
             'is_primary' => true,
             'supervisor_id' => $this->supervisor->id,
+            // Saldo inicial suficiente para que los tests de creación de
+            // solicitudes no choquen con la validación de saldo disponible.
+            'vacation_balance_initial' => 30,
         ]);
 
         $this->admin = User::factory()->admin()->create(['status' => 'active']);

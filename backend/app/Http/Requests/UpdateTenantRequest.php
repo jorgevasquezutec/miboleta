@@ -49,6 +49,17 @@ class UpdateTenantRequest extends CustomFormRequest
             'phone' => 'nullable|string|max:20',
             'logo_path' => 'nullable|string|max:500',
             'status' => 'nullable|in:active,inactive,suspended',
+            'labor_regime' => 'nullable|in:general,micro,pequena',
+            // Configuración SMTP propia de la empresa (RP2-B). Todo nullable:
+            // si no se envía, se usa el mailer por defecto de la plataforma
+            // (ver TenantMailerService).
+            'mail_host' => 'nullable|string|max:255',
+            'mail_port' => 'nullable|integer|between:1,65535',
+            'mail_username' => 'nullable|string|max:255',
+            'mail_password' => 'nullable|string|max:255',
+            'mail_encryption' => 'nullable|in:tls,ssl',
+            'mail_from_address' => 'nullable|email|max:255',
+            'mail_from_name' => 'nullable|string|max:255',
         ];
     }
 
@@ -69,6 +80,11 @@ class UpdateTenantRequest extends CustomFormRequest
             'address.max' => 'La dirección no puede exceder 500 caracteres',
             'phone.max' => 'El teléfono no puede exceder 20 caracteres',
             'status.in' => 'El estado debe ser: active, inactive o suspended',
+            'labor_regime.in' => 'El régimen laboral debe ser: general, micro o pequena',
+            'mail_port.integer' => 'El puerto SMTP debe ser un número entero',
+            'mail_port.between' => 'El puerto SMTP debe estar entre 1 y 65535',
+            'mail_encryption.in' => 'La encriptación SMTP debe ser: tls o ssl',
+            'mail_from_address.email' => 'El correo remitente debe ser una dirección de correo válida',
         ];
     }
 

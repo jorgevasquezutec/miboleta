@@ -6,6 +6,7 @@ use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\NamedRange;
 
@@ -87,6 +88,16 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
             $data[] = [''];
         }
 
+        // Sección 6 (RP1-C): roles operativos asignables por organización
+        // (org{n}_rol). 'root' queda excluido: es un rol global.
+        $data[] = [''];
+        $data[] = [''];
+        $data[] = ['Roles por Organización'];
+        $data[] = ['admin'];
+        $data[] = ['client'];
+        $data[] = ['aprobador'];
+        $data[] = ['administrador_clientes'];
+
         return $data;
     }
 
@@ -161,6 +172,44 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
                     );
 
                     $column++; // Siguiente org_ruc
+                }
+
+                // Bloque nuevo (RP1-C): org{n}_rol / org{n}_fecha_ingreso /
+                // org{n}_saldo_vacaciones, ubicado después del bloque
+                // ruc/supervisor (no altera las columnas ya existentes).
+                $orgRolesStartRow = null;
+                foreach ($sheet->getRowIterator() as $row) {
+                    $cellValue = $sheet->getCell('A' . $row->getRowIndex())->getValue();
+                    if ($cellValue === 'Roles por Organización') {
+                        $orgRolesStartRow = $row->getRowIndex() + 1;
+                        break;
+                    }
+                }
+
+                if ($orgRolesStartRow) {
+                    $orgRolesEndRow = $orgRolesStartRow + 3; // admin, client, aprobador, administrador_clientes
+                    $orgRolesRange = "Validaciones!\$A\${$orgRolesStartRow}:\$A\${$orgRolesEndRow}";
+
+                    $colIndex = 8 + (2 * $this->maxOrganizations) + 1; // primera columna del bloque nuevo
+                    for ($i = 1; $i <= $this->maxOrganizations; $i++) {
+                        $rolColumn = Coordinate::stringFromColumnIndex($colIndex);
+                        $fechaColumn = Coordinate::stringFromColumnIndex($colIndex + 1);
+                        $saldoColumn = Coordinate::stringFromColumnIndex($colIndex + 2);
+
+                        // Rol(es): lista de referencia, sin bloquear (permite
+                        // ingresar varios separados por coma, ej: "admin,aprobador")
+                        $this->applyDropdown(
+                            $usersSheet,
+                            "{$rolColumn}2:{$rolColumn}{$lastRow}",
+                            $orgRolesRange,
+                            DataValidation::STYLE_INFORMATION
+                        );
+
+                        $this->applyDateValidation($usersSheet, "{$fechaColumn}2:{$fechaColumn}{$lastRow}");
+                        $this->applyDecimalValidation($usersSheet, "{$saldoColumn}2:{$saldoColumn}{$lastRow}");
+
+                        $colIndex += 3;
+                    }
                 }
             },
         ];
@@ -264,21 +313,66 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
     }
 
     /**
-     * Helper para aplicar dropdown de validación
+     * Helper para aplicar dropdown de validación.
+     *
+     * @param string $errorStyle DataValidation::STYLE_STOP bloquea valores
+     *   fuera de la lista; STYLE_INFORMATION/STYLE_WARNING solo advierten
+     *   (necesario para org{n}_rol, que admite varios valores separados por
+     *   coma y por lo tanto no siempre calza exactamente con un ítem de la lista).
      */
-    private function applyDropdown($sheet, string $range, string $formula): void
+    private function applyDropdown($sheet, string $range, string $formula, string $errorStyle = DataValidation::STYLE_STOP): void
     {
         $validation = new DataValidation();
         $validation->setType(DataValidation::TYPE_LIST);
-        $validation->setErrorStyle(DataValidation::STYLE_STOP);
+        $validation->setErrorStyle($errorStyle);
         $validation->setAllowBlank(true);
         $validation->setShowDropDown(true);
         $validation->setFormula1($formula);
         $validation->setShowErrorMessage(true);
         $validation->setErrorTitle('Valor inválido');
-        $validation->setError('Por favor seleccione un valor de la lista desplegable.');
+        $validation->setError(
+            $errorStyle === DataValidation::STYLE_STOP
+                ? 'Por favor seleccione un valor de la lista desplegable.'
+                : 'Puedes seleccionar de la lista o escribir varios valores separados por coma (ej: admin,aprobador).'
+        );
 
         // Aplicar validación al rango completo
+        $sheet->setDataValidation($range, $validation);
+    }
+
+    /**
+     * Validación de fecha para org{n}_fecha_ingreso (solo advierte, no bloquea).
+     */
+    private function applyDateValidation($sheet, string $range): void
+    {
+        $validation = new DataValidation();
+        $validation->setType(DataValidation::TYPE_DATE);
+        $validation->setErrorStyle(DataValidation::STYLE_WARNING);
+        $validation->setAllowBlank(true);
+        $validation->setShowErrorMessage(true);
+        $validation->setErrorTitle('Fecha inválida');
+        $validation->setError('Ingresa una fecha válida (ej: 2024-01-15).');
+        $validation->setOperator(DataValidation::OPERATOR_GREATERTHANOREQUAL);
+        $validation->setFormula1('DATE(2000,1,1)');
+
+        $sheet->setDataValidation($range, $validation);
+    }
+
+    /**
+     * Validación numérica (>= 0) para org{n}_saldo_vacaciones (solo advierte, no bloquea).
+     */
+    private function applyDecimalValidation($sheet, string $range): void
+    {
+        $validation = new DataValidation();
+        $validation->setType(DataValidation::TYPE_DECIMAL);
+        $validation->setErrorStyle(DataValidation::STYLE_WARNING);
+        $validation->setAllowBlank(true);
+        $validation->setShowErrorMessage(true);
+        $validation->setErrorTitle('Valor inválido');
+        $validation->setError('El saldo de vacaciones debe ser un número mayor o igual a 0.');
+        $validation->setOperator(DataValidation::OPERATOR_GREATERTHANOREQUAL);
+        $validation->setFormula1('0');
+
         $sheet->setDataValidation($range, $validation);
     }
 }

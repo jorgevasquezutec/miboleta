@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User as UserIcon, Mail, Phone, FileText, Building2, Shield, Calendar, Save, Loader2, Upload, Trash2 } from "lucide-react";
+import { ArrowLeft, User as UserIcon, Mail, Phone, FileText, Building2, Shield, Calendar, Save, Loader2, Upload, Trash2, Cake, Briefcase, TreePalm, FileEdit } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
@@ -10,11 +10,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/presentation/components/u
 import { Badge } from "@/presentation/components/ui/badge";
 import { toast } from "sonner";
 import { useAuthStore } from "@/presentation/stores";
+import { useVacationsStore } from "@/presentation/stores/vacationsStore";
+import { LaborRegime } from "@/core/domain/entities";
+import { formatDate } from "@/presentation/utils";
+import { DataUpdateRequestModal } from "@/presentation/components/features/profile";
+
+const LABOR_REGIME_LABELS: Record<LaborRegime, string> = {
+  general: "Régimen General",
+  micro: "Microempresa",
+  pequena: "Pequeña Empresa",
+};
 
 export function ProfilePage() {
   useDocumentTitle('Mi Perfil');
   const navigate = useNavigate();
-  const { user, me, updateProfile, uploadAvatar, deleteAvatar, isLoading } = useAuthStore();
+  const { user, me, updateProfile, uploadAvatar, deleteAvatar, isLoading, currentTenant } = useAuthStore();
+  const { balance, balanceLoading, fetchVacationBalance, clearBalance } = useVacationsStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
@@ -24,6 +35,7 @@ export function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [avatarTimestamp, setAvatarTimestamp] = useState(Date.now());
+  const [isDataUpdateModalOpen, setIsDataUpdateModalOpen] = useState(false);
 
   // Cargar datos del usuario al montar el componente
   useEffect(() => {
@@ -37,6 +49,20 @@ export function ProfilePage() {
 
     loadUserData();
   }, [me]);
+
+  // Cargar el saldo de vacaciones de la empresa activa (currentTenant)
+  useEffect(() => {
+    if (currentTenant?.id) {
+      fetchVacationBalance(Number(currentTenant.id));
+    } else {
+      clearBalance();
+    }
+
+    return () => {
+      clearBalance();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTenant?.id]);
 
   // Actualizar form state cuando user cambia
   useEffect(() => {
@@ -167,13 +193,27 @@ export function ProfilePage() {
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="flex-shrink-0 mt-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-lg sm:text-2xl font-semibold text-[#1E293B]">Mi Perfil</h1>
           <p className="text-[#64748B] text-sm sm:text-base">
             Gestiona tu información personal y configuración de cuenta
           </p>
         </div>
+        <Button
+          variant="outline"
+          className="flex-shrink-0 gap-2"
+          onClick={() => setIsDataUpdateModalOpen(true)}
+        >
+          <FileEdit className="w-4 h-4" />
+          <span className="hidden sm:inline">Solicitar actualización de datos</span>
+          <span className="sm:hidden">Solicitar cambio</span>
+        </Button>
       </div>
+
+      <DataUpdateRequestModal
+        open={isDataUpdateModalOpen}
+        onOpenChange={setIsDataUpdateModalOpen}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Overview Card */}
@@ -378,6 +418,44 @@ export function ProfilePage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="profile-birth-date">
+                  <div className="flex items-center gap-2 text-[#1E293B]">
+                    <Cake className="w-4 h-4" />
+                    Fecha de Nacimiento (Solo lectura)
+                  </div>
+                </Label>
+                <Input
+                  id="profile-birth-date"
+                  value={user.birth_date ? formatDate(user.birth_date) : "No registrada"}
+                  disabled
+                  className="bg-gray-50 border-[rgba(0,0,0,0.1)]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="profile-hire-date">
+                  <div className="flex items-center gap-2 text-[#1E293B]">
+                    <Briefcase className="w-4 h-4" />
+                    Fecha de Ingreso{currentTenant ? ` (${currentTenant.name})` : ""} (Solo lectura)
+                  </div>
+                </Label>
+                <Input
+                  id="profile-hire-date"
+                  value={
+                    !currentTenant
+                      ? "Sin empresa activa"
+                      : balanceLoading
+                        ? "Cargando..."
+                        : balance?.hireDate
+                          ? formatDate(balance.hireDate)
+                          : "No registrada"
+                  }
+                  disabled
+                  className="bg-gray-50 border-[rgba(0,0,0,0.1)]"
+                />
+              </div>
+
               {user.document_type && (
                 <>
                   <div className="space-y-2">
@@ -438,6 +516,65 @@ export function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Vacation Balance Card */}
+      {currentTenant && (
+        <Card className="border-[rgba(0,0,0,0.1)]">
+          <CardHeader>
+            <CardTitle className="text-[#1E40AF] flex items-center gap-2">
+              <TreePalm className="w-5 h-5" />
+              Vacaciones Disponibles
+            </CardTitle>
+            <CardDescription>
+              Saldo de vacaciones en {currentTenant.name}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {balanceLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" />
+              </div>
+            ) : balance ? (
+              <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 md:items-center">
+                <div className="flex items-center gap-4 p-4 bg-green-50 rounded-lg border border-green-100 md:min-w-[220px]">
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
+                    <TreePalm className="w-6 h-6 text-[#10B981]" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#64748B]">Días disponibles</p>
+                    <p className="text-3xl font-bold text-[#10B981]">{balance.available}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-xs text-[#64748B] mb-1">Saldo inicial</p>
+                    <p className="font-semibold text-[#1E293B]">{balance.initial}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#64748B] mb-1">Devengadas</p>
+                    <p className="font-semibold text-[#1E293B]">{balance.accrued}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#64748B] mb-1">Tomadas</p>
+                    <p className="font-semibold text-[#1E293B]">{balance.taken}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#64748B] mb-1">
+                      Días/año ({LABOR_REGIME_LABELS[balance.laborRegime] || balance.laborRegime})
+                    </p>
+                    <p className="font-semibold text-[#1E293B]">{balance.daysPerYear}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[#64748B]">
+                No se pudo cargar el saldo de vacaciones para esta empresa.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Additional Info Card */}
       <Card className="border-[rgba(0,0,0,0.1)]">

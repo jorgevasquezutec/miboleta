@@ -59,7 +59,7 @@ class UserController extends Controller
         $user = $request->user();
 
         // Query base
-        $query = User::with(['roles', 'tenants']);
+        $query = User::with(['roles', 'tenants', 'tenantRoles.role']);
 
         // Root ve todos los usuarios
         if (!$user->isRoot()) {
@@ -110,6 +110,10 @@ class UserController extends Controller
                     });
                 }
 
+                // Roles por empresa (user_tenant_roles), agrupados una sola vez
+                // por usuario para evitar N+1 al mapear cada tenant de más abajo.
+                $tenantRolesByTenant = $u->tenantRoles->groupBy('tenant_id');
+
                 return [
                     'id' => $u->id,
                     'name' => $u->name,
@@ -122,10 +126,10 @@ class UserController extends Controller
                     'status' => $u->status,
                     'role' => $u->getCurrentRole(),
                     'roles' => $u->getCurrentRoles(),
-                    'tenants' => $visibleTenants->map(function($t) {
+                    'tenants' => $visibleTenants->map(function($t) use ($tenantRolesByTenant) {
                         $supervisorId = $t->pivot->supervisor_id ?? null;
                         $supervisor = null;
-                        
+
                         // Cargar información del supervisor si existe
                         if ($supervisorId) {
                             $supervisorUser = \App\Models\User::find($supervisorId);
@@ -138,7 +142,10 @@ class UserController extends Controller
                                 ];
                             }
                         }
-                        
+
+                        $tenantRoles = $tenantRolesByTenant->get($t->id) ?? collect();
+                        $tenantRoleNames = $tenantRoles->pluck('role.name')->filter()->values();
+
                         return [
                             'id' => $t->id,
                             'name' => $t->name,
@@ -146,6 +153,11 @@ class UserController extends Controller
                             'is_primary' => $t->pivot->is_primary ?? false,
                             'supervisor_id' => $supervisorId,
                             'supervisor' => $supervisor,
+                            // Roles operativos del usuario en ESTA empresa (para
+                            // filtrar el selector de supervisor a admins de la
+                            // empresa correcta, no del rol global del usuario).
+                            'roles' => $tenantRoleNames,
+                            'role' => \App\Models\User::highestPriorityRole($tenantRoleNames),
                         ];
                     })->values(),  // ✅ Reset array keys after filter
                     'created_at' => $u->created_at,
@@ -183,7 +195,7 @@ class UserController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $user = User::with(['roles', 'tenants'])->findOrFail($id);
+        $user = User::with(['roles', 'tenants', 'tenantRoles.role'])->findOrFail($id);
 
         // Verificar acceso
         $currentUser = $request->user();

@@ -22,13 +22,19 @@ class AuthService
     /**
      * Attempt to authenticate user.
      *
-     * @param string $email
+     * Acepta como identificador el correo electrónico o el número de
+     * documento (DNI): si $login tiene formato de email se busca por
+     * 'email', de lo contrario se busca por 'document_text'.
+     *
+     * @param string $login Email o DNI (document_text)
      * @param string $password
      * @return array|null ['user' => User, 'access_token' => string, 'refresh_token' => RefreshToken] or null if failed
      */
-    public function attemptLogin(string $email, string $password, ?string $ip = null, ?string $userAgent = null): ?array
+    public function attemptLogin(string $login, string $password, ?string $ip = null, ?string $userAgent = null): ?array
     {
-        $user = User::where('email', $email)->first();
+        $user = filter_var($login, FILTER_VALIDATE_EMAIL)
+            ? User::where('email', $login)->first()
+            : User::where('document_text', $login)->first();
 
         if (!$user || !Hash::check($password, $user->password)) {
             return null;
@@ -152,6 +158,11 @@ class AuthService
      */
     public function transformAuthUser(User $user): array
     {
+        // Cargar de una sola vez los roles por empresa (con su Role) para
+        // evitar N+1 queries al armar el arreglo 'tenants' de más abajo.
+        $user->loadMissing('tenantRoles.role');
+        $tenantRolesByTenant = $user->tenantRoles->groupBy('tenant_id');
+
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -164,9 +175,19 @@ class AuthService
             'phone' => $user->phone,
             'status' => $user->status,
             'must_change_password' => $user->must_change_password,
+            // Rol "global" de respaldo (ver User::getCurrentRole /
+            // UserService::syncGlobalRoleFallback). Para el rol específico
+            // por empresa, el frontend debe usar tenants[].roles /
+            // tenants[].role de más abajo (base para el selector de rol
+            // activo por empresa).
             'role' => $user->getCurrentRole(),
             'roles' => $user->getCurrentRoles(),
-            'tenants' => $user->tenants->map(function ($tenant) {
+            'tenants' => $user->tenants->map(function ($tenant) use ($tenantRolesByTenant) {
+                $tenantRoleNames = ($tenantRolesByTenant->get($tenant->id) ?? collect())
+                    ->pluck('role.name')
+                    ->filter()
+                    ->values();
+
                 return [
                     'id' => $tenant->id,
                     'name' => $tenant->name,
@@ -174,6 +195,12 @@ class AuthService
                     'logo_url' => $tenant->logo_url,
                     'is_primary' => $tenant->pivot->is_primary,
                     'supervisor_id' => $tenant->pivot->supervisor_id,
+                    // Roles operativos del usuario en esta empresa específica
+                    // (user_tenant_roles) y el de mayor prioridad entre ellos
+                    // (ver User::ROLE_PRIORITY): base para el selector de rol
+                    // activo por empresa en el frontend.
+                    'roles' => $tenantRoleNames,
+                    'role' => User::highestPriorityRole($tenantRoleNames),
                 ];
             }),
             'primary_tenant' => $user->primaryTenant() ? [

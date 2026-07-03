@@ -117,6 +117,29 @@ services:
     networks:
       - miboleta_network
 
+  # Sidecar de firma digital legal (Ghostscript + pyHanko). No expone puerto al
+  # host (solo red interna); el backend lo alcanza vía http://signer:8000.
+  # Spike manual: docker compose run --rm signer python /opt/signer/spike_sign.py <pdf>
+  signer:
+    build:
+      context: ./signer
+      dockerfile: Dockerfile
+    container_name: miboleta_signer
+    working_dir: /var/www/html
+    command: ["uvicorn", "app:app", "--app-dir", "/opt/signer", "--host", "0.0.0.0", "--port", "8000"]
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - ./backend:/var/www/html
+    networks:
+      - miboleta_network
+
 volumes:
   mysql_data:
     driver: local

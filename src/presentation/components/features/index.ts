@@ -17,3 +17,6 @@ export * from './users';
 
 // Vacations
 export * from './vacations';
+
+// Profile
+export * from './profile';

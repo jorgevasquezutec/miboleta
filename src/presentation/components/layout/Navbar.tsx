@@ -10,9 +10,13 @@ import {
   DropdownMenuTrigger,
 } from "@/presentation/components/ui/dropdown-menu";
 import { TenantMultiSwitcher } from "@/presentation/components/shared/TenantMultiSwitcher";
+import { TenantSwitcher } from "@/presentation/components/shared/TenantSwitcher";
+import { RoleSwitcher } from "@/presentation/components/shared/RoleSwitcher";
 import { NotificationBell } from "@/presentation/components/notifications/NotificationBell";
 import { useNavigate } from "react-router-dom";
 import { User } from "@/core/domain/entities/User";
+import { useAuthStore } from "@/presentation/stores/authStore";
+import { USER_ROLE_DISPLAY_LABELS } from "@/shared/constants";
 
 interface NavbarProps {
   user: User | null;
@@ -28,10 +32,13 @@ export function Navbar({
   onToggleSidebar,
 }: NavbarProps) {
   const navigate = useNavigate();
+  const currentRole = useAuthStore((state) => state.currentRole);
   const brandingPrimaryColor = "#2563EB";
 
   const userName = user ? `${user.name || ''} ${user.last_name || ''}`.trim() || user.email : 'Usuario';
-  const userRole = user?.role || 'user';
+  const userRole = currentRole
+    ? (USER_ROLE_DISPLAY_LABELS as Record<string, string>)[currentRole] || currentRole
+    : (user?.role || 'user');
 
   // Get initials safely
   const getInitials = (name: string): string => {
@@ -65,8 +72,14 @@ export function Navbar({
             </button>
           )}
 
-          {/* Tenant Multi-Switcher - Selección múltiple de empresas */}
+          {/* Tenant Multi-Switcher - Filtro de datos (X-Tenant-Ids) */}
           <TenantMultiSwitcher />
+
+          {/* Session switchers - Empresa activa y rol activo (currentTenant/currentRole) */}
+          <div className="hidden md:flex items-center gap-2 pl-2 ml-2 border-l border-[rgba(0,0,0,0.1)]">
+            <TenantSwitcher />
+            <RoleSwitcher />
+          </div>
         </div>
 
         {/* Right Section */}

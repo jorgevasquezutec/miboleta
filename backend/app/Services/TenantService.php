@@ -82,6 +82,17 @@ class TenantService
             'phone' => $data['phone'] ?? null,
             'logo_path' => $data['logo_path'] ?? null,
             'status' => $data['status'] ?? 'active',
+            'labor_regime' => $data['labor_regime'] ?? 'general',
+            // Configuración SMTP propia de la empresa (RP2-B); ver
+            // TenantMailerService. Todo opcional: si no se envía, la
+            // empresa usa el mailer por defecto de la plataforma.
+            'mail_host' => $data['mail_host'] ?? null,
+            'mail_port' => $data['mail_port'] ?? null,
+            'mail_username' => $data['mail_username'] ?? null,
+            'mail_password' => $data['mail_password'] ?? null,
+            'mail_encryption' => $data['mail_encryption'] ?? null,
+            'mail_from_address' => $data['mail_from_address'] ?? null,
+            'mail_from_name' => $data['mail_from_name'] ?? null,
         ]);
     }
 
@@ -253,6 +264,9 @@ class TenantService
      */
     public function transformTenantForList(Tenant $tenant): array
     {
+        $usersCount = $tenant->users()->count();
+        $initialEmployeeCount = (int) ($tenant->initial_employee_count ?? 0);
+
         return [
             'id' => $tenant->id,
             'name' => $tenant->name,
@@ -263,7 +277,24 @@ class TenantService
             'logo_path' => $tenant->logo_path,
             'logo_url' => $tenant->logo_url,
             'status' => $tenant->status,
-            'users_count' => $tenant->users()->count(),
+            'users_count' => $usersCount,
+            // Contador de empleados (RP1-C): ver UserBatch::syncInitialEmployeeCounts
+            'initial_employee_count' => $initialEmployeeCount,
+            'current_employee_count' => $usersCount,
+            'subsequent_employee_count' => max(0, $usersCount - $initialEmployeeCount),
+            // Régimen laboral para el cómputo de vacaciones (RP2-A)
+            'labor_regime' => $tenant->labor_regime,
+            // Configuración SMTP propia de la empresa (RP2-B). mail_password
+            // NUNCA se expone; solo un booleano que indica si ya hay una
+            // guardada (ver Tenant::$hidden y TenantMailerService).
+            'mail_host' => $tenant->mail_host,
+            'mail_port' => $tenant->mail_port,
+            'mail_username' => $tenant->mail_username,
+            'mail_encryption' => $tenant->mail_encryption,
+            'mail_from_address' => $tenant->mail_from_address,
+            'mail_from_name' => $tenant->mail_from_name,
+            'has_mail_password' => !empty($tenant->mail_password),
+            'has_custom_mailer' => $tenant->hasCustomMailer(),
             'created_at' => $tenant->created_at,
             'updated_at' => $tenant->updated_at,
         ];

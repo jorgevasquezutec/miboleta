@@ -145,6 +145,18 @@ export function UserBatchUploadPage() {
                 .map(org => ({
                     ruc: String(org.ruc || '').trim(),
                     supervisor_email: String(org.supervisor_email || '').trim(),
+                    // RP1-C: rol(es)/fecha de ingreso/saldo de vacaciones por
+                    // organización. null (no '') cuando están vacíos para que
+                    // las reglas 'date'/'numeric' del backend no fallen.
+                    roles: Array.isArray(org.roles) ? org.roles.filter(Boolean) : [],
+                    hire_date: org.hire_date && String(org.hire_date).trim() !== ''
+                        ? String(org.hire_date).trim()
+                        : null,
+                    vacation_balance_initial: org.vacation_balance_initial !== undefined
+                        && org.vacation_balance_initial !== null
+                        && String(org.vacation_balance_initial).trim() !== ''
+                        ? String(org.vacation_balance_initial).trim()
+                        : null,
                 }));
 
             return {

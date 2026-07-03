@@ -11,6 +11,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyles, WithColumnWidths
 {
@@ -47,10 +48,21 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
             'telefono',
         ];
 
-        // Agregar columnas de organizaciones dinámicamente
+        // Agregar columnas de organizaciones dinámicamente (RUC + supervisor,
+        // posiciones sin cambios respecto al formato anterior)
         for ($i = 1; $i <= $this->maxOrganizations; $i++) {
             $baseHeaders[] = "org{$i}_ruc";
             $baseHeaders[] = "org{$i}_supervisor_email";
+        }
+
+        // Bloque nuevo (RP1-C): rol(es), fecha de ingreso y saldo inicial de
+        // vacaciones por organización. Se agrega DESPUÉS del bloque anterior
+        // para no correr las columnas org{n}_ruc/org{n}_supervisor_email ya
+        // existentes.
+        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
+            $baseHeaders[] = "org{$i}_rol";
+            $baseHeaders[] = "org{$i}_fecha_ingreso";
+            $baseHeaders[] = "org{$i}_saldo_vacaciones";
         }
 
         return $baseHeaders;
@@ -82,6 +94,19 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
                 $row1[] = $this->organizations[0]['ruc'] ?? '';
                 $row1[] = ''; // Supervisor opcional
             } else {
+                $row1[] = '';
+                $row1[] = '';
+            }
+        }
+
+        // Ejemplo de rol/fecha de ingreso/saldo para la primera organización
+        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
+            if ($i === 1) {
+                $row1[] = 'client';
+                $row1[] = now()->subYear()->format('Y-m-d');
+                $row1[] = '15';
+            } else {
+                $row1[] = '';
                 $row1[] = '';
                 $row1[] = '';
             }
@@ -144,11 +169,19 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
             'H' => 18, // telefono
         ];
 
-        // Agregar anchos para columnas de org
+        // Agregar anchos para columnas de org (bloque ruc/supervisor)
         $col = 'I';
         for ($i = 1; $i <= $this->maxOrganizations; $i++) {
             $widths[$col++] = 15; // org_ruc
             $widths[$col++] = 30; // org_supervisor_email
+        }
+
+        // Anchos para el bloque nuevo: rol/fecha_ingreso/saldo_vacaciones
+        $colIndex = 8 + (2 * $this->maxOrganizations) + 1;
+        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
+            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 22; // org_rol
+            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // org_fecha_ingreso
+            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // org_saldo_vacaciones
         }
 
         return $widths;

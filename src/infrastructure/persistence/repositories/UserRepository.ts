@@ -12,11 +12,12 @@ export class UserRepository implements IUserRepository {
   /**
    * Login - Autenticar usuario
    * Las cookies con access_token y refresh_token se establecen automáticamente
+   * @param login DNI o correo electrónico (el backend acepta ambos en el campo `login`)
    */
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(login: string, password: string): Promise<LoginResponse> {
     try {
       const response = await apiClient.post<LoginResponse>('/login', {
-        email,
+        login,
         password,
       });
       return response.data;

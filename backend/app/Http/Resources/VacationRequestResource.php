@@ -35,6 +35,19 @@ class VacationRequestResource extends JsonResource
             'status' => $this->status,
             'status_label' => $this->status_label,
 
+            // Aprobador asignado actualmente (supervisor del empleado para
+            // esta empresa). No es un snapshot histórico: si el supervisor
+            // cambia después de creada la solicitud, refleja el vigente.
+            'approver' => $this->when($this->relationLoaded('user') && $this->user, function () {
+                $approver = $this->user->getSupervisorForTenant($this->tenant_id);
+
+                return $approver ? [
+                    'id' => $approver->id,
+                    'full_name' => $approver->full_name,
+                    'email' => $approver->email,
+                ] : null;
+            }),
+
             // Approval info
             'approved_by' => $this->approved_by,
             'approved_by_user' => $this->when($this->relationLoaded('approvedByUser') && $this->approvedByUser, function () {

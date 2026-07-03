@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Role;
 use App\Models\User;
 use App\Models\UserBatch;
 use App\Services\UserService;
@@ -56,6 +57,7 @@ class ProcessUserChunk implements ShouldQueue
         $created = 0;
         $updated = 0;
         $errors = [];
+        $affectedTenantIds = [];
 
         DB::beginTransaction();
 
@@ -72,6 +74,7 @@ class ProcessUserChunk implements ShouldQueue
                     }
 
                     // Preparar datos en el formato que espera UserService
+                    $tenantsConfig = $this->formatTenantsConfig($userData['organizaciones']);
                     $userDataForService = [
                         'name' => $userData['nombre'],
                         'last_name' => $userData['apellido'],
@@ -81,13 +84,22 @@ class ProcessUserChunk implements ShouldQueue
                         'phone' => $userData['telefono'] ?? null,
                         'status' => $userData['estado'],
                         'role_id' => $this->getRoleId($userData['rol']),
-                        'tenants_config' => $this->formatTenantsConfig($userData['organizaciones']),
+                        'tenants_config' => $tenantsConfig,
                     ];
 
                     // Crear usuario y despachar email con delay incremental (2s entre cada email)
                     $emailDelay = $created * 2; // 0s, 2s, 4s, 6s...
                     $userService->createUser($userDataForService, null, true, $emailDelay);
                     $created++;
+
+                    // Registrar los tenants afectados por este usuario (para
+                    // fijar initial_employee_count de forma idempotente al
+                    // completar el batch, ver UserBatch::syncInitialEmployeeCounts)
+                    foreach ($tenantsConfig as $cfg) {
+                        if (!empty($cfg['tenant_id'])) {
+                            $affectedTenantIds[] = (int) $cfg['tenant_id'];
+                        }
+                    }
 
                 } catch (\Exception $e) {
                     Log::error('Error creating user in chunk', [
@@ -112,6 +124,11 @@ class ProcessUserChunk implements ShouldQueue
 
             // 📊 Actualizar contadores en user_batches
             $this->updateBatchCounters($created, $updated, count($errors));
+
+            // 🏢 Registrar tenants afectados (para el contador de empleados)
+            if (!empty($affectedTenantIds)) {
+                $this->mergeAffectedTenantIds($affectedTenantIds);
+            }
 
             // 💾 Guardar errores detallados
             if (!empty($errors)) {
@@ -166,6 +183,10 @@ class ProcessUserChunk implements ShouldQueue
 
     /**
      * Obtener ID del rol por nombre
+     *
+     * @deprecated Mapeo hardcodeado, usado solo como fallback de compat para
+     * el rol global de la fila (columna 'rol', que solo admite client/root/admin).
+     * Para roles operativos por organización usar resolveRoleIdsByNames().
      */
     private function getRoleId(string $roleName): int
     {
@@ -179,9 +200,40 @@ class ProcessUserChunk implements ShouldQueue
     }
 
     /**
+     * Resolver IDs de roles operativos a partir de sus nombres (lookup en BD,
+     * sin hardcode). Ignora nombres inexistentes o el rol 'root'.
+     *
+     * @param array<string> $roleNames
+     * @return array<int>
+     */
+    private function resolveRoleIdsByNames(array $roleNames): array
+    {
+        $names = array_values(array_unique(array_filter(array_map(
+            fn($name) => strtolower(trim((string) $name)),
+            $roleNames
+        ))));
+
+        if (empty($names)) {
+            return [];
+        }
+
+        return Role::whereIn('name', $names)
+            ->where('name', '!=', 'root')
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+    }
+
+    /**
      * Formatear configuración de tenants
      * Para rol root: puede no tener organizaciones
      * Para rol client/admin: debe tener organizaciones con tenant_id
+     *
+     * Por organización (RP1-C): si vienen roles explícitos (org{n}_rol en el
+     * Excel), se resuelven por nombre a role_ids; si no, se omite la clave
+     * para que UserService use el rol global de la fila como fallback (ver
+     * UserService::assignTenantsWithConfig). También se propagan
+     * hire_date/vacation_balance_initial cuando existen.
      */
     private function formatTenantsConfig(?array $organizaciones): array
     {
@@ -192,12 +244,12 @@ class ProcessUserChunk implements ShouldQueue
 
         $config = [];
 
-        foreach ($organizaciones as $org) {
+        foreach ($organizaciones as $index => $org) {
             // Saltar organizaciones vacías o sin tenant_id
             if (empty($org) || !isset($org['tenant_id'])) {
                 continue;
             }
-            
+
             $tenantId = (int) $org['tenant_id'];
             $supervisors = [];
 
@@ -205,13 +257,52 @@ class ProcessUserChunk implements ShouldQueue
                 $supervisors = [(int) $org['supervisor_id']];
             }
 
-            $config[] = [
+            $item = [
                 'tenant_id' => $tenantId,
+                'is_primary' => $index === 0,
                 'supervisors' => $supervisors,
             ];
+
+            if (!empty($org['roles'])) {
+                $roleIds = $this->resolveRoleIdsByNames(
+                    is_array($org['roles']) ? $org['roles'] : explode(',', (string) $org['roles'])
+                );
+                if (!empty($roleIds)) {
+                    $item['role_ids'] = $roleIds;
+                }
+            }
+
+            if (!empty($org['hire_date'])) {
+                $item['hire_date'] = $org['hire_date'];
+            }
+
+            if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
+                $item['vacation_balance_initial'] = $org['vacation_balance_initial'];
+            }
+
+            $config[] = $item;
         }
 
         return $config;
+    }
+
+    /**
+     * Registra los tenants afectados por este chunk (unión acumulada entre
+     * chunks del mismo batch). Se usa al completar el batch para fijar
+     * initial_employee_count de forma idempotente (ver
+     * UserBatch::syncInitialEmployeeCounts).
+     */
+    protected function mergeAffectedTenantIds(array $tenantIds): void
+    {
+        try {
+            $batch = UserBatch::where('uuid', $this->batchUuid)->first();
+            $batch?->mergeAffectedTenantIds($tenantIds);
+        } catch (\Exception $e) {
+            Log::error('[ProcessUserChunk] Failed to merge affected tenant ids', [
+                'batch_uuid' => $this->batchUuid,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

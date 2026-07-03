@@ -105,6 +105,13 @@ export interface BulkUploadConfigData {
     }>>;
     max_organizations_limit: number;
     default_organizations: number;
+    // Roles operativos asignables por organización (RP1-C). Se obtienen de
+    // BD (no hardcodeados) para poblar el selector de "Roles por empresa".
+    available_roles: Array<{
+        id: number;
+        name: string;
+        display_name: string;
+    }>;
 }
 
 export interface ValidationError {
@@ -166,6 +173,12 @@ export interface EditableOrganization {
     ruc: string;
     tenant_id?: string;
     supervisor_email?: string;
+    // RP1-C: rol(es) operativos, fecha de ingreso y saldo inicial de
+    // vacaciones para ESTA organización. Si `roles` viene vacío, el backend
+    // usa el rol general de la fila (columna `rol`) como fallback para esta empresa.
+    roles?: string[];
+    hire_date?: string | null; // 'YYYY-MM-DD'
+    vacation_balance_initial?: string | null; // input numérico como string; se castea en backend
 }
 
 export interface EditableUser {

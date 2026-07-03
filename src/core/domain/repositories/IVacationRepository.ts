@@ -2,6 +2,7 @@ import {
   VacationRequest,
   CreateVacationRequestDTO,
   RejectVacationRequestDTO,
+  VacationBalance,
 } from '../entities/VacationRequest';
 
 export interface VacationFilters {
@@ -45,4 +46,7 @@ export interface IVacationRepository {
   getMyTeam(filters?: VacationFilters): Promise<PaginatedVacationRequests>;
   getMyDecisions(filters?: VacationFilters): Promise<PaginatedVacationRequests>;
   getAllHistory(filters?: VacationFilters): Promise<PaginatedVacationRequests>;
+
+  // Balance
+  getBalance(tenantId?: number): Promise<VacationBalance>;
 }

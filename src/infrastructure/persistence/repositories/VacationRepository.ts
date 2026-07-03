@@ -2,6 +2,7 @@ import {
     VacationRequest,
     CreateVacationRequestDTO,
     RejectVacationRequestDTO,
+    VacationBalance,
 } from '@/core/domain/entities/VacationRequest';
 import { IVacationRepository, VacationFilters, PaginatedVacationRequests } from '@/core/domain/repositories/IVacationRepository';
 import apiClient from '@/infrastructure/http/apiClient';
@@ -222,6 +223,24 @@ export class VacationRepository implements IVacationRepository {
         };
     }
 
+    // ============ Balance ============
+
+    /**
+     * Obtiene el saldo de vacaciones del usuario autenticado para una empresa.
+     * Si no se pasa tenantId, el backend usa la empresa primaria del usuario.
+     */
+    async getBalance(tenantId?: number): Promise<VacationBalance> {
+        const params = new URLSearchParams();
+        if (tenantId) params.append('tenant_id', tenantId.toString());
+        const query = params.toString();
+
+        const response = await apiClient.get<{ data: any }>(
+            `/vacation-requests/balance${query ? `?${query}` : ''}`
+        );
+
+        return this.mapVacationBalance(response.data.data);
+    }
+
     // ============ Mappers ============
 
     private mapVacationRequest(data: any): VacationRequest {
@@ -263,6 +282,27 @@ export class VacationRepository implements IVacationRepository {
             fullName: data.full_name,
             email: data.email,
             documentText: data.document_text,
+        };
+    }
+
+    private mapVacationBalance(data: any): VacationBalance {
+        return {
+            tenantId: data.tenant_id,
+            laborRegime: data.labor_regime,
+            daysPerYear: Number(data.days_per_year),
+            initial: Number(data.initial),
+            accrued: Number(data.accrued),
+            taken: Number(data.taken),
+            available: Number(data.available),
+            hireDate: data.hire_date ?? null,
+            yearsOfService: Number(data.years_of_service),
+            approver: data.approver
+                ? {
+                    id: data.approver.id,
+                    fullName: data.approver.full_name,
+                    email: data.approver.email,
+                }
+                : null,
         };
     }
 }

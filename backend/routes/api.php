@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\DocumentTypeController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\VacationRequestController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\Api\UserBatchController;
+use App\Http\Controllers\Api\SignatureSettingsController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
@@ -54,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::delete('/profile/avatar', [ProfileController::class, 'deleteAvatar']);
+    Route::post('/profile/request-data-update', [ProfileController::class, 'requestDataUpdate']);
 
     // Password management (autenticado)
     Route::post('/password/change', [PasswordController::class, 'changePassword']);
@@ -62,6 +65,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // File Uploads
     Route::post('/upload/tenant-logo', [FileUploadController::class, 'uploadTenantLogo']);
     Route::delete('/upload/file', [FileUploadController::class, 'deleteFile']);
+
+    // Roles - Catálogo de roles (para asignar por empresa en UserFormPage)
+    Route::get('/roles', [RoleController::class, 'index']);
 
     // Users - Custom routes (BEFORE resource to avoid conflicts)
     Route::get('/users/subordinates', [UserController::class, 'subordinates']);
@@ -114,6 +120,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/documents/{id}/assign', [DocumentController::class, 'assignOrphan']);
     Route::delete('/documents/{id}', [DocumentController::class, 'destroy']);
 
+    // Firma digital CRIPTOGRÁFICA (PAdES, certificado de plataforma - distinta del flujo 2FA de abajo)
+    Route::post('/documents/{id}/sign-digital', [DocumentController::class, 'signDigital']);
+    Route::get('/documents/{id}/verify-signature', [DocumentController::class, 'verifyDigital']);
+
     // Document Batches (Cargas masivas)
     Route::get('/document-batches', [DocumentBatchController::class, 'index']);
     Route::get('/document-batches/{id}', [DocumentBatchController::class, 'show']);
@@ -127,9 +137,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/documents/{id}/request-code', [DocumentSignatureController::class, 'requestCode']);
     Route::post('/documents/{id}/sign', [DocumentSignatureController::class, 'verifyAndSign']);
 
+    // Signature Settings (Certificado de firma digital de plataforma - solo root)
+    Route::get('/signature/settings', [SignatureSettingsController::class, 'show']);
+    Route::put('/signature/settings', [SignatureSettingsController::class, 'update']);
+    Route::post('/signature/certificate', [SignatureSettingsController::class, 'store']);
+    Route::delete('/signature/certificate', [SignatureSettingsController::class, 'destroy']);
+
     // ============ MÓDULO 5: VACACIONES ============
 
     // Vacation Requests - Rutas especiales primero (antes de {id})
+    Route::get('/vacation-requests/balance', [VacationRequestController::class, 'balance']);
     Route::get('/vacation-requests/pending-approval', [VacationRequestController::class, 'pendingApprovals']);
     Route::get('/vacation-requests/pending-confirmation', [VacationRequestController::class, 'pendingConfirmations']);
     Route::get('/vacation-requests/my-team', [VacationRequestController::class, 'myTeam']);

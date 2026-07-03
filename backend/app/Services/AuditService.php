@@ -71,11 +71,11 @@ class AuditService
         return $this->log(AuditLog::ACTION_USER_LOGOUT);
     }
 
-    public function logLoginFailed(string $email, string $reason = 'Invalid credentials'): AuditLog
+    public function logLoginFailed(string $login, string $reason = 'Invalid credentials'): AuditLog
     {
         return $this->log(
             action: AuditLog::ACTION_USER_LOGIN_FAILED,
-            metadata: ['email' => $email, 'reason' => $reason]
+            metadata: ['login' => $login, 'reason' => $reason]
         );
     }
 

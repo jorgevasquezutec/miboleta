@@ -1,7 +1,10 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/presentation/stores";
 
-type UserRole = "root" | "admin" | "client";
+// Roles operativos por empresa + root (global). Definido localmente (no en
+// User.role, que se mantiene como respaldo global legado con solo 3 valores
+// para no romper el CRUD de usuarios existente).
+export type UserRole = "root" | "admin" | "client" | "aprobador" | "administrador_clientes";
 
 interface ProtectedRouteProps {
   children: React.ReactElement;
@@ -10,14 +13,17 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const location = useLocation();
-  const { user } = useAuthStore();
-  const currentUserRole = user?.role || null;
+  const { user, currentRole } = useAuthStore();
 
-  if (!currentUserRole) {
+  // Sin sesión: al login.
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (!allowedRoles.includes(currentUserRole)) {
+  // Con sesión pero sin rol activo resuelto (o rol no permitido en esta
+  // ruta): redirige a "/" para que RootRedirect decida un destino válido
+  // según el rol activo (reactivo, no requiere recargar la página).
+  if (!currentRole || !allowedRoles.includes(currentRole as UserRole)) {
     return <Navigate to="/" replace />;
   }
 

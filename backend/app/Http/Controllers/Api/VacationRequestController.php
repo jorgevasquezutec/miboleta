@@ -8,6 +8,7 @@ use App\Http\Requests\CreateVacationRequestRequest;
 use App\Http\Requests\RejectVacationRequestRequest;
 use App\Http\Resources\VacationRequestResource;
 use App\Models\VacationRequest;
+use App\Services\VacationBalanceService;
 use App\Services\VacationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,8 +24,55 @@ use Illuminate\Support\Facades\Log;
 class VacationRequestController extends Controller
 {
     public function __construct(
-        protected VacationService $vacationService
+        protected VacationService $vacationService,
+        protected VacationBalanceService $vacationBalanceService
     ) {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/vacation-requests/balance",
+     *     tags={"Vacaciones"},
+     *     summary="Saldo de vacaciones del usuario autenticado",
+     *     description="Calcula el saldo disponible del usuario para una empresa (o la primaria si no se indica) y devuelve el aprobador asignado",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(name="tenant_id", in="query", required=false, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Saldo de vacaciones"),
+     *     @OA\Response(response=400, description="Tenant no especificado"),
+     *     @OA\Response(response=403, description="No pertenece a la empresa indicada")
+     * )
+     */
+    public function balance(Request $request): JsonResponse
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $role = $user->getCurrentRole();
+
+        $tenantId = $request->query('tenant_id')
+            ? (int) $request->query('tenant_id')
+            : ($user->primaryTenant()?->id ?? $user->tenants->first()?->id);
+
+        if (!$tenantId) {
+            return response()->json(['message' => 'Tenant no especificado'], 400);
+        }
+
+        // Root puede consultar cualquier empresa; el resto solo las suyas
+        if ($role !== 'root' && !$user->belongsToTenant($tenantId)) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
+        $balance = $this->vacationBalanceService->getBalance($user, $tenantId);
+        $approver = $this->vacationBalanceService->getSupervisorForTenant($user, $tenantId);
+
+        return response()->json([
+            'data' => array_merge($balance, [
+                'approver' => $approver ? [
+                    'id' => $approver->id,
+                    'full_name' => $approver->full_name,
+                    'email' => $approver->email,
+                ] : null,
+            ]),
+        ]);
     }
 
     /**

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { Document, DocumentType, DocumentBatch, ZipPreviewResponse } from "@/core/domain/entities";
+import { VerifySignatureResponse } from "@/core/domain/repositories/IDocumentRepository";
 import { documentRepository } from "@/infrastructure/persistence/repositories";
 import { getErrorMessage } from "@/infrastructure/http/apiClient";
 
@@ -39,6 +40,11 @@ interface DocumentsState {
   // Signature
   signatureTermsAccepted: boolean;
   signatureLoading: boolean;
+
+  // Cryptographic signature verification (PAdES)
+  signatureVerification: VerifySignatureResponse | null;
+  signatureVerificationLoading: boolean;
+  signatureVerificationError: string | null;
 
   // ZIP Preview
   zipPreview: ZipPreviewResponse | null;
@@ -93,6 +99,8 @@ interface DocumentsState {
   acceptSignatureTerms: () => Promise<void>;
   requestSignatureCode: (documentId: number) => Promise<{ expiresIn: number; emailSentTo: string }>;
   signDocument: (documentId: number, code: string) => Promise<void>;
+  verifyDocumentSignature: (documentId: number) => Promise<void>;
+  clearSignatureVerification: () => void;
 
   // Utility
   clearError: () => void;
@@ -122,6 +130,9 @@ const initialState = {
   orphansLoading: false,
   signatureTermsAccepted: false,
   signatureLoading: false,
+  signatureVerification: null,
+  signatureVerificationLoading: false,
+  signatureVerificationError: null,
   zipPreview: null,
 };
 
@@ -440,6 +451,23 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       throw error;
     }
   },
+
+  verifyDocumentSignature: async (documentId: number) => {
+    set({ signatureVerificationLoading: true, signatureVerificationError: null });
+
+    try {
+      const result = await documentRepository.verifySignature(documentId);
+      set({ signatureVerification: result, signatureVerificationLoading: false });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      set({
+        signatureVerificationError: errorMessage,
+        signatureVerificationLoading: false,
+      });
+    }
+  },
+
+  clearSignatureVerification: () => set({ signatureVerification: null, signatureVerificationError: null }),
 
   // ============ Utility ============
 

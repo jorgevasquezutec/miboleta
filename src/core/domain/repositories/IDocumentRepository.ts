@@ -50,6 +50,26 @@ export interface SignatureStatusResponse {
   signature: any;
 }
 
+/**
+ * Resultado de GET /documents/{id}/verify-signature. Cuando el documento no
+ * tiene una firma criptográfica PAdES aplicada (p. ej. firmado por 2FA de
+ * email, o aún sin firmar), `verifiable` es false y solo vienen `reason` y
+ * `message`; el resto de campos vienen null/undefined.
+ */
+export interface VerifySignatureResponse {
+  verifiable: boolean;
+  reason?: string;
+  message?: string;
+  intact?: boolean | null;
+  valid?: boolean | null;
+  trusted?: boolean | null;
+  coversWholeFile?: boolean | null;
+  signerSubject?: string | null;
+  signingTime?: string | null;
+  tsaApplied?: boolean | null;
+  tsaTime?: string | null;
+}
+
 export interface IDocumentRepository {
   // Document Types
   getDocumentTypes(): Promise<DocumentType[]>;
@@ -87,4 +107,7 @@ export interface IDocumentRepository {
   getSignatureStatus(documentId: number): Promise<SignatureStatusResponse>;
   requestSignatureCode(documentId: number): Promise<RequestCodeResponse>;
   signDocument(documentId: number, code: string): Promise<SignDocumentResponse>;
+
+  // Firma digital criptográfica (PAdES) - verificación
+  verifySignature(documentId: number): Promise<VerifySignatureResponse>;
 }

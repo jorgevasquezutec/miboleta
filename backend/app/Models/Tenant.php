@@ -22,9 +22,33 @@ class Tenant extends Model
         'phone',
         'logo_path',
         'status',
+        'initial_employee_count',
+        'labor_regime',
+        'mail_host',
+        'mail_port',
+        'mail_username',
+        'mail_password',
+        'mail_encryption',
+        'mail_from_address',
+        'mail_from_name',
+    ];
+
+    /**
+     * mail_password nunca debe salir en la representación array/JSON del
+     * modelo (API responses, logs de Eloquent, etc.). Ver hasCustomMailer()
+     * y TenantMailerService.
+     */
+    protected $hidden = [
+        'mail_password',
     ];
 
     protected $casts = [
+        'initial_employee_count' => 'integer',
+        'mail_port' => 'integer',
+        // Cifrado nativo de Laravel (usa APP_KEY). Se cifra/descifra de forma
+        // transparente al leer/escribir el atributo; en BD queda como texto
+        // cifrado en base64.
+        'mail_password' => 'encrypted',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -94,5 +118,31 @@ class Tenant extends Model
     public function hasUser(User $user): bool
     {
         return $this->users()->where('users.id', $user->id)->exists();
+    }
+
+    /**
+     * Días de vacaciones que devenga un trabajador por año completo de
+     * servicio en esta empresa, según su régimen laboral (D.Leg. 713 /
+     * régimen MYPE): 30 días en régimen general, 15 días en MYPE
+     * (micro o pequeña empresa).
+     */
+    public function vacationDaysPerYear(): int
+    {
+        return match ($this->labor_regime) {
+            'micro', 'pequena' => 15,
+            default => 30,
+        };
+    }
+
+    /**
+     * Determina si la empresa tiene su propio servidor SMTP configurado.
+     * Requiere al menos host y remitente; el resto de campos (usuario,
+     * password, puerto, encriptación) son opcionales según el servidor.
+     * Ver TenantMailerService::resolveMailer(), que usa este helper para
+     * decidir entre el mailer propio del tenant y el de la plataforma.
+     */
+    public function hasCustomMailer(): bool
+    {
+        return !empty($this->mail_host) && !empty($this->mail_from_address);
     }
 }

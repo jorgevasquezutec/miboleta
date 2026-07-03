@@ -158,7 +158,9 @@ class UserBatchController extends Controller
             'batch_progress' => $batchProgress, // ✅ Progreso en tiempo real de Laravel Bus
             'errors' => $batch->error_summary,
             'summary' => $batch->success_summary,
-            'processing_options' => $batch->processing_options,
+            // 'affected_tenant_ids' es bookkeeping interno (ver
+            // UserBatch::mergeAffectedTenantIds), no se expone en la API.
+            'processing_options' => collect($batch->processing_options)->except('affected_tenant_ids')->all(),
             'duration' => $batch->duration,
             'has_errors' => $batch->hasErrors(),
             'is_processing' => $batch->isProcessing(),

@@ -16,6 +16,7 @@ import {
   ClipboardList,
   Upload,
   X,
+  FileKey,
 } from "lucide-react";
 import { NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
@@ -180,7 +181,7 @@ function CollapsibleSection({
 function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { currentRole } = useAuthStore();
   const [openSections, setOpenSections] = useState<string[]>(['Vacaciones']); // Default open
 
   const isActive = (path: string) => location.pathname === path;
@@ -212,6 +213,7 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
       ],
     },
     { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
+    { label: "Firma Digital", path: "/signature-settings", icon: FileKey },
   ];
 
   const adminNavItems: NavItem[] = [
@@ -239,12 +241,46 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
     { label: "Mis Vacaciones", path: "/vacations", icon: Calendar },
   ];
 
+  // administrador_clientes: gestiona usuarios/documentos de su empresa
+  // (permisos manage_users, upload_documents, manage_documents, view_reports)
+  // pero NO aprueba vacaciones (sin permiso approve_vacations) — por eso no
+  // tiene "Mi Equipo" dentro de Vacaciones (de hecho, no tiene acceso a
+  // vacaciones en absoluto, ver mapeo de rutas en routes/index.tsx).
+  const administradorClientesNavItems: NavItem[] = [
+    { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
+    { label: "Usuarios", path: "/users", icon: Users },
+    { label: "Lotes de Carga", path: "/batches", icon: FileStack },
+    { label: "Documentos", path: "/documents", icon: FileText },
+    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
+  ];
+
+  // aprobador: aprueba vacaciones de su equipo (permiso approve_vacations) y
+  // ve reportes (view_reports), pero no gestiona usuarios ni documentos.
+  const aprobadorNavItems: NavItem[] = [
+    { label: "Mis Documentos", path: "/dashboard", icon: FileText },
+    {
+      label: "Vacaciones",
+      path: "/vacations",
+      icon: Calendar,
+      children: [
+        { label: "Mis Vacaciones", path: "/vacations", icon: Calendar },
+        { label: "Mi Equipo", path: "/team-vacations", icon: Users },
+        { label: "Histórico General", path: "/vacation-history", icon: History },
+      ],
+    },
+    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
+  ];
+
   const getNavItems = (): NavItem[] => {
-    switch (user?.role) {
+    switch (currentRole) {
       case "root":
         return rootNavItems;
       case "admin":
         return adminNavItems;
+      case "administrador_clientes":
+        return administradorClientesNavItems;
+      case "aprobador":
+        return aprobadorNavItems;
       case "client":
         return clientNavItems;
       default:

@@ -4,13 +4,13 @@ namespace App\Jobs;
 
 use App\Mail\WelcomeUserMail;
 use App\Models\User;
+use App\Services\TenantMailerService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class SendWelcomeEmailJob implements ShouldQueue
 {
@@ -31,8 +31,14 @@ class SendWelcomeEmailJob implements ShouldQueue
 
     /**
      * Execute the job.
+     *
+     * El mailer del tenant se resuelve AQUÍ, dentro del handle() que ya
+     * corre en el worker, no al momento de encolar este job. WelcomeUserMail
+     * implementa ShouldQueue, así que TenantMailerService::send() usa
+     * sendNow() para entregarlo de forma síncrona en este mismo proceso
+     * (ver docblock de TenantMailerService) en vez de volver a encolarlo.
      */
-    public function handle(): void
+    public function handle(TenantMailerService $tenantMailerService): void
     {
         $user = User::find($this->userId);
 
@@ -44,11 +50,14 @@ class SendWelcomeEmailJob implements ShouldQueue
         }
 
         try {
-            Mail::to($user->email)->send(new WelcomeUserMail($user, $this->temporaryPassword));
-            
+            $tenant = $user->primaryTenant();
+
+            $tenantMailerService->send($tenant, $user->email, new WelcomeUserMail($user, $this->temporaryPassword));
+
             Log::info('[SendWelcomeEmailJob] Welcome email sent', [
                 'user_id' => $user->id,
                 'email' => $user->email,
+                'tenant_id' => $tenant?->id,
             ]);
         } catch (\Exception $e) {
             Log::error('[SendWelcomeEmailJob] Failed to send welcome email', [

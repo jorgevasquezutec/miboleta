@@ -58,9 +58,44 @@ export function UserDataGrid({
         while (orgs.length <= orgIndex) {
             orgs.push({ ruc: '', supervisor_email: '' });
         }
-        
+
         orgs[orgIndex] = { ...orgs[orgIndex], supervisor_email: supervisorEmail };
-        
+
+        onCellChange(userId, 'organizaciones', orgs);
+    }, [users, onCellChange]);
+
+    // RP1-C: rol(es)/fecha de ingreso/saldo de vacaciones por organización.
+    // Usan spread (no reemplazan el objeto) para no perder tenant_id/ruc/etc.
+    const handleOrgRolesChange = useCallback((userId: string, orgIndex: number, roles: string[]) => {
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+
+        const orgs = [...(user.organizaciones || [])];
+        while (orgs.length <= orgIndex) {
+            orgs.push({ ruc: '', supervisor_email: '' });
+        }
+
+        orgs[orgIndex] = { ...orgs[orgIndex], roles };
+
+        onCellChange(userId, 'organizaciones', orgs);
+    }, [users, onCellChange]);
+
+    const handleOrgFieldChange = useCallback((
+        userId: string,
+        orgIndex: number,
+        field: 'hire_date' | 'vacation_balance_initial',
+        value: string
+    ) => {
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+
+        const orgs = [...(user.organizaciones || [])];
+        while (orgs.length <= orgIndex) {
+            orgs.push({ ruc: '', supervisor_email: '' });
+        }
+
+        orgs[orgIndex] = { ...orgs[orgIndex], [field]: value };
+
         onCellChange(userId, 'organizaciones', orgs);
     }, [users, onCellChange]);
 
@@ -270,6 +305,62 @@ export function UserDataGrid({
         );
     };
 
+    // RP1-C: rol(es) operativos para esta organización (vacío = usa el rol
+    // general de la fila para esa empresa)
+    const renderOrgRolesSelect = (user: EditableUser, orgIndex: number) => {
+        const org = user.organizaciones?.[orgIndex];
+        const currentRoles = org?.roles || [];
+        const availableRoles = configData?.available_roles || [];
+
+        return (
+            <select
+                multiple
+                value={currentRoles}
+                onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions).map(o => o.value);
+                    handleOrgRolesChange(user.id, orgIndex, selected);
+                }}
+                className="w-full h-14 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none border-gray-200"
+                title="Vacío = usa el rol general de la fila para esta empresa"
+            >
+                {availableRoles.map(r => (
+                    <option key={r.id} value={r.name}>{r.display_name}</option>
+                ))}
+            </select>
+        );
+    };
+
+    // RP1-C: fecha de ingreso a esta organización
+    const renderOrgHireDateInput = (user: EditableUser, orgIndex: number) => {
+        const org = user.organizaciones?.[orgIndex];
+
+        return (
+            <input
+                type="date"
+                value={org?.hire_date || ''}
+                onChange={(e) => handleOrgFieldChange(user.id, orgIndex, 'hire_date', e.target.value)}
+                className="w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none border-gray-200"
+            />
+        );
+    };
+
+    // RP1-C: saldo inicial de vacaciones (días) en esta organización
+    const renderOrgVacationBalanceInput = (user: EditableUser, orgIndex: number) => {
+        const org = user.organizaciones?.[orgIndex];
+
+        return (
+            <input
+                type="number"
+                min="0"
+                step="0.5"
+                placeholder="Días"
+                value={org?.vacation_balance_initial ?? ''}
+                onChange={(e) => handleOrgFieldChange(user.id, orgIndex, 'vacation_balance_initial', e.target.value)}
+                className="w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none border-gray-200"
+            />
+        );
+    };
+
     return (
         <div className="h-full overflow-auto bg-white">
             <table className="w-full border-collapse text-sm">
@@ -287,6 +378,9 @@ export function UserDataGrid({
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">telefono</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-44 bg-blue-50">Organización</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-48 bg-blue-50">Supervisor</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32 bg-blue-50">Roles empresa</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32 bg-blue-50">Fecha ingreso</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-28 bg-blue-50">Saldo vacac.</th>
                         <th className="px-2 py-2 text-center font-semibold text-gray-700 border-b w-12"></th>
                     </tr>
                 </thead>
@@ -363,6 +457,15 @@ export function UserDataGrid({
                                 </td>
                                 <td className="px-1 py-1 border-b border-r bg-blue-50/20">
                                     {renderSupervisorSelect(user, 0)}
+                                </td>
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderOrgRolesSelect(user, 0)}
+                                </td>
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderOrgHireDateInput(user, 0)}
+                                </td>
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderOrgVacationBalanceInput(user, 0)}
                                 </td>
                                 <td className="px-2 py-1 border-b text-center">
                                     <Button

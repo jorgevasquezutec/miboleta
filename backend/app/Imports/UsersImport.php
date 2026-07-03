@@ -13,6 +13,12 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 
 class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
 {
+    /**
+     * Roles operativos asignables por organización (RP1-C). 'root' queda
+     * excluido a propósito: es un rol global, no se asigna por empresa.
+     */
+    private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'administrador_clientes'];
+
     private array $parsedData = [];
     private array $errors = [];
     private array $warnings = [];
@@ -233,6 +239,13 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
 
     /**
      * Parsear organizaciones de las columnas org1, org2, org3
+     *
+     * Por organización, además de RUC/supervisor, se admiten (RP1-C):
+     * - org{n}_rol (u org{n}_roles): rol(es) operativos, separados por coma
+     *   (ej: "admin,aprobador"). Si viene vacío, la fila usará el rol
+     *   global (columna 'rol') como fallback para esa empresa.
+     * - org{n}_fecha_ingreso: fecha de inicio laboral en esa empresa.
+     * - org{n}_saldo_vacaciones: saldo inicial de vacaciones (días) en esa empresa.
      */
     private function parseOrganizations(array $row, array &$errors): array
     {
@@ -242,6 +255,10 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
         for ($i = 1; $i <= 5; $i++) {
             $rucKey = "org{$i}_ruc";
             $supervisorKey = "org{$i}_supervisor_email";
+            $rolesKey = "org{$i}_rol";
+            $rolesKeyAlt = "org{$i}_roles";
+            $hireDateKey = "org{$i}_fecha_ingreso";
+            $vacationBalanceKey = "org{$i}_saldo_vacaciones";
 
             $ruc = $row[$rucKey] ?? null;
             $supervisorEmail = $row[$supervisorKey] ?? null;
@@ -281,14 +298,94 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
                 $supervisorId = $supervisor->id;
             }
 
+            // Validar rol(es) operativos para esta organización
+            $rolesRaw = $row[$rolesKey] ?? $row[$rolesKeyAlt] ?? null;
+            $roles = [];
+            if (!empty($rolesRaw)) {
+                $roles = array_values(array_filter(array_map(
+                    fn($r) => strtolower(trim((string) $r)),
+                    explode(',', (string) $rolesRaw)
+                )));
+
+                foreach ($roles as $roleName) {
+                    if (!in_array($roleName, self::ALLOWED_ORG_ROLES, true)) {
+                        $errors[] = [
+                            'field' => $rolesKey,
+                            'message' => "Rol '{$roleName}' inválido en {$rolesKey} (permitidos: " . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                        ];
+                    }
+                }
+            }
+
+            // Validar fecha de ingreso a esta organización
+            $hireDate = null;
+            $hireDateRaw = $row[$hireDateKey] ?? null;
+            if (!empty($hireDateRaw)) {
+                $hireDate = $this->parseExcelDate($hireDateRaw);
+                if ($hireDate === null) {
+                    $errors[] = [
+                        'field' => $hireDateKey,
+                        'message' => "Fecha de ingreso inválida en {$hireDateKey}",
+                    ];
+                }
+            }
+
+            // Validar saldo inicial de vacaciones para esta organización
+            $vacationBalance = null;
+            $vacationBalanceRaw = $row[$vacationBalanceKey] ?? null;
+            if ($vacationBalanceRaw !== null && $vacationBalanceRaw !== '') {
+                if (!is_numeric($vacationBalanceRaw)) {
+                    $errors[] = [
+                        'field' => $vacationBalanceKey,
+                        'message' => "Saldo de vacaciones inválido en {$vacationBalanceKey} (debe ser numérico)",
+                    ];
+                } elseif ((float) $vacationBalanceRaw < 0) {
+                    $errors[] = [
+                        'field' => $vacationBalanceKey,
+                        'message' => "Saldo de vacaciones no puede ser negativo en {$vacationBalanceKey}",
+                    ];
+                } else {
+                    $vacationBalance = (float) $vacationBalanceRaw;
+                }
+            }
+
             $organizaciones[] = [
                 'ruc' => $ruc,
                 'tenant_id' => $tenant->id,
                 'supervisor_email' => $supervisorEmail,
                 'supervisor_id' => $supervisorId,
+                'roles' => $roles,
+                'hire_date' => $hireDate,
+                'vacation_balance_initial' => $vacationBalance,
             ];
         }
 
         return $organizaciones;
+    }
+
+    /**
+     * Normalizar un valor de celda de Excel a fecha 'Y-m-d'.
+     * Soporta: objetos DateTime (cuando PhpSpreadsheet ya castea la celda),
+     * números de serie de Excel, y strings de fecha comunes.
+     */
+    private function parseExcelDate($value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (is_numeric($value)) {
+            try {
+                return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $value)->format('Y-m-d');
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+
+        try {
+            return \Carbon\Carbon::parse((string) $value)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

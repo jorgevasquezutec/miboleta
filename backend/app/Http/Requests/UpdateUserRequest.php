@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -43,23 +44,49 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users', 'document_text')->ignore($userId),
             ],
             'phone' => 'nullable|string|max:20',
-            'role_id' => 'sometimes|required|exists:roles,id',
+            'birth_date' => 'nullable|date',
             'status' => 'nullable|string|in:active,inactive,pending',
+
+            // Nivel superior: relevante para transicionar a/desde root (rol
+            // global, sin empresas) y como fallback legacy de asignación
+            // simple en una sola empresa. Para usuarios operativos con roles
+            // distintos por empresa, usar tenants_config.*.role_ids.
+            'role_id' => 'sometimes|nullable|exists:roles,id',
             'tenant_id' => 'nullable|exists:tenants,id',
             'tenant_ids' => 'nullable|array',
 
-            // Configuración avanzada de tenants y supervisores
+            // Configuración avanzada de tenants, roles por empresa y supervisores
             'tenants_config' => 'nullable|array',
             'tenants_config.*.tenant_id' => 'required|exists:tenants,id',
+            'tenants_config.*.role_ids' => 'nullable|array',
+            'tenants_config.*.role_ids.*' => [
+                'exists:roles,id',
+                function ($attribute, $value, $fail) {
+                    if (Role::find($value)?->name === 'root') {
+                        $fail('No se puede asignar el rol root dentro de una empresa.');
+                    }
+                },
+            ],
+            'tenants_config.*.hire_date' => 'nullable|date',
+            'tenants_config.*.vacation_balance_initial' => 'nullable|numeric|min:0',
             'tenants_config.*.supervisor_id' => [
                 'nullable',
                 'exists:users,id',
                 function ($attribute, $value, $fail) {
-                    if ($value) {
-                        $supervisor = User::find($value);
-                        if ($supervisor && !$supervisor->hasRole('admin')) {
-                            $fail('El jefe inmediato debe ser un usuario con rol administrador.');
-                        }
+                    if (!$value) {
+                        return;
+                    }
+                    $supervisor = User::find($value);
+                    if (!$supervisor) {
+                        return;
+                    }
+                    // Recuperar el tenant_id del mismo item de tenants_config
+                    // (misma posición del array) para validar el supervisor
+                    // en el contexto de ESA empresa específica.
+                    $tenantIdAttribute = preg_replace('/supervisor_id$/', 'tenant_id', $attribute);
+                    $tenantId = $this->input($tenantIdAttribute);
+                    if ($tenantId && !$supervisor->hasRoleInTenant('admin', $tenantId)) {
+                        $fail('El jefe inmediato debe ser un usuario con rol administrador en esa empresa.');
                     }
                 },
             ],
@@ -68,6 +95,24 @@ class UpdateUserRequest extends FormRequest
             'tenant_ids.*' => 'exists:tenants,id',
             'primary_tenant_id' => 'nullable|exists:tenants,id',
         ];
+    }
+
+    /**
+     * Validaciones adicionales que dependen de la combinación de campos.
+     */
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $roleId = $this->input('role_id');
+            if (!$roleId) {
+                return;
+            }
+
+            $isRoot = Role::find($roleId)?->name === 'root';
+            if ($isRoot && ($this->filled('tenant_id') || $this->filled('tenant_ids') || $this->filled('tenants_config'))) {
+                $validator->errors()->add('role_id', 'Un usuario root no puede tener empresas asignadas.');
+            }
+        });
     }
 
     /**
@@ -86,11 +131,17 @@ class UpdateUserRequest extends FormRequest
             'document_type.in' => 'El tipo de documento debe ser: dni, ruc, ce o passport',
             'document_text.unique' => 'Este número de documento ya está registrado',
             'phone.max' => 'El teléfono no puede exceder 20 caracteres',
-            'role_id.required' => 'El rol es requerido',
+            'birth_date.date' => 'La fecha de nacimiento no es válida',
             'role_id.exists' => 'El rol seleccionado no existe',
             'tenant_id.exists' => 'La empresa seleccionada no existe',
             'tenant_ids.array' => 'Las empresas deben ser un array',
             'tenant_ids.*.exists' => 'Una o más empresas seleccionadas no existen',
+            'tenants_config.*.tenant_id.required' => 'Cada empresa configurada requiere un tenant_id',
+            'tenants_config.*.tenant_id.exists' => 'Una de las empresas configuradas no existe',
+            'tenants_config.*.role_ids.*.exists' => 'Uno de los roles seleccionados no existe',
+            'tenants_config.*.hire_date.date' => 'La fecha de inicio laboral no es válida',
+            'tenants_config.*.vacation_balance_initial.numeric' => 'El saldo inicial de vacaciones debe ser numérico',
+            'tenants_config.*.vacation_balance_initial.min' => 'El saldo inicial de vacaciones no puede ser negativo',
             'primary_tenant_id.exists' => 'La empresa primaria seleccionada no existe',
             'status.in' => 'El estado debe ser: active, inactive o pending',
         ];

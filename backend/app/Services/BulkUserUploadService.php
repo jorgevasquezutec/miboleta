@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserBatch;
@@ -15,6 +16,12 @@ use Illuminate\Support\Facades\Auth;
 
 class BulkUserUploadService
 {
+    /**
+     * Roles operativos asignables por organización (RP1-C). 'root' queda
+     * excluido a propósito: es un rol global, no se asigna por empresa.
+     */
+    private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'administrador_clientes'];
+
     // ────────────────────────────────────────────────────────────
     // CONFIGURACIÓN
     // ────────────────────────────────────────────────────────────
@@ -60,6 +67,12 @@ class BulkUserUploadService
             'supervisors_by_org' => $supervisorsByOrg,
             'max_organizations_limit' => 3,
             'default_organizations' => 1,
+            // Roles operativos asignables por organización (org{n}_rol en el
+            // Excel / selector por empresa en el editor). Se expone desde BD
+            // (sin hardcode) para que el frontend no tenga que duplicar la lista.
+            'available_roles' => Role::whereIn('name', self::ALLOWED_ORG_ROLES)
+                ->select('id', 'name', 'display_name')
+                ->get(),
         ];
     }
 
@@ -104,6 +117,23 @@ class BulkUserUploadService
                     if ($supervisor) {
                         $transformedOrg['supervisor_id'] = $supervisor->id;
                     }
+                }
+
+                // Propagar rol(es)/fecha de ingreso/saldo de vacaciones por
+                // empresa (RP1-C). Si no vienen, se omiten para que
+                // formatTenantsConfig() aplique el fallback correspondiente.
+                if (!empty($org['roles'])) {
+                    $transformedOrg['roles'] = is_array($org['roles'])
+                        ? array_values(array_filter(array_map('trim', $org['roles'])))
+                        : array_values(array_filter(array_map('trim', explode(',', (string) $org['roles']))));
+                }
+
+                if (!empty($org['hire_date'])) {
+                    $transformedOrg['hire_date'] = $org['hire_date'];
+                }
+
+                if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
+                    $transformedOrg['vacation_balance_initial'] = $org['vacation_balance_initial'];
                 }
 
                 $transformedOrgs[] = $transformedOrg;
@@ -505,7 +535,7 @@ class BulkUserUploadService
                             ->whereHas('tenants', fn($q) => $q->where('tenants.id', $tenant->id))
                             ->whereHas('roles', fn($q) => $q->where('name', 'admin'))
                             ->first();
-                        
+
                         if (!$supervisor) {
                             $errors[] = [
                                 'row' => $rowNumber,
@@ -513,6 +543,57 @@ class BulkUserUploadService
                                 'message' => "Supervisor '{$org['supervisor_email']}' no existe o no pertenece a la organización",
                             ];
                         }
+                    }
+                }
+
+                // Rol(es) operativos por organización (RP1-C). Vacío = usa el
+                // rol global de la fila para esa empresa (fallback en
+                // UserService::assignTenantsWithConfig).
+                if (!empty($org['roles'])) {
+                    $orgRoles = is_array($org['roles'])
+                        ? $org['roles']
+                        : explode(',', (string) $org['roles']);
+
+                    foreach ($orgRoles as $roleName) {
+                        $roleName = strtolower(trim((string) $roleName));
+                        if ($roleName === '') {
+                            continue;
+                        }
+                        if (!in_array($roleName, self::ALLOWED_ORG_ROLES, true)) {
+                            $errors[] = [
+                                'row' => $rowNumber,
+                                'field' => "organizaciones.{$orgIndex}.roles",
+                                'message' => "Rol '{$roleName}' inválido en organización " . ($orgIndex + 1) . ' (permitidos: ' . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                            ];
+                        }
+                    }
+                }
+
+                // Fecha de ingreso por organización
+                if (!empty($org['hire_date'])) {
+                    if (strtotime((string) $org['hire_date']) === false) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.hire_date",
+                            'message' => 'Fecha de ingreso inválida en organización ' . ($orgIndex + 1),
+                        ];
+                    }
+                }
+
+                // Saldo inicial de vacaciones por organización
+                if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
+                    if (!is_numeric($org['vacation_balance_initial'])) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.vacation_balance_initial",
+                            'message' => 'Saldo de vacaciones inválido en organización ' . ($orgIndex + 1) . ' (debe ser numérico)',
+                        ];
+                    } elseif ((float) $org['vacation_balance_initial'] < 0) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.vacation_balance_initial",
+                            'message' => 'Saldo de vacaciones no puede ser negativo en organización ' . ($orgIndex + 1),
+                        ];
                     }
                 }
             }
@@ -892,6 +973,10 @@ class BulkUserUploadService
 
     /**
      * Obtener ID del rol por nombre
+     *
+     * @deprecated Mapeo hardcodeado, usado solo como fallback de compat para
+     * el rol global de la fila (columna 'rol', que solo admite client/root/admin).
+     * Para roles operativos por organización usar resolveRoleIdsByNames().
      */
     private function getRoleId(string $roleName): int
     {
@@ -905,7 +990,39 @@ class BulkUserUploadService
     }
 
     /**
+     * Resolver IDs de roles operativos a partir de sus nombres (lookup en BD,
+     * sin hardcode). Ignora nombres inexistentes o el rol 'root' (que no se
+     * asigna por empresa).
+     *
+     * @param array<string> $roleNames
+     * @return array<int>
+     */
+    private function resolveRoleIdsByNames(array $roleNames): array
+    {
+        $names = array_values(array_unique(array_filter(array_map(
+            fn($name) => strtolower(trim((string) $name)),
+            $roleNames
+        ))));
+
+        if (empty($names)) {
+            return [];
+        }
+
+        return Role::whereIn('name', $names)
+            ->where('name', '!=', 'root')
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+    }
+
+    /**
      * Formatear organizaciones al formato que espera UserService
+     *
+     * Por cada organización se emite tenant_id, is_primary, supervisor_id y,
+     * si vienen en el Excel/grid (RP1-C), role_ids (resueltos por nombre),
+     * hire_date y vacation_balance_initial. Si una organización no trae
+     * roles explícitos, se omite 'role_ids' para que UserService aplique el
+     * fallback del rol global de la fila.
      */
     private function formatTenantsConfig(array $organizations): array
     {
@@ -924,11 +1041,30 @@ class BulkUserUploadService
                 $supervisorId = $supervisor?->id;
             }
 
-            $tenantsConfig[] = [
+            $item = [
                 'tenant_id' => $tenant->id,
                 'is_primary' => $index === 0, // Primera organización es primaria
                 'supervisor_id' => $supervisorId,
             ];
+
+            if (!empty($org['roles'])) {
+                $roleIds = $this->resolveRoleIdsByNames(
+                    is_array($org['roles']) ? $org['roles'] : explode(',', (string) $org['roles'])
+                );
+                if (!empty($roleIds)) {
+                    $item['role_ids'] = $roleIds;
+                }
+            }
+
+            if (!empty($org['hire_date'])) {
+                $item['hire_date'] = $org['hire_date'];
+            }
+
+            if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
+                $item['vacation_balance_initial'] = $org['vacation_balance_initial'];
+            }
+
+            $tenantsConfig[] = $item;
         }
 
         return $tenantsConfig;

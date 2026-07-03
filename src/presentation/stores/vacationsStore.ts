@@ -3,6 +3,7 @@ import {
     VacationRequest,
     VacationStatus,
     CreateVacationRequestDTO,
+    VacationBalance,
     // RejectVacationRequestDTO,
 } from "@/core/domain/entities";
 import { vacationRepository, VacationFilters } from "@/infrastructure/persistence/repositories";
@@ -43,6 +44,10 @@ interface VacationsState {
     myDecisionsTotal: number;
     myDecisionsTotalPages: number;
 
+    // Vacation balance (saldo del usuario autenticado para una empresa)
+    balance: VacationBalance | null;
+    balanceLoading: boolean;
+
     // Actions - CRUD
     fetchVacationRequests: (params?: {
         page?: number;
@@ -67,6 +72,10 @@ interface VacationsState {
 
     // Actions - Admin History
     fetchHistoryRequests: (params?: VacationFilters) => Promise<void>;
+
+    // Actions - Balance
+    fetchVacationBalance: (tenantId?: number) => Promise<void>;
+    clearBalance: () => void;
 
     // Utility
     setStatusFilter: (status: VacationStatus | 'all') => void;
@@ -100,6 +109,8 @@ const initialState = {
     myDecisions: [],
     myDecisionsTotal: 0,
     myDecisionsTotalPages: 0,
+    balance: null,
+    balanceLoading: false,
 };
 
 export const useVacationsStore = create<VacationsState>((set, get) => ({
@@ -362,6 +373,24 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
             throw error;
         }
     },
+
+    // ============ Balance Actions ============
+
+    fetchVacationBalance: async (tenantId) => {
+        set({ balanceLoading: true, error: null });
+        try {
+            const balance = await vacationRepository.getBalance(tenantId);
+            set({ balance, balanceLoading: false });
+        } catch (error: any) {
+            set({
+                error: error.message || 'Error al cargar el saldo de vacaciones',
+                balanceLoading: false,
+                balance: null,
+            });
+        }
+    },
+
+    clearBalance: () => set({ balance: null, balanceLoading: false }),
 
     // ============ Utility Actions ============
 

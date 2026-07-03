@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Events\BatchProgress;
 use App\Models\Document;
 use App\Models\DocumentBatch;
+use App\Models\SignatureSettings;
 use App\Models\User;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -117,13 +118,14 @@ class ProcessDocumentChunk implements ShouldQueue
         $requiresSignature = $this->batch->requires_signature ||
                              ($this->batch->documentType->requires_signature ?? false);
 
-        DB::transaction(function () use ($content, $storagePath, $file, $documentNumber, $user, $isOrphan, $existingDocument, $isReplacement, $requiresSignature) {
+        $document = DB::transaction(function () use ($content, $storagePath, $file, $documentNumber, $user, $isOrphan, $existingDocument, $isReplacement, $requiresSignature) {
             // Guardar archivo
             Storage::disk('documents')->put($storagePath, $content);
 
+            $status = $isOrphan ? 'orphan' : ($requiresSignature ? 'pending' : 'active');
+
             if ($isReplacement) {
                 // Actualizar documento existente
-                $status = $isOrphan ? 'orphan' : ($requiresSignature ? 'pending' : 'active');
                 $existingDocument->update([
                     'batch_id' => $this->batch->id,
                     'user_id' => $user?->id,
@@ -138,25 +140,26 @@ class ProcessDocumentChunk implements ShouldQueue
                     'notified_at' => null,
                     'version' => $existingDocument->version + 1,
                 ]);
-            } else {
-                // Crear nuevo documento
-                $status = $isOrphan ? 'orphan' : ($requiresSignature ? 'pending' : 'active');
-                Document::create([
-                    'tenant_id' => $this->batch->tenant_id,
-                    'user_id' => $user?->id,
-                    'batch_id' => $this->batch->id,
-                    'doc_type_id' => $this->batch->type_id,
-                    'employee_document_number' => $documentNumber,
-                    'period' => $this->batch->period,
-                    'file_path' => $storagePath,
-                    'file_size' => $file['size'],
-                    'original_name' => $file['filename'],
-                    'status' => $status,
-                    'uploaded_by' => $this->batch->uploaded_by,
-                    'requires_signature' => $requiresSignature,
-                    'expires_at' => now()->addDays(30), // Expira en 30 días
-                ]);
+
+                return $existingDocument;
             }
+
+            // Crear nuevo documento
+            return Document::create([
+                'tenant_id' => $this->batch->tenant_id,
+                'user_id' => $user?->id,
+                'batch_id' => $this->batch->id,
+                'doc_type_id' => $this->batch->type_id,
+                'employee_document_number' => $documentNumber,
+                'period' => $this->batch->period,
+                'file_path' => $storagePath,
+                'file_size' => $file['size'],
+                'original_name' => $file['filename'],
+                'status' => $status,
+                'uploaded_by' => $this->batch->uploaded_by,
+                'requires_signature' => $requiresSignature,
+                'expires_at' => now()->addDays(30), // Expira en 30 días
+            ]);
         });
 
         // Actualizar contadores del batch
@@ -165,6 +168,16 @@ class ProcessDocumentChunk implements ShouldQueue
             replaced: $isReplacement,
             orphan: $isOrphan
         );
+
+        // Firma digital automática: si el documento quedó 'pending' (no
+        // huérfano y requiere firma) y la firma criptográfica de plataforma
+        // está activada, encolar SignDocument. Si está desactivada, el
+        // documento simplemente queda 'pending' como hasta ahora (firmable
+        // luego on-demand vía POST /documents/{id}/sign-digital una vez que
+        // se active, o vía el flujo de 2FA de email existente).
+        if ($document->status === 'pending' && SignatureSettings::current()->signature_enabled) {
+            SignDocument::dispatch($document->id)->onQueue('signing');
+        }
     }
 
     // finalizeBatch() method removed - now handled by BatchCompletedCallback

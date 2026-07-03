@@ -234,6 +234,12 @@ class PasswordService
     /**
      * Send password reset email.
      *
+     * NOTA (SMTP por empresa): a propósito NO se enruta por
+     * TenantMailerService. El flujo "olvidé mi contraseña" solo tiene un
+     * correo (aún no sabemos con certeza a qué empresa quiere entrar el
+     * usuario ni cuál de sus empresas, si tiene varias), así que se envía
+     * con el mailer por defecto de la plataforma.
+     *
      * @param User $user
      * @param string $token
      * @return void
@@ -253,6 +259,11 @@ class PasswordService
 
     /**
      * Send admin password reset notification email.
+     *
+     * NOTA (SMTP por empresa): fuera del alcance actual del enrutado por
+     * tenant (ver TenantMailerService); se envía con el mailer por defecto
+     * de la plataforma. Pendiente evaluar si conviene enrutarlo por la
+     * empresa primaria del usuario en una siguiente iteración.
      *
      * @param User $user
      * @param string|null $password

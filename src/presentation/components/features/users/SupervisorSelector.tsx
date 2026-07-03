@@ -134,6 +134,30 @@ export function SupervisorSelector({
         );
     };
 
+    /**
+     * Un usuario solo puede ser supervisor si tiene el rol 'admin' EN LA
+     * EMPRESA que se está configurando (tenantIds), no en cualquier otra
+     * empresa a la que también pertenezca (modelo híbrido: los roles son
+     * por empresa, ver user_tenant_roles). Se usa `tenant.roles`/`tenant.role`
+     * (ya resueltos por el backend); si no vienen (respuesta más antigua),
+     * se cae al `role` global del usuario como último recurso.
+     */
+    const isAdminInTenants = (candidate: User): boolean => {
+        if (tenantIds.length === 0) return false;
+
+        const matchesTenant = candidate.tenants?.some(t => {
+            if (!tenantIds.includes(String(t.id))) return false;
+            if (t.roles && t.roles.length > 0) return t.roles.includes('admin');
+            if (t.role) return t.role === 'admin';
+            return false;
+        });
+
+        if (matchesTenant !== undefined) return matchesTenant;
+
+        // Fallback legado: rol global (respuestas sin roles por empresa).
+        return candidate.role === 'admin';
+    };
+
     return (
         <div className="relative">
             <Popover open={open} onOpenChange={setOpen}>
@@ -198,7 +222,7 @@ export function SupervisorSelector({
                         ) : (
                             <div className="p-1">
                                 {users.map((user) => {
-                                    const isSelectable = user.role === 'admin';
+                                    const isSelectable = isAdminInTenants(user);
                                     return (
                                         <div
                                             key={user.id}

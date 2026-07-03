@@ -9,13 +9,13 @@ use App\Models\Document;
 use App\Models\DocumentSignatureCode;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class SignatureService
 {
     public function __construct(
         protected AuditService $auditService,
-        protected PdfWatermarkService $pdfWatermarkService
+        protected PdfWatermarkService $pdfWatermarkService,
+        protected TenantMailerService $tenantMailerService
     ) {
     }
 
@@ -335,7 +335,9 @@ class SignatureService
     protected function sendSignatureCodeEmail(User $user, Document $document, string $code): void
     {
         try {
-            Mail::to($user->email)->send(new SignatureCodeMail(
+            // Enrutado por el mailer propio de la empresa del documento, con
+            // fallback al de la plataforma; ver TenantMailerService.
+            $this->tenantMailerService->send($document->tenant, $user->email, new SignatureCodeMail(
                 code: $code,
                 documentType: $document->documentType->display_name ?? 'Documento',
                 period: $document->period,

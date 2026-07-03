@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
-import { userRepository } from '@/infrastructure/persistence/repositories';
+import { userRepository, roleRepository } from '@/infrastructure/persistence/repositories';
 import { useAuthStore } from '@/presentation/stores/authStore';
 import { Button } from '@/presentation/components/ui/button';
 import {
@@ -9,9 +9,11 @@ import {
     RoleStatusCard,
     TenantAssignmentCard,
 } from '@/presentation/components/features/users';
+import { EMPTY_TENANT_EXTRA, TenantExtra } from '@/presentation/components/features/users/TenantAssignmentCard';
 import { ArrowLeft, Save, Loader2, UserPlus, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { TenantAssociation } from '@/core/domain/entities/User';
+import { Role } from '@/core/domain/entities';
 
 interface FormData {
     name: string;
@@ -20,7 +22,14 @@ interface FormData {
     document_type: string;
     document_text: string;
     phone: string;
-    role: 'root' | 'admin' | 'client';
+    birth_date: string;
+    /**
+     * Toggle de alto nivel: 'root' (plataforma, sin empresas) o 'client'
+     * (usuario de empresa). Los roles operativos reales por empresa
+     * (admin, client, aprobador, administrador_clientes) viven en
+     * tenantExtras[*].roleIds, no aquí.
+     */
+    role: 'root' | 'client';
     status: 'active' | 'inactive';
 }
 
@@ -31,9 +40,17 @@ const initialFormData: FormData = {
     document_type: 'dni',
     document_text: '',
     phone: '',
+    birth_date: '',
     role: 'client',
     status: 'active',
 };
+
+/**
+ * ID convencional del rol 'root' (ver RoleSeeder / UserService::ROOT_ROLE_ID
+ * en backend: es el primer rol insertado). Se usa como fallback si por
+ * alguna razón el catálogo de /roles no cargó a tiempo.
+ */
+const ROOT_ROLE_ID_FALLBACK = 1;
 
 export function UserFormPage() {
     const navigate = useNavigate();
@@ -47,16 +64,32 @@ export function UserFormPage() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [formData, setFormData] = useState<FormData>(initialFormData);
 
+    // Catálogo de roles (para el multi-select por empresa)
+    const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
+
     // Tenant selection state
     const [selectedTenantIds, setSelectedTenantIds] = useState<string[]>([]);
     const [primaryTenantId, setPrimaryTenantId] = useState<string | null>(null);
     const [selectedTenants, setSelectedTenants] = useState<TenantAssociation[]>([]);
     const [supervisorsByTenant, setSupervisorsByTenant] = useState<Record<string, string | null>>({});
+    // Roles / fecha de inicio / saldo inicial de vacaciones, por empresa
+    const [extrasByTenant, setExtrasByTenant] = useState<Record<string, TenantExtra>>({});
+
+    useEffect(() => {
+        roleRepository
+            .getAll()
+            .then(setAvailableRoles)
+            .catch((error) => {
+                console.error('Error loading roles catalog:', error);
+                toast.error('No se pudo cargar el catálogo de roles');
+            });
+    }, []);
 
     useEffect(() => {
         if (isEditing && id) {
             loadUser(id);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, isEditing]);
 
     const loadUser = async (userId: string) => {
@@ -71,7 +104,8 @@ export function UserFormPage() {
                     document_type: user.document_type || 'dni',
                     document_text: user.document_text || '',
                     phone: user.phone || '',
-                    role: user.role || 'client',
+                    birth_date: user.birth_date || '',
+                    role: user.role === 'root' ? 'root' : 'client',
                     status: user.status === 'active' ? 'active' : 'inactive',
                 });
 
@@ -83,12 +117,23 @@ export function UserFormPage() {
                     setPrimaryTenantId(primary ? String(primary.id) : String(user.tenants[0].id));
 
                     const supervisors: Record<string, string | null> = {};
+                    const extras: Record<string, TenantExtra> = {};
                     user.tenants.forEach(t => {
+                        const tenantId = String(t.id);
                         if (t.supervisor_id) {
-                            supervisors[String(t.id)] = String(t.supervisor_id);
+                            supervisors[tenantId] = String(t.supervisor_id);
                         }
+                        extras[tenantId] = {
+                            roleIds: t.role_ids ?? [],
+                            hireDate: t.hire_date ?? '',
+                            vacationBalanceInitial:
+                                t.vacation_balance_initial !== null && t.vacation_balance_initial !== undefined
+                                    ? String(t.vacation_balance_initial)
+                                    : '',
+                        };
                     });
                     setSupervisorsByTenant(supervisors);
+                    setExtrasByTenant(extras);
                 }
             } else {
                 toast.error('Usuario no encontrado');
@@ -138,8 +183,17 @@ export function UserFormPage() {
             }
         }
 
-        if (formData.role !== 'root' && selectedTenantIds.length === 0) {
-            newErrors.tenants = 'Los usuarios no-root deben tener al menos una organización asignada';
+        if (formData.role !== 'root') {
+            if (selectedTenantIds.length === 0) {
+                newErrors.tenants = 'Los usuarios no-root deben tener al menos una organización asignada';
+            } else {
+                const tenantWithoutRoles = selectedTenantIds.find(
+                    tenantId => (extrasByTenant[tenantId]?.roleIds ?? []).length === 0
+                );
+                if (tenantWithoutRoles) {
+                    newErrors.tenantRoles = 'Cada empresa asignada debe tener al menos un rol seleccionado';
+                }
+            }
         }
 
         setErrors(newErrors);
@@ -158,14 +212,24 @@ export function UserFormPage() {
             setSelectedTenantIds([]);
             setPrimaryTenantId(null);
             setSelectedTenants([]);
-            if (errors.tenants) {
-                setErrors(prev => ({ ...prev, tenants: '' }));
+            setSupervisorsByTenant({});
+            setExtrasByTenant({});
+            if (errors.tenants || errors.tenantRoles) {
+                setErrors(prev => ({ ...prev, tenants: '', tenantRoles: '' }));
             }
         }
     };
 
     const handleSupervisorChange = useCallback((tenantId: string, supervisorId: string | null) => {
         setSupervisorsByTenant(prev => ({ ...prev, [tenantId]: supervisorId }));
+    }, []);
+
+    const handleExtraChange = useCallback((tenantId: string, extra: Partial<TenantExtra>) => {
+        setExtrasByTenant(prev => ({
+            ...prev,
+            [tenantId]: { ...(prev[tenantId] ?? EMPTY_TENANT_EXTRA), ...extra },
+        }));
+        setErrors(prev => (prev.tenantRoles ? { ...prev, tenantRoles: '' } : prev));
     }, []);
 
     const handleTenantSelectionChange = useCallback((ids: string[]) => {
@@ -175,6 +239,18 @@ export function UserFormPage() {
         }
 
         setSupervisorsByTenant(prev => {
+            const next = { ...prev };
+            let changed = false;
+            Object.keys(next).forEach(key => {
+                if (!ids.includes(key)) {
+                    delete next[key];
+                    changed = true;
+                }
+            });
+            return changed ? next : prev;
+        });
+
+        setExtrasByTenant(prev => {
             const next = { ...prev };
             let changed = false;
             Object.keys(next).forEach(key => {
@@ -201,8 +277,6 @@ export function UserFormPage() {
 
         setIsSaving(true);
         try {
-            const roleMap: Record<string, number> = { 'root': 1, 'admin': 2, 'client': 3 };
-
             const dataToSend: Record<string, unknown> = {
                 name: formData.name,
                 last_name: formData.last_name,
@@ -210,19 +284,29 @@ export function UserFormPage() {
                 document_type: formData.document_type,
                 document_text: formData.document_text,
                 phone: formData.phone,
-                role_id: roleMap[formData.role],
+                birth_date: formData.birth_date || null,
                 status: formData.status,
             };
 
-            if (formData.role !== 'root') {
-                const tenantsConfig = selectedTenantIds.map(tenantId => ({
-                    tenant_id: parseInt(tenantId),
-                    supervisor_id: supervisorsByTenant[tenantId] ? parseInt(supervisorsByTenant[tenantId]!) : null,
-                    is_primary: tenantId === primaryTenantId
-                }));
+            if (formData.role === 'root') {
+                const rootRoleId = availableRoles.find(r => r.name === 'root')?.id ?? ROOT_ROLE_ID_FALLBACK;
+                dataToSend.role_id = rootRoleId;
+            } else {
+                const tenantsConfig = selectedTenantIds.map(tenantId => {
+                    const extra = extrasByTenant[tenantId] ?? EMPTY_TENANT_EXTRA;
+                    return {
+                        tenant_id: parseInt(tenantId, 10),
+                        role_ids: extra.roleIds,
+                        hire_date: extra.hireDate || null,
+                        vacation_balance_initial:
+                            extra.vacationBalanceInitial !== '' ? Number(extra.vacationBalanceInitial) : null,
+                        supervisor_id: supervisorsByTenant[tenantId] ? parseInt(supervisorsByTenant[tenantId]!, 10) : null,
+                        is_primary: tenantId === primaryTenantId,
+                    };
+                });
 
                 dataToSend.tenants_config = tenantsConfig;
-                dataToSend.tenant_id = parseInt(primaryTenantId || selectedTenantIds[0]);
+                dataToSend.tenant_id = parseInt(primaryTenantId || selectedTenantIds[0], 10);
             }
 
             if (isEditing && id) {
@@ -244,6 +328,7 @@ export function UserFormPage() {
     };
 
     const canChangeRole = currentUser?.role === 'root';
+    const nonRootRoles = availableRoles.filter(r => r.name !== 'root');
 
     if (isLoading) {
         return (
@@ -306,12 +391,15 @@ export function UserFormPage() {
                         primaryTenantId={primaryTenantId}
                         selectedTenants={selectedTenants}
                         supervisorsByTenant={supervisorsByTenant}
+                        availableRoles={nonRootRoles}
+                        extrasByTenant={extrasByTenant}
                         excludeUserId={id}
-                        error={errors.tenants}
+                        error={errors.tenants || errors.tenantRoles}
                         onTenantSelectionChange={handleTenantSelectionChange}
                         onTenantsChange={handleTenantsChange}
                         onPrimaryChange={setPrimaryTenantId}
                         onSupervisorChange={handleSupervisorChange}
+                        onExtraChange={handleExtraChange}
                     />
                 )}
 

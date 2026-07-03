@@ -74,9 +74,12 @@ export function TemplateConfigModal({
                                     <span>• telefono</span>
                                 </div>
                                 <div className="text-gray-600 font-semibold mt-3">Organización:</div>
-                                <div className="text-xs text-gray-500 ml-2">
-                                    <span>• org1_ruc</span>
-                                    <span className="ml-4">• org1_supervisor_email</span>
+                                <div className="text-xs text-gray-500 ml-2 space-y-0.5">
+                                    <div>• org1_ruc</div>
+                                    <div>• org1_supervisor_email</div>
+                                    <div>• org1_rol <span className="text-gray-400">(admin, client, aprobador, administrador_clientes)</span></div>
+                                    <div>• org1_fecha_ingreso</div>
+                                    <div>• org1_saldo_vacaciones</div>
                                 </div>
                             </div>
                         </div>

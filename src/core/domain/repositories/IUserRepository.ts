@@ -14,7 +14,11 @@ export interface GetUsersParams {
 }
 
 export interface IUserRepository {
-  login(email: string, password: string): Promise<LoginResponse>;
+  /**
+   * @param login DNI o correo electrónico (el backend acepta ambos en el
+   * campo `login`; ver AuthController::login / RP1-B).
+   */
+  login(login: string, password: string): Promise<LoginResponse>;
   logout(): Promise<void>;
   me(): Promise<User>;
   findAll(): Promise<User[]>;

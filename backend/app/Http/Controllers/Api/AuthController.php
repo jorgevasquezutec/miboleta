@@ -28,10 +28,10 @@ class AuthController extends Controller
      *     path="/api/login",
      *     tags={"Autenticación"},
      *     summary="Iniciar sesión",
-     *     description="Autenticación de usuario con email y password. Retorna cookies HttpOnly con access y refresh tokens.
-     * 
+     *     description="Autenticación de usuario con email o número de documento (DNI) y password. Retorna cookies HttpOnly con access y refresh tokens.
+     *
      * **Usuarios de prueba disponibles:**
-     * 
+     *
      * 1. **Root Admin** - root@miboleta.com / password (sin tenant, acceso total)
      * 2. **Admin ABC** - admin@corporacionabc.com / password (admin de Corporación ABC)
      * 3. **Juan Pérez** - juan.perez@corporacionabc.com / password (cliente de Corporación ABC)
@@ -41,8 +41,8 @@ class AuthController extends Controller
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"email","password"},
-     *             @OA\Property(property="email", type="string", format="email", example="admin@corporacionabc.com"),
+     *             required={"login","password"},
+     *             @OA\Property(property="login", type="string", example="admin@corporacionabc.com", description="Email o número de documento (DNI)"),
      *             @OA\Property(property="password", type="string", format="password", example="password")
      *         )
      *     ),
@@ -73,7 +73,7 @@ class AuthController extends Controller
         $validated = $request->validated();
 
         $result = $this->authService->attemptLogin(
-            $validated['email'],
+            $validated['login'],
             $validated['password'],
             $request->ip(),
             $request->userAgent()
@@ -81,28 +81,28 @@ class AuthController extends Controller
 
         if (!$result) {
             // Log failed login attempt
-            $this->auditService->logLoginFailed($validated['email'], 'Invalid credentials');
+            $this->auditService->logLoginFailed($validated['login'], 'Invalid credentials');
 
             throw ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas son incorrectas.'],
+                'login' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 
         // Check for specific error codes
         if (isset($result['error'])) {
             if ($result['error'] === 'user_inactive') {
-                $this->auditService->logLoginFailed($validated['email'], 'User inactive');
+                $this->auditService->logLoginFailed($validated['login'], 'User inactive');
 
                 throw ValidationException::withMessages([
-                    'email' => ['Tu cuenta se encuentra inactiva. Contacta al administrador.'],
+                    'login' => ['Tu cuenta se encuentra inactiva. Contacta al administrador.'],
                 ]);
             }
 
             if ($result['error'] === 'tenant_inactive') {
-                $this->auditService->logLoginFailed($validated['email'], 'Organization inactive');
+                $this->auditService->logLoginFailed($validated['login'], 'Organization inactive');
 
                 throw ValidationException::withMessages([
-                    'email' => ['Tu organización se encuentra inactiva. Contacta al administrador.'],
+                    'login' => ['Tu organización se encuentra inactiva. Contacta al administrador.'],
                 ]);
             }
         }
