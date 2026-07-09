@@ -26,7 +26,7 @@ interface FormData {
     /**
      * Toggle de alto nivel: 'root' (plataforma, sin empresas) o 'client'
      * (usuario de empresa). Los roles operativos reales por empresa
-     * (admin, client, aprobador, administrador_clientes) viven en
+     * (admin_tenant, admin, client, aprobador) viven en
      * tenantExtras[*].roleIds, no aquí.
      */
     role: 'root' | 'client';
@@ -130,6 +130,8 @@ export function UserFormPage() {
                                 t.vacation_balance_initial !== null && t.vacation_balance_initial !== undefined
                                     ? String(t.vacation_balance_initial)
                                     : '',
+                            department: t.department ?? '',
+                            position: t.position ?? '',
                         };
                     });
                     setSupervisorsByTenant(supervisors);
@@ -302,6 +304,8 @@ export function UserFormPage() {
                             extra.vacationBalanceInitial !== '' ? Number(extra.vacationBalanceInitial) : null,
                         supervisor_id: supervisorsByTenant[tenantId] ? parseInt(supervisorsByTenant[tenantId]!, 10) : null,
                         is_primary: tenantId === primaryTenantId,
+                        department: extra.department?.trim() ? extra.department.trim() : null,
+                        position: extra.position?.trim() ? extra.position.trim() : null,
                     };
                 });
 

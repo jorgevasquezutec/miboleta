@@ -20,9 +20,10 @@ import {
     SelectValue,
 } from '@/presentation/components/ui/select';
 import { Badge } from '@/presentation/components/ui/badge';
-import { ArrowLeft, Save, Loader2, Building2, X, ImageIcon, Mail } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Building2, X, ImageIcon, Mail, Users, PlugZap } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadTenantLogo, validateImageFile } from '@/infrastructure/http/fileUpload';
+import { tenantRepository } from '@/infrastructure/persistence/repositories/TenantRepository';
 import type { CreateTenantData, UpdateTenantData, MailEncryption } from '@/core/domain/entities/Tenant';
 
 export function TenantFormPage() {
@@ -62,6 +63,10 @@ export function TenantFormPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+    // Estado local del botón "Probar conexión" SMTP (ítem 24-menor). No usa
+    // el `isLoading` global del store porque ese ya controla los botones de
+    // Guardar/Cancelar del formulario.
+    const [isTestingSmtp, setIsTestingSmtp] = useState(false);
 
     // Clear currentTenant when creating new tenant
     useEffect(() => {
@@ -190,6 +195,30 @@ export function TenantFormPage() {
         }
 
         return payload;
+    };
+
+    /**
+     * Prueba la conexión SMTP ya guardada para esta empresa (POST
+     * /tenants/{id}/smtp/test, solo root). Prueba la configuración
+     * persistida en el backend, no los valores sin guardar del formulario
+     * (si el usuario cambió el host/puerto/etc. debe guardar primero).
+     */
+    const handleTestSmtp = async () => {
+        if (!id) return;
+
+        setIsTestingSmtp(true);
+        try {
+            const result = await tenantRepository.testSmtp(id);
+            if (result.success) {
+                toast.success(result.message);
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error: any) {
+            toast.error(error.message || 'Error al probar la conexión SMTP');
+        } finally {
+            setIsTestingSmtp(false);
+        }
     };
 
     const handleChange = (field: string, value: string) => {
@@ -387,6 +416,44 @@ export function TenantFormPage() {
                     </CardContent>
                 </Card>
 
+                {/* Employee Counters (RP1-C / ítem 19) - solo lectura, informativo */}
+                {isEditing && currentTenant && String(currentTenant.id) === String(id) && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Users className="h-5 w-5 text-blue-600" />
+                                Contador de empleados
+                            </CardTitle>
+                            <CardDescription>
+                                Información de solo lectura. El conteo inicial se fija automáticamente
+                                al completar la primera carga masiva de usuarios de esta organización.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="p-3 rounded-lg border bg-gray-50">
+                                    <p className="text-xs text-gray-500">Carga inicial</p>
+                                    <p className="text-xl font-semibold text-gray-900">
+                                        {currentTenant.initial_employee_count ?? 0}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg border bg-gray-50">
+                                    <p className="text-xs text-gray-500">Total actual</p>
+                                    <p className="text-xl font-semibold text-gray-900">
+                                        {currentTenant.current_employee_count ?? 0}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg border bg-gray-50">
+                                    <p className="text-xs text-gray-500">Agregados después</p>
+                                    <p className="text-xl font-semibold text-gray-900">
+                                        {currentTenant.subsequent_employee_count ?? 0}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {/* Basic Information */}
                 <Card>
                     <CardHeader>
@@ -543,15 +610,41 @@ export function TenantFormPage() {
                                 </CardDescription>
                             </div>
                             {isEditing && currentTenant && String(currentTenant.id) === String(id) && (
-                                currentTenant.has_custom_mailer ? (
-                                    <Badge variant="default" className="whitespace-nowrap">
-                                        Correo propio
-                                    </Badge>
-                                ) : (
-                                    <Badge variant="secondary" className="whitespace-nowrap">
-                                        Correo de la plataforma
-                                    </Badge>
-                                )
+                                <div className="flex items-center gap-2">
+                                    {currentTenant.has_custom_mailer ? (
+                                        <Badge variant="default" className="whitespace-nowrap">
+                                            Correo propio
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="secondary" className="whitespace-nowrap">
+                                            Correo de la plataforma
+                                        </Badge>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleTestSmtp}
+                                        disabled={isTestingSmtp || !currentTenant.has_custom_mailer}
+                                        title={
+                                            !currentTenant.has_custom_mailer
+                                                ? 'Guarda un host y correo remitente para poder probar la conexión'
+                                                : undefined
+                                        }
+                                    >
+                                        {isTestingSmtp ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Probando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <PlugZap className="mr-2 h-4 w-4" />
+                                                Probar conexión
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             )}
                         </div>
                     </CardHeader>

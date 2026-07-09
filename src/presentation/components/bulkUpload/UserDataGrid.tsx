@@ -3,6 +3,7 @@ import type { EditableUser, BulkUploadConfigData } from '@/domain/types/bulkUser
 import { Trash2, AlertCircle } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
 import { cn } from '@/presentation/components/ui/utils';
+import { BULK_UPLOAD_ROW_ROLES, USER_ROLE_LABELS } from '@/shared/constants';
 
 interface UserDataGridProps {
     users: EditableUser[];
@@ -25,11 +26,26 @@ export function UserDataGrid({
     const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // P2: organización "activa" por fila (índice dentro de user.organizaciones
+    // que muestran los 7 inputs/selects del bloque de organización). Default
+    // 0 por fila cuando no hay entrada explícita en el map.
+    const [activeOrgIndex, setActiveOrgIndex] = useState<Record<string, number>>({});
+
     // Mapas para búsqueda rápida
     const orgByRuc = useMemo(() => {
         if (!configData?.organizations) return new Map();
         return new Map(configData.organizations.map(org => [org.ruc, org]));
     }, [configData?.organizations]);
+
+    // P2: índice de organización activa para esta fila, con clamp a
+    // [0, orgs.length - 1] por si se eliminó una org y el índice guardado
+    // quedó fuera de rango.
+    const getActiveOrgIndex = useCallback((user: EditableUser) => {
+        const orgsLength = user.organizaciones?.length || 0;
+        const maxIndex = Math.max(0, orgsLength - 1);
+        const raw = activeOrgIndex[user.id] ?? 0;
+        return Math.min(Math.max(0, raw), maxIndex);
+    }, [activeOrgIndex]);
 
     const handleCellChange = useCallback((rowId: string, field: string, value: any) => {
         onCellChange(rowId, field, value);
@@ -83,7 +99,7 @@ export function UserDataGrid({
     const handleOrgFieldChange = useCallback((
         userId: string,
         orgIndex: number,
-        field: 'hire_date' | 'vacation_balance_initial',
+        field: 'hire_date' | 'vacation_balance_initial' | 'department' | 'position',
         value: string
     ) => {
         const user = users.find(u => u.id === userId);
@@ -98,6 +114,35 @@ export function UserDataGrid({
 
         onCellChange(userId, 'organizaciones', orgs);
     }, [users, onCellChange]);
+
+    // P2: agrega una organización vacía al final de la lista y la marca
+    // como activa. Sigue el mismo patrón local + onCellChange que el resto
+    // de handlers de organización de este componente (no usa el hook
+    // addOrganization/removeOrganization, que existen para testear la
+    // lógica de forma aislada).
+    const handleAddOrganization = useCallback((userId: string) => {
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+
+        const orgs = [...(user.organizaciones || [])];
+        const limit = configData?.max_organizations_limit;
+        if (typeof limit === 'number' && orgs.length >= limit) return;
+
+        orgs.push({ ruc: '', supervisor_email: '' });
+        onCellChange(userId, 'organizaciones', orgs);
+        setActiveOrgIndex(prev => ({ ...prev, [userId]: orgs.length - 1 }));
+    }, [users, onCellChange, configData?.max_organizations_limit]);
+
+    // P2: quita la organización activa y reajusta (clamp) el índice activo.
+    const handleRemoveOrganization = useCallback((userId: string) => {
+        const user = users.find(u => u.id === userId);
+        if (!user || !user.organizaciones || user.organizaciones.length === 0) return;
+
+        const idx = getActiveOrgIndex(user);
+        const orgs = user.organizaciones.filter((_, i) => i !== idx);
+        onCellChange(userId, 'organizaciones', orgs);
+        setActiveOrgIndex(prev => ({ ...prev, [userId]: Math.max(0, Math.min(idx, orgs.length - 1)) }));
+    }, [users, onCellChange, getActiveOrgIndex]);
 
     const handleCellClick = useCallback((rowId: string, field: string) => {
         setEditingCell({ rowId, field });
@@ -199,6 +244,58 @@ export function UserDataGrid({
             >
                 <span className="truncate">{label || '-'}</span>
                 {error && <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />}
+            </div>
+        );
+    };
+
+    // P2: selector de "organización activa" para esta fila + botones para
+    // agregar/quitar organizaciones. Los 7 renderers de organización de
+    // abajo siempre pintan la organización en este índice activo.
+    const renderOrgIndexSelector = (user: EditableUser) => {
+        const orgs = user.organizaciones || [];
+        const activeIdx = getActiveOrgIndex(user);
+        const limit = configData?.max_organizations_limit;
+        const atLimit = typeof limit === 'number' && orgs.length >= limit;
+
+        const orgHasError = (i: number) =>
+            Object.keys(user._errors).some(key => key.startsWith(`organizaciones.${i}.`));
+
+        return (
+            <div className="flex items-center gap-1">
+                <select
+                    value={orgs.length > 0 ? activeIdx : 0}
+                    onChange={(e) => setActiveOrgIndex(prev => ({ ...prev, [user.id]: Number(e.target.value) }))}
+                    disabled={orgs.length === 0}
+                    className="w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                    {orgs.length === 0 ? (
+                        <option value={0}>Sin empresas</option>
+                    ) : (
+                        orgs.map((_, i) => (
+                            <option key={i} value={i}>
+                                {`Org ${i + 1}`}{orgHasError(i) ? ' ⚠' : ''}
+                            </option>
+                        ))
+                    )}
+                </select>
+                <button
+                    type="button"
+                    onClick={() => handleAddOrganization(user.id)}
+                    disabled={atLimit}
+                    title={atLimit ? `Máximo ${limit} organizaciones` : 'Agregar organización'}
+                    className="h-7 w-7 shrink-0 flex items-center justify-center text-sm leading-none border rounded bg-white hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-200"
+                >
+                    +
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleRemoveOrganization(user.id)}
+                    disabled={orgs.length === 0}
+                    title="Quitar organización activa"
+                    className="h-7 w-7 shrink-0 flex items-center justify-center text-sm leading-none border rounded bg-white hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-200"
+                >
+                    ×
+                </button>
             </div>
         );
     };
@@ -361,6 +458,56 @@ export function UserDataGrid({
         );
     };
 
+    // RP-B3: departamento del usuario en esta organización
+    const renderOrgDepartmentInput = (user: EditableUser, orgIndex: number) => {
+        const org = user.organizaciones?.[orgIndex];
+
+        return (
+            <input
+                type="text"
+                placeholder="Departamento"
+                value={org?.department ?? ''}
+                onChange={(e) => handleOrgFieldChange(user.id, orgIndex, 'department', e.target.value)}
+                className="w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none border-gray-200"
+            />
+        );
+    };
+
+    // P1: fecha de nacimiento del usuario (campo de la fila, no de la
+    // organización). Mismo patrón que renderOrgHireDateInput pero contra el
+    // campo del usuario, vía handleCellChange.
+    const renderUserBirthDateInput = (user: EditableUser) => {
+        const error = user._errors['birth_date'];
+
+        return (
+            <input
+                type="date"
+                value={user.birth_date || ''}
+                onChange={(e) => handleCellChange(user.id, 'birth_date', e.target.value)}
+                className={cn(
+                    "w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none",
+                    error ? "border-red-400" : "border-gray-200"
+                )}
+                title={error}
+            />
+        );
+    };
+
+    // RP-B3: cargo del usuario en esta organización
+    const renderOrgPositionInput = (user: EditableUser, orgIndex: number) => {
+        const org = user.organizaciones?.[orgIndex];
+
+        return (
+            <input
+                type="text"
+                placeholder="Cargo"
+                value={org?.position ?? ''}
+                onChange={(e) => handleOrgFieldChange(user.id, orgIndex, 'position', e.target.value)}
+                className="w-full h-7 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none border-gray-200"
+            />
+        );
+    };
+
     return (
         <div className="h-full overflow-auto bg-white">
             <table className="w-full border-collapse text-sm">
@@ -376,11 +523,15 @@ export function UserDataGrid({
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-16">rol</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-16">estado</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">telefono</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32">fecha_nac</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-36 bg-blue-50">Empresa</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-44 bg-blue-50">Organización</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-48 bg-blue-50">Supervisor</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32 bg-blue-50">Roles empresa</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32 bg-blue-50">Fecha ingreso</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-28 bg-blue-50">Saldo vacac.</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-28 bg-blue-50">Departamento</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-28 bg-blue-50">Cargo</th>
                         <th className="px-2 py-2 text-center font-semibold text-gray-700 border-b w-12"></th>
                     </tr>
                 </thead>
@@ -436,11 +587,10 @@ export function UserDataGrid({
                                     {renderEditableCell(user, 'numero_documento')}
                                 </td>
                                 <td className={cn("px-2 py-1 border-b border-r", user._errors.rol && "bg-red-50")}>
-                                    {renderSelectCell(user, 'rol', [
-                                        { value: 'client', label: 'client' },
-                                        { value: 'admin', label: 'admin' },
-                                        { value: 'root', label: 'root' },
-                                    ])}
+                                    {renderSelectCell(user, 'rol', BULK_UPLOAD_ROW_ROLES.map(role => ({
+                                        value: role,
+                                        label: USER_ROLE_LABELS[role] ?? role,
+                                    })))}
                                 </td>
                                 <td className={cn("px-2 py-1 border-b border-r", user._errors.estado && "bg-red-50")}>
                                     {renderSelectCell(user, 'estado', [
@@ -451,21 +601,33 @@ export function UserDataGrid({
                                 <td className={cn("px-2 py-1 border-b border-r", user._errors.telefono && "bg-red-50")}>
                                     {renderEditableCell(user, 'telefono')}
                                 </td>
-                                {/* Selects de organización */}
+                                <td className={cn("px-1 py-1 border-b border-r", user._errors.birth_date && "bg-red-50")}>
+                                    {renderUserBirthDateInput(user)}
+                                </td>
+                                {/* Selects de organización (bloque referido a la organización ACTIVA de la fila) */}
                                 <td className="px-1 py-1 border-b border-r bg-blue-50/20">
-                                    {renderOrgSelect(user, 0)}
+                                    {renderOrgIndexSelector(user)}
                                 </td>
                                 <td className="px-1 py-1 border-b border-r bg-blue-50/20">
-                                    {renderSupervisorSelect(user, 0)}
+                                    {renderOrgSelect(user, getActiveOrgIndex(user))}
                                 </td>
                                 <td className="px-1 py-1 border-b border-r bg-blue-50/20">
-                                    {renderOrgRolesSelect(user, 0)}
+                                    {renderSupervisorSelect(user, getActiveOrgIndex(user))}
                                 </td>
                                 <td className="px-1 py-1 border-b border-r bg-blue-50/20">
-                                    {renderOrgHireDateInput(user, 0)}
+                                    {renderOrgRolesSelect(user, getActiveOrgIndex(user))}
                                 </td>
                                 <td className="px-1 py-1 border-b border-r bg-blue-50/20">
-                                    {renderOrgVacationBalanceInput(user, 0)}
+                                    {renderOrgHireDateInput(user, getActiveOrgIndex(user))}
+                                </td>
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderOrgVacationBalanceInput(user, getActiveOrgIndex(user))}
+                                </td>
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderOrgDepartmentInput(user, getActiveOrgIndex(user))}
+                                </td>
+                                <td className="px-1 py-1 border-b border-r bg-blue-50/20">
+                                    {renderOrgPositionInput(user, getActiveOrgIndex(user))}
                                 </td>
                                 <td className="px-2 py-1 border-b text-center">
                                     <Button

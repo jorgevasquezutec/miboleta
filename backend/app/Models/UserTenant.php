@@ -16,6 +16,8 @@ class UserTenant extends Model
         'is_primary',
         'hire_date',
         'vacation_balance_initial',
+        'department',
+        'position',
     ];
 
     protected $casts = [

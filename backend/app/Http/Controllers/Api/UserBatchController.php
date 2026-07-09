@@ -9,6 +9,7 @@ use App\Http\Requests\UploadUserBatchDataRequest;
 use App\Http\Requests\ValidateUserBatchDataRequest;
 use App\Http\Requests\ValidateUserBatchFileRequest;
 use App\Jobs\ProcessUserChunk;
+use App\Models\User;
 use App\Models\UserBatch;
 use App\Services\BulkUserUploadService;
 use Illuminate\Bus\Batch;
@@ -25,11 +26,64 @@ class UserBatchController extends Controller
     }
 
     /**
+     * FIX B2-r2: index/show/destroy/downloadErrors/getConfig solo estaban
+     * protegidos por el middleware auth:sanctum de la ruta (ver
+     * routes/api.php); cualquier usuario autenticado -incluido un
+     * 'client'- podía listar/ver/cancelar/eliminar batches de carga
+     * masiva. El global scope TenantFilterScope de UserBatch ya aísla por
+     * EMPRESA, pero no por ROL dentro de la misma empresa. Se exige aquí
+     * el mismo rol que ya exigen StoreUserBatchRequest/
+     * UploadUserBatchDataRequest para iniciar una carga (root/admin/
+     * admin_tenant).
+     */
+    private function authorizeBatchManager(): User
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        if (!$user || !in_array($user->getCurrentRole(), ['root', 'admin', 'admin_tenant'], true)) {
+            abort(403, 'No tienes permisos para gestionar cargas masivas.');
+        }
+
+        return $user;
+    }
+
+    /**
+     * FIX B2-r2: además del rol, para operaciones sobre UN batch puntual
+     * (show/destroy/downloadErrors) exige que pertenezca al usuario
+     * (created_by_user_id) o a un tenant que administre (admin/
+     * admin_tenant). root queda exceptuado. Sin esto, un admin de la
+     * Empresa A con acceso legítimo a la carga masiva podía ver/cancelar/
+     * eliminar batches de la Empresa B con solo adivinar/enumerar el id.
+     */
+    private function authorizeBatchOwnership(UserBatch $batch, User $user): void
+    {
+        if ($user->isRoot()) {
+            return;
+        }
+
+        if ($batch->created_by_user_id === $user->id) {
+            return;
+        }
+
+        if (
+            $batch->tenant_id
+            && ($user->hasRoleInTenant('admin', $batch->tenant_id) || $user->hasRoleInTenant('admin_tenant', $batch->tenant_id))
+        ) {
+            return;
+        }
+
+        abort(403, 'No tienes permisos para acceder a este batch.');
+    }
+
+    /**
      * GET /api/user-batches/config
      * Obtener configuración para el modal de template
      */
     public function getConfig()
     {
+        $this->authorizeBatchManager();
+
         $config = $this->service->getConfigData();
 
         return response()->json($config);
@@ -55,11 +109,25 @@ class UserBatchController extends Controller
      */
     public function index(Request $request)
     {
+        $user = $this->authorizeBatchManager();
         $perPage = $request->get('per_page', 15);
 
         $batches = UserBatch::with(['tenant', 'createdBy'])
             ->when($request->has('status'), function ($q) use ($request) {
                 $q->where('status', $request->status);
+            })
+            // FIX B2-r2: root ve todo (TenantFilterScope ya no le aplica
+            // restricción); un admin/admin_tenant solo ve los batches que
+            // creó o los de un tenant que administra.
+            ->when(!$user->isRoot(), function ($q) use ($user) {
+                $managedTenantIds = $user->tenantRoles()
+                    ->whereHas('role', fn ($r) => $r->whereIn('name', ['admin', 'admin_tenant']))
+                    ->pluck('tenant_id');
+
+                $q->where(function ($q2) use ($user, $managedTenantIds) {
+                    $q2->where('created_by_user_id', $user->id)
+                        ->orWhereIn('tenant_id', $managedTenantIds);
+                });
             })
             ->orderBy('created_at', 'desc');
 
@@ -120,8 +188,12 @@ class UserBatchController extends Controller
      */
     public function show(int $id)
     {
+        $user = $this->authorizeBatchManager();
+
         $batch = UserBatch::with(['tenant', 'createdBy'])
             ->findOrFail($id);
+
+        $this->authorizeBatchOwnership($batch, $user);
 
         // Obtener progreso en tiempo real del Laravel Bus Batch si está disponible
         $batchProgress = $batch->batch_progress;
@@ -149,6 +221,7 @@ class UserBatchController extends Controller
                 'total_rows' => $batch->total_rows,
                 'processed_rows' => $batch->processed_rows,
                 'created_users' => $batch->created_users,
+                'updated_users' => $batch->updated_users,
                 'failed_rows' => $batch->failed_rows,
                 'percentage' => $batch->progress_percentage,
                 'formatted' => $batch->formatted_progress,
@@ -246,7 +319,13 @@ class UserBatchController extends Controller
             'total_rows' => count($validation['data']),
             'processing_options' => [
                 'send_welcome_emails' => $validated['send_welcome_emails'] ?? false,
-                'update_existing' => $validated['update_existing'] ?? true,
+                // FIX M1: default false (comportamiento histórico: no
+                // actualizar salvo que se pida explícitamente). Antes,
+                // omitir el flag equivalía a update_existing=true, lo que
+                // podía pisar silenciosamente datos de usuarios existentes
+                // (incluido, antes del fix I3, el email/rol) sin que quien
+                // sube el archivo lo haya pedido.
+                'update_existing' => $validated['update_existing'] ?? false,
             ],
         ]);
 
@@ -337,7 +416,13 @@ class UserBatchController extends Controller
             'total_rows' => count($users),
             'processing_options' => [
                 'send_welcome_emails' => $validated['send_welcome_emails'] ?? false,
-                'update_existing' => $validated['update_existing'] ?? true,
+                // FIX M1: default false (comportamiento histórico: no
+                // actualizar salvo que se pida explícitamente). Antes,
+                // omitir el flag equivalía a update_existing=true, lo que
+                // podía pisar silenciosamente datos de usuarios existentes
+                // (incluido, antes del fix I3, el email/rol) sin que quien
+                // sube el archivo lo haya pedido.
+                'update_existing' => $validated['update_existing'] ?? false,
             ],
         ]);
 
@@ -386,7 +471,11 @@ class UserBatchController extends Controller
      */
     public function downloadErrors(int $id)
     {
+        $user = $this->authorizeBatchManager();
+
         $batch = UserBatch::findOrFail($id);
+
+        $this->authorizeBatchOwnership($batch, $user);
 
         if (!$batch->hasErrors()) {
             return response()->json([
@@ -409,7 +498,11 @@ class UserBatchController extends Controller
      */
     public function destroy(int $id)
     {
+        $user = $this->authorizeBatchManager();
+
         $batch = UserBatch::findOrFail($id);
+
+        $this->authorizeBatchOwnership($batch, $user);
 
         // Si está en procesamiento, intentar cancelar el batch
         if ($batch->isProcessing()) {

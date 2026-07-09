@@ -54,7 +54,7 @@ class InstructionsSheet implements FromArray, WithTitle, WithStyles, WithColumnW
             ['1. org{N}_ruc: Selecciona el RUC de la lista desplegable'],
             ['2. org{N}_supervisor_email: (Opcional) Email del supervisor en esa empresa'],
             ['3. org{N}_rol: (Opcional) Rol(es) del usuario EN ESA empresa.'],
-            ['   Permitidos: admin, client, aprobador, administrador_clientes (NO root).'],
+            ['   Permitidos: admin, client, aprobador, admin_tenant (NO root).'],
             ['   Para asignar varios roles en la misma empresa, sepáralos con coma'],
             ['   (ej: admin,aprobador). Si lo dejas vacío, se usa el rol general'],
             ['   de la columna "rol" para esa empresa.'],

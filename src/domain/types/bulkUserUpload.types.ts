@@ -10,6 +10,7 @@ export interface BatchProgress {
     total_rows: number;
     processed_rows: number;
     created_users: number;
+    updated_users?: number;
     failed_rows: number;
     percentage: string;
     formatted: string;
@@ -179,6 +180,10 @@ export interface EditableOrganization {
     roles?: string[];
     hire_date?: string | null; // 'YYYY-MM-DD'
     vacation_balance_initial?: string | null; // input numérico como string; se castea en backend
+    /** Departamento/área del usuario en esta organización. */
+    department?: string | null;
+    /** Cargo/puesto del usuario en esta organización. */
+    position?: string | null;
 }
 
 export interface EditableUser {
@@ -189,9 +194,13 @@ export interface EditableUser {
     email: string;
     tipo_documento: 'dni' | 'ce' | 'passport' | 'ruc';
     numero_documento: string;
-    rol: 'client' | 'root' | 'admin';
+    // P3: alineado con los roles que el backend acepta en la columna de fila
+    // (UploadUserBatchDataRequest::rules(), UsersImport::ALLOWED_TOP_LEVEL_ROLES).
+    // 'root' queda excluido a propósito.
+    rol: 'client' | 'admin' | 'admin_tenant' | 'aprobador';
     estado: 'active' | 'inactive';
     telefono?: string;
+    birth_date?: string | null; // 'YYYY-MM-DD'
     organizaciones: EditableOrganization[];
     // Metadatos de validación
     _errors: Record<string, string>; // { email: "Email inválido" }

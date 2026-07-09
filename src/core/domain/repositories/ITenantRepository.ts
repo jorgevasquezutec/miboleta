@@ -1,4 +1,4 @@
-import { Tenant, CreateTenantData, UpdateTenantData } from '../entities';
+import { Tenant, CreateTenantData, UpdateTenantData, TenantSmtpTestResult } from '../entities';
 import { PaginatedResponse } from '@/infrastructure/persistence/repositories/types';
 
 export interface GetTenantsParams {
@@ -17,4 +17,6 @@ export interface ITenantRepository {
   getUsers(tenantId: string): Promise<any[]>;
   addUser(tenantId: string, userId: string, isPrimary?: boolean): Promise<void>;
   removeUser(tenantId: string, userId: string): Promise<void>;
+  /** Prueba la conexión SMTP guardada de la empresa (ítem 24-menor, solo root). */
+  testSmtp(tenantId: string): Promise<TenantSmtpTestResult>;
 }

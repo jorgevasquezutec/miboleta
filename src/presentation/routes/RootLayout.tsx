@@ -17,6 +17,7 @@ import {
   Upload,
   X,
   FileKey,
+  Globe,
 } from "lucide-react";
 import { NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
@@ -202,7 +203,7 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
     { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2 },
     { label: "Usuarios", path: "/users", icon: Users },
-    // { label: "Carga Masiva", path: "/users/batch", icon: Upload },
+    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
     { label: "Documentos", path: "/documents", icon: FileText },
     {
       label: "Vacaciones",
@@ -214,6 +215,7 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
     },
     { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
     { label: "Firma Digital", path: "/signature-settings", icon: FileKey },
+    { label: "IP Pública", path: "/platform-settings", icon: Globe },
   ];
 
   const adminNavItems: NavItem[] = [
@@ -221,6 +223,7 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
     { label: "Mis Documentos", path: "/dashboard", icon: FileText },
     { label: "Cargar Documentos", path: "/upload", icon: FileText },
     { label: "Usuarios", path: "/users", icon: Users },
+    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
     { label: "Lotes de Carga", path: "/batches", icon: FileStack },
     { label: "Documentos", path: "/documents", icon: FileText },
     {
@@ -241,14 +244,17 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
     { label: "Mis Vacaciones", path: "/vacations", icon: Calendar },
   ];
 
-  // administrador_clientes: gestiona usuarios/documentos de su empresa
-  // (permisos manage_users, upload_documents, manage_documents, view_reports)
-  // pero NO aprueba vacaciones (sin permiso approve_vacations) — por eso no
-  // tiene "Mi Equipo" dentro de Vacaciones (de hecho, no tiene acceso a
-  // vacaciones en absoluto, ver mapeo de rutas en routes/index.tsx).
-  const administradorClientesNavItems: NavItem[] = [
+  // admin_tenant: gestiona usuarios/documentos de su empresa (permisos
+  // manage_users, upload_documents, manage_documents, view_reports; y ahora
+  // también approve_vacations/tenant_configuration, aunque el acceso de
+  // navegación a Vacaciones no está en el alcance de este cambio — ver
+  // routes/index.tsx, que sigue sin incluir admin_tenant en /vacations y
+  // /team-vacations). Sigue sin tener "Mi Equipo" dentro de Vacaciones (de
+  // hecho, no tiene acceso a vacaciones en absoluto, ver routes/index.tsx).
+  const adminTenantNavItems: NavItem[] = [
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
     { label: "Usuarios", path: "/users", icon: Users },
+    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
     { label: "Lotes de Carga", path: "/batches", icon: FileStack },
     { label: "Documentos", path: "/documents", icon: FileText },
     { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
@@ -277,8 +283,8 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
         return rootNavItems;
       case "admin":
         return adminNavItems;
-      case "administrador_clientes":
-        return administradorClientesNavItems;
+      case "admin_tenant":
+        return adminTenantNavItems;
       case "aprobador":
         return aprobadorNavItems;
       case "client":

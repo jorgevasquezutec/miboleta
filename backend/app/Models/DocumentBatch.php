@@ -27,6 +27,7 @@ class DocumentBatch extends Model
         'notify_employees',
         'notifications_sent',
         'requires_signature',
+        'page_size',
         'status',
         'started_at',
         'completed_at',
@@ -94,6 +95,18 @@ class DocumentBatch extends Model
     public function isCompleted(): bool
     {
         return in_array($this->status, ['completed', 'completed_with_errors']);
+    }
+
+    /**
+     * Tamaño de página de las boletas de este lote, con fallback a 'a10'
+     * (formato calibrado por defecto) para lotes viejos que quedaron con el
+     * campo en null. Ver config/signature.php (signature.watermark.sizes) y
+     * SignatureService::verifyAndSign(), que usa este valor para elegir la
+     * posición de la firma.
+     */
+    public function getResolvedPageSizeAttribute(): string
+    {
+        return $this->page_size ?: 'a10';
     }
 
     /**

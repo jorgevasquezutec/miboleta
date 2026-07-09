@@ -20,7 +20,7 @@ class BulkUserUploadService
      * Roles operativos asignables por organización (RP1-C). 'root' queda
      * excluido a propósito: es un rol global, no se asigna por empresa.
      */
-    private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'administrador_clientes'];
+    private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
 
     // ────────────────────────────────────────────────────────────
     // CONFIGURACIÓN
@@ -134,6 +134,14 @@ class BulkUserUploadService
 
                 if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
                     $transformedOrg['vacation_balance_initial'] = $org['vacation_balance_initial'];
+                }
+
+                if (!empty($org['department'])) {
+                    $transformedOrg['department'] = trim((string) $org['department']);
+                }
+
+                if (!empty($org['position'])) {
+                    $transformedOrg['position'] = trim((string) $org['position']);
                 }
 
                 $transformedOrgs[] = $transformedOrg;
@@ -477,8 +485,11 @@ class BulkUserUploadService
             }
         }
 
-        // Validar rol
-        if (!empty($user['rol']) && !in_array($user['rol'], ['client', 'root', 'admin'])) {
+        // Validar rol. FIX B2.2: 'root' excluido a propósito (ver
+        // UploadUserBatchDataRequest/UsersImport); este preview no debe
+        // marcar como "válida" una fila que luego sería rechazada (o peor,
+        // aceptada) por el resto del pipeline de carga masiva.
+        if (!empty($user['rol']) && !in_array($user['rol'], ['client', 'admin', 'admin_tenant', 'aprobador'], true)) {
             $errors[] = [
                 'row' => $rowNumber,
                 'field' => 'rol',
@@ -595,6 +606,23 @@ class BulkUserUploadService
                             'message' => 'Saldo de vacaciones no puede ser negativo en organización ' . ($orgIndex + 1),
                         ];
                     }
+                }
+
+                // Departamento/cargo por organización (RP-B3)
+                if (!empty($org['department']) && strlen((string) $org['department']) > 255) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => "organizaciones.{$orgIndex}.department",
+                        'message' => 'Departamento inválido en organización ' . ($orgIndex + 1) . ' (máx. 255 caracteres)',
+                    ];
+                }
+
+                if (!empty($org['position']) && strlen((string) $org['position']) > 255) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => "organizaciones.{$orgIndex}.position",
+                        'message' => 'Cargo inválido en organización ' . ($orgIndex + 1) . ' (máx. 255 caracteres)',
+                    ];
                 }
             }
         }

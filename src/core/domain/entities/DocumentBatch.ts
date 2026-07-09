@@ -16,6 +16,8 @@ export interface DocumentBatch {
     notifyEmployees: boolean;
     notificationsSent: boolean;
     requiresSignature: boolean;
+    /** Tamaño de página de las boletas del lote (a4|a5|a10|letter). Ver backend config/signature.php. */
+    pageSize?: PageSize;
     status: BatchStatus;
     progressPercentage: number;
     startedAt: string | null;
@@ -35,6 +37,18 @@ export interface DocumentBatch {
 }
 
 export type BatchStatus = 'pending' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'partial';
+
+// Ítem 36: tamaño de página de las boletas, elegido antes de la carga
+// masiva para calibrar correctamente la posición de la firma. 'a10' es el
+// formato calibrado histórico (comportamiento por defecto).
+export type PageSize = 'a4' | 'a5' | 'a10' | 'letter';
+
+export const pageSizeLabels: Record<PageSize, string> = {
+    a10: 'A10 (formato estándar de boleta)',
+    a4: 'A4',
+    a5: 'A5',
+    letter: 'Carta (Letter)',
+};
 
 export interface BatchError {
     file: string;
@@ -75,6 +89,8 @@ export interface BatchUploadRequest {
     notifyEmployees: boolean;
     requiresSignature: boolean;
     tenantId?: number;
+    /** Tamaño de página de las boletas del ZIP (default 'a10' si se omite). */
+    pageSize?: PageSize;
 }
 
 // Preview response

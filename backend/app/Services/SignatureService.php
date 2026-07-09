@@ -166,7 +166,10 @@ class SignatureService
      */
     public function verifyAndSign(User $user, int $documentId, string $code, array $requestData): array
     {
-        $document = Document::with('documentType')->find($documentId);
+        // Se eager-carga 'batch' porque necesitamos batch->page_size (ítem
+        // 36) para elegir las coordenadas correctas del watermark; ver más
+        // abajo, antes de pdfWatermarkService->addSignatureWatermark().
+        $document = Document::with(['documentType', 'batch'])->find($documentId);
         if (!$document) {
             throw new DocumentNotFoundException('Documento no encontrado');
         }
@@ -262,9 +265,17 @@ class SignatureService
 
         // Apply watermark to PDF
         if ($document->file_path) {
+            // Ítem 36: el tamaño de página elegido en la carga masiva vive
+            // en el batch, no en el documento. Si el documento no tiene
+            // batch (no debería pasar en el flujo normal) o el batch quedó
+            // sin page_size (lotes anteriores al ítem 36), se usa 'a10'
+            // (formato calibrado por defecto) — ver DocumentBatch::getResolvedPageSizeAttribute().
+            $pageSizeKey = $document->batch?->resolved_page_size ?? 'a10';
+
             $watermarkApplied = $this->pdfWatermarkService->addSignatureWatermark(
                 $document->file_path,
-                $signatureData
+                $signatureData,
+                $pageSizeKey
             );
 
             if (!$watermarkApplied) {

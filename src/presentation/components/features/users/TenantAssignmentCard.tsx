@@ -15,12 +15,34 @@ import { TenantMultiSelector } from '@/presentation/components/shared/TenantMult
 import { Building2 } from 'lucide-react';
 import { TenantAssociation } from '@/core/domain/entities/User';
 import { Role } from '@/core/domain/entities';
+import { useAuthStore } from '@/presentation/stores/authStore';
+
+/**
+ * Roles que un usuario autenticado con los roles `actorRoleNames` (los que
+ * tiene EN LA EMPRESA que se está configurando, no su rol global) puede
+ * asignar a otro usuario en esa empresa. Espeja la misma jerarquía RBAC que
+ * StoreUserRequest/UpdateUserRequest en el backend (ítems 29/30):
+ * - admin_tenant: puede asignar admin, aprobador, client (no admin_tenant ni root).
+ * - admin: puede asignar aprobador, client (no admin ni admin_tenant).
+ * - cualquier otro caso (o ninguno): no puede asignar roles operativos aquí
+ *   (no debería ocurrir: solo root/admin/admin_tenant llegan a este formulario).
+ */
+function assignableRoleNamesFor(actorRoleNames: string[]): string[] {
+    if (actorRoleNames.includes('admin_tenant')) {
+        return ['admin', 'aprobador', 'client'];
+    }
+    if (actorRoleNames.includes('admin')) {
+        return ['aprobador', 'client'];
+    }
+    return [];
+}
 
 /**
  * Configuración por empresa que no vive en TenantAssociation (viene del
  * formulario, no del usuario ya cargado): roles operativos a asignar,
- * fecha de inicio laboral y saldo inicial de vacaciones.
- * Se envía al backend como tenants_config.*.{role_ids,hire_date,vacation_balance_initial}.
+ * fecha de inicio laboral, saldo inicial de vacaciones y departamento/cargo.
+ * Se envía al backend como
+ * tenants_config.*.{role_ids,hire_date,vacation_balance_initial,department,position}.
  */
 export interface TenantExtra {
     roleIds: number[];
@@ -28,12 +50,18 @@ export interface TenantExtra {
     hireDate: string;
     /** Días, como string controlado (input), o '' si no se ha definido */
     vacationBalanceInitial: string;
+    /** Departamento/área del usuario en esta empresa, o '' si no se ha definido */
+    department: string;
+    /** Cargo/puesto del usuario en esta empresa, o '' si no se ha definido */
+    position: string;
 }
 
 export const EMPTY_TENANT_EXTRA: TenantExtra = {
     roleIds: [],
     hireDate: '',
     vacationBalanceInitial: '',
+    department: '',
+    position: '',
 };
 
 interface TenantAssignmentCardProps {
@@ -172,12 +200,39 @@ function TenantItem({
     onSupervisorChange,
     onExtraChange,
 }: TenantItemProps) {
+    const { user: actor } = useAuthStore();
+
     const toggleRole = (roleId: number) => {
         const next = extra.roleIds.includes(roleId)
             ? extra.roleIds.filter(id => id !== roleId)
             : [...extra.roleIds, roleId];
         onExtraChange({ roleIds: next });
     };
+
+    /**
+     * Roles visibles para asignar en ESTA empresa: root ve el catálogo
+     * completo (ya sin 'root', filtrado por el caller); el resto se filtra
+     * según el rol del usuario autenticado (`actor`) EN ESTA empresa
+     * específica (no su rol global, ni el de la empresa activa del
+     * TenantSwitcher — puede estar editando un usuario de otra empresa a la
+     * que también pertenece con un rol distinto).
+     */
+    const visibleRoles = (() => {
+        if (!actor || actor.role === 'root') {
+            return availableRoles;
+        }
+
+        const actorTenant = actor.tenants?.find(t => String(t.id) === String(tenant.id));
+        const actorRoleNames =
+            actorTenant?.roles && actorTenant.roles.length > 0
+                ? actorTenant.roles
+                : actorTenant?.role
+                    ? [actorTenant.role]
+                    : [];
+
+        const allowedNames = assignableRoleNamesFor(actorRoleNames);
+        return availableRoles.filter(role => allowedNames.includes(role.name));
+    })();
 
     return (
         <div
@@ -232,9 +287,13 @@ function TenantItem({
                     </Label>
                     {availableRoles.length === 0 ? (
                         <p className="text-xs text-gray-400">Cargando catálogo de roles...</p>
+                    ) : visibleRoles.length === 0 ? (
+                        <p className="text-xs text-gray-400">
+                            No tienes permisos para asignar roles en esta empresa.
+                        </p>
                     ) : (
                         <div className="flex flex-wrap gap-3 p-2 bg-white rounded-md border border-gray-200">
-                            {availableRoles.map(role => (
+                            {visibleRoles.map(role => (
                                 <label
                                     key={role.id}
                                     className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer"
@@ -273,6 +332,33 @@ function TenantItem({
                             placeholder="0"
                             value={extra.vacationBalanceInitial}
                             onChange={(e) => onExtraChange({ vacationBalanceInitial: e.target.value })}
+                            className="bg-white"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-gray-600">
+                            Departamento
+                        </Label>
+                        <Input
+                            type="text"
+                            placeholder="Ej: Sistemas"
+                            value={extra.department}
+                            onChange={(e) => onExtraChange({ department: e.target.value })}
+                            className="bg-white"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-gray-600">
+                            Cargo
+                        </Label>
+                        <Input
+                            type="text"
+                            placeholder="Ej: Analista Programador"
+                            value={extra.position}
+                            onChange={(e) => onExtraChange({ position: e.target.value })}
                             className="bg-white"
                         />
                     </div>

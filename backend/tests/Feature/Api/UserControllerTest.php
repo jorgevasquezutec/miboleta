@@ -188,14 +188,18 @@ class UserControllerTest extends TestCase
         $this->assertSoftDeleted('users', ['id' => $user->id]);
     }
 
-    public function test_admin_can_delete_tenant_user(): void
+    public function test_admin_cannot_delete_tenant_user(): void
     {
+        // Item 28: solo root puede eliminar usuarios (ver UserPolicy::delete(),
+        // invocada desde UserController::destroy()). Admin y admin_tenant ya no
+        // pueden, aunque compartan tenant con el usuario objetivo.
         $user = User::factory()->client()->create();
         $user->tenants()->attach($this->tenant->id);
 
         $response = $this->actingAs($this->admin)->deleteJson("/api/users/{$user->id}");
 
-        $response->assertStatus(200);
+        $response->assertStatus(403);
+        $this->assertNotSoftDeleted('users', ['id' => $user->id]);
     }
 
     public function test_filter_users_by_search(): void

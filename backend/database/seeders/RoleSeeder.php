@@ -31,7 +31,7 @@ class RoleSeeder extends Seeder
             ],
             [
                 'name' => 'admin',
-                'display_name' => 'Administrador de Tenant',
+                'display_name' => 'Administrador',
                 'description' => 'Administrador con acceso completo dentro de su organización',
                 'guard_name' => 'web',
                 'permissions' => [
@@ -70,15 +70,17 @@ class RoleSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'administrador_clientes',
-                'display_name' => 'Administrador de clientes',
-                'description' => 'Usuario con permisos para gestionar usuarios y documentos de clientes dentro de su empresa',
+                'name' => 'admin_tenant',
+                'display_name' => 'Administrador de Empresa (Tenant)',
+                'description' => 'Administrador de la empresa (tenant), con permisos superiores a Admin: gestiona usuarios (incluidos Admin y Aprobador), documentos, vacaciones, reportes y configuración de su empresa',
                 'guard_name' => 'web',
                 'permissions' => [
                     'manage_users',
                     'upload_documents',
                     'manage_documents',
+                    'approve_vacations',
                     'view_reports',
+                    'tenant_configuration',
                 ],
             ],
         ];

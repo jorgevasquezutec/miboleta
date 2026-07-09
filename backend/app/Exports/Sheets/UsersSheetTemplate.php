@@ -65,6 +65,19 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
             $baseHeaders[] = "org{$i}_saldo_vacaciones";
         }
 
+        // Bloque nuevo (RP-B3): departamento/cargo por organización. Igual
+        // que el bloque anterior, se agrega al final para no correr las
+        // columnas ya existentes.
+        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
+            $baseHeaders[] = "org{$i}_departamento";
+            $baseHeaders[] = "org{$i}_cargo";
+        }
+
+        // P1: fecha de nacimiento del usuario (campo de users, no por
+        // organización). Se agrega AL FINAL para no correr las columnas ya
+        // existentes.
+        $baseHeaders[] = 'fecha_nacimiento';
+
         return $baseHeaders;
     }
 
@@ -111,6 +124,20 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
                 $row1[] = '';
             }
         }
+
+        // Ejemplo de departamento/cargo para la primera organización
+        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
+            if ($i === 1) {
+                $row1[] = 'Sistemas';
+                $row1[] = 'Analista Programador';
+            } else {
+                $row1[] = '';
+                $row1[] = '';
+            }
+        }
+
+        // P1: ejemplo de fecha de nacimiento (campo de users, al final)
+        $row1[] = '1990-05-15';
 
         $examples[] = $row1;
 
@@ -183,6 +210,15 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
             $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // org_fecha_ingreso
             $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // org_saldo_vacaciones
         }
+
+        // Anchos para el bloque nuevo: departamento/cargo (RP-B3)
+        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
+            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 22; // org_departamento
+            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 22; // org_cargo
+        }
+
+        // P1: ancho para fecha_nacimiento (columna final, campo de users)
+        $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // fecha_nacimiento
 
         return $widths;
     }

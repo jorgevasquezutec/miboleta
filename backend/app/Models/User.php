@@ -27,8 +27,8 @@ class User extends Authenticatable
      * @var list<string>
      */
     public const ROLE_PRIORITY = [
+        'admin_tenant',
         'admin',
-        'administrador_clientes',
         'aprobador',
         'client',
     ];
@@ -155,7 +155,7 @@ class User extends Authenticatable
     public function tenants(): BelongsToMany
     {
         return $this->belongsToMany(Tenant::class, 'user_tenants')
-            ->withPivot(['is_primary', 'supervisor_id', 'hire_date', 'vacation_balance_initial'])
+            ->withPivot(['is_primary', 'supervisor_id', 'hire_date', 'vacation_balance_initial', 'department', 'position'])
             ->withTimestamps();
     }
 
@@ -164,7 +164,7 @@ class User extends Authenticatable
      *
      * A diferencia de roles() (global, vía user_roles, donde vive únicamente 'root'),
      * esta relación modela el híbrido: un usuario puede tener varios roles operativos
-     * (admin, client, aprobador, administrador_clientes) distintos en cada empresa.
+     * (admin_tenant, admin, client, aprobador) distintos en cada empresa.
      */
     public function tenantRoles(): HasMany
     {

@@ -119,9 +119,34 @@ class UserService
      *
      * @param User $user
      * @param array $data
+     * @param bool $preserveTenantFieldsWhenMissing Cuando es true, los campos
+     *   "opcionales por empresa" (hire_date, vacation_balance_initial,
+     *   department, position, supervisor_id) que NO vengan explícitos en
+     *   $data['tenants_config'][n] conservan el valor ya guardado en el
+     *   pivote en vez de limpiarse a null (ver assignTenantsWithConfig). Lo
+     *   usa la actualización de existentes de la carga masiva
+     *   (ProcessUserChunk::update_existing) para no borrar, por ejemplo, un
+     *   saldo de vacaciones ya devengado cuando la fila reprocesada no trae
+     *   ese dato. El formulario de edición individual (UserController@update)
+     *   sigue usando el comportamiento histórico (false): un campo vacío en
+     *   el formulario SÍ limpia el valor, porque ahí "vacío" es una acción
+     *   explícita del usuario.
+     * @param bool $mergeTenants FIX I3(b): cuando es true, la sincronización
+     *   de tenants_config usa MERGE (syncWithoutDetaching) en vez de sync
+     *   (que desengancha cualquier tenant no listado en $data). Lo usa
+     *   exclusivamente la actualización de existentes de la carga masiva
+     *   (ProcessUserChunk::update_existing), porque una fila reprocesada
+     *   solo trae las organizaciones que le conciernen a quien subió el
+     *   archivo: no se debe interpretar la ausencia de otras organizaciones
+     *   del usuario como "quítaselas" (eso desengancharía silenciosamente al
+     *   usuario de empresas con las que la fila del Excel no tenía nada que
+     *   ver). La edición individual (UserController@update) sigue usando el
+     *   comportamiento histórico (false): el formulario reenvía la lista
+     *   COMPLETA de tenants del usuario, así que un sync explícito (con
+     *   detach) es el comportamiento correcto ahí.
      * @return User
      */
-    public function updateUser(User $user, array $data): User
+    public function updateUser(User $user, array $data, bool $preserveTenantFieldsWhenMissing = false, bool $mergeTenants = false): User
     {
         DB::beginTransaction();
 
@@ -170,7 +195,7 @@ class UserService
             // algo que aplicar: cambio de rol o datos de tenant en el request)
             if (!$becomingRoot && ($roleChanged || $tenantFieldsProvided)) {
                 if (isset($data['tenants_config']) && is_array($data['tenants_config'])) {
-                    $this->assignTenantsWithConfig($user, $data['tenants_config'], $newRoleId);
+                    $this->assignTenantsWithConfig($user, $data['tenants_config'], $newRoleId, $preserveTenantFieldsWhenMissing, $mergeTenants);
                 } elseif (isset($data['tenant_ids']) && is_array($data['tenant_ids'])) {
                     // Legacy/Simple assignment without supervisors update (or keeping existing)
                     // But sync deletes existing pivot data. We should be careful.
@@ -180,7 +205,10 @@ class UserService
                     foreach ($data['tenant_ids'] as $tenantId) {
                         $pivotData[$tenantId] = ['is_primary' => $tenantId == $primaryTenantId];
                     }
-                    $user->tenants()->sync($pivotData);
+                    // FIX I3(a): limpiar user_tenant_roles huérfanos de los
+                    // tenants que el sync haya desenganchado (ver doc de
+                    // syncTenantsAndCleanOrphanRoles).
+                    $this->syncTenantsAndCleanOrphanRoles($user, $pivotData, $mergeTenants);
 
                     if ($newRoleId) {
                         foreach ($data['tenant_ids'] as $tenantId) {
@@ -188,9 +216,10 @@ class UserService
                         }
                     }
                 } elseif (isset($data['tenant_id'])) {
-                    $user->tenants()->sync([
+                    // FIX I3(a): idem, ver comentario arriba.
+                    $this->syncTenantsAndCleanOrphanRoles($user, [
                         $data['tenant_id'] => ['is_primary' => true]
-                    ]);
+                    ], $mergeTenants);
 
                     if ($newRoleId) {
                         $this->assignRoles($user, (int) $data['tenant_id'], [$newRoleId]);
@@ -306,7 +335,7 @@ class UserService
      *
      * @param User $user
      * @param int $tenantId
-     * @param array<int> $roleIds Roles operativos (admin, client, aprobador, administrador_clientes)
+     * @param array<int> $roleIds Roles operativos (admin_tenant, admin, client, aprobador)
      * @return void
      */
     protected function assignRoles(User $user, int $tenantId, array $roleIds): void
@@ -413,32 +442,60 @@ class UserService
      *     'is_primary' => bool,
      *     'hire_date' => ?string,
      *     'vacation_balance_initial' => ?float,
+     *     'department' => ?string,
+     *     'position' => ?string,
      *   ]
      * @param int|null $fallbackRoleId Rol a aplicar en las empresas cuyo item no traiga 'role_ids'
      *   (compatibilidad con la carga masiva, que hoy envía un único role_id global
      *   junto con tenants_config sin desglose de roles por empresa).
+     * @param bool $preserveWhenMissing Ver doc de updateUser(). false (default) = comportamiento
+     *   histórico: un item sin un campo opcional lo deja en null (equivalente a un "PUT" completo
+     *   del pivote). true = un campo opcional ausente/vacío conserva el valor ya guardado en el
+     *   pivote existente (usado solo por la actualización de existentes de la carga masiva).
+     * @param bool $mergeTenants FIX I3(b): ver doc de updateUser(). true = MERGE
+     *   (syncWithoutDetaching, usado solo por update_existing de la carga masiva); false (default)
+     *   = sync explícito con detach (comportamiento histórico, usado por la edición individual).
      */
-    protected function assignTenantsWithConfig(User $user, array $config, ?int $fallbackRoleId = null): void
+    protected function assignTenantsWithConfig(User $user, array $config, ?int $fallbackRoleId = null, bool $preserveWhenMissing = false, bool $mergeTenants = false): void
     {
+        // Pivotes actuales (solo se consultan si hace falta preservar valores
+        // ausentes; evita una query extra en el camino histórico).
+        $existingPivots = ($preserveWhenMissing && $user->exists)
+            ? $user->tenants()->get()->keyBy('id')
+            : collect();
+
         $pivotData = [];
         foreach ($config as $item) {
+            $tenantId = (int) $item['tenant_id'];
+            $existingPivot = $existingPivots->get($tenantId)?->pivot;
+
             // Manejar tanto 'supervisor_id' como 'supervisors' (array)
             $supervisorId = null;
+            $supervisorProvided = isset($item['supervisor_id'])
+                || (isset($item['supervisors']) && is_array($item['supervisors']) && !empty($item['supervisors']));
             if (isset($item['supervisor_id'])) {
                 $supervisorId = $item['supervisor_id'];
             } elseif (isset($item['supervisors']) && is_array($item['supervisors']) && !empty($item['supervisors'])) {
                 // Tomar el primer supervisor si viene como array
                 $supervisorId = $item['supervisors'][0];
             }
+            if (!$supervisorProvided && $preserveWhenMissing && $existingPivot) {
+                $supervisorId = $existingPivot->supervisor_id;
+            }
 
-            $pivotData[$item['tenant_id']] = [
+            $pivotData[$tenantId] = [
                 'supervisor_id' => $supervisorId,
                 'is_primary' => $item['is_primary'] ?? false,
-                'hire_date' => $item['hire_date'] ?? null,
-                'vacation_balance_initial' => $item['vacation_balance_initial'] ?? null,
+                'hire_date' => $this->resolvePivotValue($item['hire_date'] ?? null, $existingPivot?->hire_date, $preserveWhenMissing),
+                'vacation_balance_initial' => $this->resolvePivotValue($item['vacation_balance_initial'] ?? null, $existingPivot?->vacation_balance_initial, $preserveWhenMissing),
+                'department' => $this->resolvePivotValue($item['department'] ?? null, $existingPivot?->department, $preserveWhenMissing),
+                'position' => $this->resolvePivotValue($item['position'] ?? null, $existingPivot?->position, $preserveWhenMissing),
             ];
         }
-        $user->tenants()->sync($pivotData);
+
+        // FIX I3(a): limpiar user_tenant_roles huérfanos de los tenants que
+        // el sync haya desenganchado (ver doc del helper).
+        $this->syncTenantsAndCleanOrphanRoles($user, $pivotData, $mergeTenants);
 
         // Asignar roles operativos por empresa. Si un item no trae role_ids
         // explícitos, se usa el rol global de respaldo (fallbackRoleId) para
@@ -450,6 +507,65 @@ class UserService
                 $this->assignRoles($user, (int) $item['tenant_id'], $roleIds);
             }
         }
+    }
+
+    /**
+     * FIX I3: sincroniza el pivote user_tenants del usuario y, si el sync
+     * desengancha algún tenant (solo puede pasar cuando $mergeTenants es
+     * false), elimina también las filas de user_tenant_roles de ese
+     * usuario para esos tenants.
+     *
+     * Antes de este fix, tenants()->sync() desenganchaba tenants no
+     * listados en $pivotData pero NO tocaba user_tenant_roles: el usuario
+     * quedaba sin membresía en user_tenants para esa empresa, pero
+     * hasRoleInTenant() (y por tanto getCurrentRole($tenantId) y todo el
+     * middleware/autorización que depende de ella) seguía devolviendo
+     * true/el rol viejo para una empresa de la que, a todos los efectos
+     * visibles, el usuario ya había sido removido.
+     *
+     * $mergeTenants = true usa syncWithoutDetaching (nunca desengancha, ver
+     * doc de updateUser()/assignTenantsWithConfig), por lo que en ese modo
+     * esta limpieza es naturalmente un no-op ('detached' siempre viene
+     * vacío).
+     *
+     * @param User $user
+     * @param array<int, array<string, mixed>> $pivotData Datos de pivote keyed por tenant_id, formato esperado por BelongsToMany::sync()/syncWithoutDetaching().
+     * @param bool $mergeTenants
+     * @return array{attached: array<int, int|string>, detached: array<int, int|string>, updated: array<int, int|string>}
+     */
+    private function syncTenantsAndCleanOrphanRoles(User $user, array $pivotData, bool $mergeTenants = false): array
+    {
+        $syncResult = $mergeTenants
+            ? $user->tenants()->syncWithoutDetaching($pivotData)
+            : $user->tenants()->sync($pivotData);
+
+        if (!empty($syncResult['detached'])) {
+            UserTenantRole::where('user_id', $user->id)
+                ->whereIn('tenant_id', $syncResult['detached'])
+                ->delete();
+        }
+
+        return $syncResult;
+    }
+
+    /**
+     * Resuelve el valor a persistir en el pivote user_tenants para un campo
+     * "opcional por empresa" (hire_date, vacation_balance_initial,
+     * department, position): si $newValue viene explícito (no vacío) se usa
+     * ese; si no viene y $preserve es true, se conserva $existingValue en
+     * vez de pisarlo con null. Ver doc de updateUser()/assignTenantsWithConfig.
+     *
+     * @param mixed $newValue
+     * @param mixed $existingValue
+     * @return mixed
+     */
+    private function resolvePivotValue($newValue, $existingValue, bool $preserve)
+    {
+        if ($newValue !== null && $newValue !== '') {
+            return $newValue;
+        }
+
+        return $preserve ? $existingValue : null;
     }
 
     /**

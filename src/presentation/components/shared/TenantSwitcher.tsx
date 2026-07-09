@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Building2, Check, ChevronsUpDown, Globe2, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/presentation/stores/authStore";
+import { useTenantFilterActions, useTenantFilterStore } from "@/presentation/stores/tenantFilterStore";
 import { Tenant, TenantAssociation } from "@/core/domain/entities";
 import { tenantRepository } from "@/infrastructure/persistence/repositories";
 import { Button } from "@/presentation/components/ui/button";
@@ -36,18 +37,22 @@ function toRootTenantAssociation(tenant: Tenant): TenantAssociation {
 
 /**
  * Switcher de empresa activa (contexto de sesión: currentTenant/currentRole
- * en authStore). Distinto de TenantMultiSwitcher (filtro de datos vía
- * X-Tenant-Ids, tenantFilterStore) — ambos conviven en el Navbar.
+ * en authStore). Es el único control de empresa en el Navbar.
  *
  * - No-root: lista `user.tenants` (las empresas a las que pertenece). Si
- *   tiene 1 o 0, se muestra estático (sin dropdown).
+ *   tiene 1 o 0, se muestra estático (sin dropdown). El filtro de datos
+ *   (tenantFilterStore, X-Tenant-Ids) lo maneja TenantMultiSwitcher aparte.
  * - Root: "god mode". Ve el catálogo completo de empresas (no solo las
  *   suyas, porque no tiene ninguna asignada) más una opción "Todas las
- *   empresas" para operar sin scope de empresa.
+ *   empresas" para operar sin scope de empresa. Al elegir, además de fijar
+ *   currentTenant, sincroniza tenantFilterStore (X-Tenant-Ids /
+ *   X-Tenant-Scope: all) para que listas y dashboard queden filtrados por
+ *   la misma empresa — root no tiene un segundo control para eso.
  */
 export function TenantSwitcher() {
     const { user, currentTenant, switchTenant } = useAuthStore();
     const isRoot = user?.role === "root";
+    const { setFilter } = useTenantFilterActions();
 
     const [allTenants, setAllTenants] = useState<Tenant[]>([]);
     const [isLoadingTenants, setIsLoadingTenants] = useState(false);
@@ -75,13 +80,37 @@ export function TenantSwitcher() {
         };
     }, [isRoot]);
 
+    // Root: si currentTenant ya existe (p. ej. restaurado de una sesión
+    // previa) pero el filtro global sigue en 'all' (desincronizado, porque
+    // antes TenantSwitcher no lo tocaba), sincronizarlo para que listas y
+    // dashboard respeten la empresa activa desde el primer render.
+    useEffect(() => {
+        if (!isRoot || !currentTenant) return;
+        if (useTenantFilterStore.getState().filter.mode === "all") {
+            setFilter([currentTenant.id], [currentTenant]);
+        }
+    }, [isRoot, currentTenant, setFilter]);
+
     // ---- Root: god mode ----
     if (isRoot) {
         const currentLabel = currentTenant ? currentTenant.name : "Todas las empresas";
 
         const handleRootSwitch = (tenantId: string | null, tenant?: Tenant) => {
             try {
-                switchTenant(tenantId, tenant ? toRootTenantAssociation(tenant) : undefined);
+                const association = tenant ? toRootTenantAssociation(tenant) : undefined;
+                switchTenant(tenantId, association);
+
+                // Root no tiene un segundo control para el filtro de datos:
+                // sincronizar tenantFilterStore con la misma elección para
+                // que listas (Usuarios/Documentos) y el dashboard queden
+                // filtrados por la empresa activa.
+                const allAssociations = allTenants.map(toRootTenantAssociation);
+                if (tenantId === null) {
+                    setFilter([], allAssociations); // modo 'all' -> X-Tenant-Scope: all
+                } else if (association) {
+                    setFilter([association.id], allAssociations); // modo 'single' -> X-Tenant-Ids
+                }
+
                 toast.success(`Cambiando a ${tenantId === null ? "Todas las empresas" : tenant?.name}...`);
             } catch (error) {
                 toast.error("Error al cambiar de empresa");
@@ -130,18 +159,18 @@ export function TenantSwitcher() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                     align="start"
-                    className="w-[260px] !bg-gray-800 !border-gray-700 !text-white shadow-lg"
+                    className="w-[260px] !bg-white !border-gray-200 shadow-xl"
                     sideOffset={5}
                 >
-                    <DropdownMenuLabel className="text-xs text-gray-400 uppercase font-normal px-2 py-1.5">
+                    <DropdownMenuLabel className="text-xs text-gray-500 uppercase font-normal px-2 py-1.5">
                         Organizaciones
                     </DropdownMenuLabel>
-                    <DropdownMenuSeparator className="bg-gray-700" />
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                         onClick={() => handleRootSwitch(null)}
                         className={cn(
-                            "cursor-pointer px-2 py-2 !text-white hover:!bg-gray-700 hover:!text-white focus:!bg-gray-700 focus:!text-white",
-                            !currentTenant && "!bg-gray-700"
+                            "cursor-pointer px-2 py-2 text-gray-900 hover:bg-blue-50 hover:text-gray-900 focus:bg-blue-50 focus:text-gray-900",
+                            !currentTenant && "bg-blue-50"
                         )}
                     >
                         <div className="flex items-center justify-between w-full gap-2">
@@ -152,7 +181,7 @@ export function TenantSwitcher() {
                             {!currentTenant && <Check className="h-4 w-4 text-blue-500 flex-shrink-0" />}
                         </div>
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-gray-700" />
+                    <DropdownMenuSeparator />
                     {allTenants.map((tenant) => {
                         const isActive = currentTenant?.id === tenant.id;
                         return (
@@ -160,8 +189,8 @@ export function TenantSwitcher() {
                                 key={tenant.id}
                                 onClick={() => handleRootSwitch(tenant.id, tenant)}
                                 className={cn(
-                                    "cursor-pointer px-2 py-2 !text-white hover:!bg-gray-700 hover:!text-white focus:!bg-gray-700 focus:!text-white",
-                                    isActive && "!bg-gray-700"
+                                    "cursor-pointer px-2 py-2 text-gray-900 hover:bg-blue-50 hover:text-gray-900 focus:bg-blue-50 focus:text-gray-900",
+                                    isActive && "bg-blue-50"
                                 )}
                             >
                                 <div className="flex items-center justify-between w-full gap-2">
@@ -173,7 +202,7 @@ export function TenantSwitcher() {
                                                 className="h-5 w-5 rounded object-cover flex-shrink-0"
                                             />
                                         ) : (
-                                            <div className="flex h-5 w-5 items-center justify-center rounded bg-gray-700 flex-shrink-0">
+                                            <div className="flex h-5 w-5 items-center justify-center rounded bg-gray-100 flex-shrink-0">
                                                 <Building2 className="h-3 w-3 text-gray-400" />
                                             </div>
                                         )}
@@ -268,13 +297,13 @@ export function TenantSwitcher() {
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 align="start"
-                className="w-[240px] !bg-gray-800 !border-gray-700 !text-white shadow-lg"
+                className="w-[240px] !bg-white !border-gray-200 shadow-xl"
                 sideOffset={5}
             >
-                <DropdownMenuLabel className="text-xs text-gray-400 uppercase font-normal px-2 py-1.5">
+                <DropdownMenuLabel className="text-xs text-gray-500 uppercase font-normal px-2 py-1.5">
                     Organizaciones
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-gray-700" />
+                <DropdownMenuSeparator />
                 {user.tenants.map((tenant, index) => {
                     const isActive = currentTenant?.id === tenant.id;
 
@@ -283,8 +312,8 @@ export function TenantSwitcher() {
                             key={tenant.id}
                             onClick={() => handleTenantSwitch(tenant.id)}
                             className={cn(
-                                "cursor-pointer px-2 py-2 !text-white hover:!bg-gray-700 hover:!text-white focus:!bg-gray-700 focus:!text-white",
-                                isActive && "!bg-gray-700"
+                                "cursor-pointer px-2 py-2 text-gray-900 hover:bg-blue-50 hover:text-gray-900 focus:bg-blue-50 focus:text-gray-900",
+                                isActive && "bg-blue-50"
                             )}
                         >
                             <div className="flex items-center justify-between w-full gap-2">
@@ -296,7 +325,7 @@ export function TenantSwitcher() {
                                             className="h-5 w-5 rounded object-cover flex-shrink-0"
                                         />
                                     ) : (
-                                        <div className="flex h-5 w-5 items-center justify-center rounded bg-gray-700 flex-shrink-0">
+                                        <div className="flex h-5 w-5 items-center justify-center rounded bg-gray-100 flex-shrink-0">
                                             <Building2 className="h-3 w-3 text-gray-400" />
                                         </div>
                                     )}

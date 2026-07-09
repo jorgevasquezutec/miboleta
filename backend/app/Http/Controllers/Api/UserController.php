@@ -297,6 +297,10 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
+        // Solo root puede eliminar usuarios (y nadie puede eliminarse a sí
+        // mismo), ver UserPolicy::delete().
+        $this->authorize('delete', $user);
+
         // Verificar acceso
         $currentUser = $request->user();
         if (!$this->userService->canAccessUser($currentUser, $user)) {

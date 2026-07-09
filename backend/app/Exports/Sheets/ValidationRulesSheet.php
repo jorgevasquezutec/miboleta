@@ -96,7 +96,7 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
         $data[] = ['admin'];
         $data[] = ['client'];
         $data[] = ['aprobador'];
-        $data[] = ['administrador_clientes'];
+        $data[] = ['admin_tenant'];
 
         return $data;
     }
@@ -187,7 +187,7 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
                 }
 
                 if ($orgRolesStartRow) {
-                    $orgRolesEndRow = $orgRolesStartRow + 3; // admin, client, aprobador, administrador_clientes
+                    $orgRolesEndRow = $orgRolesStartRow + 3; // admin, client, aprobador, admin_tenant
                     $orgRolesRange = "Validaciones!\$A\${$orgRolesStartRow}:\$A\${$orgRolesEndRow}";
 
                     $colIndex = 8 + (2 * $this->maxOrganizations) + 1; // primera columna del bloque nuevo

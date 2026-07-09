@@ -33,6 +33,7 @@ export function Navbar({
 }: NavbarProps) {
   const navigate = useNavigate();
   const currentRole = useAuthStore((state) => state.currentRole);
+  const isRoot = user?.role === "root";
   const brandingPrimaryColor = "#2563EB";
 
   const userName = user ? `${user.name || ''} ${user.last_name || ''}`.trim() || user.email : 'Usuario';
@@ -72,14 +73,29 @@ export function Navbar({
             </button>
           )}
 
-          {/* Tenant Multi-Switcher - Filtro de datos (X-Tenant-Ids) */}
-          <TenantMultiSwitcher />
+          {/* Tenant Multi-Switcher - Filtro de datos (X-Tenant-Ids). Solo
+              no-root: para root, TenantSwitcher ya es el control único de
+              empresa (fija currentTenant y el filtro global). */}
+          {!isRoot && <TenantMultiSwitcher />}
 
-          {/* Session switchers - Empresa activa y rol activo (currentTenant/currentRole) */}
-          <div className="hidden md:flex items-center gap-2 pl-2 ml-2 border-l border-[rgba(0,0,0,0.1)]">
-            <TenantSwitcher />
-            <RoleSwitcher />
-          </div>
+          {/* Session switchers - Empresa activa y rol activo (currentTenant/currentRole).
+              Root no tiene TenantMultiSwitcher, así que TenantSwitcher es su
+              único control de empresa y debe verse también en móvil (<md);
+              no-root ya ve su selector en TenantMultiSwitcher en móvil, así
+              que este bloque se mantiene oculto hasta md como antes.
+              RoleSwitcher no aplica a root (retorna null), así que incluirlo
+              aquí no le afecta. */}
+          {isRoot ? (
+            <div className="flex items-center gap-2 md:pl-2 md:ml-2 md:border-l md:border-[rgba(0,0,0,0.1)]">
+              <TenantSwitcher />
+              <RoleSwitcher />
+            </div>
+          ) : (
+            <div className="hidden md:flex items-center gap-2 pl-2 ml-2 border-l border-[rgba(0,0,0,0.1)]">
+              <TenantSwitcher />
+              <RoleSwitcher />
+            </div>
+          )}
         </div>
 
         {/* Right Section */}

@@ -281,6 +281,7 @@ export function TenantsListPage() {
                                     <TableHead className="min-w-[100px]">RUC</TableHead>
                                     <TableHead className="hidden md:table-cell min-w-[150px]">Razón Social</TableHead>
                                     <TableHead className="hidden lg:table-cell min-w-[100px]">Teléfono</TableHead>
+                                    <TableHead className="hidden lg:table-cell min-w-[110px] text-center">Empleados</TableHead>
                                     <TableHead className="min-w-[80px]">Estado</TableHead>
                                     <TableHead className="text-center min-w-[100px]">Acciones</TableHead>
                                 </TableRow>
@@ -288,14 +289,14 @@ export function TenantsListPage() {
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8">
+                                        <TableCell colSpan={8} className="text-center py-8">
                                             <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
                                             <p className="text-sm text-gray-500 mt-2">Cargando organizaciones...</p>
                                         </TableCell>
                                     </TableRow>
                                 ) : tenants.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8">
+                                        <TableCell colSpan={8} className="text-center py-8">
                                             <Building2 className="h-12 w-12 mx-auto text-gray-300 mb-2" />
                                             <p className="text-gray-500">No se encontraron organizaciones</p>
                                             {canCreateTenant && (
@@ -332,6 +333,18 @@ export function TenantsListPage() {
                                             </TableCell>
                                             <TableCell className="hidden lg:table-cell">
                                                 {tenant.phone || '-'}
+                                            </TableCell>
+                                            <TableCell className="hidden lg:table-cell text-center">
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <Badge variant="outline" className="font-medium">
+                                                        {tenant.current_employee_count ?? 0}
+                                                    </Badge>
+                                                    {!!tenant.subsequent_employee_count && (
+                                                        <span className="text-[11px] text-gray-500">
+                                                            +{tenant.subsequent_employee_count} desde carga inicial
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell>{getStatusBadge(tenant.status)}</TableCell>
                                             <TableCell className="text-center">

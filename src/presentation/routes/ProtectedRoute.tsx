@@ -4,7 +4,7 @@ import { useAuthStore } from "@/presentation/stores";
 // Roles operativos por empresa + root (global). Definido localmente (no en
 // User.role, que se mantiene como respaldo global legado con solo 3 valores
 // para no romper el CRUD de usuarios existente).
-export type UserRole = "root" | "admin" | "client" | "aprobador" | "administrador_clientes";
+export type UserRole = "root" | "admin" | "client" | "aprobador" | "admin_tenant";
 
 interface ProtectedRouteProps {
   children: React.ReactElement;

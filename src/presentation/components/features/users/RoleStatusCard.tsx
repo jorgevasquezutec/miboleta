@@ -18,7 +18,7 @@ interface RoleStatusCardProps {
     /**
      * Toggle de alto nivel: 'root' (usuario global de plataforma, sin
      * empresas) o 'client' (usuario de empresa). Los roles operativos reales
-     * (admin, client, aprobador, administrador_clientes) se asignan por
+     * (admin_tenant, admin, client, aprobador) se asignan por
      * empresa en TenantAssignmentCard, no aquí.
      */
     role: 'root' | 'client';

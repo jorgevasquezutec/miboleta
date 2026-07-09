@@ -27,7 +27,7 @@ export const USER_ROLES = {
   ADMIN: 'admin',
   CLIENT: 'client',
   APROBADOR: 'aprobador',
-  ADMINISTRADOR_CLIENTES: 'administrador_clientes',
+  ADMIN_TENANT: 'admin_tenant',
 } as const;
 
 export const USER_ROLE_LABELS = {
@@ -35,20 +35,34 @@ export const USER_ROLE_LABELS = {
   admin: 'Administrador',
   client: 'Usuario',
   aprobador: 'Aprobador',
-  administrador_clientes: 'Administrador de clientes',
+  admin_tenant: 'Administrador de Empresa (Tenant)',
 } as const;
 
 // Etiquetas de rol para mostrar en UI (RoleSwitcher, chips, encabezados).
-// Los roles operativos por empresa (admin, client, aprobador,
-// administrador_clientes) viven en user_tenant_roles; ver
-// User::ROLE_PRIORITY en el backend.
+// Los roles operativos por empresa (admin_tenant, admin, client, aprobador)
+// viven en user_tenant_roles; ver User::ROLE_PRIORITY en el backend.
 export const USER_ROLE_DISPLAY_LABELS = {
   root: 'Administrador Plataforma',
   admin: 'Administrador',
   client: 'Cliente',
   aprobador: 'Aprobador',
-  administrador_clientes: 'Administrador de clientes',
+  admin_tenant: 'Administrador de Empresa (Tenant)',
 } as const;
+
+// P3: roles asignables en la columna 'rol' (nivel de fila) de la carga
+// masiva de usuarios. Debe coincidir EXACTAMENTE con las reglas de
+// validación del backend:
+//   - UploadUserBatchDataRequest::rules() -> 'users.*.rol' => 'required|in:client,admin,admin_tenant,aprobador'
+//   - UsersImport::ALLOWED_TOP_LEVEL_ROLES
+// 'root' queda excluido a propósito (rol global; ver FIX B2.2): solo root
+// puede dar de alta a otro root, y la carga masiva no puede verificar esa
+// jerarquía por fila.
+export const BULK_UPLOAD_ROW_ROLES = [
+  USER_ROLES.CLIENT,
+  USER_ROLES.ADMIN,
+  USER_ROLES.ADMIN_TENANT,
+  USER_ROLES.APROBADOR,
+] as const;
 
 // User Status
 export const USER_STATUS = {

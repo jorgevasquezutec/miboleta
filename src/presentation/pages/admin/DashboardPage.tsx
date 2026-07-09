@@ -35,9 +35,7 @@ import { Skeleton } from "@/presentation/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useReportsStore } from "@/presentation/stores/reportsStore";
 import { useAuthStore } from "@/presentation/stores/authStore";
-import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
-import { Tenant } from "@/core/domain/entities/Tenant";
 
 // Map action categories to icons
 const getActionIcon = (action: string) => {
@@ -85,10 +83,6 @@ export function AdminDashboardView() {
     isExporting,
   } = useReportsStore();
 
-  // State for root users to select a tenant
-  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-
   // Date range state - default last 30 days (only used when a specific range is chosen)
   const [dateRange, setDateRange] = useState<DateRange>({
     from: subDays(new Date(), 30),
@@ -99,10 +93,11 @@ export function AdminDashboardView() {
 
   const isRoot = user?.role === 'root';
 
-  // Get current tenant ID - for root use selected, for admin use currentTenant
-  const tenantId = isRoot
-    ? (selectedTenantId ? Number(selectedTenantId) : undefined)
-    : (currentTenant?.id ? Number(currentTenant.id) : undefined);
+  // Empresa activa: para root y no-root por igual, viene del navbar
+  // (TenantSwitcher -> authStore.currentTenant). Root ya no tiene un
+  // selector local aparte; al elegir "Todas las empresas" currentTenant
+  // queda null y el dashboard muestra el agregado de todas.
+  const tenantId = currentTenant?.id ? Number(currentTenant.id) : undefined;
 
   // Format dates for API. When "Todo el tiempo" is active, send no range (real totals).
   const startDate = allTime || !dateRange.from ? undefined : format(dateRange.from, 'yyyy-MM-dd');
@@ -128,13 +123,6 @@ export function AdminDashboardView() {
       start_date: startDate,
       end_date: endDate,
     });
-  };
-
-  const handleTenantChange = (id: string | null) => {
-    setSelectedTenantId(id);
-    if (!id) {
-      setSelectedTenant(null);
-    }
   };
 
   const handleDateRangeChange = (values: { range: DateRange }) => {
@@ -167,7 +155,7 @@ export function AdminDashboardView() {
             <h1 className="text-xl sm:text-2xl font-bold">Panel de Administración</h1>
             <p className="text-[#64748B] text-sm sm:text-base">
               {isRoot
-                ? (selectedTenantId ? `Estadísticas de: ${selectedTenant?.name || 'Organización seleccionada'}` : 'Vista general de todas las organizaciones')
+                ? (currentTenant ? `Estadísticas de ${currentTenant.name}` : 'Vista general de todas las organizaciones')
                 : `Estadísticas de ${currentTenant?.name || 'tu organización'}`}
             </p>
           </div>
@@ -192,22 +180,6 @@ export function AdminDashboardView() {
             </Button>
           </div>
         </div>
-
-        {/* Tenant selector for root users */}
-        {isRoot && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-            <span className="text-sm text-gray-500">Filtrar por organización:</span>
-            <div className="w-full sm:w-80">
-              <TenantAutocompleteSelector
-                value={selectedTenantId}
-                onChange={handleTenantChange}
-                selectedTenant={selectedTenant}
-                placeholder="Todas las organizaciones"
-              />
-            </div>
-          </div>
-        )
-        }
 
         {/* Date range filter */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">

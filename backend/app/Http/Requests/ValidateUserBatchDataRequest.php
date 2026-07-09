@@ -11,7 +11,10 @@ class ValidateUserBatchDataRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        // FIX B2.1: parte del flujo de carga masiva (previsualización de
+        // datos editados); gateado con el mismo control de rol que las
+        // demás rutas de user-batches.
+        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant']);
     }
 
     /**
@@ -31,6 +34,9 @@ class ValidateUserBatchDataRequest extends FormRequest
             'users.*.rol' => 'nullable|string',
             'users.*.estado' => 'nullable|string',
             'users.*.telefono' => 'nullable|string',
+            // P1: birth_date debe declararse aquí para que FormRequest::validated()
+            // no la descarte antes de llegar a BulkUserUploadService::validateData().
+            'users.*.birth_date' => 'nullable|date',
             'users.*.organizaciones' => 'nullable|array',
             'users.*.row_number' => 'nullable|integer',
         ];

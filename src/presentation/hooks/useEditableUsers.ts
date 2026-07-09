@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { EditableUser, ValidationError, ValidationWarning } from '@/domain/types/bulkUserUpload.types';
+import type { EditableUser, EditableOrganization, ValidationError, ValidationWarning } from '@/domain/types/bulkUserUpload.types';
+import { BULK_UPLOAD_ROW_ROLES } from '@/shared/constants';
 
 interface UseEditableUsersReturn {
     users: EditableUser[];
@@ -8,6 +9,13 @@ interface UseEditableUsersReturn {
     loadUsers: (data: any[], errors: ValidationError[], warnings?: ValidationWarning[]) => void;
     updateUser: (id: string, field: keyof EditableUser, value: any) => void;
     updateOrganization: (userId: string, orgIndex: number, field: string, value: string) => void;
+    // P2: helpers de organizaciones a nivel de fila (múltiples empresas por
+    // usuario). UserDataGrid usa su propio patrón local + onCellChange para
+    // las mutaciones de UI (igual que el resto de handlers de organización),
+    // así que estos helpers existen principalmente para poder testear la
+    // lógica de agregar/quitar organizaciones de forma aislada.
+    addOrganization: (userId: string, org?: Partial<EditableOrganization>) => void;
+    removeOrganization: (userId: string, orgIndex: number) => void;
     addNewRow: () => void;
     deleteRow: (id: string) => void;
     validateUser: (user: EditableUser) => { errors: Record<string, string>; warnings: Record<string, string> };
@@ -21,7 +29,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Roles operativos asignables por organización (RP1-C). 'root' es un rol
 // global y no se asigna por empresa.
-const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'administrador_clientes'];
+const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
 
 // Función helper para convertir data a EditableUser
 function convertToEditableUsers(
@@ -59,6 +67,7 @@ function convertToEditableUsers(
             rol: user.rol || 'client',
             estado: user.estado || 'active',
             telefono: user.telefono || '',
+            birth_date: user.birth_date || '',
             organizaciones: user.organizaciones || [],
             _errors: rowErrors,
             _warnings: rowWarnings,
@@ -111,8 +120,11 @@ export function useEditableUsers(): UseEditableUsersReturn {
                 return null;
             
             case 'rol':
-                if (!['client', 'root', 'admin'].includes(value)) {
-                    return 'Rol inválido (client, root o admin)';
+                // P3: alineado con lo que el backend acepta en la columna de
+                // fila (UploadUserBatchDataRequest/UsersImport::ALLOWED_TOP_LEVEL_ROLES).
+                // 'root' queda excluido a propósito.
+                if (!(BULK_UPLOAD_ROW_ROLES as readonly string[]).includes(value)) {
+                    return 'Rol inválido (client, admin, admin_tenant o aprobador)';
                 }
                 return null;
             
@@ -125,7 +137,14 @@ export function useEditableUsers(): UseEditableUsersReturn {
             case 'telefono':
                 // No validamos formato de teléfono - es opcional y puede tener varios formatos
                 return null;
-            
+
+            case 'birth_date':
+                // Opcional: solo se valida formato/rango si trae valor.
+                if (!value) return null;
+                if (isNaN(Date.parse(value))) return 'Fecha de nacimiento inválida';
+                if (new Date(value) > new Date()) return 'Fecha de nacimiento inválida';
+                return null;
+
             default:
                 return null;
         }
@@ -152,6 +171,14 @@ export function useEditableUsers(): UseEditableUsersReturn {
             const error = validateField('telefono', user.telefono, user);
             if (error) {
                 errors['telefono'] = error;
+            }
+        }
+
+        // Validar fecha de nacimiento si existe (opcional, no forma parte de requiredFields)
+        if (user.birth_date) {
+            const error = validateField('birth_date', user.birth_date, user);
+            if (error) {
+                errors['birth_date'] = error;
             }
         }
         
@@ -292,6 +319,53 @@ export function useEditableUsers(): UseEditableUsersReturn {
         }));
     }, [validateUser]);
 
+    // P2: agrega una organización vacía (o con overrides) al final de la
+    // lista de organizaciones de la fila.
+    const addOrganization = useCallback((userId: string, org: Partial<EditableOrganization> = {}) => {
+        setUsers(prev => prev.map(user => {
+            if (user.id !== userId) return user;
+
+            const updatedOrgs = [...(user.organizaciones || []), { ruc: '', supervisor_email: '', ...org }];
+            const updatedUser = { ...user, organizaciones: updatedOrgs, _isModified: true };
+            const validation = validateUser(updatedUser);
+
+            return {
+                ...updatedUser,
+                _errors: validation.errors,
+                _warnings: { ...user._warnings, ...validation.warnings },
+                _isValid: Object.keys(validation.errors).length === 0,
+            };
+        }));
+    }, [validateUser]);
+
+    // P2: quita la organización en orgIndex. Los errores 'organizaciones.*'
+    // existentes se descartan (los índices de las orgs restantes cambian) y
+    // se recalculan desde cero contra el estado resultante.
+    const removeOrganization = useCallback((userId: string, orgIndex: number) => {
+        setUsers(prev => prev.map(user => {
+            if (user.id !== userId) return user;
+
+            const updatedOrgs = (user.organizaciones || []).filter((_, i) => i !== orgIndex);
+            const updatedUser = { ...user, organizaciones: updatedOrgs, _isModified: true };
+            const validation = validateUser(updatedUser);
+
+            const preservedErrors: Record<string, string> = {};
+            Object.entries(user._errors || {}).forEach(([key, msg]) => {
+                if (!key.startsWith('organizaciones')) {
+                    preservedErrors[key] = msg;
+                }
+            });
+            const combinedErrors = { ...preservedErrors, ...validation.errors };
+
+            return {
+                ...updatedUser,
+                _errors: combinedErrors,
+                _warnings: { ...user._warnings, ...validation.warnings },
+                _isValid: Object.keys(combinedErrors).length === 0,
+            };
+        }));
+    }, [validateUser]);
+
     const addNewRow = useCallback(() => {
         const newUser: EditableUser = {
             id: uuidv4(),
@@ -304,6 +378,7 @@ export function useEditableUsers(): UseEditableUsersReturn {
             rol: 'client',
             estado: 'active',
             telefono: '',
+            birth_date: '',
             organizaciones: [],
             _errors: {
                 nombre: 'Nombre es requerido',
@@ -340,6 +415,8 @@ export function useEditableUsers(): UseEditableUsersReturn {
         loadUsers,
         updateUser,
         updateOrganization,
+        addOrganization,
+        removeOrganization,
         addNewRow,
         deleteRow,
         validateUser,

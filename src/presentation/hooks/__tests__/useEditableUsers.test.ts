@@ -362,6 +362,190 @@ describe('useEditableUsers', () => {
     });
   });
 
+  describe('rol validation (P3 - alineado con backend)', () => {
+    const baseUser = {
+      id: '1',
+      row_number: 2,
+      nombre: 'Juan',
+      apellido: 'Perez',
+      email: 'juan@test.com',
+      tipo_documento: 'dni',
+      numero_documento: '12345678',
+      estado: 'active',
+      telefono: '',
+      organizaciones: [],
+      _errors: {},
+      _warnings: {},
+      _isValid: false,
+      _isNew: false,
+      _isModified: false,
+    };
+
+    it('should accept admin_tenant as a valid row role', () => {
+      const { result } = renderHook(() => useEditableUsers());
+      const user = { ...baseUser, rol: 'admin_tenant' };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.rol).toBeUndefined();
+    });
+
+    it('should accept aprobador as a valid row role', () => {
+      const { result } = renderHook(() => useEditableUsers());
+      const user = { ...baseUser, rol: 'aprobador' };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.rol).toBeUndefined();
+    });
+
+    it('should reject root as a row role', () => {
+      const { result } = renderHook(() => useEditableUsers());
+      const user = { ...baseUser, rol: 'root' };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.rol).toBe('Rol inválido (client, admin, admin_tenant o aprobador)');
+    });
+  });
+
+  describe('birth_date validation (P1)', () => {
+    const baseUser = {
+      id: '1',
+      row_number: 2,
+      nombre: 'Juan',
+      apellido: 'Perez',
+      email: 'juan@test.com',
+      tipo_documento: 'dni',
+      numero_documento: '12345678',
+      rol: 'client',
+      estado: 'active',
+      telefono: '',
+      organizaciones: [],
+      _errors: {},
+      _warnings: {},
+      _isValid: false,
+      _isNew: false,
+      _isModified: false,
+    };
+
+    it('should accept an empty birth_date (optional field)', () => {
+      const { result } = renderHook(() => useEditableUsers());
+      const user = { ...baseUser, birth_date: '' };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.birth_date).toBeUndefined();
+    });
+
+    it('should accept a valid past birth_date', () => {
+      const { result } = renderHook(() => useEditableUsers());
+      const user = { ...baseUser, birth_date: '1990-05-15' };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.birth_date).toBeUndefined();
+    });
+
+    it('should reject an unparseable birth_date', () => {
+      const { result } = renderHook(() => useEditableUsers());
+      const user = { ...baseUser, birth_date: 'not-a-date' };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.birth_date).toBe('Fecha de nacimiento inválida');
+    });
+
+    it('should reject a future birth_date', () => {
+      const { result } = renderHook(() => useEditableUsers());
+      const futureYear = new Date().getFullYear() + 5;
+      const user = { ...baseUser, birth_date: `${futureYear}-01-01` };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.birth_date).toBe('Fecha de nacimiento inválida');
+    });
+  });
+
+  describe('organization helpers (P2 - múltiples organizaciones por fila)', () => {
+    it('should add an empty organization', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const data = [
+        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', rol: 'client', estado: 'active', organizaciones: [] },
+      ];
+
+      act(() => {
+        result.current.loadUsers(data, [], []);
+      });
+
+      const userId = result.current.users[0].id;
+
+      act(() => {
+        result.current.addOrganization(userId);
+      });
+
+      expect(result.current.users[0].organizaciones).toHaveLength(1);
+      expect(result.current.users[0].organizaciones[0].ruc).toBe('');
+      expect(result.current.users[0]._isModified).toBe(true);
+    });
+
+    it('should add multiple organizations by calling addOrganization repeatedly', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const data = [
+        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', rol: 'client', estado: 'active', organizaciones: [{ ruc: '11111111111', supervisor_email: '' }] },
+      ];
+
+      act(() => {
+        result.current.loadUsers(data, [], []);
+      });
+
+      const userId = result.current.users[0].id;
+
+      act(() => {
+        result.current.addOrganization(userId, { ruc: '22222222222' });
+      });
+
+      expect(result.current.users[0].organizaciones).toHaveLength(2);
+      expect(result.current.users[0].organizaciones[1].ruc).toBe('22222222222');
+    });
+
+    it('should remove an organization by index', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const data = [
+        {
+          row_number: 2,
+          nombre: 'Juan',
+          apellido: 'Perez',
+          email: 'juan@test.com',
+          tipo_documento: 'dni',
+          numero_documento: '12345678',
+          rol: 'client',
+          estado: 'active',
+          organizaciones: [
+            { ruc: '11111111111', supervisor_email: '' },
+            { ruc: '22222222222', supervisor_email: '' },
+          ],
+        },
+      ];
+
+      act(() => {
+        result.current.loadUsers(data, [], []);
+      });
+
+      const userId = result.current.users[0].id;
+
+      act(() => {
+        result.current.removeOrganization(userId, 0);
+      });
+
+      expect(result.current.users[0].organizaciones).toHaveLength(1);
+      expect(result.current.users[0].organizaciones[0].ruc).toBe('22222222222');
+    });
+  });
+
   describe('stats calculation', () => {
     it('should calculate error count correctly', () => {
       const { result } = renderHook(() => useEditableUsers());

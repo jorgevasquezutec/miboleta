@@ -5,6 +5,7 @@ namespace Tests\Unit\Services;
 use App\Exceptions\UnauthorizedAccessException;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantMailerService;
 use App\Services\TenantService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -25,7 +26,7 @@ class TenantServiceTest extends TestCase
 
         $this->seed(\Database\Seeders\RoleSeeder::class);
 
-        $this->tenantService = new TenantService();
+        $this->tenantService = new TenantService(new TenantMailerService());
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
 

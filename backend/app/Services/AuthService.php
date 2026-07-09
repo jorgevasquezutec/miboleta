@@ -173,6 +173,11 @@ class AuthService
             'document_type' => $user->document_type,
             'document_text' => $user->document_text,
             'phone' => $user->phone,
+            // Fecha de nacimiento (ítem 37): formateada a 'Y-m-d' porque el
+            // modelo la castea a Carbon (ver User::casts). Se serializa así
+            // en vez de dejar que Carbon use su formato ISO por defecto,
+            // para que el frontend (formatDate) reciba siempre 'YYYY-MM-DD'.
+            'birth_date' => $user->birth_date?->format('Y-m-d'),
             'status' => $user->status,
             'must_change_password' => $user->must_change_password,
             // Rol "global" de respaldo (ver User::getCurrentRole /

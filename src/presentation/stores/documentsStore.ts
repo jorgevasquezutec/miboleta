@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Document, DocumentType, DocumentBatch, ZipPreviewResponse } from "@/core/domain/entities";
+import { Document, DocumentType, DocumentBatch, ZipPreviewResponse, PageSize } from "@/core/domain/entities";
 import { VerifySignatureResponse } from "@/core/domain/repositories/IDocumentRepository";
 import { documentRepository } from "@/infrastructure/persistence/repositories";
 import { getErrorMessage } from "@/infrastructure/http/apiClient";
@@ -86,6 +86,7 @@ interface DocumentsState {
     notifyEmployees: boolean;
     requiresSignature: boolean;
     tenantId?: number;
+    pageSize?: PageSize;
   }) => Promise<{ batchId: number }>;
   previewZip: (file: File) => Promise<void>;
   clearZipPreview: () => void;

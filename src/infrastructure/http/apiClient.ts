@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import { getCsrfToken } from '@/shared/utils';
 
 // Configuración base de la API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8090/api';
 // Crear instancia de Axios
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

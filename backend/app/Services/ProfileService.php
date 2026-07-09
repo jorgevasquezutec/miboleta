@@ -36,6 +36,10 @@ class ProfileService
             'document_type' => $user->document_type,
             'document_text' => $user->document_text,
             'phone' => $user->phone,
+            // Fecha de nacimiento (ítem 37): ver AuthService::transformAuthUser
+            // (mismo criterio de formateo 'Y-m-d'; User::birth_date está
+            // casteada a 'date' en el modelo).
+            'birth_date' => $user->birth_date?->format('Y-m-d'),
             'status' => $user->status,
             'role' => $user->getCurrentRole(),
             'roles' => $user->getCurrentRoles(),

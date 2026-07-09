@@ -40,10 +40,8 @@ import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-ra
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
-import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { AuditLog, ReportFilters } from "@/core/domain/entities";
-import { Tenant } from "@/core/domain/entities/Tenant";
 
 // Map action to icon
 const getActionIcon = (action: string) => {
@@ -114,7 +112,7 @@ const actionDescriptions: Record<string, string> = {
 
 export function AuditLogsPage() {
     useDocumentTitle('Registro de Actividad');
-    const { user } = useAuthStore();
+    const { user, currentTenant } = useAuthStore();
     const isRoot = user?.role === 'root';
 
     // URL-synced filters
@@ -123,7 +121,6 @@ export function AuditLogsPage() {
             search: '',
             action: 'all',
             category: 'all',
-            tenant_id: '',
             date_from: '',
             date_to: '',
             page: 1,
@@ -133,7 +130,6 @@ export function AuditLogsPage() {
 
     // Local state for search input (debounce)
     const [searchInput, setSearchInput] = useState(filters.search);
-    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
     // Parse dates from URL
@@ -174,12 +170,18 @@ export function AuditLogsPage() {
     }, []);
 
     // Fetch logs
+    // El modelo AuditLog NO tiene TenantFilterScope (no respeta el header
+    // X-Tenant-Ids), así que ReportsController::audit solo filtra por
+    // empresa vía el query param `tenant_id` (ver getTenantId en el
+    // backend). Para root, ese tenant_id sale de la empresa activa del
+    // navbar (authStore.currentTenant); para no-root (admin), el backend
+    // ya lo resuelve solo a partir del usuario, así que no enviamos nada.
     const fetchLogs = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
             const reportFilters: ReportFilters = {
-                // tenantId removed - backend uses headers
+                tenant_id: isRoot ? (currentTenant ? Number(currentTenant.id) : undefined) : undefined,
                 page: filters.page,
                 per_page: filters.per_page,
                 search: filters.search || undefined,
@@ -197,17 +199,14 @@ export function AuditLogsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [filters.page, filters.per_page, filters.search, filters.action, filters.date_from, filters.date_to]);
+    }, [filters.page, filters.per_page, filters.search, filters.action, filters.date_from, filters.date_to, isRoot, currentTenant?.id]);
 
-    // ✅ MIGRATED: Now reacts automatically to tenant filter changes
+    // Reacciona tanto al filtro global de tenant (useTenantAwareEffect)
+    // como al cambio de empresa activa para root (currentTenant?.id ya
+    // forma parte de la identidad de fetchLogs vía su dependencia).
     useTenantAwareEffect(() => {
         fetchLogs();
     }, [fetchLogs]);
-
-    const handleTenantChange = (id: string | null) => {
-        setFilters({ tenant_id: id || '', page: 1 });
-        if (!id) setSelectedTenant(null);
-    };
 
     const handleActionChange = (value: string) => {
         setFilters({ action: value, page: 1 });
@@ -238,7 +237,7 @@ export function AuditLogsPage() {
         setIsExporting(true);
         try {
             const blob = await reportsRepository.exportAudit({
-                // tenant_id removed - backend uses headers
+                tenant_id: isRoot ? (currentTenant ? Number(currentTenant.id) : undefined) : undefined,
                 search: filters.search || undefined,
                 action: filters.action && filters.action !== 'all' ? filters.action : undefined,
                 start_date: filters.date_from || undefined,
@@ -256,7 +255,6 @@ export function AuditLogsPage() {
     // Clear filters
     const clearFilters = () => {
         setSearchInput('');
-        setSelectedTenant(null);
         resetFilters();
     };
 
@@ -319,20 +317,10 @@ export function AuditLogsPage() {
                             />
                         </div>
 
-                        {/* Tenant Filter (only for root) */}
-                        {isRoot && (
-                            <div>
-                                <label className="text-xs font-medium mb-1 block text-gray-600">
-                                    Empresa
-                                </label>
-                                <TenantAutocompleteSelector
-                                    value={filters.tenant_id || null}
-                                    onChange={handleTenantChange}
-                                    selectedTenant={selectedTenant}
-                                    placeholder="Todas"
-                                />
-                            </div>
-                        )}
+                        {/* Nota: sin dropdown local de empresa para root. El navbar
+                            (TenantSwitcher) es su único control de empresa; ver
+                            fetchLogs/handleExport, que derivan tenant_id de
+                            authStore.currentTenant. */}
 
                         {/* Category Filter */}
                         <div>

@@ -21,6 +21,11 @@ class UploadZipBatchRequest extends FormRequest
             'tenant_id' => 'required|exists:tenants,id',
             'notify_employees' => 'boolean',
             'requires_signature' => 'boolean',
+            // Ítem 36: tamaño de página de las boletas del lote, usado para
+            // calibrar la posición de la firma (ver config/signature.php).
+            // 'a10' es el formato calibrado por defecto (comportamiento
+            // histórico) si el campo no se envía.
+            'page_size' => 'nullable|string|in:a4,a5,a10,letter',
         ];
     }
 
@@ -39,6 +44,7 @@ class UploadZipBatchRequest extends FormRequest
             'period.regex' => 'El período debe tener el formato YYYY-MM',
             'notify_employees.boolean' => 'El campo debe ser verdadero o falso',
             'requires_signature.boolean' => 'El campo debe ser verdadero o falso',
+            'page_size.in' => 'El tamaño de página debe ser uno de: a4, a5, a10, letter',
         ];
     }
 }

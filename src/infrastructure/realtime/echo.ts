@@ -23,7 +23,7 @@ window.Pusher = Pusher;
  * Authentication: Uses cookies (withCredentials) for auth.
  */
 export function createEchoInstance(): Echo<'reverb'> {
-    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost/api';
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8090/api';
 
     const echo = new Echo({
         broadcaster: 'reverb',

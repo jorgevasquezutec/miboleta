@@ -25,6 +25,18 @@ export interface Tenant {
   /** Régimen laboral: define los días de vacaciones por año (30 general / 15 micro,pequeña). */
   labor_regime?: LaborRegime;
 
+  // --- Contadores de empleados (RP1-C / ítem 19) ---
+  // initial_employee_count se fija una sola vez (idempotente) al completar
+  // la primera carga masiva sobre el tenant (ver
+  // UserBatch::syncInitialEmployeeCounts en backend). current_employee_count
+  // es el conteo en vivo; subsequent_employee_count es la diferencia
+  // (empleados agregados después de la carga inicial). Los 3 son de solo
+  // lectura: el backend no expone hoy un endpoint para editar
+  // initial_employee_count manualmente.
+  initial_employee_count?: number;
+  current_employee_count?: number;
+  subsequent_employee_count?: number;
+
   // --- Servidor de correo (SMTP) por empresa ---
   // Campos de LECTURA que expone TenantResource. Si la empresa no configura
   // SMTP, sus correos usan el mailer por defecto de la plataforma.
@@ -43,6 +55,15 @@ export interface Tenant {
   updatedAt?: Date;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Resultado de POST /tenants/{id}/smtp/test (botón "Probar conexión", ítem
+ * 24-menor). Ver TenantService::testMailerConnection en el backend.
+ */
+export interface TenantSmtpTestResult {
+  success: boolean;
+  message: string;
 }
 
 /**
@@ -69,7 +90,10 @@ type ReadOnlyTenantFields =
   | 'updated_at'
   | 'logo_url'
   | 'has_mail_password'
-  | 'has_custom_mailer';
+  | 'has_custom_mailer'
+  | 'initial_employee_count'
+  | 'current_employee_count'
+  | 'subsequent_employee_count';
 
 export type CreateTenantData =
   Omit<Tenant, ReadOnlyTenantFields | keyof TenantMailInput> & TenantMailInput;

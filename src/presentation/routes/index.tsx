@@ -27,6 +27,7 @@ const UserBatchesListPage = lazy(() => import("@/presentation/pages/admin/UserBa
 const UserBatchUploadPage = lazy(() => import("@/presentation/pages/admin/UserBatchUploadPage"));
 const UserBatchDetailPage = lazy(() => import("@/presentation/pages/admin/UserBatchDetailPage"));
 const SignatureSettingsPage = lazy(() => import("@/presentation/pages/admin/SignatureSettingsPage"));
+const PlatformSettingsPage = lazy(() => import("@/presentation/pages/admin/PlatformSettingsPage"));
 
 
 // Employee pages (lazy loaded)
@@ -56,7 +57,7 @@ function RootRedirect() {
     try {
       const parsed = JSON.parse(authStorage);
       // currentRole es el rol activo scoped a la empresa actual (ver
-      // authStore); root/admin/administrador_clientes van al panel de
+      // authStore); root/admin/admin_tenant van al panel de
       // administración, client/aprobador a la vista de empleado.
       role = parsed.state?.currentRole ?? parsed.state?.user?.role ?? null;
     } catch (e) {
@@ -103,7 +104,7 @@ export const router = createBrowserRouter([
       {
         path: "admin",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage>
               <AdminDashboardPage />
             </LazyPage>
@@ -121,7 +122,7 @@ export const router = createBrowserRouter([
       {
         path: "upload",
         element: (
-          <ProtectedRoute allowedRoles={["admin", "client", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["admin", "client", "admin_tenant"]}>
             <LazyPage>
               <DocumentUploadView />
             </LazyPage>
@@ -131,7 +132,7 @@ export const router = createBrowserRouter([
       {
         path: "viewer",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client", "aprobador", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "client", "aprobador", "admin_tenant"]}>
             <LazyPage>
               <DocumentViewerView />
             </LazyPage>
@@ -141,7 +142,7 @@ export const router = createBrowserRouter([
       {
         path: "users",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><UsersListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -149,7 +150,7 @@ export const router = createBrowserRouter([
       {
         path: "users/new",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><UserFormPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -158,7 +159,7 @@ export const router = createBrowserRouter([
       {
         path: "users/batch",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><UserBatchesListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -166,7 +167,7 @@ export const router = createBrowserRouter([
       {
         path: "users/batch-upload",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><UserBatchUploadPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -174,7 +175,7 @@ export const router = createBrowserRouter([
       {
         path: "users/batch/:id",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><UserBatchDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -183,7 +184,7 @@ export const router = createBrowserRouter([
       {
         path: "users/:id",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><UserDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -191,7 +192,7 @@ export const router = createBrowserRouter([
       {
         path: "users/:id/edit",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><UserFormPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -229,9 +230,17 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: "platform-settings",
+        element: (
+          <ProtectedRoute allowedRoles={["root"]}>
+            <LazyPage><PlatformSettingsPage /></LazyPage>
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: "profile",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client", "aprobador", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "client", "aprobador", "admin_tenant"]}>
             <LazyPage>
               <ProfilePage />
             </LazyPage>
@@ -241,7 +250,7 @@ export const router = createBrowserRouter([
       {
         path: "notifications",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client", "aprobador", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "client", "aprobador", "admin_tenant"]}>
             <LazyPage><NotificationsPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -249,7 +258,7 @@ export const router = createBrowserRouter([
       {
         path: "batches",
         element: (
-          <ProtectedRoute allowedRoles={["admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["admin", "admin_tenant"]}>
             <LazyPage><BatchesListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -257,7 +266,7 @@ export const router = createBrowserRouter([
       {
         path: "batches/:id",
         element: (
-          <ProtectedRoute allowedRoles={["admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["admin", "admin_tenant"]}>
             <LazyPage><BatchDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -265,7 +274,7 @@ export const router = createBrowserRouter([
       {
         path: "documents",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "admin_tenant"]}>
             <LazyPage><DocumentsListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -298,7 +307,7 @@ export const router = createBrowserRouter([
       {
         path: "vacation-history",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "aprobador", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "aprobador", "admin_tenant"]}>
             <LazyPage><VacationHistoryPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -306,7 +315,7 @@ export const router = createBrowserRouter([
       {
         path: "audit-logs",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "aprobador", "administrador_clientes"]}>
+          <ProtectedRoute allowedRoles={["root", "admin", "aprobador", "admin_tenant"]}>
             <LazyPage><AuditLogsPage /></LazyPage>
           </ProtectedRoute>
         ),

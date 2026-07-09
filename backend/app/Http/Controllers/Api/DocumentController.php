@@ -473,7 +473,7 @@ class DocumentController extends Controller
      *     path="/api/documents/{id}/verify-signature",
      *     tags={"Documentos"},
      *     summary="Verificar la firma digital criptográfica de un documento",
-     *     description="Verifica (vía sidecar pyHanko) la firma PAdES embebida en el PDF: integridad, validez, confianza de la cadena de certificación y sello de tiempo (TSA). Autorizado igual que GET /documents/{id} (dueño del documento o root/admin/administrador_clientes según reglas de DocumentService). Si el documento no tiene una firma criptográfica (p. ej. fue firmado con el flujo de 2FA de email, o aún no está firmado), devuelve verifiable=false con un motivo en vez de un error.",
+     *     description="Verifica (vía sidecar pyHanko) la firma PAdES embebida en el PDF: integridad, validez, confianza de la cadena de certificación y sello de tiempo (TSA). Autorizado igual que GET /documents/{id} (dueño del documento o root/admin/admin_tenant según reglas de DocumentService). Si el documento no tiene una firma criptográfica (p. ej. fue firmado con el flujo de 2FA de email, o aún no está firmado), devuelve verifiable=false con un motivo en vez de un error.",
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(
      *         name="id",

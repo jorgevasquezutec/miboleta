@@ -77,7 +77,7 @@ export function TemplateConfigModal({
                                 <div className="text-xs text-gray-500 ml-2 space-y-0.5">
                                     <div>• org1_ruc</div>
                                     <div>• org1_supervisor_email</div>
-                                    <div>• org1_rol <span className="text-gray-400">(admin, client, aprobador, administrador_clientes)</span></div>
+                                    <div>• org1_rol <span className="text-gray-400">(admin, client, aprobador, admin_tenant)</span></div>
                                     <div>• org1_fecha_ingreso</div>
                                     <div>• org1_saldo_vacaciones</div>
                                 </div>

@@ -25,7 +25,10 @@ import {
 import { MonthYearPicker } from "@/presentation/components/ui/month-year-picker";
 import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
 import { formatFileSize } from "@/presentation/utils";
+import { PageSize, pageSizeLabels } from "@/core/domain/entities";
 import { toast } from "sonner";
+
+const PAGE_SIZE_OPTIONS: PageSize[] = ["a10", "a4", "a5", "letter"];
 
 interface DocumentUploadViewProps {
   onBack?: () => void;
@@ -69,6 +72,9 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [notifyEmployees, setNotifyEmployees] = useState(true);
   const [requiresSignature, setRequiresSignature] = useState(true);
+  // Ítem 36: tamaño de página de las boletas del ZIP, para calibrar
+  // correctamente la posición de la firma. 'a10' = formato estándar actual.
+  const [pageSize, setPageSize] = useState<PageSize>("a10");
   const [uploadSuccess, setUploadSuccess] = useState<{ batchId: number } | null>(null);
 
   // Reset form and load document types on mount
@@ -79,6 +85,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setPeriod("");
     setNotifyEmployees(true);
     setRequiresSignature(true);
+    setPageSize("a10");
     setUploadSuccess(null);
     clearZipPreview();
     clearError();
@@ -168,6 +175,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
         notifyEmployees,
         requiresSignature,
         tenantId: parseInt(selectedTenantId),
+        pageSize,
       });
 
       setUploadSuccess(result);
@@ -183,6 +191,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setPeriod("");
     setNotifyEmployees(true);
     setRequiresSignature(true);
+    setPageSize("a10");
     setUploadSuccess(null);
     clearZipPreview();
     clearError();
@@ -487,6 +496,29 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
                     placeholder="Seleccionar período..."
                     disabled={!zipPreview || zipPreview.validPdfs === 0}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="pageSize">Tamaño de página de la boleta *</Label>
+                  <Select
+                    value={pageSize}
+                    onValueChange={(value) => setPageSize(value as PageSize)}
+                    disabled={!zipPreview || zipPreview.validPdfs === 0}
+                  >
+                    <SelectTrigger id="pageSize">
+                      <SelectValue placeholder="Seleccionar tamaño..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <SelectItem key={size} value={size}>
+                          {pageSizeLabels[size]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-[#64748B]">
+                    Determina dónde se coloca la firma sobre el PDF. Si no estás seguro, deja "A10".
+                  </p>
                 </div>
               </div>
 

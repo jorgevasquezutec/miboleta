@@ -9,3 +9,4 @@ export * from './VacationRequest';
 export * from './Notification';
 export * from './Report';
 export * from './SignatureSettings';
+export * from './PlatformSettings';

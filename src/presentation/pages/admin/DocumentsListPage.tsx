@@ -23,12 +23,11 @@ import {
 import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-range-picker";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
-import { Tenant } from "@/core/domain/entities/Tenant";
 import { useAuthStore } from "@/presentation/stores";
+import { useTenantFilterStore } from "@/presentation/stores";
 import { getDocumentStatusBadgeInline } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
@@ -54,7 +53,6 @@ export function DocumentsListPage() {
             search: '',
             status: 'all',
             doc_type_id: '',
-            tenant_id: '',
             date_from: '',
             date_to: '',
             page: 1,
@@ -64,11 +62,20 @@ export function DocumentsListPage() {
 
     // Local state for search input (debounce)
     const [searchInput, setSearchInput] = useState(filters.search);
-    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [documentToDelete, setDocumentToDelete] = useState<number | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+    // Filtro de empresa del navbar (header X-Tenant-Ids). Root usa el
+    // TenantSwitcher (una empresa o "todas"); no-root usa el
+    // TenantMultiSwitcher (una o varias). Guardamos la key previa para
+    // poder resetear la página a 1 cuando cambia, sin doble fetch (ver
+    // efecto de abajo).
+    const tenantFilterKey = useTenantFilterStore(
+        (state) => state.filter.tenantIds.sort().join(',')
+    );
+    const prevTenantFilterKeyRef = useRef(tenantFilterKey);
 
     // Parse dates from URL
     const dateRange: DateRange | undefined = filters.date_from ? {
@@ -107,36 +114,42 @@ export function DocumentsListPage() {
 
     // Fetch documents when filters change
     // ✅ MIGRATED: Now automatically refetches when tenant filter changes
+    // tenant_id removed - el modelo Document aplica el header X-Tenant-Ids
+    // automáticamente (TenantFilterScope), que root controla desde el
+    // navbar (TenantSwitcher) y no-root desde el TenantMultiSwitcher. No
+    // hay filtro local de empresa en esta página.
+    //
+    // Si cambia la selección de empresa (root o no-root) mientras estamos
+    // en una página > 1, reseteamos a la página 1 primero (sin fetch) y
+    // dejamos que ese cambio de `filters.page` dispare el fetch real en la
+    // siguiente ejecución del efecto, evitando pedir la página vieja con
+    // la empresa nueva.
     useTenantAwareEffect(() => {
+        const tenantChanged = prevTenantFilterKeyRef.current !== tenantFilterKey;
+        prevTenantFilterKeyRef.current = tenantFilterKey;
+
+        if (tenantChanged && filters.page !== 1) {
+            setFilters({ page: 1 });
+            return;
+        }
+
         fetchDocuments({
             page: filters.page,
             perPage: filters.per_page,
             search: filters.search || undefined,
             status: filters.status !== 'all' ? (filters.status as Document['status']) : undefined,
             docTypeId: filters.doc_type_id ? parseInt(filters.doc_type_id) : undefined,
-            tenantId: filters.tenant_id ? parseInt(filters.tenant_id) : undefined,
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
         });
-    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.tenant_id, filters.date_from, filters.date_to, fetchDocuments]);
+    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments, tenantFilterKey]);
 
     const handleSearch = () => {
         setFilters({ page: 1 });
     };
 
-    const handleTenantFilterChange = (id: string | null) => {
-        setFilters({ tenant_id: id || '', page: 1 });
-        if (id) {
-            // Optionally set selected tenant for display
-            setSelectedTenant({ id, name: '', ruc: '' } as Tenant);
-        } else {
-            setSelectedTenant(null);
-        }
-    };
-
     const handleResetFilters = () => {
         setSearchInput('');
-        setSelectedTenant(null);
         resetFilters();
     };
 
@@ -189,7 +202,7 @@ export function DocumentsListPage() {
                 search: filters.search || undefined,
                 status: filters.status !== 'all' ? filters.status : undefined,
                 document_type: filters.doc_type_id || undefined,
-                tenant_id: filters.tenant_id ? Number(filters.tenant_id) : undefined,
+                // tenant_id removed - backend usa el header X-Tenant-Ids (TenantFilterScope)
                 start_date: filters.date_from || undefined,
                 end_date: filters.date_to || undefined,
             });
@@ -250,20 +263,9 @@ export function DocumentsListPage() {
                             />
                         </div>
 
-                        {/* Tenant Filter - Only for root users */}
-                        {user?.role === 'root' && (
-                            <div className="min-w-[160px]">
-                                <label className="text-xs font-medium mb-1 block text-gray-600">
-                                    Organización
-                                </label>
-                                <TenantAutocompleteSelector
-                                    value={filters.tenant_id || null}
-                                    onChange={handleTenantFilterChange}
-                                    selectedTenant={selectedTenant}
-                                    placeholder="Todas"
-                                />
-                            </div>
-                        )}
+                        {/* Nota: sin filtro local de empresa. Para root, el navbar
+                            (TenantSwitcher) es el único control de empresa y ya
+                            filtra la lista vía el header X-Tenant-Ids. */}
 
                         {/* Document Type Filter */}
                         <div className="min-w-[160px]">

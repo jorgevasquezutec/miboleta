@@ -41,8 +41,6 @@ import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/present
 import { VacationStatusBadge } from "@/presentation/components/features/vacations";
 import { formatDate } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
-import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
-import { Tenant } from "@/core/domain/entities/Tenant";
 import { toast } from "sonner";
 
 // Status badge helper component
@@ -90,7 +88,6 @@ export function VacationHistoryPage() {
         defaultValues: {
             status: 'all',
             search: '',
-            tenant_id: '',
             date_from: '',
             date_to: '',
             page: 1,
@@ -100,7 +97,6 @@ export function VacationHistoryPage() {
 
     // Local state for search input (debounce)
     const [searchInput, setSearchInput] = useState(filters.search);
-    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -164,13 +160,6 @@ export function VacationHistoryPage() {
     const handleStatusChange = (value: string) => {
         setFilters({ status: value, page: 1 });
     };
-
-    const handleTenantChange = (id: string | null) => {
-        setFilters({ tenant_id: id || '', page: 1 });
-        if (!id) setSelectedTenant(null);
-    };
-
-
 
     const handleDateRangeChange = (values: { range: DateRange }) => {
         setFilters({
@@ -330,20 +319,10 @@ export function VacationHistoryPage() {
                             />
                         </div>
 
-                        {/* Tenant Filter (only for root) */}
-                        {isRoot && (
-                            <div className="min-w-[180px]">
-                                <label className="text-xs font-medium mb-1 block text-gray-600">
-                                    Empresa
-                                </label>
-                                <TenantAutocompleteSelector
-                                    value={filters.tenant_id || null}
-                                    onChange={handleTenantChange}
-                                    selectedTenant={selectedTenant}
-                                    placeholder="Todas"
-                                />
-                            </div>
-                        )}
+                        {/* Nota: sin dropdown local de empresa para root. El navbar
+                            (TenantSwitcher) es su único control de empresa y ya
+                            filtra la lista vía el header X-Tenant-Ids
+                            (VacationRequest sí tiene TenantFilterScope). */}
 
                         {/* Status Filter */}
                         <div className="min-w-[160px]">
@@ -387,7 +366,6 @@ export function VacationHistoryPage() {
                             size="sm"
                             onClick={() => {
                                 setSearchInput('');
-                                setSelectedTenant(null);
                                 resetFilters();
                             }}
                             className="h-9 whitespace-nowrap"

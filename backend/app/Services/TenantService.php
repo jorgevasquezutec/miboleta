@@ -10,6 +10,11 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class TenantService
 {
+    public function __construct(
+        protected TenantMailerService $tenantMailerService
+    ) {
+    }
+
     /**
      * Get tenants list based on user role.
      *
@@ -225,6 +230,48 @@ class TenantService
         return [
             'success' => true,
             'message' => 'Usuario removido del tenant exitosamente',
+        ];
+    }
+
+    /**
+     * Prueba la conexión SMTP configurada para un tenant (botón "Probar
+     * conexión", ítem 24-menor). Solo root: es información sensible del
+     * servidor de correo de la empresa (host/usuario/password) y el
+     * handshake SMTP puede usarse para sondear la red desde el servidor.
+     *
+     * @param string $id
+     * @param User $user
+     * @return array{success: bool, message: string}
+     * @throws UnauthorizedAccessException
+     */
+    public function testMailerConnection(string $id, User $user): array
+    {
+        if (!$user->isRoot()) {
+            throw new UnauthorizedAccessException('No autorizado. Solo el administrador de plataforma puede probar la conexión SMTP.');
+        }
+
+        $tenant = Tenant::findOrFail($id);
+
+        if (!$tenant->hasCustomMailer()) {
+            return [
+                'success' => false,
+                'message' => 'Esta empresa no tiene un servidor SMTP propio configurado (falta host o correo remitente).',
+            ];
+        }
+
+        $success = $this->tenantMailerService->testConnection([
+            'host' => $tenant->mail_host,
+            'port' => $tenant->mail_port ?? 587,
+            'username' => $tenant->mail_username,
+            'password' => $tenant->mail_password,
+            'encryption' => $tenant->mail_encryption,
+        ]);
+
+        return [
+            'success' => $success,
+            'message' => $success
+                ? 'Conexión exitosa con el servidor SMTP.'
+                : 'No se pudo conectar con el servidor SMTP. Verifica host, puerto, usuario, contraseña y cifrado.',
         ];
     }
 

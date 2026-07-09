@@ -38,9 +38,7 @@ class UserBatch extends Model
         'completed_at',
     ];
 
-    protected $hidden = [
-        'updated_users', // No usamos actualización de usuarios en bulk uploads
-    ];
+    protected $hidden = [];
 
     protected $casts = [
         'file_size' => 'integer',

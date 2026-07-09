@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { useAuthStore } from "@/presentation/stores/authStore";
-import { useUrlFilters, useDocumentTitle } from "@/presentation/hooks";
+import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Table,
@@ -48,7 +48,10 @@ export function UsersListPage() {
     goToPage,
     changePerPage,
   } = useUsersStore();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, currentRole, currentTenant } = useAuthStore();
+  // Root: el navbar (TenantSwitcher) es el único control de empresa; ver
+  // más abajo por qué el dropdown local se oculta y se deriva de currentTenant.
+  const isRootUser = currentUser?.role === "root";
 
   // URL-synced filters
   const { filters, setFilter, setFilters, resetFilters } = useUrlFilters({
@@ -90,8 +93,48 @@ export function UsersListPage() {
     setSearchInput(filters.search);
   }, []);
 
-  // Fetch users when URL filters change
+  // Root: ref a la empresa activa previa. Sirve para detectar el cambio de
+  // empresa desde el navbar (currentTenant) dentro del efecto de abajo y
+  // resetear la página a 1 sin disparar un doble fetch (uno con la página
+  // vieja y otro con page=1): si cambió la empresa y no estamos en la
+  // página 1, solo actualizamos la URL (page=1) y salimos; el propio
+  // cambio de `filters.page` vuelve a disparar el efecto, ya con el ref
+  // actualizado, y ahí sí se hace el fetch real.
+  const prevTenantIdRef = useRef<string | undefined>(currentTenant?.id);
+
+  // Root: el backend de Usuarios (UserController::index) NO respeta el
+  // header X-Tenant-Ids, solo el query param `tenant_id`. Por eso, en vez
+  // del dropdown local, derivamos el filtro de la empresa activa del
+  // navbar (authStore.currentTenant) y usamos useTenantAwareEffect para
+  // que la lista se recargue cuando cambie (TenantSwitcher sincroniza
+  // currentTenant y tenantFilterStore juntos para root, así que
+  // reaccionar al filtro global equivale a reaccionar al navbar). Para
+  // no-root este efecto no hace nada (early return): mantienen su propio
+  // useEffect con su filtro local, sin cambios.
+  useTenantAwareEffect(() => {
+    if (!isRootUser) return;
+
+    const tenantChanged = prevTenantIdRef.current !== currentTenant?.id;
+    prevTenantIdRef.current = currentTenant?.id;
+
+    if (tenantChanged && filters.page !== 1) {
+      setFilter('page', 1);
+      return;
+    }
+
+    const statusValue = filters.status === 'all' ? '' : filters.status;
+    fetchUsers({
+      search: filters.search,
+      status: statusValue,
+      tenant_id: currentTenant?.id || undefined,
+      page: filters.page,
+    });
+  }, [isRootUser, filters.search, filters.status, filters.page, currentTenant?.id, fetchUsers]);
+
+  // No-root: comportamiento actual sin cambios (filtro local de empresa
+  // vía filters.tenant_id, poblado por el dropdown TenantAutocompleteSelector).
   useEffect(() => {
+    if (isRootUser) return;
     const statusValue = filters.status === 'all' ? '' : filters.status;
     fetchUsers({
       search: filters.search,
@@ -99,7 +142,7 @@ export function UsersListPage() {
       tenant_id: filters.tenant_id || undefined,
       page: filters.page,
     });
-  }, [filters.search, filters.status, filters.tenant_id, filters.page, fetchUsers]);
+  }, [isRootUser, filters.search, filters.status, filters.tenant_id, filters.page, fetchUsers]);
 
   const handleDelete = (id: string, userName: string) => {
     setUserToDelete({ id, name: userName });
@@ -149,9 +192,16 @@ export function UsersListPage() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
+      // Root: reportsService.getUsersReportData no aplica TenantFilterScope
+      // (el modelo User no tiene ese global scope), así que igual que en
+      // la lista, el tenant_id del export para root sale de la empresa
+      // activa del navbar en vez del dropdown local (oculto para root).
+      const tenantIdParam = isRootUser
+        ? (currentTenant ? Number(currentTenant.id) : undefined)
+        : (filters.tenant_id ? Number(filters.tenant_id) : undefined);
       const blob = await reportsRepository.exportUsers({
         search: filters.search || undefined,
-        tenant_id: filters.tenant_id ? Number(filters.tenant_id) : undefined,
+        tenant_id: tenantIdParam,
         status: filters.status !== 'all' ? filters.status : undefined,
       });
       const filename = `usuarios_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -216,31 +266,31 @@ export function UsersListPage() {
                 )}
                 <span className="ml-2 hidden xs:inline">Exportar</span>
               </Button>
+              {(currentRole === "root" || currentRole === "admin_tenant" || currentRole === "admin") && (
+                <Button
+                  variant="outline"
+                  className="h-9 sm:h-10 px-3 sm:px-4"
+                  onClick={() => navigate("/users/batch-upload")}
+                >
+                  <Upload className="h-4 w-4" />
+                  <span className="ml-2 hidden xs:inline">Carga Masiva</span>
+                </Button>
+              )}
               {currentUser?.role === "root" && (
-                <>
-                  {/* <Button
-                    variant="outline"
-                    className="h-9 sm:h-10 px-3 sm:px-4"
-                    onClick={() => navigate("/users/batch-upload")}
-                  >
-                    <Upload className="h-4 w-4" />
-                    <span className="ml-2 hidden xs:inline">Carga Masiva</span>
-                  </Button> */}
-                  <Button
-                    className="h-9 sm:h-10 px-3 sm:px-4"
-                    onClick={() => navigate("/users/new")}
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    <span className="ml-2 hidden xs:inline">Nuevo Usuario</span>
-                  </Button>
-                </>
+                <Button
+                  className="h-9 sm:h-10 px-3 sm:px-4"
+                  onClick={() => navigate("/users/new")}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span className="ml-2 hidden xs:inline">Nuevo Usuario</span>
+                </Button>
               )}
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${isRootUser ? 'md:grid-cols-3' : 'md:grid-cols-4'}`}>
             {/* Search - takes 2 columns */}
             <div className="md:col-span-2">
               <label className="text-sm font-medium mb-2 block">Buscar</label>
@@ -255,16 +305,20 @@ export function UsersListPage() {
               </div>
             </div>
 
-            {/* Tenant filter */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">Organización</label>
-              <TenantAutocompleteSelector
-                value={filters.tenant_id || null}
-                onChange={handleTenantFilterChange}
-                selectedTenant={selectedTenant}
-                placeholder="Todas"
-              />
-            </div>
+            {/* Tenant filter - oculto para root: el navbar (TenantSwitcher)
+                es su único control de empresa. No-root mantiene su dropdown
+                local sin cambios. */}
+            {!isRootUser && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">Organización</label>
+                <TenantAutocompleteSelector
+                  value={filters.tenant_id || null}
+                  onChange={handleTenantFilterChange}
+                  selectedTenant={selectedTenant}
+                  placeholder="Todas"
+                />
+              </div>
+            )}
 
             {/* Status filter */}
             <div>

@@ -100,6 +100,10 @@ class DocumentBatchService
             'original_filename' => $file->getClientOriginalName(),
             'notify_employees' => $data['notify_employees'] ?? false,
             'requires_signature' => $data['requires_signature'] ?? false,
+            // Ítem 36: tamaño de página elegido por el usuario antes de la
+            // carga masiva, usado luego para calibrar la posición de la
+            // firma (ver PdfWatermarkService / config/signature.php).
+            'page_size' => $data['page_size'] ?? 'a10',
             'status' => 'pending',
         ]);
 
@@ -237,6 +241,7 @@ class DocumentBatchService
             'progress_percentage' => $batch->progress_percentage,
             'notify_employees' => $batch->notify_employees,
             'requires_signature' => $batch->requires_signature,
+            'page_size' => $batch->resolved_page_size,
             'started_at' => $batch->started_at,
             'completed_at' => $batch->completed_at,
             'created_at' => $batch->created_at,

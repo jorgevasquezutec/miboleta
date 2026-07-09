@@ -91,13 +91,13 @@ export function RoleSwitcher() {
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 align="start"
-                className="w-[220px] !bg-gray-800 !border-gray-700 !text-white shadow-lg"
+                className="w-[220px] !bg-white !border-gray-200 shadow-xl"
                 sideOffset={5}
             >
-                <DropdownMenuLabel className="text-xs text-gray-400 uppercase font-normal px-2 py-1.5">
+                <DropdownMenuLabel className="text-xs text-gray-500 uppercase font-normal px-2 py-1.5">
                     Rol activo en {currentTenant.name}
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-gray-700" />
+                <DropdownMenuSeparator />
                 {availableRoles.map((role) => {
                     const isActive = currentRole === role;
                     return (
@@ -105,8 +105,8 @@ export function RoleSwitcher() {
                             key={role}
                             onClick={() => handleRoleSwitch(role)}
                             className={cn(
-                                "cursor-pointer px-2 py-2 !text-white hover:!bg-gray-700 hover:!text-white focus:!bg-gray-700 focus:!text-white",
-                                isActive && "!bg-gray-700"
+                                "cursor-pointer px-2 py-2 text-gray-900 hover:bg-blue-50 hover:text-gray-900 focus:bg-blue-50 focus:text-gray-900",
+                                isActive && "bg-blue-50"
                             )}
                         >
                             <div className="flex items-center justify-between w-full gap-2">

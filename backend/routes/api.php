@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\Api\UserBatchController;
 use App\Http\Controllers\Api\SignatureSettingsController;
+use App\Http\Controllers\Api\PlatformSettingsController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
@@ -103,6 +104,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users', [TenantController::class, 'users']);
         Route::post('/users', [TenantController::class, 'addUser']);
         Route::delete('/users/{userId}', [TenantController::class, 'removeUser']);
+        // Probar conexión SMTP de la empresa (ítem 24-menor). Enforcement de
+        // root dentro de TenantService::testMailerConnection.
+        Route::post('/smtp/test', [TenantController::class, 'testSmtpConnection']);
     });
 
     // ============ MÓDULO 4: DOCUMENTOS ============
@@ -142,6 +146,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/signature/settings', [SignatureSettingsController::class, 'update']);
     Route::post('/signature/certificate', [SignatureSettingsController::class, 'store']);
     Route::delete('/signature/certificate', [SignatureSettingsController::class, 'destroy']);
+
+    // Platform Settings (IP pública del servidor - solo root, ítem 23)
+    Route::get('/platform/settings', [PlatformSettingsController::class, 'show']);
+    Route::put('/platform/settings', [PlatformSettingsController::class, 'update']);
 
     // ============ MÓDULO 5: VACACIONES ============
 

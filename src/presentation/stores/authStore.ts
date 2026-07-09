@@ -8,7 +8,7 @@ import { userRepository } from "@/infrastructure/persistence/repositories";
  * gana) para elegir el rol activo por defecto al entrar a una empresa.
  * Debe reflejar exactamente User::ROLE_PRIORITY en el backend.
  */
-const ROLE_PRIORITY = ["admin", "administrador_clientes", "aprobador", "client"] as const;
+const ROLE_PRIORITY = ["admin_tenant", "admin", "aprobador", "client"] as const;
 
 /**
  * Dado un conjunto de nombres de rol (los que el usuario tiene en una

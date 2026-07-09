@@ -84,6 +84,9 @@ class UserResource extends JsonResource
                             ? \Illuminate\Support\Carbon::parse($tenant->pivot->hire_date)->format('Y-m-d')
                             : null,
                         'vacation_balance_initial' => $tenant->pivot->vacation_balance_initial,
+                        // Departamento/cargo del usuario en esta empresa (RP-B3).
+                        'department' => $tenant->pivot->department ?? null,
+                        'position' => $tenant->pivot->position ?? null,
                     ];
                 })->values();  // ✅ Reset array keys after filter
             }),

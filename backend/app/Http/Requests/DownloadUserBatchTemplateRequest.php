@@ -11,7 +11,10 @@ class DownloadUserBatchTemplateRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        // FIX B2.1: parte del flujo de carga masiva (descarga de template
+        // personalizado por organización); gateado con el mismo control de
+        // rol que las demás rutas de user-batches.
+        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant']);
     }
 
     /**

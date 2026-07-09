@@ -11,7 +11,11 @@ class StoreUserBatchRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        // FIX B2.1: la carga masiva puede crear/actualizar usuarios con
+        // cualquier rol operativo; sin este chequeo, CUALQUIER usuario
+        // autenticado (p.ej. un 'client') podía disparar POST
+        // /api/user-batches.
+        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant']);
     }
 
     /**

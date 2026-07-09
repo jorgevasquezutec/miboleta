@@ -14,7 +14,7 @@ export interface User {
    * Rol "global" de respaldo (ver AuthService::transformAuthUser /
    * User::getCurrentRole en backend). Para root sigue siendo la fuente de
    * verdad ('root' es global). Para el resto de roles operativos
-   * (admin, client, aprobador, administrador_clientes), el rol relevante es
+   * (admin_tenant, admin, client, aprobador), el rol relevante es
    * el de la empresa activa: usa `tenants[].role` / `tenants[].roles`, o
    * mejor aún, `authStore.currentRole` (ya resuelto para la sesión activa).
    * Se deja el tipo sin ampliar para no romper el CRUD de usuarios
@@ -56,8 +56,8 @@ export interface TenantAssociation {
   supervisor_id?: string | null;
   supervisor?: SupervisorBasic | null;
   /**
-   * Roles operativos del usuario en esta empresa (admin, client, aprobador,
-   * administrador_clientes). Viene de user_tenant_roles (ver
+   * Roles operativos del usuario en esta empresa (admin_tenant, admin,
+   * client, aprobador). Viene de user_tenant_roles (ver
    * AuthService::transformAuthUser en backend).
    */
   roles?: string[];
@@ -81,6 +81,10 @@ export interface TenantAssociation {
    * como string, p. ej. "5.00", según el driver de BD) — no asumir `number`.
    */
   vacation_balance_initial?: number | string | null;
+  /** Departamento/área del usuario en esta empresa. */
+  department?: string | null;
+  /** Cargo/puesto del usuario en esta empresa. */
+  position?: string | null;
 }
 
 // Información básica de tenant
