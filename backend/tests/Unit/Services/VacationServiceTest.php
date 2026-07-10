@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\VacationRequest;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Services\TenantMailerService;
 use App\Services\VacationBalanceService;
 use App\Services\VacationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,8 +35,9 @@ class VacationServiceTest extends TestCase
 
         $notificationService = $this->createMock(NotificationService::class);
         $auditService = $this->createMock(AuditService::class);
+        $tenantMailerService = $this->createMock(TenantMailerService::class);
 
-        $this->vacationService = new VacationService($notificationService, $auditService, new VacationBalanceService());
+        $this->vacationService = new VacationService($notificationService, $auditService, new VacationBalanceService(), $tenantMailerService);
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
 

@@ -135,8 +135,10 @@ class UserServiceTest extends TestCase
 
         $this->userService->createUser($data, $this->admin, true);
 
-        // Email is queued, not sent directly
-        Mail::assertQueued(\App\Mail\WelcomeUserMail::class, function ($mail) {
+        // El correo se despacha vía SendWelcomeEmailJob (queue=sync en tests)
+        // y se entrega con TenantMailerService::send(), que usa sendNow(); por
+        // eso queda registrado como "sent" y no como "queued".
+        Mail::assertSent(\App\Mail\WelcomeUserMail::class, function ($mail) {
             return $mail->hasTo('juan@example.com');
         });
     }

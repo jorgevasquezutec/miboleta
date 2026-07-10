@@ -34,9 +34,22 @@ class UserControllerTest extends TestCase
 
         $this->admin = User::factory()->admin()->create(['status' => 'active']);
         $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // Los permisos operativos ahora se resuelven por empresa (user_tenant_roles),
+        // no por el rol global. Sin esta asignación el admin no pasa el chequeo
+        // hasRoleInTenant('admin', ...) de StoreUserRequest.
+        \App\Models\UserTenantRole::create([
+            'user_id' => $this->admin->id,
+            'tenant_id' => $this->tenant->id,
+            'role_id' => Role::where('name', 'admin')->first()->id,
+        ]);
 
         $this->client = User::factory()->client()->create(['status' => 'active']);
         $this->client->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        \App\Models\UserTenantRole::create([
+            'user_id' => $this->client->id,
+            'tenant_id' => $this->tenant->id,
+            'role_id' => $this->clientRole->id,
+        ]);
     }
 
     public function test_root_can_list_all_users(): void
