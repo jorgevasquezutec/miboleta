@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AuditSettingsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\HealthController;
@@ -69,6 +70,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Roles - Catálogo de roles (para asignar por empresa en UserFormPage)
     Route::get('/roles', [RoleController::class, 'index']);
+
+    // Matriz de Accesos (config/access_matrix.php): ability => [roles].
+    // Fuente única de verdad compartida con el frontend, que la usa para gatear
+    // sidebar, rutas y botones contra el rol activo. También llega en el payload
+    // de /login y /me; este endpoint es para refetch puntual.
+    Route::get('/access-matrix', fn () => response()->json(['data' => config('access_matrix')]));
 
     // Users - Custom routes (BEFORE resource to avoid conflicts)
     Route::get('/users/subordinates', [UserController::class, 'subordinates']);
@@ -150,6 +157,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Platform Settings (IP pública del servidor - solo root, ítem 23)
     Route::get('/platform/settings', [PlatformSettingsController::class, 'show']);
     Route::put('/platform/settings', [PlatformSettingsController::class, 'update']);
+
+    // Audit Settings (mantenedor activar/desactivar captura de logs - solo root)
+    Route::get('/audit/settings', [AuditSettingsController::class, 'show']);
+    Route::put('/audit/settings', [AuditSettingsController::class, 'update']);
 
     // ============ MÓDULO 5: VACACIONES ============
 

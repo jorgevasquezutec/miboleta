@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ValidateUserBatchFileRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -14,7 +17,9 @@ class ValidateUserBatchFileRequest extends FormRequest
         // FIX B2.1: parte del flujo de carga masiva (previsualización de
         // archivo); gateado con el mismo control de rol que las demás
         // rutas de user-batches.
-        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant']);
+        // Matriz: 'users.bulk_upload' = root, admin_tenant. 'admin' ya no puede
+        // (la matriz no se lo concede); el rol se resuelve en la empresa ACTIVA.
+        return $this->allowsAbility('users.bulk_upload');
     }
 
     /**

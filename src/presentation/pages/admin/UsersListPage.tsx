@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useUsersStore } from "@/presentation/stores/usersStore";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
-import { TenantAutocompleteSelector } from "@/presentation/components/shared/TenantAutocompleteSelector";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
+import { useCan, useCanAny } from "@/presentation/hooks/useCan";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Table,
@@ -33,7 +33,6 @@ import {
 } from "@/presentation/components/ui/select";
 import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { Tenant } from "@/core/domain/entities/Tenant";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 
 export function UsersListPage() {
@@ -48,24 +47,32 @@ export function UsersListPage() {
     goToPage,
     changePerPage,
   } = useUsersStore();
-  const { user: currentUser, currentRole, currentTenant } = useAuthStore();
-  // Root: el navbar (TenantSwitcher) es el único control de empresa; ver
-  // más abajo por qué el dropdown local se oculta y se deriva de currentTenant.
+  const { user: currentUser, currentTenant } = useAuthStore();
+  // El navbar (TenantSwitcher) es el único control de empresa para todos los
+  // roles. isRootUser solo se usa para el export: ReportsController resuelve
+  // la empresa de root por query param y la de no-root por header.
   const isRootUser = currentUser?.role === "root";
 
+  // Permisos según la Matriz de Accesos (el backend autoriza con el mismo mapa),
+  // en vez de comparar contra currentUser.role — que es el respaldo GLOBAL
+  // (unión de los roles del usuario en todas sus empresas) y dejaba fuera a
+  // admin_tenant, que sí puede crear/editar según la matriz.
+  const canCreateUser = useCanAny(["users.create_any_role", "users.create_limited_role"]);
+  const canUpdateUser = useCan("users.update");
+  const canDeleteUser = useCan("users.delete");
+  const canBulkUpload = useCan("users.bulk_upload");
+
   // URL-synced filters
-  const { filters, setFilter, setFilters, resetFilters } = useUrlFilters({
+  const { filters, setFilter, setFilters } = useUrlFilters({
     defaultValues: {
       search: '',
       status: 'all',
-      tenant_id: '',
       page: 1,
     }
   });
 
   // Local state for search input (for debounce)
   const [searchInput, setSearchInput] = useState(filters.search);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -88,32 +95,35 @@ export function UsersListPage() {
     };
   }, [searchInput, filters.search, setFilters]);
 
-  // Sync search input with URL on mount
+  // Semilla inicial del input de búsqueda desde la URL. Solo al montar
+  // A PROPÓSITO: con `filters.search` en las dependencias, el valor que el
+  // debounce escribe en la URL 500 ms después volvería a entrar aquí y
+  // pisaría lo que el usuario haya seguido tecleando entre medias.
   useEffect(() => {
     setSearchInput(filters.search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Root: ref a la empresa activa previa. Sirve para detectar el cambio de
-  // empresa desde el navbar (currentTenant) dentro del efecto de abajo y
-  // resetear la página a 1 sin disparar un doble fetch (uno con la página
-  // vieja y otro con page=1): si cambió la empresa y no estamos en la
-  // página 1, solo actualizamos la URL (page=1) y salimos; el propio
-  // cambio de `filters.page` vuelve a disparar el efecto, ya con el ref
-  // actualizado, y ahí sí se hace el fetch real.
+  // Ref a la empresa activa previa. Sirve para detectar el cambio de empresa
+  // desde el navbar (currentTenant) dentro del efecto de abajo y resetear la
+  // página a 1 sin disparar un doble fetch (uno con la página vieja y otro
+  // con page=1): si cambió la empresa y no estamos en la página 1, solo
+  // actualizamos la URL (page=1) y salimos; el propio cambio de
+  // `filters.page` vuelve a disparar el efecto, ya con el ref actualizado, y
+  // ahí sí se hace el fetch real.
   const prevTenantIdRef = useRef<string | undefined>(currentTenant?.id);
 
-  // Root: el backend de Usuarios (UserController::index) NO respeta el
-  // header X-Tenant-Ids, solo el query param `tenant_id`. Por eso, en vez
-  // del dropdown local, derivamos el filtro de la empresa activa del
-  // navbar (authStore.currentTenant) y usamos useTenantAwareEffect para
-  // que la lista se recargue cuando cambie (TenantSwitcher sincroniza
-  // currentTenant y tenantFilterStore juntos para root, así que
-  // reaccionar al filtro global equivale a reaccionar al navbar). Para
-  // no-root este efecto no hace nada (early return): mantienen su propio
-  // useEffect con su filtro local, sin cambios.
+  // Un solo efecto para root y no-root: UserController::index ya scopea a la
+  // empresa activa del switcher (header X-Tenant-Ids), así que no se manda
+  // `tenant_id` y el header hace el trabajo. Antes había dos efectos y un
+  // dropdown local de empresa porque el backend ignoraba el header; eso era
+  // un workaround del bug, no una feature.
+  //
+  // useTenantAwareEffect recarga cuando cambia el filtro global, que
+  // TenantSwitcher sincroniza junto con currentTenant para ambos roles. Root
+  // en modo "Todas las empresas" no manda header y el backend no filtra:
+  // mismo resultado que antes.
   useTenantAwareEffect(() => {
-    if (!isRootUser) return;
-
     const tenantChanged = prevTenantIdRef.current !== currentTenant?.id;
     prevTenantIdRef.current = currentTenant?.id;
 
@@ -126,23 +136,9 @@ export function UsersListPage() {
     fetchUsers({
       search: filters.search,
       status: statusValue,
-      tenant_id: currentTenant?.id || undefined,
       page: filters.page,
     });
-  }, [isRootUser, filters.search, filters.status, filters.page, currentTenant?.id, fetchUsers]);
-
-  // No-root: comportamiento actual sin cambios (filtro local de empresa
-  // vía filters.tenant_id, poblado por el dropdown TenantAutocompleteSelector).
-  useEffect(() => {
-    if (isRootUser) return;
-    const statusValue = filters.status === 'all' ? '' : filters.status;
-    fetchUsers({
-      search: filters.search,
-      status: statusValue,
-      tenant_id: filters.tenant_id || undefined,
-      page: filters.page,
-    });
-  }, [isRootUser, filters.search, filters.status, filters.tenant_id, filters.page, fetchUsers]);
+  }, [filters.search, filters.status, filters.page, currentTenant?.id, fetchUsers]);
 
   const handleDelete = (id: string, userName: string) => {
     setUserToDelete({ id, name: userName });
@@ -164,16 +160,6 @@ export function UsersListPage() {
     setFilters({ status: value, page: 1 });
   };
 
-  const handleTenantFilterChange = (id: string | null) => {
-    setFilters({ tenant_id: id || '', page: 1 });
-    if (id) {
-      const foundTenant = users.flatMap(u => u.tenants || []).find(t => t.id === id);
-      setSelectedTenant(foundTenant ? { id: foundTenant.id, name: foundTenant.name, ruc: foundTenant.ruc || '' } as Tenant : null);
-    } else {
-      setSelectedTenant(null);
-    }
-  };
-
   const handlePageChange = (page: number) => {
     setFilter('page', page);
     goToPage(page);
@@ -184,21 +170,16 @@ export function UsersListPage() {
     changePerPage(perPage);
   };
 
-  const handleResetFilters = () => {
-    setSearchInput('');
-    setSelectedTenant(null);
-    resetFilters();
-  };
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      // Root: reportsService.getUsersReportData no aplica TenantFilterScope
-      // (el modelo User no tiene ese global scope), así que igual que en
-      // la lista, el tenant_id del export para root sale de la empresa
-      // activa del navbar en vez del dropdown local (oculto para root).
-      const tenantIdParam = isRootUser
-        ? (currentTenant ? Number(currentTenant.id) : undefined)
-        : (filters.tenant_id ? Number(filters.tenant_id) : undefined);
+      // Para no-root no se manda tenant_id: ReportsController::exportUsers
+      // resuelve la empresa activa desde el header (ActiveTenantResolver),
+      // igual que la lista. Root sí lo manda, porque para root el resolver
+      // lee el query param y no el header.
+      const tenantIdParam = isRootUser && currentTenant
+        ? Number(currentTenant.id)
+        : undefined;
       const blob = await reportsRepository.exportUsers({
         search: filters.search || undefined,
         tenant_id: tenantIdParam,
@@ -266,7 +247,7 @@ export function UsersListPage() {
                 )}
                 <span className="ml-2 hidden xs:inline">Exportar</span>
               </Button>
-              {(currentRole === "root" || currentRole === "admin_tenant" || currentRole === "admin") && (
+              {canBulkUpload && (
                 <Button
                   variant="outline"
                   className="h-9 sm:h-10 px-3 sm:px-4"
@@ -276,7 +257,7 @@ export function UsersListPage() {
                   <span className="ml-2 hidden xs:inline">Carga Masiva</span>
                 </Button>
               )}
-              {currentUser?.role === "root" && (
+              {canCreateUser && (
                 <Button
                   className="h-9 sm:h-10 px-3 sm:px-4"
                   onClick={() => navigate("/users/new")}
@@ -290,7 +271,7 @@ export function UsersListPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}
-          <div className={`grid grid-cols-1 gap-4 ${isRootUser ? 'md:grid-cols-3' : 'md:grid-cols-4'}`}>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {/* Search - takes 2 columns */}
             <div className="md:col-span-2">
               <label className="text-sm font-medium mb-2 block">Buscar</label>
@@ -305,20 +286,11 @@ export function UsersListPage() {
               </div>
             </div>
 
-            {/* Tenant filter - oculto para root: el navbar (TenantSwitcher)
-                es su único control de empresa. No-root mantiene su dropdown
-                local sin cambios. */}
-            {!isRootUser && (
-              <div>
-                <label className="text-sm font-medium mb-2 block">Organización</label>
-                <TenantAutocompleteSelector
-                  value={filters.tenant_id || null}
-                  onChange={handleTenantFilterChange}
-                  selectedTenant={selectedTenant}
-                  placeholder="Todas"
-                />
-              </div>
-            )}
+            {/* Sin filtro de Organización: el navbar (TenantSwitcher) es el
+                único control de empresa, para root y no-root. El dropdown que
+                había aquí existía porque el backend ignoraba X-Tenant-Ids; ya
+                no hace falta y su placeholder "Todas" era engañoso (para
+                no-root nunca hubo vista multi-empresa). */}
 
             {/* Status filter */}
             <div>
@@ -360,8 +332,7 @@ export function UsersListPage() {
                       <TableRow>
                         <TableHead className="whitespace-nowrap">Nombre</TableHead>
                         <TableHead className="whitespace-nowrap">Documento</TableHead>
-                        <TableHead className="whitespace-nowrap">Rol</TableHead>
-                        <TableHead className="whitespace-nowrap">Tenants</TableHead>
+                        <TableHead className="whitespace-nowrap">Tenants / Rol</TableHead>
                         <TableHead className="whitespace-nowrap hidden lg:table-cell">Supervisor</TableHead>
                         <TableHead className="whitespace-nowrap">Estado</TableHead>
                         <TableHead className="text-center whitespace-nowrap">Acciones</TableHead>
@@ -388,15 +359,15 @@ export function UsersListPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              style={getRoleBadgeStyle(user.role || "")}
-                            >
-                              {user.role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1 flex-wrap min-w-[200px]">
-                              {user.tenants && user.tenants.length > 0 ? (
+                            <div className="flex gap-1 flex-wrap min-w-[220px]">
+                              {user.role === "root" ? (
+                                <Badge
+                                  style={getRoleBadgeStyle("root")}
+                                  className="text-xs whitespace-nowrap"
+                                >
+                                  root · plataforma
+                                </Badge>
+                              ) : user.tenants && user.tenants.length > 0 ? (
                                 user.tenants.map((tenant) => (
                                   <Badge
                                     key={tenant.id}
@@ -404,7 +375,10 @@ export function UsersListPage() {
                                     className="text-xs whitespace-nowrap"
                                   >
                                     {tenant.name}
-                                    {tenant.is_primary && " ★"}
+                                    {tenant.is_primary ? " ★" : null}
+                                    {tenant.role && (
+                                      <span className="opacity-80"> · {tenant.role}</span>
+                                    )}
                                   </Badge>
                                 ))
                               ) : (
@@ -452,7 +426,7 @@ export function UsersListPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {currentUser?.role === "root" && (
+                              {(canUpdateUser || canDeleteUser) && (
                                 <>
                                   <Button
                                     variant="ghost"

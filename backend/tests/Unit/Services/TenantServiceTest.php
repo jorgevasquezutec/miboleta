@@ -5,6 +5,7 @@ namespace Tests\Unit\Services;
 use App\Exceptions\UnauthorizedAccessException;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\TenantMailerService;
 use App\Services\TenantService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,17 +27,22 @@ class TenantServiceTest extends TestCase
 
         $this->seed(\Database\Seeders\RoleSeeder::class);
 
-        $this->tenantService = new TenantService(new TenantMailerService());
+        $this->tenantService = new TenantService(new TenantMailerService(), new AuditService());
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
 
         $this->root = User::factory()->root()->create(['status' => 'active']);
 
-        $this->admin = User::factory()->admin()->create(['status' => 'active']);
-        $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // El rol operativo se asigna POR EMPRESA (user_tenant_roles): es lo que
+        // se autoriza. Los states ->admin()/->client() solo escriben el rol
+        // global de respaldo (display), que ya no autoriza nada.
+        $this->admin = User::factory()->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
 
-        $this->client = User::factory()->client()->create(['status' => 'active']);
-        $this->client->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        $this->client = User::factory()->client()
+            ->withTenantRole($this->tenant, 'client', true)
+            ->create(['status' => 'active']);
     }
 
     public function test_root_can_see_all_tenants(): void
@@ -186,6 +192,31 @@ class TenantServiceTest extends TestCase
 
         $this->assertFalse($result['success']);
         $this->assertStringContainsString('primario', $result['message']);
+    }
+
+    public function test_client_cannot_remove_users_from_his_own_tenant(): void
+    {
+        // REGRESIÓN: canManageTenantUsers() era `root || $tenant->hasUser($user)`,
+        // sin mirar el rol, así que un client podía sacar a cualquiera de su
+        // propia empresa. Ahora exige 'tenants.assign_users' (root, admin).
+        $this->assertFalse($this->tenantService->canManageTenantUsers($this->client, $this->tenant));
+
+        $this->expectException(UnauthorizedAccessException::class);
+
+        $this->tenantService->removeUserFromTenant(
+            (string) $this->tenant->id,
+            (string) $this->admin->id,
+            $this->client
+        );
+    }
+
+    public function test_admin_of_another_tenant_cannot_remove_users(): void
+    {
+        // El rol se resuelve en la empresa DEL RECURSO: ser admin en la empresa
+        // A no da permisos sobre la B.
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+
+        $this->assertFalse($this->tenantService->canManageTenantUsers($this->admin, $otherTenant));
     }
 
     public function test_can_access_tenant_root(): void

@@ -77,15 +77,16 @@ export function TenantFormPage() {
     }, [isEditing]);
 
     // Load tenant data if editing
+    //
+    // Se llama a fetchTenantById directamente: el envoltorio loadTenant que
+    // había aquí se recreaba en cada render, así que no podía estar en las
+    // dependencias sin provocar un fetch por render. fetchTenantById es una
+    // acción del store (identidad estable), así que sí puede.
     useEffect(() => {
         if (isEditing && id) {
-            loadTenant(id);
+            fetchTenantById(id);
         }
-    }, [id, isEditing]);
-
-    const loadTenant = async (tenantId: string) => {
-        await fetchTenantById(tenantId);
-    };
+    }, [id, isEditing, fetchTenantById]);
 
     // Update form when currentTenant changes (only when editing)
     useEffect(() => {

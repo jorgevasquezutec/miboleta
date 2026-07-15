@@ -7,7 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateVacationRequestRequest;
 use App\Http\Requests\RejectVacationRequestRequest;
 use App\Http\Resources\VacationRequestResource;
+use App\Models\User;
 use App\Models\VacationRequest;
+use App\Services\ActiveTenantResolver;
 use App\Services\VacationBalanceService;
 use App\Services\VacationService;
 use Illuminate\Http\JsonResponse;
@@ -25,7 +27,8 @@ class VacationRequestController extends Controller
 {
     public function __construct(
         protected VacationService $vacationService,
-        protected VacationBalanceService $vacationBalanceService
+        protected VacationBalanceService $vacationBalanceService,
+        protected ActiveTenantResolver $activeTenantResolver
     ) {
     }
 
@@ -46,7 +49,6 @@ class VacationRequestController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $role = $user->getCurrentRole();
 
         $tenantId = $request->query('tenant_id')
             ? (int) $request->query('tenant_id')
@@ -56,8 +58,9 @@ class VacationRequestController extends Controller
             return response()->json(['message' => 'Tenant no especificado'], 400);
         }
 
-        // Root puede consultar cualquier empresa; el resto solo las suyas
-        if ($role !== 'root' && !$user->belongsToTenant($tenantId)) {
+        // Root puede consultar cualquier empresa; el resto solo las suyas.
+        // isRoot() en vez de getCurrentRole() === 'root': determinístico.
+        if (!$user->isRoot() && !$user->belongsToTenant($tenantId)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
@@ -92,7 +95,12 @@ class VacationRequestController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $role = $user->getCurrentRole();
+
+        // El rol se resuelve dentro de la empresa ACTIVA, no con el respaldo
+        // global: antes, quien fuera admin en cualquiera de sus empresas
+        // resolvía 'admin' y con scope=tenant listaba TODAS las solicitudes de
+        // la empresa activa, aunque allí solo fuera client (fuga entre empresas).
+        $role = User::roleForTenant($user, $this->activeTenantResolver->resolve($request, $user));
 
         // Obtener tenant IDs del middleware o usar tenants del usuario
         $tenantIds = $request->get('_tenant_filter_ids') ?? $user->tenants->pluck('id')->toArray();
@@ -198,9 +206,20 @@ class VacationRequestController extends Controller
         // Check access
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $role = $user->getCurrentRole();
 
-        if ($role === 'client' && $vacationRequest->user_id !== $user->id) {
+        // El rol se resuelve dentro de la empresa DE LA SOLICITUD. Antes se
+        // usaba el respaldo global: quien fuera admin en la empresa A podía leer
+        // solicitudes ajenas de la B donde solo es client (el rol global no
+        // resolvía 'client', así que el check no lo frenaba).
+        //
+        // Además se invierte a lista blanca: el check anterior ("no es client")
+        // dejaba pasar también a quien no tuviera NINGÚN rol en esa empresa
+        // (rol null), o sea era fail-open. Ahora, sin rol en la empresa de la
+        // solicitud, solo se ve la propia.
+        $isOwner = $vacationRequest->user_id === $user->id;
+        $role = User::roleForTenant($user, $vacationRequest->tenant_id);
+
+        if (!$isOwner && !in_array($role, ['root', 'admin', 'admin_tenant', 'aprobador'], true)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 

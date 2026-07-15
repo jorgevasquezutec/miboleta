@@ -6,6 +6,7 @@ use App\Mail\EmailChangedNotificationMail;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\UserService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -32,7 +33,7 @@ class EmailChangeNotificationTest extends TestCase
 
         Mail::fake();
 
-        $this->userService = new UserService();
+        $this->userService = new UserService(new AuditService());
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
 

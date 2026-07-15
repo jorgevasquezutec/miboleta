@@ -10,7 +10,9 @@ use App\Http\Requests\ValidateUserBatchDataRequest;
 use App\Http\Requests\ValidateUserBatchFileRequest;
 use App\Jobs\ProcessUserChunk;
 use App\Models\User;
+use App\Services\ActiveTenantResolver;
 use App\Models\UserBatch;
+use App\Services\AuditService;
 use App\Services\BulkUserUploadService;
 use Illuminate\Bus\Batch;
 use Illuminate\Http\Request;
@@ -21,7 +23,9 @@ use Illuminate\Support\Facades\Auth;
 class UserBatchController extends Controller
 {
     public function __construct(
-        private BulkUserUploadService $service
+        private BulkUserUploadService $service,
+        private AuditService $auditService,
+        private ActiveTenantResolver $activeTenantResolver
     ) {
     }
 
@@ -41,7 +45,22 @@ class UserBatchController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
 
-        if (!$user || !in_array($user->getCurrentRole(), ['root', 'admin', 'admin_tenant'], true)) {
+        if (!$user) {
+            abort(403, 'No tienes permisos para gestionar cargas masivas.');
+        }
+
+        // El rol se resuelve dentro de la empresa ACTIVA, no con el respaldo
+        // global: antes, ser admin en cualquiera de sus empresas bastaba para
+        // gestionar cargas masivas de la empresa activa (fuga entre empresas).
+        //
+        // Se conserva a propósito el mismo conjunto de roles de hoy: este paso
+        // solo cierra la fuga. La Matriz de Accesos ('users.bulk_upload' =
+        // [root, admin_tenant], sin 'admin') se aplicará junto con el router y
+        // el sidebar del frontend, para no dejar un menú visible que el backend
+        // rechace con 403.
+        $role = User::roleForTenant($user, $this->activeTenantResolver->resolve(request(), $user));
+
+        if (!in_array($role, ['root', 'admin', 'admin_tenant'], true)) {
             abort(403, 'No tienes permisos para gestionar cargas masivas.');
         }
 
@@ -329,6 +348,8 @@ class UserBatchController extends Controller
             ],
         ]);
 
+        $this->auditService->logUserBatchCreated($batch->id, $batch->total_rows);
+
         // 5. Dividir usuarios en chunks y crear jobs
         $chunkSize = 50;
         $userChunks = array_chunk($validation['data'], $chunkSize);
@@ -425,6 +446,8 @@ class UserBatchController extends Controller
                 'update_existing' => $validated['update_existing'] ?? false,
             ],
         ]);
+
+        $this->auditService->logUserBatchCreated($batch->id, $batch->total_rows);
 
         // 4. Dividir usuarios en chunks y crear jobs
         $chunkSize = 50;

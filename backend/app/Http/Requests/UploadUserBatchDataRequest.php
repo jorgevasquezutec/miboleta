@@ -3,10 +3,13 @@
 namespace App\Http\Requests;
 
 use App\Models\Tenant;
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UploadUserBatchDataRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -16,7 +19,9 @@ class UploadUserBatchDataRequest extends FormRequest
         // ruta también dispara la creación/actualización masiva de
         // usuarios (con datos ya editados), así que no puede quedar
         // abierta a cualquier usuario autenticado.
-        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant']);
+        // Matriz: 'users.bulk_upload' = root, admin_tenant. 'admin' ya no puede
+        // (la matriz no se lo concede); el rol se resuelve en la empresa ACTIVA.
+        return $this->allowsAbility('users.bulk_upload');
     }
 
     /**

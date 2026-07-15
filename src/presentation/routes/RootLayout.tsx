@@ -1,7 +1,7 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/presentation/stores";
 import { Navbar } from "@/presentation/components/layout";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Users,
   FileText,
@@ -17,7 +17,8 @@ import {
   Upload,
   X,
   FileKey,
-  Globe,
+  Settings,
+  ShieldCheck,
 } from "lucide-react";
 import { NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
@@ -34,6 +35,12 @@ interface NavItem {
   path: string;
   icon: LucideIcon;
   children?: NavItem[];
+  /**
+   * Abilities de la Matriz de Accesos que habilitan este ítem (basta con UNA).
+   * El menú se filtra con ellas contra el mismo mapa que usa el backend para
+   * autorizar, de modo que no puede mostrar algo que luego devuelva 403.
+   */
+  abilities?: string[];
 }
 
 interface CollapsibleSectionProps {
@@ -182,7 +189,6 @@ function CollapsibleSection({
 function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentRole } = useAuthStore();
   const [openSections, setOpenSections] = useState<string[]>(['Vacaciones']); // Default open
 
   const isActive = (path: string) => location.pathname === path;
@@ -198,103 +204,86 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
     );
   };
 
-  // Define navigation items by role
-  const rootNavItems: NavItem[] = [
-    { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
-    { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2 },
-    { label: "Usuarios", path: "/users", icon: Users },
-    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
-    { label: "Documentos", path: "/documents", icon: FileText },
+  // Menú declarativo ÚNICO, filtrado por las abilities de la Matriz de Accesos
+  // (config/access_matrix.php, servida por el backend). Antes había 5 arrays
+  // por rol + un switch, que había que mantener en sync a mano con el router y
+  // con el backend — de ahí la deriva que hacía visible "Auditoría" a un
+  // aprobador al que el backend luego rechazaba con 403.
+  //
+  // Cada ítem declara las abilities que lo habilitan (basta con UNA). Al usar
+  // el mismo mapa que autoriza el backend, el menú no puede volver a mostrar
+  // algo que el backend no permita. Las abilities deben coincidir con las
+  // `requires` de la ruta correspondiente en routes/index.tsx.
+  const ALL_NAV_ITEMS: NavItem[] = [
+    { label: "Dashboard", path: "/admin", icon: LayoutDashboard, abilities: ["dashboard.global_metrics", "dashboard.org_metrics"] },
+    { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2, abilities: ["tenants.manage"] },
+    { label: "Mis Documentos", path: "/dashboard", icon: FileText, abilities: ["documents.view_own"] },
+    { label: "Cargar Documentos", path: "/upload", icon: FileText, abilities: ["documents.bulk_upload_zip"] },
+    { label: "Usuarios", path: "/users", icon: Users, abilities: ["users.view_list"] },
+    { label: "Carga Masiva", path: "/users/batch", icon: Upload, abilities: ["users.bulk_upload"] },
+    { label: "Lotes de Carga", path: "/batches", icon: FileStack, abilities: ["documents.view_batches"] },
+    { label: "Documentos", path: "/documents", icon: FileText, abilities: ["documents.view_org"] },
     {
       label: "Vacaciones",
       path: "/vacations",
       icon: Calendar,
+      abilities: ["vacations.request_own", "vacations.view_own_requests", "vacations.approve_reject_team", "vacations.view_history"],
       children: [
-        { label: "Histórico General", path: "/vacation-history", icon: History },
+        { label: "Mis Vacaciones", path: "/vacations", icon: Calendar, abilities: ["vacations.request_own", "vacations.view_own_requests"] },
+        { label: "Mi Equipo", path: "/team-vacations", icon: Users, abilities: ["vacations.approve_reject_team", "vacations.view_team_calendar"] },
+        { label: "Histórico General", path: "/vacation-history", icon: History, abilities: ["vacations.view_history"] },
       ],
     },
-    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
-    { label: "Firma Digital", path: "/signature-settings", icon: FileKey },
-    { label: "IP Pública", path: "/platform-settings", icon: Globe },
-  ];
-
-  const adminNavItems: NavItem[] = [
-    { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
-    { label: "Mis Documentos", path: "/dashboard", icon: FileText },
-    { label: "Cargar Documentos", path: "/upload", icon: FileText },
-    { label: "Usuarios", path: "/users", icon: Users },
-    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
-    { label: "Lotes de Carga", path: "/batches", icon: FileStack },
-    { label: "Documentos", path: "/documents", icon: FileText },
     {
-      label: "Vacaciones",
-      path: "/vacations",
-      icon: Calendar,
+      // Un padre con hijos visibles solo despliega, nunca navega a su propio
+      // `path` (ver CollapsibleSection), así que la página del padre se declara
+      // también como hijo — misma convención que "Vacaciones", cuyo /vacations
+      // se repite en "Mis Vacaciones". Sin esto, quien SÍ ve "Configuración"
+      // (solo root, por platform.manage) convertía "Auditoría" en un grupo y se
+      // quedaba sin forma de llegar al registro: más permisos, menos acceso.
+      label: "Auditoría",
+      path: "/audit-logs",
+      icon: ClipboardList,
+      abilities: ["audit.view", "platform.manage"],
       children: [
-        { label: "Mis Vacaciones", path: "/vacations", icon: Calendar },
-        { label: "Mi Equipo", path: "/team-vacations", icon: Users },
-        { label: "Histórico General", path: "/vacation-history", icon: History },
+        { label: "Registro de Actividad", path: "/audit-logs", icon: ClipboardList, abilities: ["audit.view"] },
+        { label: "Configuración", path: "/audit-settings", icon: ShieldCheck, abilities: ["platform.manage"] },
       ],
     },
-    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
+    { label: "Firma Digital", path: "/signature-settings", icon: FileKey, abilities: ["platform.manage"] },
+    { label: "Configuración", path: "/platform-settings", icon: Settings, abilities: ["platform.manage"] },
   ];
 
-  const clientNavItems: NavItem[] = [
-    { label: "Mis Documentos", path: "/dashboard", icon: FileText },
-    { label: "Mis Vacaciones", path: "/vacations", icon: Calendar },
-  ];
+  // El set de abilities del rol activo se calcula FUERA del selector.
+  //
+  // Ojo al construirlo: los selectores de zustand se comparan con Object.is
+  // sobre lo que devuelven, así que un `useAuthStore(s => new Set(...))` produce
+  // un valor nuevo en cada pasada, useSyncExternalStore lo lee como "cambió"
+  // eternamente y React aborta con "Maximum update depth exceeded" — en este
+  // layout, o sea en TODAS las páginas. Los selectores deben devolver algo
+  // estable (un primitivo o una referencia del store) y derivar aparte.
+  const accessMatrix = useAuthStore((s) => s.accessMatrix);
+  const currentRole = useAuthStore((s) => s.currentRole);
 
-  // admin_tenant: gestiona usuarios/documentos de su empresa (permisos
-  // manage_users, upload_documents, manage_documents, view_reports; y ahora
-  // también approve_vacations/tenant_configuration, aunque el acceso de
-  // navegación a Vacaciones no está en el alcance de este cambio — ver
-  // routes/index.tsx, que sigue sin incluir admin_tenant en /vacations y
-  // /team-vacations). Sigue sin tener "Mi Equipo" dentro de Vacaciones (de
-  // hecho, no tiene acceso a vacaciones en absoluto, ver routes/index.tsx).
-  const adminTenantNavItems: NavItem[] = [
-    { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
-    { label: "Usuarios", path: "/users", icon: Users },
-    { label: "Carga Masiva", path: "/users/batch", icon: Upload },
-    { label: "Lotes de Carga", path: "/batches", icon: FileStack },
-    { label: "Documentos", path: "/documents", icon: FileText },
-    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
-  ];
+  const grantedAbilities = useMemo(
+    () =>
+      new Set(
+        Object.entries(accessMatrix ?? {})
+          .filter(([, roles]) => currentRole !== null && roles.includes(currentRole))
+          .map(([ability]) => ability)
+      ),
+    [accessMatrix, currentRole]
+  );
 
-  // aprobador: aprueba vacaciones de su equipo (permiso approve_vacations) y
-  // ve reportes (view_reports), pero no gestiona usuarios ni documentos.
-  const aprobadorNavItems: NavItem[] = [
-    { label: "Mis Documentos", path: "/dashboard", icon: FileText },
-    {
-      label: "Vacaciones",
-      path: "/vacations",
-      icon: Calendar,
-      children: [
-        { label: "Mis Vacaciones", path: "/vacations", icon: Calendar },
-        { label: "Mi Equipo", path: "/team-vacations", icon: Users },
-        { label: "Histórico General", path: "/vacation-history", icon: History },
-      ],
-    },
-    { label: "Auditoría", path: "/audit-logs", icon: ClipboardList },
-  ];
+  // Sin abilities declaradas el ítem es visible para cualquier sesión.
+  const isVisible = (item: NavItem) =>
+    !item.abilities || item.abilities.some((a) => grantedAbilities.has(a));
 
-  const getNavItems = (): NavItem[] => {
-    switch (currentRole) {
-      case "root":
-        return rootNavItems;
-      case "admin":
-        return adminNavItems;
-      case "admin_tenant":
-        return adminTenantNavItems;
-      case "aprobador":
-        return aprobadorNavItems;
-      case "client":
-        return clientNavItems;
-      default:
-        return [];
-    }
-  };
+  const navItems: NavItem[] = ALL_NAV_ITEMS.filter(isVisible).map((item) => ({
+    ...item,
+    children: item.children?.filter(isVisible),
+  }));
 
-  const navItems = getNavItems();
 
   // Mobile sidebar with overlay
   if (isMobile) {
@@ -396,11 +385,6 @@ export function RootLayout() {
     }
   }, [user, navigate]);
 
-  // Don't render the layout if not authenticated (prevents flash)
-  if (!user) {
-    return null;
-  }
-
   // Handle responsive behavior
   useEffect(() => {
     const MOBILE_BREAKPOINT = 768; // md breakpoint
@@ -430,6 +414,18 @@ export function RootLayout() {
       setIsSidebarExpanded(false);
     }
   }, [location.pathname, isMobile]);
+
+  // Sin sesión no se pinta el layout (evita el flash antes de que el efecto de
+  // arriba redirija al login).
+  //
+  // Va DESPUÉS de todos los hooks a propósito: estaba justo tras el primer
+  // useEffect, por encima de los otros dos, así que al hacer logout
+  // (user -> null) el render salía temprano y React veía menos hooks que en el
+  // render anterior ("Rendered fewer hooks than expected"). Un return temprano
+  // nunca puede quedar por encima de un hook.
+  if (!user) {
+    return null;
+  }
 
   const handleLogout = async () => {
     await logout();

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
-import { useAuthStore } from '@/presentation/stores/authStore';
+import { useCan } from '@/presentation/hooks/useCan';
 import { useUrlFilters, useDocumentTitle } from '@/presentation/hooks';
 import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 import { Tenant } from '@/core/domain/entities/Tenant';
@@ -51,7 +51,6 @@ export function TenantsListPage() {
         setSearch: setSearchInStore,
         setStatusFilter,
     } = useTenantsStore();
-    const { user: currentUser } = useAuthStore();
 
     // URL-synced filters
     const { filters, setFilters } = useUrlFilters({
@@ -86,9 +85,13 @@ export function TenantsListPage() {
         };
     }, [searchInput, filters.search, setFilters]);
 
-    // Sync search input with URL on mount
+    // Semilla inicial del input de búsqueda desde la URL. Solo al montar
+    // A PROPÓSITO: con `filters.search` en las dependencias, el valor que el
+    // debounce escribe en la URL 500 ms después volvería a entrar aquí y
+    // pisaría lo que el usuario haya seguido tecleando entre medias.
     useEffect(() => {
         setSearchInput(filters.search);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Fetch tenants when URL filters change
@@ -131,13 +134,14 @@ export function TenantsListPage() {
         );
     };
 
-    const canCreateTenant = currentUser?.role === 'root';
-    const canEditTenant = (tenantId: string) => {
-        if (currentUser?.role === 'root') return true;
-        // Admin solo puede editar sus tenants
-        return currentUser?.tenants?.some(t => t.id === tenantId) || false;
-    };
-    const canDeleteTenant = currentUser?.role === 'root';
+    // Matriz de Accesos: crear / editar / desactivar organizaciones es
+    // 'tenants.manage' (solo root), y el backend autoriza con el mismo mapa.
+    // Antes se comparaba contra user.role, el respaldo GLOBAL.
+    //
+    // Editar ya no depende del tenant: bastaba con pertenecer a la empresa
+    // (sin mirar el rol), así que a un client se le pintaba el lápiz y la API
+    // respondía 403 — el bug de "botón visible -> 403" que motivó la matriz.
+    const canManageTenants = useCan('tenants.manage');
 
     const handleExport = async () => {
         setIsExporting(true);
@@ -194,7 +198,7 @@ export function TenantsListPage() {
                         )}
                         Exportar
                     </Button>
-                    {canCreateTenant && (
+                    {canManageTenants && (
                         <Button
                             className="h-9 sm:h-10 px-3 sm:px-4"
                             onClick={() => navigate('/tenants/new')}
@@ -299,7 +303,7 @@ export function TenantsListPage() {
                                         <TableCell colSpan={8} className="text-center py-8">
                                             <Building2 className="h-12 w-12 mx-auto text-gray-300 mb-2" />
                                             <p className="text-gray-500">No se encontraron organizaciones</p>
-                                            {canCreateTenant && (
+                                            {canManageTenants && (
                                                 <Button
                                                     variant="link"
                                                     onClick={() => navigate('/tenants/new')}
@@ -356,7 +360,7 @@ export function TenantsListPage() {
                                                     >
                                                         <Eye className="h-4 w-4" />
                                                     </Button> */}
-                                                    {canEditTenant(tenant.id) && (
+                                                    {canManageTenants && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
@@ -365,7 +369,7 @@ export function TenantsListPage() {
                                                             <Pencil className="h-4 w-4" />
                                                         </Button>
                                                     )}
-                                                    {canDeleteTenant && (
+                                                    {canManageTenants && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"

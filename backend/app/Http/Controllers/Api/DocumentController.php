@@ -11,6 +11,7 @@ use App\Http\Resources\DocumentResource;
 use App\Jobs\SignDocument;
 use App\Models\Document;
 use App\Models\User;
+use App\Services\ActiveTenantResolver;
 use App\Services\DocumentService;
 use App\Services\DocumentSigningService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -29,7 +30,8 @@ class DocumentController extends Controller
 {
     public function __construct(
         protected DocumentService $documentService,
-        protected DocumentSigningService $documentSigningService
+        protected DocumentSigningService $documentSigningService,
+        protected ActiveTenantResolver $activeTenantResolver
     ) {
     }
 
@@ -308,9 +310,13 @@ class DocumentController extends Controller
     public function orphans(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $role = $user->getCurrentRole();
 
-        if ($role === 'client') {
+        // Ability evaluada dentro de la empresa activa (antes: rol global "no
+        // client", que dejaba pasar a quien no fuera client en NINGUNA de sus
+        // empresas, aunque en la activa sí lo fuera).
+        $activeTenantId = $this->activeTenantResolver->resolve($request, $user);
+
+        if (!$user->can('documents.view_orphans', $activeTenantId)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
@@ -446,17 +452,23 @@ class DocumentController extends Controller
     public function signDigital(int $id): JsonResponse
     {
         $user = Auth::user();
-        $role = $user->getCurrentRole();
 
-        if (!in_array($role, ['root', 'admin'])) {
+        try {
+            $document = Document::findOrFail($id);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Documento no encontrado'], 404);
+        }
+
+        // Se autoriza contra la empresa DEL DOCUMENTO, no con el rol global:
+        // antes, quien fuera admin en cualquiera de sus empresas podía lanzar la
+        // firma digital de documentos de OTRA empresa. El documento se busca
+        // primero justamente para poder scopear el rol.
+        if (!$user->can('documents.sign_digital', $document->tenant_id)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
         try {
-            $document = Document::findOrFail($id);
             $this->documentSigningService->assertEligible($document);
-        } catch (ModelNotFoundException $e) {
-            return response()->json(['message' => 'Documento no encontrado'], 404);
         } catch (DocumentSigningException $e) {
             return response()->json(['message' => $e->getMessage()], $e->getCode() ?: 422);
         }

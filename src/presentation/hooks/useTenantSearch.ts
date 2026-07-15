@@ -34,14 +34,13 @@ export function useTenantSearch(initialQuery: string = '', debounceMs: number = 
     clearSearchResults,
   } = useTenantsStore();
 
-  // Buscar cuando cambia el query con debounce
+  // Buscar cuando cambia el query con debounce. Con query vacío cargamos la
+  // primera página (sin filtro de texto) en vez de vaciar la lista, para que
+  // el autocomplete muestre todas las organizaciones al abrir sin tener que
+  // escribir. El backend interpreta search='' como "sin filtro".
   useEffect(() => {
-    if (debouncedQuery.trim()) {
-      searchTenants(debouncedQuery);
-    } else {
-      clearSearchResults();
-    }
-  }, [debouncedQuery, searchTenants, clearSearchResults]);
+    searchTenants(debouncedQuery.trim());
+  }, [debouncedQuery, searchTenants]);
 
   // Limpiar resultados al desmontar
   useEffect(() => {

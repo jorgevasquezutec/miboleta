@@ -28,13 +28,18 @@ class DocumentsControllerTest extends TestCase
         $this->tenant = Tenant::factory()->create();
         $this->docType = DocumentType::factory()->create();
 
-        // Create regular user with client role
-        $this->user = User::factory()->client()->create(['status' => 'active']);
-        $this->user->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // withTenantRole asigna el rol DENTRO de la empresa (user_tenant_roles),
+        // que es la fuente de verdad para autorizar. Los states client()/admin()
+        // solo escriben el rol global (user_roles), que es un respaldo de display.
+        $this->user = User::factory()
+            ->client()
+            ->withTenantRole($this->tenant, 'client', true)
+            ->create(['status' => 'active']);
 
-        // Create admin user using factory admin() method
-        $this->admin = User::factory()->admin()->create(['status' => 'active']);
-        $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        $this->admin = User::factory()
+            ->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
     }
 
     public function test_user_can_list_their_documents(): void

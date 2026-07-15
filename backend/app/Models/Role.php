@@ -30,24 +30,6 @@ class Role extends Model
     }
 
     /**
-     * Verificar si el rol tiene un permiso específico
-     */
-    public function hasPermission(string $permission): bool
-    {
-        if (!$this->permissions) {
-            return false;
-        }
-
-        foreach ($this->permissions as $resource => $actions) {
-            if (in_array($permission, $actions)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * Verificar si es el rol root
      */
     public function isRoot(): bool

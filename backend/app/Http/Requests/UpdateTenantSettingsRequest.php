@@ -2,13 +2,18 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateTenantSettingsRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     public function authorize(): bool
     {
-        return $this->user() && \in_array($this->user()->getCurrentRole(), ['root', 'admin'], true);
+        // Rol resuelto en la empresa ACTIVA (ver trait), no con el respaldo
+        // global de roles. Mismo conjunto de roles que antes.
+        return $this->allowsAbility('tenants.update_settings');
     }
 
     public function rules(): array

@@ -26,6 +26,11 @@ use InvalidArgumentException;
  */
 class SignatureCertificateService
 {
+    public function __construct(
+        protected AuditService $auditService
+    ) {
+    }
+
     protected const DISK = 'certificates';
 
     protected const ALLOWED_EXTENSIONS = ['pfx', 'p12'];
@@ -96,6 +101,8 @@ class SignatureCertificateService
         ]);
         $settings->save();
 
+        $this->auditService->logCertificateUploaded($user->id);
+
         Log::info('[SignatureCertificateService] Certificado de firma actualizado', [
             'uploaded_by' => $user->id,
         ]);
@@ -124,6 +131,8 @@ class SignatureCertificateService
 
         $settings->signature_enabled = $enabled;
         $settings->save();
+
+        $this->auditService->logSignatureSettingsUpdated($user->id, ['signature_enabled' => $enabled]);
 
         Log::info('[SignatureCertificateService] signature_enabled actualizado', [
             'user_id' => $user->id,
@@ -156,6 +165,8 @@ class SignatureCertificateService
             'uploaded_at' => null,
         ]);
         $settings->save();
+
+        $this->auditService->logCertificateDeleted($user->id);
 
         Log::info('[SignatureCertificateService] Certificado eliminado', ['user_id' => $user->id]);
 

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { userRepository, roleRepository } from '@/infrastructure/persistence/repositories';
-import { useAuthStore } from '@/presentation/stores/authStore';
+import { useCan } from '@/presentation/hooks/useCan';
 import { Button } from '@/presentation/components/ui/button';
 import {
     PersonalInfoCard,
@@ -57,7 +57,6 @@ export function UserFormPage() {
     const { id } = useParams<{ id: string }>();
     const isEditing = Boolean(id);
     useDocumentTitle(isEditing ? 'Editar Usuario' : 'Nuevo Usuario');
-    const { user: currentUser } = useAuthStore();
 
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -331,7 +330,9 @@ export function UserFormPage() {
         }
     };
 
-    const canChangeRole = currentUser?.role === 'root';
+    // Solo quien puede crear usuarios de CUALQUIER rol puede marcar a alguien
+  // como root (la matriz reserva eso a root).
+  const canChangeRole = useCan('users.create_any_role');
     const nonRootRoles = availableRoles.filter(r => r.name !== 'root');
 
     if (isLoading) {

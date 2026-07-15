@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\Auth;
 
 class UserService
 {
+    public function __construct(
+        protected AuditService $auditService
+    ) {
+    }
+
     /**
      * ID convencional del rol 'root' (ver RoleSeeder: es el primer rol
      * insertado). Root es global: no tiene empresas ni roles por empresa.
@@ -272,6 +277,7 @@ class UserService
             // empresas, así que no hay un único tenant obvio para resolver.
             if ($emailChanged) {
                 $newEmail = $data['email'];
+                $this->auditService->logEmailChanged($user->id, $oldEmail, $newEmail);
                 try {
                     $notification = new EmailChangedNotificationMail($user, $oldEmail, $newEmail);
                     Mail::to($oldEmail)->send($notification);
@@ -319,12 +325,20 @@ class UserService
      */
     protected function assignGlobalRole(User $user, int $roleId, ?User $grantedBy): void
     {
+        $oldRoleIds = $user->roles()->pluck('roles.id')->all();
+
         $user->roles()->sync([
             $roleId => [
                 'granted_by' => $grantedBy?->id,
                 'granted_at' => now(),
             ],
         ]);
+
+        // Solo se audita en contexto interactivo (hay usuario autenticado). En
+        // cargas masivas (jobs, sin Auth) queda cubierto por user_batch.completed.
+        if (Auth::check()) {
+            $this->auditService->logRoleAssigned($user->id, null, [$roleId], $oldRoleIds);
+        }
     }
 
     /**
@@ -340,6 +354,11 @@ class UserService
      */
     protected function assignRoles(User $user, int $tenantId, array $roleIds): void
     {
+        $oldRoleIds = UserTenantRole::where('user_id', $user->id)
+            ->where('tenant_id', $tenantId)
+            ->pluck('role_id')
+            ->all();
+
         UserTenantRole::where('user_id', $user->id)
             ->where('tenant_id', $tenantId)
             ->delete();
@@ -359,6 +378,12 @@ class UserService
         if (!empty($rows)) {
             UserTenantRole::insert($rows);
         }
+
+        // Solo se audita en contexto interactivo (hay usuario autenticado). En
+        // cargas masivas (jobs, sin Auth) queda cubierto por user_batch.completed.
+        if (Auth::check()) {
+            $this->auditService->logRoleAssigned($user->id, $tenantId, $roleIds, $oldRoleIds);
+        }
     }
 
     /**
@@ -366,22 +391,19 @@ class UserService
      * user_roles) con la unión de los roles operativos que tiene asignados
      * en todas sus empresas (user_tenant_roles).
      *
-     * Esto es una medida de transición: la fuente de verdad para roles
-     * operativos es user_tenant_roles, pero gran parte del código existente
-     * (middleware CheckRole, StoreUserRequest/UpdateUserRequest::authorize,
-     * reportes, etc.) todavía resuelve permisos vía
-     * getCurrentRole()/getCurrentRoles() sin contexto de empresa. Sin este
-     * respaldo, esos usuarios quedarían sin rol global y esas verificaciones
-     * fallarían para cualquier usuario operativo creado o actualizado a
-     * través de este servicio.
+     * Esto es un resto de transición: la fuente de verdad para roles operativos
+     * es user_tenant_roles, y la AUTORIZACIÓN ya no depende de este respaldo
+     * (las abilities de config/access_matrix.php resuelven el rol por empresa
+     * vía User::roleForTenant(), sin fallback global). Lo que todavía lee
+     * user_roles es getCurrentRole() sin empresa, hoy limitado a usos de
+     * DISPLAY (UserResource, ProfileService, logs, exportes) más el filtrado
+     * por fila de DocumentService::getDocuments() (ver Riesgo #2 del plan).
      *
-     * TODO(RP1-D): eliminar este respaldo cuando el frontend/middleware
-     * resuelva el rol vía tenant activo (header X-Tenant-Ids) en lugar de
-     * depender de user_roles para usuarios operativos. Nótese que, si un
-     * usuario tiene roles distintos en distintas empresas, este respaldo
-     * expone la UNIÓN de todos ellos (no solo el de la empresa "activa"),
-     * lo cual es más permisivo de lo ideal hasta que ese workstream aterrice
-     * el chequeo por tenant.
+     * TODO(RP1-D): eliminar este respaldo cuando el listado de documentos
+     * filtre por rol de la empresa de cada fila y los usos de display resuelvan
+     * el rol vía tenant activo. Nótese que, si un usuario tiene roles distintos
+     * en distintas empresas, este respaldo expone la UNIÓN de todos ellos (no
+     * solo el de la empresa "activa"), lo cual es más permisivo de lo ideal.
      *
      * @param User $user
      * @param User|null $grantedBy
@@ -398,6 +420,21 @@ class UserService
         $roleIds = UserTenantRole::where('user_id', $user->id)
             ->distinct()
             ->pluck('role_id');
+
+        // Guard anti-erosión: si el usuario NO tiene roles por empresa pero
+        // SÍ sigue teniendo empresas asignadas, el vacío es un estado
+        // transitorio/inconsistente (p.ej. usuario aún no backfilleado), no
+        // una revocación intencional. Ejecutar sync([]) aquí borraría su rol
+        // global en user_roles y lo dejaría sin rol en los usos que aún lo leen
+        // (display y el filtrado por fila de documentos). Preservamos
+        // user_roles tal cual. Si el usuario ya no tiene NINGUNA empresa,
+        // caemos al sync([]) de abajo (revocación legítima del fallback).
+        if ($roleIds->isEmpty() && $user->tenants()->exists()) {
+            Log::warning('[UserService] syncGlobalRoleFallback: user_tenant_roles vacío con tenants asignados; se omite sync([]) para no erosionar user_roles', [
+                'user_id' => $user->id,
+            ]);
+            return;
+        }
 
         $pivotData = [];
         foreach ($roleIds as $roleId) {

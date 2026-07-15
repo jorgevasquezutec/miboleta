@@ -4,10 +4,13 @@ namespace App\Http\Requests;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreUserRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Roles de supervisión válidos: quien figure como "jefe inmediato" de un
      * usuario en una empresa debe tener uno de estos roles EN ESA empresa
@@ -20,8 +23,15 @@ class StoreUserRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        // Solo root, admin y admin_tenant pueden crear usuarios
-        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant']);
+        // Alcanzabilidad del endpoint: basta con poder crear ALGÚN rol.
+        // Matriz: create_any_role = [root], create_limited_role = [root,
+        // admin_tenant]. Cambia respecto del hardcode anterior: 'admin' ya no
+        // puede crear usuarios.
+        //
+        // QUÉ rol puede asignar cada uno es validación de payload y vive en
+        // rules() — no cabe en una ability booleana.
+        return $this->allowsAbility('users.create_any_role')
+            || $this->allowsAbility('users.create_limited_role');
     }
 
     /**

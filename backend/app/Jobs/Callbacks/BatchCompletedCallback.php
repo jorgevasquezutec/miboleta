@@ -7,6 +7,7 @@ use App\Events\NewDocumentAvailable;
 use App\Jobs\SendBatchNotifications;
 use App\Models\Document;
 use App\Models\DocumentBatch;
+use App\Services\AuditService;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Log;
 
@@ -61,5 +62,19 @@ class BatchCompletedCallback
             "Reemplazados: {$this->batch->replaced_count}, " .
             "Huérfanos: {$this->batch->orphan_count}, " .
             "Errores: {$this->batch->error_count}");
+
+        // Auditoría en contexto de job (sin Auth): userId/tenantId explícitos.
+        // Un fallo de auditoría nunca debe interrumpir el cierre del lote.
+        try {
+            app(AuditService::class)->logBatchCompleted(
+                $this->batch->id,
+                (int) $this->batch->success_count,
+                (int) $this->batch->error_count,
+                $this->batch->uploaded_by,
+                $this->batch->tenant_id
+            );
+        } catch (\Throwable $e) {
+            Log::warning("BatchCompletedCallback: audit log failed for batch {$this->batch->id}: {$e->getMessage()}");
+        }
     }
 }

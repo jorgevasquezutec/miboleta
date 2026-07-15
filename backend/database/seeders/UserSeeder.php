@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\UserTenantRole;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -47,6 +48,7 @@ class UserSeeder extends Seeder
         ]);
         $adminABC->roles()->attach($roles['admin'], ['granted_by' => $root->id, 'granted_at' => now()]);
         $adminABC->tenants()->attach($tenants[0]->id, ['is_primary' => true]);
+        $this->assignTenantRole($adminABC->id, $tenants[0]->id, $roles['admin']->id);
 
         // 3. Cliente para Corporación ABC
         $clientABC = User::create([
@@ -62,6 +64,7 @@ class UserSeeder extends Seeder
         ]);
         $clientABC->roles()->attach($roles['client'], ['granted_by' => $adminABC->id, 'granted_at' => now()]);
         $clientABC->tenants()->attach($tenants[0]->id, ['is_primary' => true]);
+        $this->assignTenantRole($clientABC->id, $tenants[0]->id, $roles['client']->id);
 
         // 4. Admin para Empresa XYZ
         $adminXYZ = User::create([
@@ -77,6 +80,7 @@ class UserSeeder extends Seeder
         ]);
         $adminXYZ->roles()->attach($roles['admin'], ['granted_by' => $root->id, 'granted_at' => now()]);
         $adminXYZ->tenants()->attach($tenants[1]->id, ['is_primary' => true]);
+        $this->assignTenantRole($adminXYZ->id, $tenants[1]->id, $roles['admin']->id);
 
         // 5. Cliente para Empresa XYZ
         $clientXYZ = User::create([
@@ -92,6 +96,7 @@ class UserSeeder extends Seeder
         ]);
         $clientXYZ->roles()->attach($roles['client'], ['granted_by' => $adminXYZ->id, 'granted_at' => now()]);
         $clientXYZ->tenants()->attach($tenants[1]->id, ['is_primary' => true]);
+        $this->assignTenantRole($clientXYZ->id, $tenants[1]->id, $roles['client']->id);
 
         // 6. Usuario multi-tenant (pertenece a 2 empresas)
         $multiTenant = User::create([
@@ -105,8 +110,29 @@ class UserSeeder extends Seeder
             'status' => 'active',
             'email_verified_at' => now(),
         ]);
+        // Ana tiene roles DISTINTOS por empresa: admin en Corporación ABC,
+        // client en Empresa XYZ. El fallback global (user_roles) refleja la
+        // unión de ambos, coherente con lo que syncGlobalRoleFallback calcula.
+        $multiTenant->roles()->attach($roles['admin'], ['granted_by' => $root->id, 'granted_at' => now()]);
         $multiTenant->roles()->attach($roles['client'], ['granted_by' => $root->id, 'granted_at' => now()]);
         $multiTenant->tenants()->attach($tenants[0]->id, ['is_primary' => true]);
         $multiTenant->tenants()->attach($tenants[1]->id, ['is_primary' => false]);
+        $this->assignTenantRole($multiTenant->id, $tenants[0]->id, $roles['admin']->id);
+        $this->assignTenantRole($multiTenant->id, $tenants[1]->id, $roles['client']->id);
+    }
+
+    /**
+     * Inserta un rol operativo por empresa (user_tenant_roles), fuente de
+     * verdad del modelo multitenant. Mismo patrón que UserService::assignRoles.
+     */
+    private function assignTenantRole(int $userId, int $tenantId, int $roleId): void
+    {
+        UserTenantRole::insert([
+            'user_id' => $userId,
+            'tenant_id' => $tenantId,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

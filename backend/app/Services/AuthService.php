@@ -49,7 +49,9 @@ class AuthService
         $user->load(['roles', 'tenants']);
 
         // Check if user has access to at least one active tenant (skip for root users)
-        if ($user->getCurrentRole() !== 'root') {
+        // isRoot() en vez de getCurrentRole() !== 'root': determinístico y sin
+        // depender del respaldo global de roles.
+        if (!$user->isRoot()) {
             $hasActiveTenant = $user->tenants->contains(function ($tenant) {
                 return $tenant->status === 'active';
             });
@@ -110,7 +112,8 @@ class AuthService
         $user->load(['roles', 'tenants']);
 
         // Check if user still has access to at least one active tenant (skip for root users)
-        if ($user->getCurrentRole() !== 'root') {
+        // isRoot() en vez de getCurrentRole() !== 'root': determinístico.
+        if (!$user->isRoot()) {
             $hasActiveTenant = $user->tenants->contains(function ($tenant) {
                 return $tenant->status === 'active';
             });

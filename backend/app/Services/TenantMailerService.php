@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PlatformSettings;
 use App\Models\Tenant;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Log;
@@ -49,31 +50,30 @@ class TenantMailerService
     protected const MAILER_PREFIX = 'tenant_';
 
     /**
+     * Nombre del mailer dinámico registrado en runtime para el SMTP global
+     * de la plataforma (config('mail.mailers.platform_global')).
+     */
+    protected const PLATFORM_MAILER = 'platform_global';
+
+    /**
      * Resuelve el mailer y el remitente (from) a usar para un tenant.
      *
-     * Si el tenant es null o no tiene servidor propio configurado
-     * (Tenant::hasCustomMailer()), devuelve el mailer/from por defecto de
-     * la plataforma. Si el tenant tiene configuración propia, la registra
-     * en runtime bajo el nombre "tenant_{id}" y la devuelve.
+     * Precedencia: si el tenant tiene servidor propio configurado
+     * (Tenant::hasCustomMailer()), se usa ese; en cualquier otro caso (tenant
+     * null o sin SMTP propio) se cae al default de plataforma, que a su vez
+     * prefiere el SMTP global de PlatformSettings y, si no está configurado,
+     * el mailer/from de .env/config/mail.php (ver platformDefault()).
      *
      * @param Tenant|null $tenant
      * @return array{mailer: string, from: array{address: string, name: string}}
      */
     public function resolveMailer(?Tenant $tenant): array
     {
-        $platformFrom = [
-            'address' => config('mail.from.address'),
-            'name' => config('mail.from.name'),
-        ];
-
-        $platformDefault = [
-            'mailer' => config('mail.default'),
-            'from' => $platformFrom,
-        ];
-
         if (!$tenant || !$tenant->hasCustomMailer()) {
-            return $platformDefault;
+            return $this->platformDefault();
         }
+
+        $platformFrom = $this->envFrom();
 
         try {
             $mailerName = self::MAILER_PREFIX . $tenant->id;
@@ -106,8 +106,80 @@ class TenantMailerService
                 'error' => $e->getMessage(),
             ]);
 
-            return $platformDefault;
+            return $this->platformDefault();
         }
+    }
+
+    /**
+     * Resuelve el mailer/from por defecto de la plataforma con la precedencia:
+     * SMTP global de PlatformSettings -> .env/config/mail.php.
+     *
+     * Si root configuró un SMTP global (PlatformSettings::hasCustomMailer()),
+     * lo registra en runtime bajo el nombre "platform_global" y lo devuelve;
+     * si no, o si el registro falla por cualquier motivo, cae al mailer/from
+     * de .env (config('mail.default') + config('mail.from.*')).
+     *
+     * @return array{mailer: string, from: array{address: string, name: string}}
+     */
+    protected function platformDefault(): array
+    {
+        $envDefault = [
+            'mailer' => config('mail.default'),
+            'from' => $this->envFrom(),
+        ];
+
+        try {
+            $settings = PlatformSettings::current();
+        } catch (\Throwable $e) {
+            // Sin tabla/fila disponible (p. ej. migración no corrida): usar .env.
+            return $envDefault;
+        }
+
+        if (!$settings->hasCustomMailer()) {
+            return $envDefault;
+        }
+
+        try {
+            $encryption = $settings->mail_encryption ? strtolower($settings->mail_encryption) : null;
+
+            config(["mail.mailers." . self::PLATFORM_MAILER => [
+                'transport' => 'smtp',
+                'scheme' => $encryption === 'ssl' ? 'smtps' : 'smtp',
+                'host' => $settings->mail_host,
+                'port' => $settings->mail_port ?? 587,
+                'username' => $settings->mail_username,
+                'password' => $settings->mail_password,
+                'encryption' => $encryption,
+                'timeout' => null,
+            ]]);
+
+            return [
+                'mailer' => self::PLATFORM_MAILER,
+                'from' => [
+                    'address' => $settings->mail_from_address ?: $envDefault['from']['address'],
+                    'name' => $settings->mail_from_name ?: $envDefault['from']['name'],
+                ],
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('[TenantMailerService] No se pudo registrar el SMTP global, usando el mailer por defecto de .env', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $envDefault;
+        }
+    }
+
+    /**
+     * Remitente (from) por defecto definido en .env/config/mail.php.
+     *
+     * @return array{address: string, name: string}
+     */
+    protected function envFrom(): array
+    {
+        return [
+            'address' => config('mail.from.address'),
+            'name' => config('mail.from.name'),
+        ];
     }
 
     /**

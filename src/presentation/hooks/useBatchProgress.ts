@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import type { UserBatch } from '@/domain/types/bulkUserUpload.types';
 
@@ -24,7 +24,20 @@ export function useBatchProgress({
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const hasCompletedRef = useRef(false);
 
-    const fetchBatch = async () => {
+    // Las callbacks viven en refs para que fetchBatch NO dependa de ellas.
+    // Los llamantes las pasan como arrows inline (identidad nueva en cada
+    // render), así que si fetchBatch dependiera de ellas cambiaría también en
+    // cada render y el efecto de polling destruiría y recrearía el setInterval
+    // continuamente, disparando un fetch por render.
+    const onCompleteRef = useRef(onComplete);
+    const onErrorRef = useRef(onError);
+
+    useEffect(() => {
+        onCompleteRef.current = onComplete;
+        onErrorRef.current = onError;
+    });
+
+    const fetchBatch = useCallback(async () => {
         try {
             const data = await bulkUserUploadService.getBatch(id);
             setBatch(data);
@@ -34,7 +47,7 @@ export function useBatchProgress({
             // Si completó y aún no lo habíamos notificado
             if (data.is_completed && !hasCompletedRef.current) {
                 hasCompletedRef.current = true;
-                onComplete?.(data);
+                onCompleteRef.current?.(data);
 
                 // Detener polling
                 if (intervalRef.current) {
@@ -55,7 +68,7 @@ export function useBatchProgress({
             const error = err instanceof Error ? err : new Error('Error fetching batch');
             setError(error);
             setIsLoading(false);
-            onError?.(error);
+            onErrorRef.current?.(error);
 
             // Detener polling en error
             if (intervalRef.current) {
@@ -63,7 +76,7 @@ export function useBatchProgress({
                 intervalRef.current = null;
             }
         }
-    };
+    }, [id]);
 
     useEffect(() => {
         if (!enabled) return;
@@ -83,7 +96,7 @@ export function useBatchProgress({
                 intervalRef.current = null;
             }
         };
-    }, [id, enabled, pollInterval]);
+    }, [id, enabled, pollInterval, fetchBatch]);
 
     const refresh = () => {
         fetchBatch();

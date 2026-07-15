@@ -10,3 +10,4 @@ export * from './Notification';
 export * from './Report';
 export * from './SignatureSettings';
 export * from './PlatformSettings';
+export * from './AuditSettings';

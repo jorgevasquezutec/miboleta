@@ -77,6 +77,23 @@ class ProcessBulkUserUpload implements ShouldQueue
 
                     $batch->markAsCompleted($summary);
 
+                    // Auditoría en contexto de job (sin Auth): userId/tenantId
+                    // explícitos del batch. Nunca debe interrumpir el cierre.
+                    try {
+                        app(\App\Services\AuditService::class)->logUserBatchCompleted(
+                            $batch->id,
+                            [
+                                'created' => $summary['created'] ?? 0,
+                                'updated' => $summary['updated'] ?? 0,
+                                'failed_rows' => $summary['failed_rows'] ?? 0,
+                            ],
+                            $batch->created_by_user_id,
+                            $batch->tenant_id
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning("[BulkUserUpload] audit log failed for batch {$batch->id}: {$e->getMessage()}");
+                    }
+
                     Log::info("✅ [BulkUserUpload] Batch completed successfully", [
                         'batch_uuid' => $this->batchUuid,
                         'created' => $summary['created'],

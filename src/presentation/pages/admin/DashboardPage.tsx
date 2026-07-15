@@ -16,6 +16,10 @@ import {
   Trash2,
   Eye,
   UserPlus,
+  Shield,
+  Settings,
+  KeyRound,
+  UserCog,
   Building2,
   AlertTriangle,
 } from "lucide-react";
@@ -48,6 +52,12 @@ const getActionIcon = (action: string) => {
   if (action.startsWith('document.deleted')) return <Trash2 className="w-4 h-4 text-red-500" />;
   if (action.startsWith('vacation.')) return <Calendar className="w-4 h-4 text-amber-500" />;
   if (action.startsWith('tenant.')) return <Building2 className="w-4 h-4 text-indigo-500" />;
+  if (action.startsWith('role.')) return <Shield className="w-4 h-4 text-rose-500" />;
+  if (action.startsWith('platform.')) return <Settings className="w-4 h-4 text-slate-500" />;
+  if (action.startsWith('signature.')) return <FileSignature className="w-4 h-4 text-emerald-500" />;
+  if (action.startsWith('user_batch.')) return <Users className="w-4 h-4 text-cyan-600" />;
+  if (action.startsWith('profile.')) return <UserCog className="w-4 h-4 text-blue-500" />;
+  if (action.includes('password') || action === 'user.email_changed') return <KeyRound className="w-4 h-4 text-orange-500" />;
   return <FileText className="w-4 h-4 text-gray-500" />;
 };
 

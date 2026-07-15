@@ -4,11 +4,14 @@ namespace App\Http\Requests;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateUserRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Roles de supervisión válidos: quien figure como "jefe inmediato" de un
      * usuario en una empresa debe tener uno de estos roles EN ESA empresa
@@ -21,8 +24,9 @@ class UpdateUserRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        // Solo root, admin y admin_tenant pueden actualizar usuarios
-        return $this->user() && \in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant'], true);
+        // Matriz: 'users.update' = root, admin_tenant. Cambia respecto del
+        // hardcode anterior: 'admin' ya no puede editar usuarios.
+        return $this->allowsAbility('users.update');
     }
 
     /**

@@ -2,27 +2,25 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Tenant;
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Validation\Rule;
 
 class UpdateTenantRequest extends CustomFormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        $tenantId = $this->route('tenant');
-        $user = $this->user();
-
-        // Root puede actualizar cualquier tenant
-        if ($user && $user->isRoot()) {
-            return true;
-        }
-
-        // Admin solo puede actualizar sus tenants
-        $tenant = Tenant::find($tenantId);
-        return $user && $tenant && $tenant->hasUser($user);
+        // Editar una empresa es 'tenants.manage' (matriz: solo root).
+        //
+        // Antes: root, o CUALQUIER usuario con $tenant->hasUser($user) — sin
+        // mirar el rol. Un client de la empresa podía editar los datos de su
+        // propia empresa (nombre, RUC...). No era solo una desviación de la
+        // matriz: era una escalada de privilegios.
+        return $this->allowsAbility('tenants.manage');
     }
 
     /**

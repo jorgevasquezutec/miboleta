@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\Storage;
 class ProfileService
 {
     public function __construct(
-        protected TenantMailerService $tenantMailerService
+        protected TenantMailerService $tenantMailerService,
+        protected AuditService $auditService
     ) {
     }
 
@@ -65,8 +66,16 @@ class ProfileService
      */
     public function updateProfile(User $user, array $data): User
     {
+        $oldValues = $user->only(array_keys($data));
+
         $user->update($data);
         $user->load(['roles', 'tenants']);
+
+        $this->auditService->logProfileUpdated(
+            $user->id,
+            $oldValues,
+            $user->only(array_keys($data))
+        );
 
         return $user;
     }
@@ -170,6 +179,11 @@ class ProfileService
             $tenant,
             $recipients,
             new DataUpdateRequestMail($user, $tenant, $message, $requestedChanges)
+        );
+
+        $this->auditService->logDataChangeRequested(
+            $user->id,
+            is_array($requestedChanges) ? array_keys($requestedChanges) : []
         );
 
         Log::info('[ProfileService] Solicitud de actualización de datos enviada', [

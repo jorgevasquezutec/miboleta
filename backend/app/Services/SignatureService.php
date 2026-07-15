@@ -56,6 +56,8 @@ class SignatureService
 
         $user->update(['signature_terms_accepted_at' => now()]);
 
+        $this->auditService->logTermsAccepted($user->id);
+
         Log::info('[SignatureService] Terms accepted successfully', [
             'accepted_at' => $user->signature_terms_accepted_at
         ]);
@@ -317,9 +319,18 @@ class SignatureService
             throw new DocumentNotFoundException('Documento no encontrado');
         }
 
-        // Check access
-        $role = $user->getCurrentRole();
-        if ($role === 'client' && $document->user_id !== $user->id) {
+        // El rol se resuelve dentro de la empresa DEL DOCUMENTO, no con el
+        // respaldo global: antes, ser admin en la empresa A permitía consultar
+        // el estado de firma de documentos ajenos de la B (allí el usuario es
+        // client, pero el rol global no resolvía 'client' y el check no frenaba).
+        //
+        // Además se invierte a lista blanca: el check anterior ("es client")
+        // dejaba pasar a quien no tuviera NINGÚN rol en esa empresa (rol null),
+        // o sea era fail-open.
+        $isOwner = $document->user_id === $user->id;
+        $role = User::roleForTenant($user, $document->tenant_id);
+
+        if (!$isOwner && !in_array($role, ['root', 'admin', 'admin_tenant', 'aprobador'], true)) {
             throw new UnauthorizedAccessException('No autorizado');
         }
 

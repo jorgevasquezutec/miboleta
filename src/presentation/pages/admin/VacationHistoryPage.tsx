@@ -126,9 +126,13 @@ export function VacationHistoryPage() {
         };
     }, [searchInput, filters.search, setFilters]);
 
-    // Sync search input with URL on mount
+    // Semilla inicial del input de búsqueda desde la URL. Solo al montar
+    // A PROPÓSITO: con `filters.search` en las dependencias, el valor que el
+    // debounce escribe en la URL 500 ms después volvería a entrar aquí y
+    // pisaría lo que el usuario haya seguido tecleando entre medias.
     useEffect(() => {
         setSearchInput(filters.search);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Fetch data when filters change

@@ -40,8 +40,12 @@ function toRootTenantAssociation(tenant: Tenant): TenantAssociation {
  * en authStore). Es el único control de empresa en el Navbar.
  *
  * - No-root: lista `user.tenants` (las empresas a las que pertenece). Si
- *   tiene 1 o 0, se muestra estático (sin dropdown). El filtro de datos
- *   (tenantFilterStore, X-Tenant-Ids) lo maneja TenantMultiSwitcher aparte.
+ *   tiene 1 o 0, se muestra estático (sin dropdown). Es el control único de
+ *   empresa: al elegir una, además de fijar currentTenant sincroniza el
+ *   filtro de datos (tenantFilterStore, X-Tenant-Ids) para que listados y
+ *   dashboard queden scopeados a esa empresa. No hay vista "todas las
+ *   empresas" para no-root: los roles son por empresa, así que siempre se
+ *   opera dentro de exactamente una (con el rol que le corresponde ahí).
  * - Root: "god mode". Ve el catálogo completo de empresas (no solo las
  *   suyas, porque no tiene ninguna asignada) más una opción "Todas las
  *   empresas" para operar sin scope de empresa. Al elegir, además de fijar
@@ -90,6 +94,23 @@ export function TenantSwitcher() {
             setFilter([currentTenant.id], [currentTenant]);
         }
     }, [isRoot, currentTenant, setFilter]);
+
+    // No-root: el scope de datos SIEMPRE es la empresa activa. Como los roles
+    // son por empresa, no existe una vista "todas las empresas" coherente (no
+    // habría un rol único bajo el cual operar), así que si el filtro quedó
+    // desincronizado (modo 'all'/'selected' de una sesión previa, u otra
+    // empresa), se corrige a la empresa activa.
+    useEffect(() => {
+        if (isRoot || !currentTenant || !user?.tenants) return;
+        const { filter } = useTenantFilterStore.getState();
+        const scopedToActive =
+            filter.mode === "single" &&
+            filter.tenantIds.length === 1 &&
+            String(filter.tenantIds[0]) === String(currentTenant.id);
+        if (!scopedToActive) {
+            setFilter([currentTenant.id], user.tenants);
+        }
+    }, [isRoot, currentTenant, user?.tenants, setFilter]);
 
     // ---- Root: god mode ----
     if (isRoot) {
@@ -225,6 +246,12 @@ export function TenantSwitcher() {
     const handleTenantSwitch = (tenantId: string) => {
         try {
             switchTenant(tenantId);
+            // Sincronizar el filtro de datos con la empresa activa (espejo de
+            // handleRootSwitch): no-root ya no tiene un segundo control, así
+            // que la empresa activa arrastra el scope de listados (X-Tenant-Ids).
+            if (user?.tenants) {
+                setFilter([tenantId], user.tenants);
+            }
             const newTenant = user?.tenants?.find(t => t.id === tenantId);
             if (newTenant) {
                 toast.success(`Cambiando a ${newTenant.name}...`);

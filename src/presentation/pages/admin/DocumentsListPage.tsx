@@ -26,7 +26,7 @@ import { PaginationControls } from "@/presentation/components/shared/PaginationC
 import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
 import { Document } from "@/core/domain/entities/Document";
-import { useAuthStore } from "@/presentation/stores";
+import { useCan } from "@/presentation/hooks/useCan";
 import { useTenantFilterStore } from "@/presentation/stores";
 import { getDocumentStatusBadgeInline } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -35,7 +35,9 @@ import { toast } from "sonner";
 export function DocumentsListPage() {
     useDocumentTitle('Documentos');
     const navigate = useNavigate();
-    const { user } = useAuthStore();
+    // Permiso de la Matriz de Accesos. Antes: user?.role === "admin" (rol
+    // GLOBAL), que además dejaba fuera a root y a admin_tenant.
+    const canDeleteDocument = useCan("documents.delete");
     const {
         documents,
         documentTypes,
@@ -72,8 +74,10 @@ export function DocumentsListPage() {
     // TenantMultiSwitcher (una o varias). Guardamos la key previa para
     // poder resetear la página a 1 cuando cambia, sin doble fetch (ver
     // efecto de abajo).
+    // Se copia antes de ordenar: .sort() ordena IN-PLACE y sin el spread este
+    // selector mutaba state.filter.tenantIds del store durante el render.
     const tenantFilterKey = useTenantFilterStore(
-        (state) => state.filter.tenantIds.sort().join(',')
+        (state) => [...state.filter.tenantIds].sort().join(',')
     );
     const prevTenantFilterKeyRef = useRef(tenantFilterKey);
 
@@ -100,9 +104,13 @@ export function DocumentsListPage() {
         };
     }, [searchInput, filters.search, setFilters]);
 
-    // Sync search input with URL on mount
+    // Semilla inicial del input de búsqueda desde la URL. Solo al montar
+    // A PROPÓSITO: con `filters.search` en las dependencias, el valor que el
+    // debounce escribe en la URL 500 ms después volvería a entrar aquí y
+    // pisaría lo que el usuario haya seguido tecleando entre medias.
     useEffect(() => {
         setSearchInput(filters.search);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -409,7 +417,7 @@ export function DocumentsListPage() {
                                                         >
                                                             <Eye className="w-4 h-4 text-[#2563EB]" />
                                                         </Button>
-                                                        {user?.role === "admin" && (
+                                                        {canDeleteDocument && (
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"

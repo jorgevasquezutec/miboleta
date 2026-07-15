@@ -116,10 +116,16 @@ class ReportsService
             $query->where('tenant_id', $tenantId);
         }
 
+        // YEAR()/MONTH() son de MySQL; sqlite (usado en los tests) no las tiene.
+        // Se emite el equivalente por driver: mismo resultado, mismo tipo.
+        $isSqlite = $query->getConnection()->getDriverName() === 'sqlite';
+        $yearExpr = $isSqlite ? "cast(strftime('%Y', created_at) as integer)" : 'YEAR(created_at)';
+        $monthExpr = $isSqlite ? "cast(strftime('%m', created_at) as integer)" : 'MONTH(created_at)';
+
         $results = $query
             ->select(
-                DB::raw('YEAR(created_at) as year'),
-                DB::raw('MONTH(created_at) as month'),
+                DB::raw("{$yearExpr} as year"),
+                DB::raw("{$monthExpr} as month"),
                 DB::raw('count(*) as count')
             )
             ->groupBy('year', 'month')
@@ -208,17 +214,25 @@ class ReportsService
                 return $this->getEmptyUserStats();
             }
 
-            $users = $tenant->users();
-            $total = $users->count();
-            $active = $users->where('status', 'active')->count();
-            $inactive = $users->whereIn('status', ['inactive', 'terminated', 'pending'])->count();
+            // Un builder NUEVO por métrica: al reutilizar uno solo, los where se
+            // acumulaban sobre la misma instancia y producían
+            // `status = 'active' AND status IN ('inactive','terminated','pending')`,
+            // que es insatisfacible — 'inactive' devolvía siempre 0.
+            $total = $tenant->users()->count();
+            $active = $tenant->users()->where('status', 'active')->count();
+            $inactive = $tenant->users()
+                ->whereIn('status', ['inactive', 'terminated', 'pending'])
+                ->count();
 
-            // Users by role in this tenant
-            $byRole = DB::table('user_tenants')
-                ->join('users', 'user_tenants.user_id', '=', 'users.id')
-                ->join('user_roles', 'users.id', '=', 'user_roles.user_id')
-                ->join('roles', 'user_roles.role_id', '=', 'roles.id')
-                ->where('user_tenants.tenant_id', $tenantId)
+            // Roles DENTRO de esta empresa: user_tenant_roles. Antes se unía
+            // contra user_roles (el respaldo global, que es la UNIÓN de los roles
+            // del usuario en TODAS sus empresas), así que a un usuario
+            // multi-empresa se le contaba aquí el rol que tiene en otra.
+            $byRole = DB::table('user_tenant_roles')
+                ->join('users', 'user_tenant_roles.user_id', '=', 'users.id')
+                ->join('roles', 'user_tenant_roles.role_id', '=', 'roles.id')
+                ->where('user_tenant_roles.tenant_id', $tenantId)
+                ->whereNull('users.deleted_at')
                 ->select('roles.name', DB::raw('count(*) as count'))
                 ->groupBy('roles.name')
                 ->get()

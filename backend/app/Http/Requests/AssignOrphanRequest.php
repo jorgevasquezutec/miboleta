@@ -2,17 +2,22 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AssignOrphanRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
         // Solo root y admin pueden asignar documentos huérfanos
-        return $this->user() && \in_array($this->user()->getCurrentRole(), ['root', 'admin'], true);
+        // Rol resuelto en la empresa ACTIVA (ver trait), no con el respaldo
+        // global de roles. Mismo conjunto de roles que antes.
+        return $this->allowsAbility('documents.assign_orphan');
     }
 
     /**

@@ -40,8 +40,13 @@ class VacationRequestControllerTest extends TestCase
             'vacation_balance_initial' => 30,
         ]);
 
-        $this->admin = User::factory()->admin()->create(['status' => 'active']);
-        $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // withTenantRole asigna el rol DENTRO de la empresa (user_tenant_roles),
+        // que es lo que se usa para autorizar; admin() solo escribe el rol
+        // global (user_roles), que es un respaldo de display.
+        $this->admin = User::factory()
+            ->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
     }
 
     public function test_employee_can_create_vacation_request(): void

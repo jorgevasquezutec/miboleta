@@ -11,8 +11,33 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 class TenantService
 {
     public function __construct(
-        protected TenantMailerService $tenantMailerService
+        protected TenantMailerService $tenantMailerService,
+        protected AuditService $auditService
     ) {
+    }
+
+    /**
+     * Snapshot auditable de una empresa: incluye los campos relevantes pero
+     * NUNCA la contraseña SMTP (solo un booleano has_mail_password).
+     */
+    protected function auditableTenantSnapshot(Tenant $tenant): array
+    {
+        return [
+            'name' => $tenant->name,
+            'ruc' => $tenant->ruc,
+            'business_name' => $tenant->business_name,
+            'address' => $tenant->address,
+            'phone' => $tenant->phone,
+            'status' => $tenant->status,
+            'labor_regime' => $tenant->labor_regime,
+            'mail_host' => $tenant->mail_host,
+            'mail_port' => $tenant->mail_port,
+            'mail_username' => $tenant->mail_username,
+            'mail_encryption' => $tenant->mail_encryption,
+            'mail_from_address' => $tenant->mail_from_address,
+            'mail_from_name' => $tenant->mail_from_name,
+            'has_mail_password' => !empty($tenant->mail_password),
+        ];
     }
 
     /**
@@ -79,7 +104,7 @@ class TenantService
      */
     public function createTenant(array $data): Tenant
     {
-        return Tenant::create([
+        $tenant = Tenant::create([
             'name' => $data['name'],
             'ruc' => $data['ruc'],
             'business_name' => $data['business_name'] ?? null,
@@ -99,6 +124,10 @@ class TenantService
             'mail_from_address' => $data['mail_from_address'] ?? null,
             'mail_from_name' => $data['mail_from_name'] ?? null,
         ]);
+
+        $this->auditService->logTenantCreated($tenant->id, $this->auditableTenantSnapshot($tenant));
+
+        return $tenant;
     }
 
     /**
@@ -112,6 +141,8 @@ class TenantService
     {
         $statusChanged = isset($data['status']) && $data['status'] !== $tenant->status;
 
+        $oldSnapshot = $this->auditableTenantSnapshot($tenant);
+
         $tenant->update($data);
 
         // If status changed, clear the active tenant IDs cache for all users of this tenant
@@ -122,7 +153,15 @@ class TenantService
             }
         }
 
-        return $tenant->fresh();
+        $fresh = $tenant->fresh();
+
+        $this->auditService->logTenantUpdated(
+            $tenant->id,
+            $oldSnapshot,
+            $this->auditableTenantSnapshot($fresh)
+        );
+
+        return $fresh;
     }
 
     /**
@@ -140,7 +179,16 @@ class TenantService
         }
 
         $tenant = Tenant::findOrFail($id);
-        return $tenant->delete();
+        $snapshot = $this->auditableTenantSnapshot($tenant);
+        $tenantId = $tenant->id;
+
+        $deleted = $tenant->delete();
+
+        if ($deleted) {
+            $this->auditService->logTenantDeleted($tenantId, $snapshot);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -300,7 +348,15 @@ class TenantService
      */
     public function canManageTenantUsers(User $user, Tenant $tenant): bool
     {
-        return $user->isRoot() || $tenant->hasUser($user);
+        // Gestionar la membresía de una empresa es 'tenants.assign_users'
+        // (misma ability que TenantController::addUser vía AssignTenantsRequest;
+        // quitar es el inverso de asignar). El rol se resuelve en la empresa DEL
+        // RECURSO, no en la activa de la sesión.
+        //
+        // Antes: root || $tenant->hasUser($user) — sin mirar el rol, así que
+        // CUALQUIER miembro (incluido un client) podía sacar usuarios de su
+        // propia empresa. Escalada de privilegios, no solo desvío de la matriz.
+        return $user->can('tenants.assign_users', $tenant->id);
     }
 
     /**

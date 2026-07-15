@@ -58,6 +58,28 @@ interface AuthState {
    * respaldo global legado.
    */
   currentRole: string | null;
+  /**
+   * Matriz de Accesos (ability -> roles permitidos), servida por el backend
+   * desde config/access_matrix.php — la fuente única de verdad. Llega en el
+   * payload de /login y /me.
+   *
+   * No se refetchea al cambiar de empresa o rol: la matriz no depende de la
+   * empresa, solo cambia cuál rol está activo, y de eso ya se encarga
+   * `currentRole`. Usar con el helper `can()/useCan()` (hooks/useCan.ts), nunca
+   * comparando nombres de rol a mano.
+   */
+  accessMatrix: Record<string, string[]> | null;
+  /**
+   * ¿Ya se refrescó la matriz contra el backend en esta carga de la app?
+   *
+   * NO se persiste (ver `partialize`), así que arranca en false en cada carga
+   * y fuerza un refetch por sesión de navegador. Sin esto, la copia de
+   * localStorage se quedaba congelada para siempre: al cambiar
+   * config/access_matrix.php en el backend, quien tuviera sesión abierta
+   * seguía viendo el menú viejo hasta desloguearse (una ability nueva no
+   * existía en su mapa y `evaluate()` la denegaba por fail-closed).
+   */
+  accessMatrixRefreshed: boolean;
   isLoading: boolean;
   error: string | null;
 
@@ -69,6 +91,14 @@ interface AuthState {
   login: (login: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   me: () => Promise<void>;
+  /**
+   * Recupera la Matriz de Accesos desde el backend.
+   *
+   * Necesario para sesiones restauradas de localStorage que no la tienen
+   * guardada (las anteriores a que se persistiera). Sin mapa, useCan() deniega
+   * todo. No lanza: ante un fallo conserva la matriz que hubiera.
+   */
+  fetchAccessMatrix: () => Promise<void>;
   /**
    * Cambia la empresa activa.
    * - `tenantId` puede ser `null` para "Todas las empresas" (god mode, solo
@@ -96,6 +126,8 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       currentTenant: null,
       currentRole: null,
+      accessMatrix: null,
+      accessMatrixRefreshed: false,
       isLoading: false,
       error: null,
 
@@ -127,6 +159,7 @@ export const useAuthStore = create<AuthState>()(
             user: response.user,
             currentTenant,
             currentRole,
+            accessMatrix: response.access_matrix ?? null,
             isLoading: false,
             error: null,
           });
@@ -152,11 +185,14 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
-          // Limpiar estado local independientemente del resultado
+          // Limpiar estado local independientemente del resultado.
+          // accessMatrixRefreshed vuelve a false para que la próxima sesión en
+          // esta misma pestaña refresque la matriz en vez de heredar la marca.
           set({
             user: null,
             currentTenant: null,
             currentRole: null,
+            accessMatrixRefreshed: false,
             isLoading: false,
             error: null,
           });
@@ -167,6 +203,21 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem('pusherTransportNonTLS');
           localStorage.removeItem('TanstackQueryDevtools.open');
 
+        }
+      },
+
+      fetchAccessMatrix: async () => {
+        try {
+          set({ accessMatrix: await userRepository.getAccessMatrix() });
+        } catch (error) {
+          // Silencioso a propósito: es una recuperación de respaldo. Si falla,
+          // el usuario ve la UI mínima pero el backend sigue autorizando bien.
+          console.error('[AuthStore] No se pudo obtener la Matriz de Accesos:', error);
+        } finally {
+          // En `finally`: si el fetch falla, marcarlo igual evita que el efecto
+          // que lo dispara vuelva a intentarlo en bucle. Se reintenta en la
+          // próxima carga (o al relogear, que trae la matriz en el payload).
+          set({ accessMatrixRefreshed: true });
         }
       },
 
@@ -206,6 +257,9 @@ export const useAuthStore = create<AuthState>()(
             user,
             currentTenant,
             currentRole,
+            // Si el backend no la envía (versión anterior), conservar la que ya
+            // hubiera en el store en vez de borrarla.
+            accessMatrix: user.access_matrix ?? get().accessMatrix,
             isLoading: false,
           });
         } catch (error) {
@@ -376,6 +430,19 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         currentTenant: state.currentTenant,
         currentRole: state.currentRole,
+        // La Matriz de Accesos se persiste como CACHÉ de arranque: sin ella
+        // useCan() deniega TODO, y cualquier F5 dejaba al usuario rebotando
+        // entre "/" y su ruta hasta agotar la pila de React ("Maximum update
+        // depth exceeded"). Con la copia local se puede pintar de inmediato.
+        //
+        // Es caché, no fuente de verdad: useAccessMatrixReady la refresca
+        // contra el backend una vez por carga (ver accessMatrixRefreshed), así
+        // que un cambio en config/access_matrix.php llega sin desloguear.
+        //
+        // No es información sensible: es el mismo mapa para todos y el backend
+        // lo sirve en /login, /me y GET /api/access-matrix. Quien autoriza es
+        // el backend; esto es solo gating de UI.
+        accessMatrix: state.accessMatrix,
         // No persistimos token porque ahora está en cookies HttpOnly
       }),
     }

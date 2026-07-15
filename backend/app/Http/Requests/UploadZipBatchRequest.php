@@ -2,14 +2,19 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UploadZipBatchRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     public function authorize(): bool
     {
-        // Solo root y admin pueden subir lotes ZIP
-        return $this->user() && \in_array($this->user()->getCurrentRole(), ['root', 'admin'], true);
+        // Matriz: 'documents.bulk_upload_zip' = admin, admin_tenant. Cambia
+        // respecto del hardcode anterior ['root','admin']: la matriz no le
+        // concede a root la carga de ZIPs, y sí a admin_tenant.
+        return $this->allowsAbility('documents.bulk_upload_zip');
     }
 
     public function rules(): array

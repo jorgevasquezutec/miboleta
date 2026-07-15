@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreUserBatchRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -15,7 +18,9 @@ class StoreUserBatchRequest extends FormRequest
         // cualquier rol operativo; sin este chequeo, CUALQUIER usuario
         // autenticado (p.ej. un 'client') podía disparar POST
         // /api/user-batches.
-        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin', 'admin_tenant']);
+        // Matriz: 'users.bulk_upload' = root, admin_tenant. 'admin' ya no puede
+        // (la matriz no se lo concede); el rol se resuelve en la empresa ACTIVA.
+        return $this->allowsAbility('users.bulk_upload');
     }
 
     /**

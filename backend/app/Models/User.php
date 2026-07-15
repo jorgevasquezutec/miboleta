@@ -255,7 +255,15 @@ class User extends Authenticatable
     // }
 
     /**
-     * Verificar si el usuario tiene un rol específico
+     * ¿El usuario tiene este rol GLOBAL (user_roles)?
+     *
+     * OJO: user_roles es la UNIÓN de los roles del usuario en todas sus
+     * empresas (ver UserService::syncGlobalRoleFallback), así que preguntar
+     * aquí por un rol operativo ('admin', 'client', …) responde "sí" aunque lo
+     * tenga en OTRA empresa. NO usar para autorizar: para eso están
+     * roleForTenant()/hasRoleInTenant()/hasAbility(), que resuelven contra una
+     * empresa concreta. El único rol que tiene sentido consultar aquí es
+     * 'root', que es global de plataforma por diseño (no tiene empresas).
      */
     public function hasRole(string $role): bool
     {
@@ -263,27 +271,18 @@ class User extends Authenticatable
     }
 
     /**
-     * Verificar si es usuario root
+     * ¿Es root? Único uso legítimo del rol global: root es de plataforma y no
+     * pertenece a ninguna empresa, así que su rol no puede vivir en
+     * user_tenant_roles.
+     *
+     * (Aquí vivían isAdmin() e isClient(); se eliminaron porque preguntaban por
+     * roles operativos contra la unión global: ser admin en la empresa B daba
+     * "true" al operar en la A. Su único llamador era TenantPolicy, que se
+     * eliminó por esa misma fuga.)
      */
     public function isRoot(): bool
     {
         return $this->hasRole('root');
-    }
-
-    /**
-     * Verificar si es admin
-     */
-    public function isAdmin(): bool
-    {
-        return $this->hasRole('admin');
-    }
-
-    /**
-     * Verificar si es client
-     */
-    public function isClient(): bool
-    {
-        return $this->hasRole('client');
     }
 
     /**
@@ -321,27 +320,73 @@ class User extends Authenticatable
     }
 
     /**
+     * Rol EFECTIVO del usuario dentro de una empresa concreta, sin respaldo
+     * global. Es la primitiva correcta para AUTORIZAR.
+     *
+     * Diferencia clave con getCurrentRole($tenantId): ese método, si el usuario
+     * no tiene rol en la empresa indicada, cae al respaldo global
+     * (`user_roles`, la UNIÓN de los roles del usuario en TODAS sus empresas,
+     * resuelto con ->first() sin ORDER BY = no determinístico). Ese fallback es
+     * una fuga de privilegios entre empresas: un admin en la empresa A podría
+     * pasar checks operando en la B. Aquí NO hay fallback: sin rol en esa
+     * empresa, el resultado es null (fail-closed).
+     *
+     * getCurrentRole() sigue existiendo para usos de DISPLAY (UserResource,
+     * ProfileService, logs). No usarlo para autorizar.
+     */
+    public static function roleForTenant(?self $user, ?int $tenantId): ?string
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        // Root es global (plataforma): no depende de ninguna empresa.
+        if ($user->isRoot()) {
+            return 'root';
+        }
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return self::highestPriorityRole($user->getRolesForTenant($tenantId)->pluck('name'));
+    }
+
+    /**
+     * ¿El usuario tiene la ability dentro de la empresa indicada?
+     *
+     * Lee config/access_matrix.php (fuente única de verdad). No llamar
+     * directamente desde controllers/services: usar $user->can($ability, $tenantId)
+     * o $this->authorize($ability, $tenantId) — los Gates se registran desde este
+     * mismo config en AppServiceProvider::boot().
+     */
+    public function hasAbility(string $ability, ?int $tenantId = null): bool
+    {
+        // OJO: no usar config("access_matrix.{$ability}") — config() interpreta
+        // los puntos como anidamiento, y las abilities los llevan en el nombre
+        // ('tenants.manage'), así que buscaría ['access_matrix']['tenants']['manage'].
+        // Hay que leer el array completo e indexar con la clave literal.
+        $matrix = config('access_matrix', []);
+        $allowedRoles = $matrix[$ability] ?? null;
+
+        if (!is_array($allowedRoles)) {
+            // Ability inexistente: fail-closed y reportar (nunca permitir en silencio).
+            report(new \InvalidArgumentException("Unknown ability: {$ability}"));
+
+            return false;
+        }
+
+        $role = self::roleForTenant($this, $tenantId);
+
+        return $role !== null && in_array($role, $allowedRoles, true);
+    }
+
+    /**
      * Obtener roles actuales del usuario
      */
     public function getCurrentRoles(): array
     {
         return $this->roles()->pluck('name')->toArray();
-    }
-
-    /**
-     * Verificar si tiene un permiso específico (considera todos sus roles)
-     */
-    public function hasPermission(string $permission): bool
-    {
-        $roles = $this->roles()->get();
-
-        foreach ($roles as $role) {
-            if ($role->hasPermission($permission)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

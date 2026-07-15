@@ -198,6 +198,7 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
             const response = await tenantRepository.getAll(params);
 
             set({
+                search: query,
                 searchResults: page === 1 ? response.data : [...get().searchResults, ...response.data],
                 searchPagination: response.meta,
                 isSearching: false,

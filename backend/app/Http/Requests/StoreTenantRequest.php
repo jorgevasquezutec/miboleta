@@ -2,15 +2,20 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
+
 class StoreTenantRequest extends CustomFormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        // Solo root puede crear tenants
-        return $this->user() && $this->user()->isRoot();
+        // Solo root crea empresas (matriz: 'tenants.manage'). Mismo resultado
+        // que el isRoot() anterior, ahora leído del config.
+        return $this->allowsAbility('tenants.manage');
     }
 
     /**

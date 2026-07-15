@@ -8,6 +8,7 @@ use App\Models\DocumentType;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\UserService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -30,7 +31,7 @@ class UserServiceTest extends TestCase
 
         Mail::fake();
 
-        $this->userService = new UserService();
+        $this->userService = new UserService(new AuditService());
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
         $this->clientRole = Role::where('name', 'client')->first();
@@ -193,6 +194,35 @@ class UserServiceTest extends TestCase
 
         $this->assertEquals('root', $updatedUser->getCurrentRole());
         $this->assertCount(0, $updatedUser->tenants);
+    }
+
+    public function test_update_user_does_not_wipe_global_role_when_tenant_roles_empty(): void
+    {
+        // Simula un usuario "pre-backfill": tiene empresa y rol global en
+        // user_roles (modelo viejo) pero SIN filas en user_tenant_roles.
+        // El factory client() ya asigna el rol global 'client' en user_roles.
+        $user = User::factory()->client()->create();
+        $user->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+
+        $this->assertEquals('client', $user->fresh()->getCurrentRole());
+        $this->assertSame(0, \App\Models\UserTenantRole::where('user_id', $user->id)->count());
+
+        $this->actingAs($this->admin);
+
+        // Edición que reenvía la empresa pero sin role_ids: no crea roles por
+        // empresa, así que user_tenant_roles sigue vacío al llamar a
+        // syncGlobalRoleFallback.
+        $this->userService->updateUser($user, [
+            'tenants_config' => [
+                ['tenant_id' => $this->tenant->id, 'is_primary' => true, 'role_ids' => []],
+            ],
+        ]);
+
+        // Guard anti-erosión: el rol global debe preservarse. Antes del fix,
+        // syncGlobalRoleFallback hacía sync([]) y lo borraba, dejando al usuario
+        // sin rol en los usos que aún leen user_roles (display y filtrado por
+        // fila de documentos).
+        $this->assertEquals('client', $user->fresh()->getCurrentRole());
     }
 
     public function test_generate_temporary_password_has_correct_length(): void

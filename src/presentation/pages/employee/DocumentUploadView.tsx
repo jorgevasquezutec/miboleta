@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Upload, FileArchive, CheckCircle, AlertTriangle, Loader2, Building2 } from "lucide-react";
@@ -62,7 +62,12 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
   const { user } = useAuthStore();
 
   // Get user's tenants
-  const userTenants = user?.tenants || [];
+  //
+  // useMemo porque userTenants es dependencia del efecto de carga inicial: sin
+  // él, cuando user.tenants viene undefined (p. ej. root, que no tiene fila en
+  // user_tenants) el `|| []` creaba un array NUEVO en cada render, el efecto lo
+  // veía siempre distinto y llamaba a fetchDocumentTypes() en bucle.
+  const userTenants = useMemo(() => user?.tenants || [], [user?.tenants]);
   const hasMultipleTenants = userTenants.length > 1;
 
   // Form state

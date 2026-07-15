@@ -113,6 +113,11 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => $this->authService->transformAuthUser($result['user']),
+            // Matriz de Accesos (config/access_matrix.php), fuente única de
+            // verdad. El frontend la guarda y evalúa can(ability) contra el rol
+            // activo (currentRole), que cambia al conmutar de empresa/rol sin
+            // re-login. Ver también GET /api/access-matrix.
+            'access_matrix' => config('access_matrix'),
         ])
             ->cookie($this->authService->createAccessTokenCookie($result['access_token']))
             ->cookie($this->authService->createRefreshTokenCookie($result['refresh_token']->token));
@@ -185,7 +190,15 @@ class AuthController extends Controller
         $user = $request->user();
         $user->load(['roles', 'tenants']);
 
-        return response()->json($this->authService->transformAuthUser($user));
+        // NOTA: /me devuelve el usuario plano en la raíz, mientras que /login lo
+        // envuelve en {user: ...}. Es una asimetría preexistente que no se
+        // corrige aquí para no romper UserRepository.me()/login().
+        // 'access_matrix' se agrega como campo hermano (aditivo).
+        return response()->json(
+            $this->authService->transformAuthUser($user) + [
+                'access_matrix' => config('access_matrix'),
+            ]
+        );
     }
 
     /**

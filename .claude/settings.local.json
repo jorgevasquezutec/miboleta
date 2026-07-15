@@ -5,7 +5,9 @@
       "mcp__codebase-memory-mcp__index_repository",
       "mcp__codebase-memory-mcp__list_projects",
       "mcp__codebase-memory-mcp__search_graph",
-      "mcp__codebase-memory-mcp__index_status"
+      "mcp__codebase-memory-mcp__index_status",
+      "mcp__codebase-memory-mcp__trace_path",
+      "mcp__codebase-memory-mcp__search_code"
     ]
   }
 }

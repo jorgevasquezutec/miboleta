@@ -129,9 +129,29 @@ class UserControllerTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'nuevo@example.com']);
     }
 
-    public function test_admin_can_create_user_in_tenant(): void
+    public function test_admin_cannot_create_user_in_tenant(): void
     {
+        // Matriz de Accesos: crear usuarios es de root ('users.create_any_role')
+        // y admin_tenant ('users.create_limited_role'). 'admin' no aparece, así
+        // que ya no puede — antes este test afirmaba lo contrario.
         $response = $this->actingAs($this->admin)->postJson('/api/users', [
+            'name' => 'Nuevo',
+            'last_name' => 'Usuario',
+            'email' => 'nuevo@example.com',
+            'role_id' => $this->clientRole->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('users', ['email' => 'nuevo@example.com']);
+    }
+
+    public function test_admin_tenant_can_create_user_in_tenant(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson('/api/users', [
             'name' => 'Nuevo',
             'last_name' => 'Usuario',
             'email' => 'nuevo@example.com',
@@ -181,9 +201,24 @@ class UserControllerTest extends TestCase
             ->assertJsonFragment(['name' => 'Actualizado']);
     }
 
-    public function test_admin_can_update_tenant_user(): void
+    public function test_admin_cannot_update_tenant_user(): void
     {
+        // Matriz de Accesos: 'users.update' = root, admin_tenant. 'admin' no
+        // aparece — antes este test afirmaba lo contrario.
         $response = $this->actingAs($this->admin)->putJson("/api/users/{$this->client->id}", [
+            'name' => 'Actualizado',
+        ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('users', ['id' => $this->client->id, 'name' => 'Actualizado']);
+    }
+
+    public function test_admin_tenant_can_update_tenant_user(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->putJson("/api/users/{$this->client->id}", [
             'name' => 'Actualizado',
         ]);
 
@@ -203,9 +238,9 @@ class UserControllerTest extends TestCase
 
     public function test_admin_cannot_delete_tenant_user(): void
     {
-        // Item 28: solo root puede eliminar usuarios (ver UserPolicy::delete(),
-        // invocada desde UserController::destroy()). Admin y admin_tenant ya no
-        // pueden, aunque compartan tenant con el usuario objetivo.
+        // Item 28: solo root puede eliminar usuarios (ability 'users.delete' de
+        // la Matriz de Accesos). Admin y admin_tenant ya no pueden, aunque
+        // compartan tenant con el usuario objetivo.
         $user = User::factory()->client()->create();
         $user->tenants()->attach($this->tenant->id);
 
@@ -213,6 +248,17 @@ class UserControllerTest extends TestCase
 
         $response->assertStatus(403);
         $this->assertNotSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    public function test_root_cannot_delete_himself(): void
+    {
+        // La ability 'users.delete' permite a root, pero nadie puede eliminarse
+        // a sí mismo: esa regla es del par (actor, objetivo) y vive en
+        // UserController::destroy(), no en la matriz.
+        $response = $this->actingAs($this->root)->deleteJson("/api/users/{$this->root->id}");
+
+        $response->assertStatus(403);
+        $this->assertNotSoftDeleted('users', ['id' => $this->root->id]);
     }
 
     public function test_filter_users_by_search(): void

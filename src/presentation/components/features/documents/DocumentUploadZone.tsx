@@ -30,26 +30,11 @@ export function DocumentUploadZone({ onFilesSelected }: DocumentUploadZoneProps)
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-
-      const files = Array.from(e.dataTransfer.files);
-      handleFiles(files);
-    },
-    [onFilesSelected]
-  );
-
-  const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files ? Array.from(e.target.files) : [];
-      handleFiles(files);
-    },
-    [onFilesSelected]
-  );
-
-  const handleFiles = (files: File[]) => {
+  // useCallback para poder ser dependencia de los dos handlers de arriba, que
+  // declaraban [onFilesSelected] mientras la función que de verdad usaban era
+  // esta. Solo depende de onFilesSelected: los setUploadedFiles usan la forma
+  // funcional (prev => ...), que no necesita leer el estado actual.
+  const handleFiles = useCallback((files: File[]) => {
     const newFiles: UploadedFile[] = files.map((file) => ({
       id: Math.random().toString(36).substr(2, 9),
       name: file.name,
@@ -85,8 +70,26 @@ export function DocumentUploadZone({ onFilesSelected }: DocumentUploadZoneProps)
     if (onFilesSelected) {
       onFilesSelected(files);
     }
-  };
+  }, [onFilesSelected]);
 
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+
+      const files = Array.from(e.dataTransfer.files);
+      handleFiles(files);
+    },
+    [handleFiles]
+  );
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files ? Array.from(e.target.files) : [];
+      handleFiles(files);
+    },
+    [handleFiles]
+  );
 
 
   const removeFile = (id: string) => {

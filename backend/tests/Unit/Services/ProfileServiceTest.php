@@ -4,6 +4,7 @@ namespace Tests\Unit\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\ProfileService;
 use App\Services\TenantMailerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,7 +28,7 @@ class ProfileServiceTest extends TestCase
 
         Storage::fake('public');
 
-        $this->profileService = new ProfileService(new TenantMailerService());
+        $this->profileService = new ProfileService(new TenantMailerService(), new AuditService());
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
 

@@ -261,6 +261,8 @@ class VacationService
 
         $request->markAsTaken($confirmer);
 
+        $this->auditService->logVacationConfirmed($request->id, true);
+
         Log::info('[VacationService] Vacation marked as taken', [
             'request_id' => $request->id,
             'confirmed_by' => $confirmer->id,
@@ -286,6 +288,8 @@ class VacationService
         }
 
         $request->markAsNotTaken($confirmer);
+
+        $this->auditService->logVacationConfirmed($request->id, false);
 
         Log::info('[VacationService] Vacation marked as NOT taken', [
             'request_id' => $request->id,
@@ -444,7 +448,9 @@ class VacationService
      */
     public function getAllRequests(User $user, array $filters = []): LengthAwarePaginator
     {
-        $role = $user->getCurrentRole();
+        // isRoot() en vez de getCurrentRole() === 'root': determinístico y sin
+        // depender del respaldo global de roles (root es global por diseño).
+        $isRoot = $user->isRoot();
         $tenantId = $filters['tenant_id'] ?? $user->tenants->first()?->id;
 
         $query = VacationRequest::with(['user', 'approvedByUser', 'rejectedByUser', 'confirmedByUser'])
@@ -453,9 +459,9 @@ class VacationService
         // Apply tenant filter:
         // - Non-root users always filter by tenant
         // - Root users only filter if they explicitly specify a tenant_id
-        if ($role !== 'root' && $tenantId) {
+        if (!$isRoot && $tenantId) {
             $query->forTenant($tenantId);
-        } elseif ($role === 'root' && !empty($filters['tenant_id'])) {
+        } elseif ($isRoot && !empty($filters['tenant_id'])) {
             $query->forTenant($filters['tenant_id']);
         }
 
@@ -564,10 +570,19 @@ class VacationService
     {
         $request->load('user');
 
-        $role = $supervisor->getCurrentRole();
+        // El rol se resuelve dentro de la empresa DE LA SOLICITUD, no con el
+        // respaldo global. Antes, quien fuera 'admin' en cualquiera de sus
+        // empresas resolvía 'admin' vía getCurrentRole() y podía aprobar
+        // solicitudes de OTRA empresa donde no es admin (fuga entre empresas).
+        //
+        // Se preserva a propósito la misma política de hoy (root/admin saltan el
+        // chequeo de supervisor; el resto debe ser el supervisor asignado): este
+        // paso solo cierra la fuga. El realineamiento a la Matriz de Accesos
+        // ('vacations.approve_reject_team' excluye a root) va aparte.
+        $role = User::roleForTenant($supervisor, $request->tenant_id);
 
         // Root and admin can also approve
-        if (in_array($role, ['root', 'admin'])) {
+        if (in_array($role, ['root', 'admin'], true)) {
             return;
         }
 

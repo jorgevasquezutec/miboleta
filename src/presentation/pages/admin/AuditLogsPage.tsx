@@ -15,6 +15,11 @@ import {
     Building2,
     Calendar,
     Upload,
+    Shield,
+    Settings,
+    KeyRound,
+    UserCog,
+    Users,
 } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -56,6 +61,12 @@ const getActionIcon = (action: string) => {
     if (action.startsWith('document.deleted')) return <Trash2 className="w-4 h-4 text-red-500" />;
     if (action.startsWith('vacation.')) return <Calendar className="w-4 h-4 text-amber-500" />;
     if (action.startsWith('tenant.')) return <Building2 className="w-4 h-4 text-indigo-500" />;
+    if (action.startsWith('role.')) return <Shield className="w-4 h-4 text-rose-500" />;
+    if (action.startsWith('platform.')) return <Settings className="w-4 h-4 text-slate-500" />;
+    if (action.startsWith('signature.')) return <FileSignature className="w-4 h-4 text-emerald-500" />;
+    if (action.startsWith('user_batch.')) return <Users className="w-4 h-4 text-cyan-600" />;
+    if (action.startsWith('profile.')) return <UserCog className="w-4 h-4 text-blue-500" />;
+    if (action.includes('password') || action === 'user.email_changed') return <KeyRound className="w-4 h-4 text-orange-500" />;
     return <FileText className="w-4 h-4 text-gray-500" />;
 };
 
@@ -67,6 +78,11 @@ const getCategoryBadge = (category: string) => {
         vacation: "bg-amber-100 text-amber-800",
         tenant: "bg-indigo-100 text-indigo-800",
         batch: "bg-cyan-100 text-cyan-800",
+        role: "bg-rose-100 text-rose-800",
+        platform: "bg-slate-100 text-slate-800",
+        signature: "bg-emerald-100 text-emerald-800",
+        user_batch: "bg-cyan-100 text-cyan-800",
+        profile: "bg-blue-100 text-blue-800",
     };
 
     const labels: Record<string, string> = {
@@ -75,6 +91,11 @@ const getCategoryBadge = (category: string) => {
         vacation: "Vacaciones",
         tenant: "Organización",
         batch: "Lote",
+        role: "Roles",
+        platform: "Plataforma",
+        signature: "Firma",
+        user_batch: "Carga masiva",
+        profile: "Perfil",
     };
 
     return (
@@ -93,6 +114,9 @@ const actionDescriptions: Record<string, string> = {
     'user.updated': 'Usuario actualizado',
     'user.deleted': 'Usuario eliminado',
     'user.password_changed': 'Cambió contraseña',
+    'user.password_reset': 'Restableció contraseña',
+    'user.password_reset_requested': 'Solicitó restablecer contraseña',
+    'user.email_changed': 'Cambió el correo electrónico',
     'document.uploaded': 'Documento cargado',
     'document.viewed': 'Documento visualizado',
     'document.downloaded': 'Documento descargado',
@@ -108,6 +132,16 @@ const actionDescriptions: Record<string, string> = {
     'tenant.created': 'Organización creada',
     'tenant.updated': 'Organización actualizada',
     'tenant.deleted': 'Organización eliminada',
+    'role.assigned': 'Asignó roles a un usuario',
+    'platform.settings_updated': 'Actualizó la configuración de la plataforma',
+    'signature.settings_updated': 'Actualizó la configuración de firma',
+    'signature.certificate_uploaded': 'Cargó el certificado de firma',
+    'signature.certificate_deleted': 'Eliminó el certificado de firma',
+    'signature.terms_accepted': 'Aceptó los términos de firma',
+    'user_batch.created': 'Creó una carga masiva de usuarios',
+    'user_batch.completed': 'Completó una carga masiva de usuarios',
+    'profile.updated': 'Actualizó su perfil',
+    'profile.data_change_requested': 'Solicitó cambio de datos',
 };
 
 export function AuditLogsPage() {
@@ -164,9 +198,13 @@ export function AuditLogsPage() {
         };
     }, [searchInput, filters.search, setFilters]);
 
-    // Sync search input with URL on mount
+    // Semilla inicial del input de búsqueda desde la URL. Solo al montar
+    // A PROPÓSITO: con `filters.search` en las dependencias, el valor que el
+    // debounce escribe en la URL 500 ms después volvería a entrar aquí y
+    // pisaría lo que el usuario haya seguido tecleando entre medias.
     useEffect(() => {
         setSearchInput(filters.search);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Fetch logs
@@ -176,12 +214,19 @@ export function AuditLogsPage() {
     // backend). Para root, ese tenant_id sale de la empresa activa del
     // navbar (authStore.currentTenant); para no-root (admin), el backend
     // ya lo resuelve solo a partir del usuario, así que no enviamos nada.
+    // El id se extrae fuera del callback (primitivo) para que la dependencia
+    // sea exactamente lo que el cuerpo usa. Antes el cuerpo leía `currentTenant`
+    // entero mientras las deps declaraban `currentTenant?.id`: ESLint no podía
+    // verificarlo y, si el store devolviera un objeto nuevo con el mismo id, la
+    // identidad de fetchLogs cambiaría sin motivo.
+    const tenantIdFilter = isRoot && currentTenant ? Number(currentTenant.id) : undefined;
+
     const fetchLogs = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
             const reportFilters: ReportFilters = {
-                tenant_id: isRoot ? (currentTenant ? Number(currentTenant.id) : undefined) : undefined,
+                tenant_id: tenantIdFilter,
                 page: filters.page,
                 per_page: filters.per_page,
                 search: filters.search || undefined,
@@ -199,7 +244,7 @@ export function AuditLogsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [filters.page, filters.per_page, filters.search, filters.action, filters.date_from, filters.date_to, isRoot, currentTenant?.id]);
+    }, [filters.page, filters.per_page, filters.search, filters.action, filters.date_from, filters.date_to, tenantIdFilter]);
 
     // Reacciona tanto al filtro global de tenant (useTenantAwareEffect)
     // como al cambio de empresa activa para root (currentTenant?.id ya
@@ -337,6 +382,11 @@ export function AuditLogsPage() {
                                     <SelectItem value="document">Documentos</SelectItem>
                                     <SelectItem value="vacation">Vacaciones</SelectItem>
                                     <SelectItem value="tenant">Organizaciones</SelectItem>
+                                    <SelectItem value="role">Roles</SelectItem>
+                                    <SelectItem value="platform">Plataforma</SelectItem>
+                                    <SelectItem value="signature">Firma</SelectItem>
+                                    <SelectItem value="user_batch">Carga masiva</SelectItem>
+                                    <SelectItem value="profile">Perfil</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -357,8 +407,14 @@ export function AuditLogsPage() {
                                     <SelectItem value="user.login_failed">Login fallido</SelectItem>
                                     <SelectItem value="document.signed">Firma de documento</SelectItem>
                                     <SelectItem value="document.viewed">Visualización</SelectItem>
+                                    <SelectItem value="document.downloaded">Descarga</SelectItem>
                                     <SelectItem value="vacation.approved">Vacaciones aprobadas</SelectItem>
                                     <SelectItem value="vacation.rejected">Vacaciones rechazadas</SelectItem>
+                                    <SelectItem value="role.assigned">Asignación de roles</SelectItem>
+                                    <SelectItem value="platform.settings_updated">Configuración de plataforma</SelectItem>
+                                    <SelectItem value="user.password_reset">Reset de contraseña</SelectItem>
+                                    <SelectItem value="signature.certificate_uploaded">Carga de certificado</SelectItem>
+                                    <SelectItem value="user_batch.completed">Carga masiva completada</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

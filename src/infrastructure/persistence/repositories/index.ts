@@ -8,3 +8,4 @@ export * from './ReportsRepository';
 export * from './RoleRepository';
 export * from './SignatureSettingsRepository';
 export * from './PlatformSettingsRepository';
+export * from './AuditSettingsRepository';
