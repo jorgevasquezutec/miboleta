@@ -3,6 +3,7 @@
 use App\Exceptions\DocumentNotFoundException;
 use App\Exceptions\UnauthorizedAccessException;
 use App\Exceptions\UserCreationException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,7 +22,6 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'role' => \App\Http\Middleware\CheckRole::class,
             // 'tenant' => \App\Http\Middleware\TenantScope::class, // ❌ DEPRECADO - Use TenantFilter
             'tenant.filter' => \App\Http\Middleware\TenantFilter::class, // ✅ Multi-tenant filter
         ]);
@@ -81,6 +81,18 @@ return Application::configure(basePath: dirname(__DIR__))
                     'error' => 'Acceso no autorizado',
                     'message' => $e->getMessage(),
                 ], $e->getCode() ?: 403);
+            }
+        });
+
+        // AuthorizationException (Gates de config/access_matrix.php, vía
+        // $this->authorize()/$user->can()) -> 403 con el mismo formato que ya
+        // usa el resto de la API ("No autorizado"), en vez del texto por
+        // defecto de Laravel ("This action is unauthorized.").
+        $exceptions->renderable(function (AuthorizationException $e, Request $request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'message' => 'No autorizado',
+                ], 403);
             }
         });
 

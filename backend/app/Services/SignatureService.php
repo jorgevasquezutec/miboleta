@@ -9,13 +9,13 @@ use App\Models\Document;
 use App\Models\DocumentSignatureCode;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class SignatureService
 {
     public function __construct(
         protected AuditService $auditService,
-        protected PdfWatermarkService $pdfWatermarkService
+        protected PdfWatermarkService $pdfWatermarkService,
+        protected TenantMailerService $tenantMailerService
     ) {
     }
 
@@ -55,6 +55,8 @@ class SignatureService
         }
 
         $user->update(['signature_terms_accepted_at' => now()]);
+
+        $this->auditService->logTermsAccepted($user->id);
 
         Log::info('[SignatureService] Terms accepted successfully', [
             'accepted_at' => $user->signature_terms_accepted_at
@@ -166,7 +168,10 @@ class SignatureService
      */
     public function verifyAndSign(User $user, int $documentId, string $code, array $requestData): array
     {
-        $document = Document::with('documentType')->find($documentId);
+        // Se eager-carga 'batch' porque necesitamos batch->page_size (ítem
+        // 36) para elegir las coordenadas correctas del watermark; ver más
+        // abajo, antes de pdfWatermarkService->addSignatureWatermark().
+        $document = Document::with(['documentType', 'batch'])->find($documentId);
         if (!$document) {
             throw new DocumentNotFoundException('Documento no encontrado');
         }
@@ -262,9 +267,17 @@ class SignatureService
 
         // Apply watermark to PDF
         if ($document->file_path) {
+            // Ítem 36: el tamaño de página elegido en la carga masiva vive
+            // en el batch, no en el documento. Si el documento no tiene
+            // batch (no debería pasar en el flujo normal) o el batch quedó
+            // sin page_size (lotes anteriores al ítem 36), se usa 'a10'
+            // (formato calibrado por defecto) — ver DocumentBatch::getResolvedPageSizeAttribute().
+            $pageSizeKey = $document->batch?->resolved_page_size ?? 'a10';
+
             $watermarkApplied = $this->pdfWatermarkService->addSignatureWatermark(
                 $document->file_path,
-                $signatureData
+                $signatureData,
+                $pageSizeKey
             );
 
             if (!$watermarkApplied) {
@@ -306,9 +319,18 @@ class SignatureService
             throw new DocumentNotFoundException('Documento no encontrado');
         }
 
-        // Check access
-        $role = $user->getCurrentRole();
-        if ($role === 'client' && $document->user_id !== $user->id) {
+        // El rol se resuelve dentro de la empresa DEL DOCUMENTO, no con el
+        // respaldo global: antes, ser admin en la empresa A permitía consultar
+        // el estado de firma de documentos ajenos de la B (allí el usuario es
+        // client, pero el rol global no resolvía 'client' y el check no frenaba).
+        //
+        // Además se invierte a lista blanca: el check anterior ("es client")
+        // dejaba pasar a quien no tuviera NINGÚN rol en esa empresa (rol null),
+        // o sea era fail-open.
+        $isOwner = $document->user_id === $user->id;
+        $role = User::roleForTenant($user, $document->tenant_id);
+
+        if (!$isOwner && !in_array($role, ['root', 'admin', 'admin_tenant', 'aprobador'], true)) {
             throw new UnauthorizedAccessException('No autorizado');
         }
 
@@ -335,7 +357,9 @@ class SignatureService
     protected function sendSignatureCodeEmail(User $user, Document $document, string $code): void
     {
         try {
-            Mail::to($user->email)->send(new SignatureCodeMail(
+            // Enrutado por el mailer propio de la empresa del documento, con
+            // fallback al de la plataforma; ver TenantMailerService.
+            $this->tenantMailerService->send($document->tenant, $user->email, new SignatureCodeMail(
                 code: $code,
                 documentType: $document->documentType->display_name ?? 'Documento',
                 period: $document->period,

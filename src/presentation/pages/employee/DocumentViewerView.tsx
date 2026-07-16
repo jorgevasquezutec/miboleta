@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useDocumentTitle } from "@/presentation/hooks";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, FileText, CheckCircle, Info, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Download, FileText, CheckCircle, Info, Loader2, AlertCircle, ShieldCheck, Clock } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { Separator } from "@/presentation/components/ui/separator";
@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
 import { PDFViewer } from "@/presentation/components/shared/PDFViewer";
 import { DocumentSignatureModal } from "@/presentation/components/features/documents/DocumentSignatureModal";
+import { VerifySignatureModal } from "@/presentation/components/features/documents/VerifySignatureModal";
 import { getDocumentStatusBadge, formatDate, formatDateTime } from "@/presentation/utils";
+import { isPadesSignature } from "@/core/domain/entities/Document";
 
 interface DocumentViewerViewProps {
   onBack?: () => void;
@@ -41,9 +43,15 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
     acceptSignatureTerms,
     requestSignatureCode,
     signDocument,
+    signatureVerification,
+    signatureVerificationLoading,
+    signatureVerificationError,
+    verifyDocumentSignature,
+    clearSignatureVerification,
   } = useDocumentsStore();
 
   const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [pdfCacheBuster, setPdfCacheBuster] = useState<number | null>(null);
 
   const pdfUrl = useMemo(() => {
@@ -76,6 +84,17 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
       // Force PDF viewer to reload by adding cache-busting timestamp
       setPdfCacheBuster(Date.now());
     }
+  };
+
+  const handleVerifySignature = () => {
+    if (!documentId) return;
+    setShowVerifyModal(true);
+    verifyDocumentSignature(parseInt(documentId));
+  };
+
+  const handleCloseVerifyModal = () => {
+    setShowVerifyModal(false);
+    clearSignatureVerification();
   };
 
   const handleDownload = () => {
@@ -260,8 +279,72 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
             return null;
           })()}
 
-          {/* Signed Info */}
-          {currentDocument.status === 'signed' && (
+          {/* Signed Info - Firma criptográfica PAdES (certificado de plataforma) */}
+          {currentDocument.status === 'signed' && isPadesSignature(currentDocument.signature) && (
+            <Card className="border-green-500">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <ShieldCheck className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-green-700">Firmado Digitalmente</h3>
+                    <p className="text-[#64748B]">
+                      Firma criptográfica con certificado de plataforma (PAdES)
+                    </p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-[#64748B]">Firmante</span>
+                    <span className="font-medium text-right">
+                      {currentDocument.signature.signer_subject || "-"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-[#64748B]">Fecha de firma</span>
+                    <span className="font-medium">
+                      {currentDocument.signature.signing_time
+                        ? formatDateTime(currentDocument.signature.signing_time)
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2 items-center">
+                    <span className="text-[#64748B] flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" /> Sello de tiempo (TSA)
+                    </span>
+                    <span className="font-medium">
+                      {currentDocument.signature.tsa_applied ? "Sí" : "No"}
+                    </span>
+                  </div>
+                </div>
+
+                <Alert className="border-blue-200 bg-blue-50">
+                  <Info className="w-4 h-4 text-blue-600" />
+                  <AlertDescription className="text-xs text-gray-700">
+                    Que la firma sea "confiable" depende de que el certificado esté emitido por una
+                    entidad certificadora acreditada; con un certificado de prueba la verificación
+                    normalmente mostrará "No confiable" aunque la firma sea íntegra y válida.
+                  </AlertDescription>
+                </Alert>
+
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={handleVerifySignature}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  Verificar Firma
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Signed Info - Firma por 2FA de email (flujo distinto, sin firma criptográfica) */}
+          {currentDocument.status === 'signed' && !isPadesSignature(currentDocument.signature) && (
             <Card className="border-green-500">
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-4">
@@ -282,6 +365,15 @@ export function DocumentViewerView({ onBack }: DocumentViewerViewProps) {
           )}
         </div>
       </div>
+
+      {/* Verify Signature Modal */}
+      <VerifySignatureModal
+        isOpen={showVerifyModal}
+        onClose={handleCloseVerifyModal}
+        isLoading={signatureVerificationLoading}
+        error={signatureVerificationError}
+        result={signatureVerification}
+      />
 
       {/* Signature Modal */}
       {currentDocument && (

@@ -78,6 +78,17 @@ return [
             'visibility' => 'private',
         ],
 
+        // Disco para el certificado de firma digital de plataforma (.pfx/.p12).
+        // Separado de "documents": nunca debe compartir carpeta ni exponerse
+        // por rutas públicas/descarga. Ver SignatureCertificateService.
+        'certificates' => [
+            'driver' => 'local',
+            'root' => storage_path('app/certificates'),
+            'throw' => true,
+            'report' => true,
+            'visibility' => 'private',
+        ],
+
     ],
 
 

@@ -23,6 +23,7 @@ interface PersonalInfoCardProps {
         document_type: string;
         document_text: string;
         phone: string;
+        birth_date: string;
     };
     errors: Record<string, string>;
     onChange: (field: string, value: string | null) => void;
@@ -154,14 +155,26 @@ export function PersonalInfoCard({ formData, errors, onChange }: PersonalInfoCar
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="phone">Teléfono</Label>
-                    <Input
-                        id="phone"
-                        value={formData.phone}
-                        onChange={(e) => onChange('phone', e.target.value)}
-                        placeholder="+51 999 999 999"
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="phone">Teléfono</Label>
+                        <Input
+                            id="phone"
+                            value={formData.phone}
+                            onChange={(e) => onChange('phone', e.target.value)}
+                            placeholder="+51 999 999 999"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="birth_date">Fecha de Nacimiento</Label>
+                        <Input
+                            id="birth_date"
+                            type="date"
+                            value={formData.birth_date}
+                            onChange={(e) => onChange('birth_date', e.target.value)}
+                        />
+                    </div>
                 </div>
             </CardContent>
         </Card>

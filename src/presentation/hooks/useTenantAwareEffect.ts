@@ -29,17 +29,24 @@ export function useTenantAwareEffect(
     callback: () => void | (() => void),
     deps: DependencyList = []
 ): void {
-    // ✅ Subscribe ONLY to the tenantIds string (primitive value)
-    // This ensures re-render when it changes
+    // Se suscribe SOLO al string de tenantIds (primitivo), que es estable bajo
+    // la comparación Object.is de zustand y dispara el efecto al cambiar.
+    //
+    // Se copia antes de ordenar: .sort() ordena IN-PLACE, así que sin el spread
+    // este selector mutaba state.filter.tenantIds del store en cada render —
+    // fuera de un set(), y durante el render (los selectores deben ser puros).
     const tenantIdsKey = useTenantFilterStore(
-        state => state.filter.tenantIds.sort().join(',')  // Sort for stable comparison
+        state => [...state.filter.tenantIds].sort().join(',')
     );
 
     useEffect(() => {
         return callback();
+        // El spread es inherente al diseño: este hook envuelve useEffect con
+        // dependencias dinámicas, así que ESLint no puede verificarlas
+        // estáticamente (ni ver `callback`). Quien llama declara sus deps
+        // exactamente igual que en un useEffect, y ahí sí las valida la regla.
+        // tenantIdsKey es un string (primitivo): dispara el efecto al cambiar de
+        // empresa sin arrastrar la identidad del array del store.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-        ...deps,
-        tenantIdsKey,  // ✅ Primitive string - guaranteed to trigger re-render
-    ]);
+    }, [...deps, tenantIdsKey]);
 }

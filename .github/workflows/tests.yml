@@ -7,6 +7,25 @@ on:
     branches: [main, develop]
 
 jobs:
+  access-matrix-guards:
+    name: Access Matrix Guards
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Sin composer install: el script lee config/access_matrix.php con require
+      # (es un array plano) y escanea el resto por texto. No arranca Laravel.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Check access matrix guards
+        run: php scripts/check-access-matrix.php
+
   backend-tests:
     name: Backend Tests (Laravel)
     runs-on: ubuntu-latest
@@ -65,6 +84,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Falla solo ante errores; los warnings (any, exhaustive-deps...) son
+      # deuda preexistente y no bloquean. Caza las Rules of Hooks y los
+      # selectores de zustand que devuelven un valor nuevo — las dos causas del
+      # "Maximum update depth exceeded" que costó un debug caro.
+      - name: Lint
+        run: npm run lint
 
       - name: Run tests
         run: npm run test:run

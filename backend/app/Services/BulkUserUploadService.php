@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserBatch;
@@ -15,6 +16,12 @@ use Illuminate\Support\Facades\Auth;
 
 class BulkUserUploadService
 {
+    /**
+     * Roles operativos asignables por organización (RP1-C). 'root' queda
+     * excluido a propósito: es un rol global, no se asigna por empresa.
+     */
+    private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
+
     // ────────────────────────────────────────────────────────────
     // CONFIGURACIÓN
     // ────────────────────────────────────────────────────────────
@@ -60,6 +67,12 @@ class BulkUserUploadService
             'supervisors_by_org' => $supervisorsByOrg,
             'max_organizations_limit' => 3,
             'default_organizations' => 1,
+            // Roles operativos asignables por organización (org{n}_rol en el
+            // Excel / selector por empresa en el editor). Se expone desde BD
+            // (sin hardcode) para que el frontend no tenga que duplicar la lista.
+            'available_roles' => Role::whereIn('name', self::ALLOWED_ORG_ROLES)
+                ->select('id', 'name', 'display_name')
+                ->get(),
         ];
     }
 
@@ -104,6 +117,31 @@ class BulkUserUploadService
                     if ($supervisor) {
                         $transformedOrg['supervisor_id'] = $supervisor->id;
                     }
+                }
+
+                // Propagar rol(es)/fecha de ingreso/saldo de vacaciones por
+                // empresa (RP1-C). Los campos ausentes se omiten; de los roles
+                // faltantes se encarga la validación, que los exige.
+                if (!empty($org['roles'])) {
+                    $transformedOrg['roles'] = is_array($org['roles'])
+                        ? array_values(array_filter(array_map('trim', $org['roles'])))
+                        : array_values(array_filter(array_map('trim', explode(',', (string) $org['roles']))));
+                }
+
+                if (!empty($org['hire_date'])) {
+                    $transformedOrg['hire_date'] = $org['hire_date'];
+                }
+
+                if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
+                    $transformedOrg['vacation_balance_initial'] = $org['vacation_balance_initial'];
+                }
+
+                if (!empty($org['department'])) {
+                    $transformedOrg['department'] = trim((string) $org['department']);
+                }
+
+                if (!empty($org['position'])) {
+                    $transformedOrg['position'] = trim((string) $org['position']);
                 }
 
                 $transformedOrgs[] = $transformedOrg;
@@ -160,27 +198,29 @@ class BulkUserUploadService
             $consolidated = $consolidationResult['data'];
             $errors = array_merge($errors, $consolidationResult['errors']);
 
-            // Validar emails que ya existen en BD
+            // Validar emails que ya existen en BD. La carga masiva solo da de
+            // alta usuarios nuevos, así que un usuario existente es un error
+            // que hay que resolver quitando la fila (ver ProcessUserChunk).
             $duplicateEmails = $this->checkDuplicateEmails($consolidated);
-            
+
             // Agregar errores de emails duplicados
             foreach ($duplicateEmails as $duplicate) {
                 $errors[] = [
                     'row' => $duplicate['row'] ?? 0,
                     'field' => 'email',
-                    'message' => "El email '{$duplicate['email']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                    'message' => "El email '{$duplicate['email']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}. La carga masiva solo da de alta usuarios nuevos: quita esta fila para continuar.",
                 ];
             }
 
             // Validar documentos que ya existen en BD
             $duplicateDocuments = $this->checkDuplicateDocuments($consolidated);
-            
+
             // Agregar errores de documentos duplicados
             foreach ($duplicateDocuments as $duplicate) {
                 $errors[] = [
                     'row' => $duplicate['row'] ?? 0,
                     'field' => 'numero_documento',
-                    'message' => "El documento '{$duplicate['document']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                    'message' => "El documento '{$duplicate['document']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}. La carga masiva solo da de alta usuarios nuevos: quita esta fila para continuar.",
                 ];
             }
 
@@ -270,13 +310,15 @@ class BulkUserUploadService
             $consolidated = $consolidationResult['data'];
             $errors = array_merge($errors, $consolidationResult['errors']);
 
-            // Validar emails que ya existen en BD
+            // Validar emails que ya existen en BD. La carga masiva solo da de
+            // alta usuarios nuevos, así que un usuario existente es un error
+            // que hay que resolver quitando la fila (ver ProcessUserChunk).
             $duplicateEmails = $this->checkDuplicateEmails($consolidated);
             foreach ($duplicateEmails as $duplicate) {
                 $errors[] = [
                     'row' => $duplicate['row'] ?? 0,
                     'field' => 'email',
-                    'message' => "El email '{$duplicate['email']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                    'message' => "El email '{$duplicate['email']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}. La carga masiva solo da de alta usuarios nuevos: quita esta fila para continuar.",
                 ];
             }
 
@@ -286,7 +328,7 @@ class BulkUserUploadService
                 $errors[] = [
                     'row' => $duplicate['row'] ?? 0,
                     'field' => 'numero_documento',
-                    'message' => "El documento '{$duplicate['document']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}",
+                    'message' => "El documento '{$duplicate['document']}' ya existe en el sistema para el usuario: {$duplicate['existing_user']}. La carga masiva solo da de alta usuarios nuevos: quita esta fila para continuar.",
                 ];
             }
 
@@ -345,7 +387,7 @@ class BulkUserUploadService
         $errors = [];
 
         // Campos requeridos
-        $required = ['nombre', 'apellido', 'email', 'tipo_documento', 'numero_documento', 'rol', 'estado'];
+        $required = ['nombre', 'apellido', 'email', 'tipo_documento', 'numero_documento', 'estado'];
         foreach ($required as $field) {
             if (empty($user[$field])) {
                 $errors[] = [
@@ -447,15 +489,6 @@ class BulkUserUploadService
             }
         }
 
-        // Validar rol
-        if (!empty($user['rol']) && !in_array($user['rol'], ['client', 'root', 'admin'])) {
-            $errors[] = [
-                'row' => $rowNumber,
-                'field' => 'rol',
-                'message' => 'Rol inválido',
-            ];
-        }
-
         // Validar estado
         if (!empty($user['estado']) && !in_array($user['estado'], ['active', 'inactive'])) {
             $errors[] = [
@@ -465,55 +498,139 @@ class BulkUserUploadService
             ];
         }
 
-        // Validar que roles client/admin tengan al menos una organización
-        $rol = $user['rol'] ?? '';
-        if (in_array($rol, ['client', 'admin'])) {
-            $hasValidOrg = false;
-            if (!empty($user['organizaciones']) && is_array($user['organizaciones'])) {
-                foreach ($user['organizaciones'] as $org) {
-                    if (!empty($org['ruc']) && is_string($org['ruc']) && trim($org['ruc']) !== '') {
-                        $hasValidOrg = true;
-                        break;
-                    }
+        // Toda fila debe traer al menos una empresa: el rol del usuario vive
+        // en la empresa (user_tenant_roles), así que una fila sin empresa
+        // crearía un usuario sin empresas y sin ningún rol. El único rol
+        // global es 'root', que no se da de alta por carga masiva.
+        $hasValidOrg = false;
+        if (!empty($user['organizaciones']) && is_array($user['organizaciones'])) {
+            foreach ($user['organizaciones'] as $org) {
+                if (!empty($org['ruc']) && is_string($org['ruc']) && trim($org['ruc']) !== '') {
+                    $hasValidOrg = true;
+                    break;
                 }
             }
-            
-            if (!$hasValidOrg) {
-                $errors[] = [
-                    'row' => $rowNumber,
-                    'field' => 'organizaciones',
-                    'message' => "Los usuarios con rol '{$rol}' deben tener al menos una organización asignada",
-                ];
-            }
+        }
+
+        if (!$hasValidOrg) {
+            $errors[] = [
+                'row' => $rowNumber,
+                'field' => 'organizaciones',
+                'message' => 'Debes asignar al menos una empresa',
+            ];
         }
 
         // Validar organizaciones (si existen)
         if (!empty($user['organizaciones'])) {
             foreach ($user['organizaciones'] as $orgIndex => $org) {
-                if (!empty($org['ruc'])) {
-                    // Verificar que la organización existe
-                    $tenant = Tenant::where('ruc', $org['ruc'])->first();
-                    if (!$tenant) {
+                // Una organización sin RUC es una fila en blanco del grid: no
+                // se valida ni se le exige rol (mismo criterio que
+                // UsersImport::parseOrganizations).
+                if (empty($org['ruc']) || trim((string) $org['ruc']) === '') {
+                    continue;
+                }
+
+                // Verificar que la organización existe
+                $tenant = Tenant::where('ruc', $org['ruc'])->first();
+                if (!$tenant) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => "organizaciones.{$orgIndex}.ruc",
+                        'message' => "Organización con RUC '{$org['ruc']}' no existe",
+                    ];
+                } else if (!empty($org['supervisor_email'])) {
+                    // Verificar que el supervisor existe y pertenece a la org
+                    $supervisor = User::where('email', $org['supervisor_email'])
+                        ->whereHas('tenants', fn($q) => $q->where('tenants.id', $tenant->id))
+                        ->whereHas('roles', fn($q) => $q->where('name', 'admin'))
+                        ->first();
+
+                    if (!$supervisor) {
                         $errors[] = [
                             'row' => $rowNumber,
-                            'field' => "organizaciones.{$orgIndex}.ruc",
-                            'message' => "Organización con RUC '{$org['ruc']}' no existe",
+                            'field' => "organizaciones.{$orgIndex}.supervisor_email",
+                            'message' => "Supervisor '{$org['supervisor_email']}' no existe o no pertenece a la organización",
                         ];
-                    } else if (!empty($org['supervisor_email'])) {
-                        // Verificar que el supervisor existe y pertenece a la org
-                        $supervisor = User::where('email', $org['supervisor_email'])
-                            ->whereHas('tenants', fn($q) => $q->where('tenants.id', $tenant->id))
-                            ->whereHas('roles', fn($q) => $q->where('name', 'admin'))
-                            ->first();
-                        
-                        if (!$supervisor) {
-                            $errors[] = [
-                                'row' => $rowNumber,
-                                'field' => "organizaciones.{$orgIndex}.supervisor_email",
-                                'message' => "Supervisor '{$org['supervisor_email']}' no existe o no pertenece a la organización",
-                            ];
-                        }
                     }
+                }
+
+                // Rol(es) operativos por organización (RP1-C). Requerido: es
+                // el único lugar donde la carga masiva asigna roles, así que
+                // sin él el usuario quedaría en la empresa sin permisos.
+                $orgRoles = [];
+                if (!empty($org['roles'])) {
+                    $orgRoles = is_array($org['roles'])
+                        ? $org['roles']
+                        : explode(',', (string) $org['roles']);
+
+                    $orgRoles = array_values(array_filter(array_map(
+                        fn($roleName) => strtolower(trim((string) $roleName)),
+                        $orgRoles
+                    )));
+                }
+
+                if (empty($orgRoles)) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => "organizaciones.{$orgIndex}.roles",
+                        'message' => 'Rol requerido en organización ' . ($orgIndex + 1)
+                            . ' (permitidos: ' . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                    ];
+                }
+
+                foreach ($orgRoles as $roleName) {
+                    if (!in_array($roleName, self::ALLOWED_ORG_ROLES, true)) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.roles",
+                            'message' => "Rol '{$roleName}' inválido en organización " . ($orgIndex + 1) . ' (permitidos: ' . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                        ];
+                    }
+                }
+
+                // Fecha de ingreso por organización
+                if (!empty($org['hire_date'])) {
+                    if (strtotime((string) $org['hire_date']) === false) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.hire_date",
+                            'message' => 'Fecha de ingreso inválida en organización ' . ($orgIndex + 1),
+                        ];
+                    }
+                }
+
+                // Saldo inicial de vacaciones por organización
+                if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
+                    if (!is_numeric($org['vacation_balance_initial'])) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.vacation_balance_initial",
+                            'message' => 'Saldo de vacaciones inválido en organización ' . ($orgIndex + 1) . ' (debe ser numérico)',
+                        ];
+                    } elseif ((float) $org['vacation_balance_initial'] < 0) {
+                        $errors[] = [
+                            'row' => $rowNumber,
+                            'field' => "organizaciones.{$orgIndex}.vacation_balance_initial",
+                            'message' => 'Saldo de vacaciones no puede ser negativo en organización ' . ($orgIndex + 1),
+                        ];
+                    }
+                }
+
+                // Departamento/cargo por organización (RP-B3)
+                if (!empty($org['department']) && strlen((string) $org['department']) > 255) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => "organizaciones.{$orgIndex}.department",
+                        'message' => 'Departamento inválido en organización ' . ($orgIndex + 1) . ' (máx. 255 caracteres)',
+                    ];
+                }
+
+                if (!empty($org['position']) && strlen((string) $org['position']) > 255) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => "organizaciones.{$orgIndex}.position",
+                        'message' => 'Cargo inválido en organización ' . ($orgIndex + 1) . ' (máx. 255 caracteres)',
+                    ];
                 }
             }
         }
@@ -652,7 +769,10 @@ class BulkUserUploadService
      */
     private function checkDuplicateConsistency(array $existing, array $new): array
     {
-        $fieldsToCheck = ['nombre', 'apellido', 'tipo_documento', 'numero_documento', 'rol', 'estado'];
+        // No se compara el rol: es por empresa (organizaciones[].roles), y dos
+        // filas del mismo usuario describen empresas distintas, así que roles
+        // distintos son lo esperado, no una inconsistencia.
+        $fieldsToCheck = ['nombre', 'apellido', 'tipo_documento', 'numero_documento', 'estado'];
         $inconsistentFields = [];
 
         foreach ($fieldsToCheck as $field) {
@@ -861,7 +981,8 @@ class BulkUserUploadService
                     'document_text' => $userData['numero_documento'],
                     'phone' => $userData['telefono'] ?? null,
                     'status' => $userData['estado'],
-                    'role_id' => $this->getRoleId($userData['rol']),
+                    // Los roles van por empresa dentro de tenants_config; no hay
+                    // rol de nivel de fila (ver formatTenantsConfig).
                     'tenants_config' => $this->formatTenantsConfig($userData['organizaciones']),
                 ];
 
@@ -891,21 +1012,39 @@ class BulkUserUploadService
     }
 
     /**
-     * Obtener ID del rol por nombre
+     * Resolver IDs de roles operativos a partir de sus nombres (lookup en BD,
+     * sin hardcode). Ignora nombres inexistentes o el rol 'root' (que no se
+     * asigna por empresa).
+     *
+     * @param array<string> $roleNames
+     * @return array<int>
      */
-    private function getRoleId(string $roleName): int
+    private function resolveRoleIdsByNames(array $roleNames): array
     {
-        $roleMap = [
-            'root' => 1,
-            'admin' => 2,
-            'client' => 3,
-        ];
+        $names = array_values(array_unique(array_filter(array_map(
+            fn($name) => strtolower(trim((string) $name)),
+            $roleNames
+        ))));
 
-        return $roleMap[$roleName] ?? 3; // Default: client
+        if (empty($names)) {
+            return [];
+        }
+
+        return Role::whereIn('name', $names)
+            ->where('name', '!=', 'root')
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->all();
     }
 
     /**
      * Formatear organizaciones al formato que espera UserService
+     *
+     * Por cada organización se emite tenant_id, is_primary, supervisor_id y,
+     * si vienen en el Excel/grid (RP1-C), role_ids (resueltos por nombre),
+     * hire_date y vacation_balance_initial. Los roles son la única fuente de
+     * permisos de la carga masiva (no hay rol de nivel de fila), y validateData
+     * exige al menos uno por organización.
      */
     private function formatTenantsConfig(array $organizations): array
     {
@@ -924,11 +1063,30 @@ class BulkUserUploadService
                 $supervisorId = $supervisor?->id;
             }
 
-            $tenantsConfig[] = [
+            $item = [
                 'tenant_id' => $tenant->id,
                 'is_primary' => $index === 0, // Primera organización es primaria
                 'supervisor_id' => $supervisorId,
             ];
+
+            if (!empty($org['roles'])) {
+                $roleIds = $this->resolveRoleIdsByNames(
+                    is_array($org['roles']) ? $org['roles'] : explode(',', (string) $org['roles'])
+                );
+                if (!empty($roleIds)) {
+                    $item['role_ids'] = $roleIds;
+                }
+            }
+
+            if (!empty($org['hire_date'])) {
+                $item['hire_date'] = $org['hire_date'];
+            }
+
+            if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
+                $item['vacation_balance_initial'] = $org['vacation_balance_initial'];
+            }
+
+            $tenantsConfig[] = $item;
         }
 
         return $tenantsConfig;

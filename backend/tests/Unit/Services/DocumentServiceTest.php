@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\DocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -29,16 +30,23 @@ class DocumentServiceTest extends TestCase
 
         $this->seed(\Database\Seeders\RoleSeeder::class);
 
-        $this->documentService = new DocumentService();
+        $this->documentService = new DocumentService(new AuditService());
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
         $this->docType = DocumentType::factory()->create();
 
-        $this->client = User::factory()->client()->create(['status' => 'active']);
-        $this->client->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // withTenantRole asigna el rol DENTRO de la empresa (user_tenant_roles),
+        // que es lo que se usa para autorizar. Los states client()/admin() solo
+        // escriben el rol global (user_roles), que es un respaldo de display.
+        $this->client = User::factory()
+            ->client()
+            ->withTenantRole($this->tenant, 'client', true)
+            ->create(['status' => 'active']);
 
-        $this->admin = User::factory()->admin()->create(['status' => 'active']);
-        $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        $this->admin = User::factory()
+            ->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
 
         $this->root = User::factory()->root()->create(['status' => 'active']);
     }
@@ -180,6 +188,79 @@ class DocumentServiceTest extends TestCase
         $canAccess = $this->documentService->canAccessDocument($otherAdmin, $document);
 
         $this->assertFalse($canAccess);
+    }
+
+    /**
+     * REGRESIÓN (fuga de privilegios entre empresas): un usuario multi-empresa
+     * que es admin en una NO debe poder leer ni borrar documentos ajenos de otra
+     * empresa donde solo es client.
+     *
+     * Antes del fix, canAccessDocument/deleteDocument resolvían el rol con
+     * getCurrentRole() (respaldo global = unión de roles de todas sus empresas),
+     * que devolvía 'admin' y, como el usuario sí pertenece a la empresa B,
+     * concedía el acceso. Ahora el rol se resuelve dentro de la empresa DEL
+     * DOCUMENTO.
+     */
+    public function test_admin_in_one_tenant_cannot_access_documents_of_tenant_where_is_only_client(): void
+    {
+        $tenantB = Tenant::factory()->create(['status' => 'active']);
+
+        // Admin en la empresa principal, pero solo client en la empresa B.
+        // ->admin() reproduce el respaldo global (user_roles) que en producción
+        // mantiene UserService::syncGlobalRoleFallback con la UNIÓN de los roles
+        // de todas las empresas. Es imprescindible para que este test sea una
+        // regresión real: es justo ese 'admin' global el que el código anterior
+        // leía con getCurrentRole() para conceder el acceso indebido.
+        $multiTenant = User::factory()
+            ->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->withTenantRole($tenantB, 'client')
+            ->create(['status' => 'active']);
+
+        $colleagueInB = User::factory()->withTenantRole($tenantB, 'client', true)->create();
+
+        // Documento AJENO dentro de la empresa B.
+        $documentInB = Document::factory()->create([
+            'user_id' => $colleagueInB->id,
+            'tenant_id' => $tenantB->id,
+            'doc_type_id' => $this->docType->id,
+            'uploaded_by' => $colleagueInB->id,
+        ]);
+
+        $this->assertFalse(
+            $this->documentService->canAccessDocument($multiTenant, $documentInB),
+            'FUGA: en la empresa B solo es client, no debe ver documentos ajenos '
+            . 'aunque sea admin en otra empresa.'
+        );
+
+        $this->expectException(UnauthorizedAccessException::class);
+        $this->documentService->deleteDocument($documentInB->id, $multiTenant);
+    }
+
+    /**
+     * La contraparte: en la empresa donde SÍ es admin, el acceso funciona.
+     * (Evita que el test de arriba pase por un deny-all accidental.)
+     */
+    public function test_multi_tenant_user_can_access_documents_where_actually_admin(): void
+    {
+        $tenantB = Tenant::factory()->create(['status' => 'active']);
+
+        $multiTenant = User::factory()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->withTenantRole($tenantB, 'client')
+            ->create(['status' => 'active']);
+
+        $documentInPrimary = Document::factory()->create([
+            'user_id' => $this->client->id,
+            'tenant_id' => $this->tenant->id,
+            'doc_type_id' => $this->docType->id,
+            'uploaded_by' => $this->admin->id,
+        ]);
+
+        $this->assertTrue(
+            $this->documentService->canAccessDocument($multiTenant, $documentInPrimary),
+            'Como admin en esta empresa sí debe poder ver documentos ajenos de ella.'
+        );
     }
 
     public function test_filter_documents_by_status(): void

@@ -1,4 +1,4 @@
-import { Tenant, CreateTenantData, UpdateTenantData } from '@/core/domain/entities';
+import { Tenant, CreateTenantData, UpdateTenantData, TenantSmtpTestResult } from '@/core/domain/entities';
 import { ITenantRepository, GetTenantsParams } from '@/core/domain/repositories/ITenantRepository';
 import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
 import { PaginatedResponse } from './types';
@@ -99,6 +99,19 @@ export class TenantRepository implements ITenantRepository {
   async removeUser(tenantId: string, userId: string): Promise<void> {
     try {
       await apiClient.delete(`/tenants/${tenantId}/users/${userId}`);
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Probar la conexión SMTP guardada de la empresa (botón "Probar conexión",
+   * ítem 24-menor). Solo root; el backend valida y responde 403 si no.
+   */
+  async testSmtp(tenantId: string): Promise<TenantSmtpTestResult> {
+    try {
+      const response = await apiClient.post<TenantSmtpTestResult>(`/tenants/${tenantId}/smtp/test`);
+      return response.data;
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }

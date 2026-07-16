@@ -24,7 +24,11 @@ class CreateVacationRequestRequest extends FormRequest
         return [
             'start_date' => ['required', 'date', 'after_or_equal:today'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'days_requested' => ['required', 'numeric', 'min:0.5', 'max:30'],
+            // Tope de sanidad (1 año calendario). El límite real de negocio
+            // lo aplica VacationService::validateSufficientBalance contra el
+            // saldo disponible del usuario (VacationBalanceService), que
+            // puede superar los 30 días si acumuló varios años de servicio.
+            'days_requested' => ['required', 'numeric', 'min:0.5', 'max:365'],
             'reason' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -43,7 +47,7 @@ class CreateVacationRequestRequest extends FormRequest
             'end_date.after_or_equal' => 'La fecha de fin debe ser igual o posterior a la fecha de inicio.',
             'days_requested.required' => 'La cantidad de días es obligatoria.',
             'days_requested.min' => 'Debes solicitar al menos medio día.',
-            'days_requested.max' => 'No puedes solicitar más de 30 días.',
+            'days_requested.max' => 'No puedes solicitar más de 365 días.',
             'reason.max' => 'El motivo no puede exceder 1000 caracteres.',
         ];
     }

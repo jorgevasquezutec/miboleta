@@ -28,10 +28,10 @@ class AuthController extends Controller
      *     path="/api/login",
      *     tags={"Autenticación"},
      *     summary="Iniciar sesión",
-     *     description="Autenticación de usuario con email y password. Retorna cookies HttpOnly con access y refresh tokens.
-     * 
+     *     description="Autenticación de usuario con email o número de documento (DNI) y password. Retorna cookies HttpOnly con access y refresh tokens.
+     *
      * **Usuarios de prueba disponibles:**
-     * 
+     *
      * 1. **Root Admin** - root@miboleta.com / password (sin tenant, acceso total)
      * 2. **Admin ABC** - admin@corporacionabc.com / password (admin de Corporación ABC)
      * 3. **Juan Pérez** - juan.perez@corporacionabc.com / password (cliente de Corporación ABC)
@@ -41,8 +41,8 @@ class AuthController extends Controller
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"email","password"},
-     *             @OA\Property(property="email", type="string", format="email", example="admin@corporacionabc.com"),
+     *             required={"login","password"},
+     *             @OA\Property(property="login", type="string", example="admin@corporacionabc.com", description="Email o número de documento (DNI)"),
      *             @OA\Property(property="password", type="string", format="password", example="password")
      *         )
      *     ),
@@ -73,7 +73,7 @@ class AuthController extends Controller
         $validated = $request->validated();
 
         $result = $this->authService->attemptLogin(
-            $validated['email'],
+            $validated['login'],
             $validated['password'],
             $request->ip(),
             $request->userAgent()
@@ -81,28 +81,28 @@ class AuthController extends Controller
 
         if (!$result) {
             // Log failed login attempt
-            $this->auditService->logLoginFailed($validated['email'], 'Invalid credentials');
+            $this->auditService->logLoginFailed($validated['login'], 'Invalid credentials');
 
             throw ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas son incorrectas.'],
+                'login' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 
         // Check for specific error codes
         if (isset($result['error'])) {
             if ($result['error'] === 'user_inactive') {
-                $this->auditService->logLoginFailed($validated['email'], 'User inactive');
+                $this->auditService->logLoginFailed($validated['login'], 'User inactive');
 
                 throw ValidationException::withMessages([
-                    'email' => ['Tu cuenta se encuentra inactiva. Contacta al administrador.'],
+                    'login' => ['Tu cuenta se encuentra inactiva. Contacta al administrador.'],
                 ]);
             }
 
             if ($result['error'] === 'tenant_inactive') {
-                $this->auditService->logLoginFailed($validated['email'], 'Organization inactive');
+                $this->auditService->logLoginFailed($validated['login'], 'Organization inactive');
 
                 throw ValidationException::withMessages([
-                    'email' => ['Tu organización se encuentra inactiva. Contacta al administrador.'],
+                    'login' => ['Tu organización se encuentra inactiva. Contacta al administrador.'],
                 ]);
             }
         }
@@ -113,6 +113,11 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => $this->authService->transformAuthUser($result['user']),
+            // Matriz de Accesos (config/access_matrix.php), fuente única de
+            // verdad. El frontend la guarda y evalúa can(ability) contra el rol
+            // activo (currentRole), que cambia al conmutar de empresa/rol sin
+            // re-login. Ver también GET /api/access-matrix.
+            'access_matrix' => config('access_matrix'),
         ])
             ->cookie($this->authService->createAccessTokenCookie($result['access_token']))
             ->cookie($this->authService->createRefreshTokenCookie($result['refresh_token']->token));
@@ -185,7 +190,15 @@ class AuthController extends Controller
         $user = $request->user();
         $user->load(['roles', 'tenants']);
 
-        return response()->json($this->authService->transformAuthUser($user));
+        // NOTA: /me devuelve el usuario plano en la raíz, mientras que /login lo
+        // envuelve en {user: ...}. Es una asimetría preexistente que no se
+        // corrige aquí para no romper UserRepository.me()/login().
+        // 'access_matrix' se agrega como campo hermano (aditivo).
+        return response()->json(
+            $this->authService->transformAuthUser($user) + [
+                'access_matrix' => config('access_matrix'),
+            ]
+        );
     }
 
     /**

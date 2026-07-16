@@ -56,7 +56,7 @@ export default defineConfig(({ mode }) => ({
     // Proxy API requests to Laravel backend
     proxy: {
       '/api': {
-        target: 'http://localhost',
+        target: `http://localhost:${process.env.MIBOLETA_HTTP_PORT || 8090}`,
         changeOrigin: true,
         secure: false,
       },

@@ -59,22 +59,40 @@ class UserController extends Controller
         $user = $request->user();
 
         // Query base
-        $query = User::with(['roles', 'tenants']);
+        $query = User::with(['roles', 'tenants', 'tenantRoles.role']);
 
-        // Root ve todos los usuarios
+        // Techo de visibilidad: un no-root nunca ve más allá de sus empresas.
+        // Root no tiene techo (ve el catálogo completo de la plataforma).
         if (!$user->isRoot()) {
-            // Admin y Client solo ven usuarios de sus tenants
             $tenantIds = $user->tenants->pluck('id');
             $query->whereHas('tenants', function ($q) use ($tenantIds) {
                 $q->whereIn('tenants.id', $tenantIds);
             });
         }
 
-        // Filtro por tenant específico
-        if ($request->has('tenant_id')) {
+        if ($request->filled('tenant_id')) {
+            // Override explícito a una empresa concreta. Lo usan el dropdown de
+            // root y SupervisorSelector, que consulta ?tenant_id por CADA empresa
+            // del formulario —incluidas las que no son la activa—, así que el
+            // param tiene que ganarle al header en vez de intersecarse con él.
+            // Para un no-root sigue acotado por el whereHas de arriba, o sea no
+            // puede alcanzar una empresa ajena.
             $query->whereHas('tenants', function ($q) use ($request) {
                 $q->where('tenants.id', $request->tenant_id);
             });
+        } else {
+            // Default: la empresa activa del switcher (header X-Tenant-Ids, ya
+            // validado por TenantFilter en `_tenant_filter_ids`). Es el mismo
+            // contrato que TenantFilterScope aplica a Document/VacationRequest/
+            // UserBatch, adaptado a mano porque User no tiene columna tenant_id
+            // (su relación con empresas es m2m vía el pivote user_tenants).
+            // Sin header (cliente antiguo) no se estrecha nada: queda el techo.
+            $filterIds = $request->input('_tenant_filter_ids');
+            if (is_array($filterIds) && !empty($filterIds)) {
+                $query->whereHas('tenants', function ($q) use ($filterIds) {
+                    $q->whereIn('tenants.id', $filterIds);
+                });
+            }
         }
 
         // Búsqueda por nombre, email o documento
@@ -110,6 +128,10 @@ class UserController extends Controller
                     });
                 }
 
+                // Roles por empresa (user_tenant_roles), agrupados una sola vez
+                // por usuario para evitar N+1 al mapear cada tenant de más abajo.
+                $tenantRolesByTenant = $u->tenantRoles->groupBy('tenant_id');
+
                 return [
                     'id' => $u->id,
                     'name' => $u->name,
@@ -122,10 +144,10 @@ class UserController extends Controller
                     'status' => $u->status,
                     'role' => $u->getCurrentRole(),
                     'roles' => $u->getCurrentRoles(),
-                    'tenants' => $visibleTenants->map(function($t) {
+                    'tenants' => $visibleTenants->map(function($t) use ($tenantRolesByTenant) {
                         $supervisorId = $t->pivot->supervisor_id ?? null;
                         $supervisor = null;
-                        
+
                         // Cargar información del supervisor si existe
                         if ($supervisorId) {
                             $supervisorUser = \App\Models\User::find($supervisorId);
@@ -138,14 +160,25 @@ class UserController extends Controller
                                 ];
                             }
                         }
-                        
+
+                        $tenantRoles = $tenantRolesByTenant->get($t->id) ?? collect();
+                        $tenantRoleNames = $tenantRoles->pluck('role.name')->filter()->values();
+
                         return [
                             'id' => $t->id,
                             'name' => $t->name,
                             'ruc' => $t->ruc ?? '',
-                            'is_primary' => $t->pivot->is_primary ?? false,
+                            // Cast explícito: el pivote entrega el 0/1 de la BD y
+                            // el contrato (User.ts) declara boolean. Sin esto, un
+                            // `{x.is_primary && ...}` en JSX renderiza el 0.
+                            'is_primary' => (bool) ($t->pivot->is_primary ?? false),
                             'supervisor_id' => $supervisorId,
                             'supervisor' => $supervisor,
+                            // Roles operativos del usuario en ESTA empresa (para
+                            // filtrar el selector de supervisor a admins de la
+                            // empresa correcta, no del rol global del usuario).
+                            'roles' => $tenantRoleNames,
+                            'role' => \App\Models\User::highestPriorityRole($tenantRoleNames),
                         ];
                     })->values(),  // ✅ Reset array keys after filter
                     'created_at' => $u->created_at,
@@ -183,7 +216,7 @@ class UserController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $user = User::with(['roles', 'tenants'])->findOrFail($id);
+        $user = User::with(['roles', 'tenants', 'tenantRoles.role'])->findOrFail($id);
 
         // Verificar acceso
         $currentUser = $request->user();
@@ -247,7 +280,7 @@ class UserController extends Controller
         if (
             array_key_exists('email', $validated)
             && $validated['email'] !== $user->email
-            && $currentUser->getCurrentRole() !== 'root'
+            && !$currentUser->isRoot()
         ) {
             return response()->json([
                 'message' => 'Solo el rol root puede cambiar el correo de un usuario.',
@@ -285,8 +318,18 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
+        // Solo root puede eliminar usuarios (Matriz de Accesos: 'users.delete').
+        $this->authorize('users.delete');
+
         // Verificar acceso
         $currentUser = $request->user();
+
+        // Nadie puede eliminarse a sí mismo. Es una regla sobre el par
+        // (actor, objetivo), no sobre el rol, así que no cabe en una ability
+        // booleana de la matriz y vive aquí.
+        if ($currentUser->id === $user->id) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
         if (!$this->userService->canAccessUser($currentUser, $user)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }

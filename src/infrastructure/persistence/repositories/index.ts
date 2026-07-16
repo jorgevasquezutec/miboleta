@@ -5,3 +5,7 @@ export * from './TenantRepository';
 export * from './VacationRepository';
 export * from './NotificationRepository';
 export * from './ReportsRepository';
+export * from './RoleRepository';
+export * from './SignatureSettingsRepository';
+export * from './PlatformSettingsRepository';
+export * from './AuditSettingsRepository';

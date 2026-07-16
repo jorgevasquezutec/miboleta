@@ -2,17 +2,22 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AdminResetPasswordRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        // Solo root y admin pueden resetear contraseñas
-        return $this->user() && in_array($this->user()->getCurrentRole(), ['root', 'admin'], true);
+        // Matriz: 'users.reset_password' = root, admin_tenant. Cambia respecto
+        // del hardcode anterior ['root','admin']: 'admin' ya no puede resetear
+        // contraseñas y 'admin_tenant' sí.
+        return $this->allowsAbility('users.reset_password');
     }
 
     /**

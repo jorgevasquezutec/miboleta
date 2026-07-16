@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/presentation/components/ui/button';
@@ -21,7 +21,11 @@ export function UserBatchesListPage() {
     const [perPage, setPerPage] = useState(12);
     const [statusFilter, setStatusFilter] = useState<string>('');
 
-    const fetchBatches = async () => {
+    // useCallback para que la identidad solo cambie con los filtros reales: así
+    // el efecto puede depender de fetchBatches (lo que ESLint exige) sin
+    // recrearla en cada render, que dispararía un fetch por render en bucle.
+    // Las dependencias son las mismas que ya declaraba el efecto.
+    const fetchBatches = useCallback(async () => {
         setIsLoading(true);
         try {
             const data: PaginatedBatchList = await bulkUserUploadService.listBatches({
@@ -39,11 +43,11 @@ export function UserBatchesListPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [currentPage, perPage, statusFilter]);
 
     useEffect(() => {
         fetchBatches();
-    }, [currentPage, perPage, statusFilter]);
+    }, [fetchBatches]);
 
     const handleBatchClick = (id: number) => {
         navigate(`/users/batch/${id}`);

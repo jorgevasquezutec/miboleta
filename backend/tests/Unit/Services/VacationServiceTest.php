@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Models\VacationRequest;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Services\TenantMailerService;
+use App\Services\VacationBalanceService;
 use App\Services\VacationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -33,8 +35,9 @@ class VacationServiceTest extends TestCase
 
         $notificationService = $this->createMock(NotificationService::class);
         $auditService = $this->createMock(AuditService::class);
+        $tenantMailerService = $this->createMock(TenantMailerService::class);
 
-        $this->vacationService = new VacationService($notificationService, $auditService);
+        $this->vacationService = new VacationService($notificationService, $auditService, new VacationBalanceService(), $tenantMailerService);
 
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
 
@@ -45,10 +48,19 @@ class VacationServiceTest extends TestCase
         $this->employee->tenants()->attach($this->tenant->id, [
             'is_primary' => true,
             'supervisor_id' => $this->supervisor->id,
+            // Saldo inicial suficiente para que los tests de creación de
+            // solicitudes (p. ej. 4-5 días) no choquen con la validación de
+            // saldo disponible (VacationService::validateSufficientBalance).
+            'vacation_balance_initial' => 30,
         ]);
 
-        $this->admin = User::factory()->admin()->create(['status' => 'active']);
-        $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // withTenantRole asigna el rol DENTRO de la empresa (user_tenant_roles),
+        // que es lo que se usa para autorizar; admin() solo escribe el rol
+        // global (user_roles), que es un respaldo de display.
+        $this->admin = User::factory()
+            ->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
     }
 
     public function test_create_request_succeeds_with_valid_data(): void
@@ -158,6 +170,38 @@ class VacationServiceTest extends TestCase
 
         $this->assertEquals('approved', $approved->status);
         $this->assertEquals($this->admin->id, $approved->approved_by);
+    }
+
+    /**
+     * REGRESIÓN (fuga entre empresas): admin en la empresa A, client en la B.
+     * No debe poder aprobar solicitudes de vacaciones de la empresa B.
+     *
+     * Antes, verifySupervisor() resolvía el rol con getCurrentRole() (respaldo
+     * global = unión de roles de todas sus empresas, que en producción mantiene
+     * syncGlobalRoleFallback). Devolvía 'admin' y saltaba el chequeo de
+     * supervisor, aprobando en una empresa donde no es admin.
+     */
+    public function test_admin_in_one_tenant_cannot_approve_requests_of_another_tenant(): void
+    {
+        $tenantB = Tenant::factory()->create(['status' => 'active']);
+
+        // ->admin() reproduce el respaldo global; sin él el test no probaría nada.
+        $multiTenant = User::factory()
+            ->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->withTenantRole($tenantB, 'client')
+            ->create(['status' => 'active']);
+
+        $employeeInB = User::factory()->withTenantRole($tenantB, 'client', true)->create();
+
+        $requestInB = VacationRequest::factory()->create([
+            'user_id' => $employeeInB->id,
+            'tenant_id' => $tenantB->id,
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(UnauthorizedAccessException::class);
+        $this->vacationService->approveRequest($requestInB, $multiTenant);
     }
 
     public function test_approve_fails_for_non_supervisor(): void

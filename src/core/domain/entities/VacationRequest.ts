@@ -1,4 +1,10 @@
 // Domain Entity - VacationRequest (aligned with backend)
+// `LaborRegime` vive en `./Tenant` (es una propiedad de la empresa) y ya se
+// reexporta desde ahí en el barrel `entities/index.ts` — solo se importa
+// aquí para tipar `VacationBalance`, sin volver a exportarlo (evitaría
+// ambigüedad de nombres duplicados en el `export *` del barrel).
+import type { LaborRegime } from './Tenant';
+
 export interface VacationRequest {
     id: number;
     userId: number;
@@ -60,6 +66,28 @@ export interface CreateVacationRequestDTO {
 
 export interface RejectVacationRequestDTO {
     reason: string;
+}
+
+// ============ Vacation Balance ============
+// Aligned with backend GET /vacation-requests/balance (Sprint 2)
+
+export interface VacationBalanceApprover {
+    id: number;
+    fullName: string;
+    email?: string;
+}
+
+export interface VacationBalance {
+    tenantId: number;
+    laborRegime: LaborRegime;
+    daysPerYear: number;
+    initial: number;
+    accrued: number;
+    taken: number;
+    available: number;
+    hireDate: string | null;
+    yearsOfService: number;
+    approver: VacationBalanceApprover | null;
 }
 
 // Status helpers

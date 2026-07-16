@@ -149,7 +149,6 @@ export class BulkUserUploadService {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('send_welcome_emails', options.send_welcome_emails ? '1' : '0');
-        formData.append('update_existing', options.update_existing ? '1' : '0');
 
         const response = await apiClient.post('/user-batches', formData, {
             headers: {
@@ -180,7 +179,6 @@ export class BulkUserUploadService {
         const response = await apiClient.post('/user-batches/upload-data', {
             users,
             send_welcome_emails: options.send_welcome_emails,
-            update_existing: options.update_existing,
         });
 
         return response.data;

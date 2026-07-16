@@ -6,6 +6,7 @@ use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReprocessChunkRequest;
 use App\Http\Requests\UploadZipBatchRequest;
+use App\Services\ActiveTenantResolver;
 use App\Services\DocumentBatchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,8 @@ use Illuminate\Support\Facades\Auth;
 class DocumentBatchController extends Controller
 {
     public function __construct(
-        protected DocumentBatchService $batchService
+        protected DocumentBatchService $batchService,
+        protected ActiveTenantResolver $activeTenantResolver
     ) {
     }
 
@@ -94,7 +96,11 @@ class DocumentBatchController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$this->batchService->canAccessBatches($user)) {
+        // El rol se evalúa dentro de la empresa activa (header X-Tenant-Ids, ya
+        // validado por TenantFilter), no con el respaldo global de roles.
+        $activeTenantId = $this->activeTenantResolver->resolve($request, $user);
+
+        if (!$this->batchService->canAccessBatches($user, $activeTenantId)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 

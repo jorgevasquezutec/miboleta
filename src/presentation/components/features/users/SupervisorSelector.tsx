@@ -120,18 +120,55 @@ export function SupervisorSelector({
         setSearch('');
     };
 
+    // Roles válidos de supervisión (ítem 31): quien figure como "jefe
+    // inmediato" de un usuario en una empresa debe tener uno de estos roles
+    // EN ESA empresa. Debe reflejar exactamente
+    // StoreUserRequest::VALID_SUPERVISOR_ROLES / UpdateUserRequest en el backend.
+    const VALID_SUPERVISOR_ROLES = ['admin', 'admin_tenant', 'aprobador'];
+
     const getRoleBadge = (role: string) => {
         const variants: Record<string, string> = {
             admin: 'bg-blue-100 text-blue-800',
+            admin_tenant: 'bg-purple-100 text-purple-800',
+            aprobador: 'bg-amber-100 text-amber-800',
         };
         const labels: Record<string, string> = {
             admin: 'Admin',
+            admin_tenant: 'Admin Tenant',
+            aprobador: 'Aprobador',
         };
         return (
             <Badge variant="outline" className={variants[role] || ''}>
                 {labels[role] || role}
             </Badge>
         );
+    };
+
+    /**
+     * Un usuario solo puede ser supervisor si tiene alguno de los
+     * VALID_SUPERVISOR_ROLES (admin, admin_tenant o aprobador) EN LA EMPRESA
+     * que se está configurando (tenantIds), no en cualquier otra empresa a
+     * la que también pertenezca (modelo híbrido: los roles son por empresa,
+     * ver user_tenant_roles). Se usa `tenant.roles`/`tenant.role` (ya
+     * resueltos por el backend); si no vienen (respuesta más antigua), se
+     * cae al `role` global del usuario como último recurso.
+     */
+    const isValidSupervisorInTenants = (candidate: User): boolean => {
+        if (tenantIds.length === 0) return false;
+
+        const matchesTenant = candidate.tenants?.some(t => {
+            if (!tenantIds.includes(String(t.id))) return false;
+            if (t.roles && t.roles.length > 0) {
+                return t.roles.some(r => VALID_SUPERVISOR_ROLES.includes(r));
+            }
+            if (t.role) return VALID_SUPERVISOR_ROLES.includes(t.role);
+            return false;
+        });
+
+        if (matchesTenant !== undefined) return matchesTenant;
+
+        // Fallback legado: rol global (respuestas sin roles por empresa).
+        return VALID_SUPERVISOR_ROLES.includes(candidate.role);
     };
 
     return (
@@ -198,7 +235,7 @@ export function SupervisorSelector({
                         ) : (
                             <div className="p-1">
                                 {users.map((user) => {
-                                    const isSelectable = user.role === 'admin';
+                                    const isSelectable = isValidSupervisorInTenants(user);
                                     return (
                                         <div
                                             key={user.id}
@@ -220,7 +257,7 @@ export function SupervisorSelector({
                                                         {user.full_name || `${user.name} ${user.last_name || ''}`}
                                                     </p>
                                                     {!isSelectable && (
-                                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1 rounded">No Admin</span>
+                                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1 rounded">No supervisor</span>
                                                     )}
                                                 </div>
                                                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
@@ -242,7 +279,7 @@ export function SupervisorSelector({
                     <div className="border-t px-3 py-2 text-xs text-gray-500">
                         {tenantIds.length === 0
                             ? 'Selecciona al menos una organización para ver los supervisores disponibles'
-                            : 'Solo usuarios Administradores de las organizaciones seleccionadas'}
+                            : 'Solo usuarios Administrador, Administrador de Empresa (Tenant) o Aprobador de las organizaciones seleccionadas'}
                     </div>
                 </PopoverContent>
             </Popover>

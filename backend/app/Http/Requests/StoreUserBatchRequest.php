@@ -2,16 +2,25 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreUserBatchRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return true;
+        // FIX B2.1: la carga masiva puede crear/actualizar usuarios con
+        // cualquier rol operativo; sin este chequeo, CUALQUIER usuario
+        // autenticado (p.ej. un 'client') podía disparar POST
+        // /api/user-batches.
+        // Matriz: 'users.bulk_upload' = root, admin_tenant. 'admin' ya no puede
+        // (la matriz no se lo concede); el rol se resuelve en la empresa ACTIVA.
+        return $this->allowsAbility('users.bulk_upload');
     }
 
     /**
@@ -24,7 +33,6 @@ class StoreUserBatchRequest extends FormRequest
         return [
             'file' => 'required|file|mimes:xlsx,xls|max:10240', // 10MB max
             'send_welcome_emails' => 'boolean',
-            'update_existing' => 'boolean',
         ];
     }
 

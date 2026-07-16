@@ -14,10 +14,16 @@ class UserTenant extends Model
         'user_id',
         'tenant_id',
         'is_primary',
+        'hire_date',
+        'vacation_balance_initial',
+        'department',
+        'position',
     ];
 
     protected $casts = [
         'is_primary' => 'boolean',
+        'hire_date' => 'date',
+        'vacation_balance_initial' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

@@ -23,6 +23,7 @@ class UserResource extends JsonResource
             'document_type' => $this->document_type,
             'document_text' => $this->document_text,
             'phone' => $this->phone,
+            'birth_date' => $this->birth_date?->format('Y-m-d'),
             'status' => $this->status,
             'must_change_password' => $this->must_change_password,
             'role' => $this->getCurrentRole(),
@@ -40,10 +41,16 @@ class UserResource extends JsonResource
                     });
                 }
 
-                return $visibleTenants->map(function ($tenant) {
+                // Roles por empresa (user_tenant_roles), agrupados una sola vez
+                // para evitar N+1 al mapear cada tenant de más abajo.
+                $tenantRolesByTenant = $this->relationLoaded('tenantRoles')
+                    ? $this->tenantRoles->groupBy('tenant_id')
+                    : collect();
+
+                return $visibleTenants->map(function ($tenant) use ($tenantRolesByTenant) {
                     $supervisorId = $tenant->pivot->supervisor_id ?? null;
                     $supervisor = null;
-                    
+
                     // Cargar información del supervisor si existe
                     if ($supervisorId) {
                         $supervisorUser = \App\Models\User::find($supervisorId);
@@ -56,7 +63,11 @@ class UserResource extends JsonResource
                             ];
                         }
                     }
-                    
+
+                    $tenantRoles = $tenantRolesByTenant->get($tenant->id) ?? collect();
+                    $tenantRoleNames = $tenantRoles->pluck('role.name')->filter()->values();
+                    $tenantRoleIds = $tenantRoles->pluck('role_id')->filter()->values();
+
                     return [
                         'id' => $tenant->id,
                         'name' => $tenant->name,
@@ -64,6 +75,18 @@ class UserResource extends JsonResource
                         'is_primary' => $tenant->pivot->is_primary ?? false,
                         'supervisor_id' => $supervisorId,
                         'supervisor' => $supervisor,
+                        // Roles operativos del usuario en esta empresa: base para
+                        // pre-seleccionar el multi-select de UserFormPage.
+                        'roles' => $tenantRoleNames,
+                        'role' => \App\Models\User::highestPriorityRole($tenantRoleNames),
+                        'role_ids' => $tenantRoleIds,
+                        'hire_date' => $tenant->pivot->hire_date
+                            ? \Illuminate\Support\Carbon::parse($tenant->pivot->hire_date)->format('Y-m-d')
+                            : null,
+                        'vacation_balance_initial' => $tenant->pivot->vacation_balance_initial,
+                        // Departamento/cargo del usuario en esta empresa (RP-B3).
+                        'department' => $tenant->pivot->department ?? null,
+                        'position' => $tenant->pivot->position ?? null,
                     ];
                 })->values();  // ✅ Reset array keys after filter
             }),

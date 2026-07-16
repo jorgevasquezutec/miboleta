@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\Log;
 
 class DocumentService
 {
+    public function __construct(
+        protected AuditService $auditService
+    ) {
+    }
+
     /**
      * Get documents with filters based on user role.
      *
@@ -81,14 +86,15 @@ class DocumentService
      */
     public function getOrphanDocuments(User $user, array $filters = []): LengthAwarePaginator
     {
-        $role = $user->getCurrentRole();
         $tenantId = $filters['tenant_id'] ?? $user->tenants->first()?->id;
 
         $query = Document::orphan()
             ->with(['documentType', 'batch:id,period,original_filename'])
             ->orderBy('created_at', 'desc');
 
-        if ($tenantId && $role !== 'root') {
+        // isRoot() en vez de getCurrentRole() !== 'root': mismo resultado pero
+        // determinístico (root es global; el respaldo global de roles no).
+        if ($tenantId && !$user->isRoot()) {
             $query->where('tenant_id', $tenantId);
         }
 
@@ -127,6 +133,42 @@ class DocumentService
      */
     public function downloadDocument(int $id, User $user): array
     {
+        $result = $this->resolveDownloadableFile($id, $user);
+
+        $this->auditService->logDocumentDownloaded($id);
+
+        return $result;
+    }
+
+    /**
+     * Preview a document (inline).
+     *
+     * @param int $id
+     * @param User $user
+     * @return array ['path' => string, 'filename' => string]
+     * @throws DocumentNotFoundException
+     * @throws UnauthorizedAccessException
+     */
+    public function previewDocument(int $id, User $user): array
+    {
+        $result = $this->resolveDownloadableFile($id, $user);
+
+        $this->auditService->logDocumentViewed($id);
+
+        return $result;
+    }
+
+    /**
+     * Resuelve la ruta y nombre del archivo de un documento tras validar
+     * existencia, acceso y presencia física. Núcleo compartido por
+     * downloadDocument()/previewDocument(), que solo difieren en el evento de
+     * auditoría (descarga vs. visualización).
+     *
+     * @throws DocumentNotFoundException
+     * @throws UnauthorizedAccessException
+     */
+    protected function resolveDownloadableFile(int $id, User $user): array
+    {
         $document = Document::find($id);
 
         if (!$document) {
@@ -148,20 +190,6 @@ class DocumentService
     }
 
     /**
-     * Preview a document (inline).
-     *
-     * @param int $id
-     * @param User $user
-     * @return array ['path' => string, 'filename' => string]
-     * @throws DocumentNotFoundException
-     * @throws UnauthorizedAccessException
-     */
-    public function previewDocument(int $id, User $user): array
-    {
-        return $this->downloadDocument($id, $user);
-    }
-
-    /**
      * Delete a document.
      *
      * @param int $id
@@ -179,8 +207,9 @@ class DocumentService
             throw new DocumentNotFoundException("Documento no encontrado");
         }
 
-        $role = $user->getCurrentRole();
-        if ($role === 'client') {
+        // Autorizado contra la empresa DEL DOCUMENTO (no el rol global, que
+        // permitía borrar en una empresa usando el rol de otra).
+        if (!$user->can('documents.delete', $document->tenant_id)) {
             throw new UnauthorizedAccessException("No autorizado para eliminar documentos");
         }
 
@@ -188,7 +217,19 @@ class DocumentService
             Storage::disk('documents')->delete($document->file_path);
         }
 
-        return $document->delete();
+        $snapshot = [
+            'original_name' => $document->original_name,
+            'tenant_id' => $document->tenant_id,
+            'user_id' => $document->user_id,
+        ];
+
+        $deleted = $document->delete();
+
+        if ($deleted) {
+            $this->auditService->logDocumentDeleted($id, $snapshot);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -200,20 +241,21 @@ class DocumentService
      */
     public function canAccessDocument(User $user, Document $document): bool
     {
-        $role = $user->getCurrentRole();
+        // El rol se evalúa dentro de la empresa DEL DOCUMENTO, no con el rol
+        // global ni con la empresa "activa" de la sesión. Antes se usaba
+        // getCurrentRole() (respaldo global = unión de los roles del usuario en
+        // TODAS sus empresas): quien fuera admin en la empresa A podía leer
+        // documentos ajenos de la empresa B donde solo es client, porque el rol
+        // global resolvía 'admin' y bastaba con pertenecer a B.
+        $tenantId = $document->tenant_id;
 
-        // Root can access everything
-        if ($role === 'root') {
-            return true;
+        // Documento propio: requiere poder ver los documentos personales.
+        if ($document->user_id === $user->id) {
+            return $user->can('documents.view_own', $tenantId);
         }
 
-        // Admin can access documents in their tenant
-        if ($role === 'admin') {
-            return $user->tenants->pluck('id')->contains($document->tenant_id);
-        }
-
-        // Client can only access their own documents
-        return $document->user_id === $user->id;
+        // Documento de otra persona: requiere ver los documentos de la empresa.
+        return $user->can('documents.view_org', $tenantId);
     }
 
     /**
@@ -224,6 +266,22 @@ class DocumentService
      * @param string $role
      * @param array $filters
      * @return Builder
+     */
+    /**
+     * LIMITACIÓN CONOCIDA (preexistente, ver plan de autorización, Riesgo #2):
+     * $role llega desde getDocuments() vía getCurrentRole() SIN empresa, o sea
+     * el respaldo global (unión de los roles del usuario en todas sus empresas).
+     * Para un usuario con roles distintos por empresa el filtrado de filas puede
+     * ser más permisivo de lo debido (p. ej. client en la empresa A y admin en
+     * la B ⇒ el rol global resuelve 'admin' y no se aplica el filtro
+     * "solo mis documentos" al listar A).
+     *
+     * No se corrige en este paso porque el listado admite filtrar por VARIAS
+     * empresas a la vez (X-Tenant-Ids en modo 'selected'), y ahí no existe un
+     * rol único válido para toda la consulta: haría falta filtrar por fila según
+     * el rol en la empresa de cada documento. Los checks sobre un documento
+     * CONCRETO (canAccessDocument/deleteDocument) sí están ya scopeados a la
+     * empresa del documento.
      */
     protected function applyRoleFilters(Builder $query, User $user, string $role, array $filters): Builder
     {

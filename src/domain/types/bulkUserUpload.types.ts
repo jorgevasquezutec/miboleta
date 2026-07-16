@@ -10,6 +10,7 @@ export interface BatchProgress {
     total_rows: number;
     processed_rows: number;
     created_users: number;
+    updated_users?: number;
     failed_rows: number;
     percentage: string;
     formatted: string;
@@ -105,6 +106,13 @@ export interface BulkUploadConfigData {
     }>>;
     max_organizations_limit: number;
     default_organizations: number;
+    // Roles operativos asignables por organización (RP1-C). Se obtienen de
+    // BD (no hardcodeados) para poblar el selector de "Roles por empresa".
+    available_roles: Array<{
+        id: number;
+        name: string;
+        display_name: string;
+    }>;
 }
 
 export interface ValidationError {
@@ -127,9 +135,11 @@ export interface ValidationSummary {
     consolidated_users?: number;
 }
 
+// La carga masiva solo da de alta usuarios nuevos: no existe una opción de
+// actualizar a los que ya existen (esas filas se reportan como error para que
+// se quiten del archivo).
 export interface BulkUploadOptions {
     send_welcome_emails: boolean;
-    update_existing: boolean;
 }
 
 export interface BatchProgressEvent {
@@ -166,6 +176,16 @@ export interface EditableOrganization {
     ruc: string;
     tenant_id?: string;
     supervisor_email?: string;
+    // RP1-C: rol(es) operativos, fecha de ingreso y saldo inicial de
+    // vacaciones para ESTA organización. Si `roles` viene vacío, el backend
+    // usa el rol general de la fila (columna `rol`) como fallback para esta empresa.
+    roles?: string[];
+    hire_date?: string | null; // 'YYYY-MM-DD'
+    vacation_balance_initial?: string | null; // input numérico como string; se castea en backend
+    /** Departamento/área del usuario en esta organización. */
+    department?: string | null;
+    /** Cargo/puesto del usuario en esta organización. */
+    position?: string | null;
 }
 
 export interface EditableUser {
@@ -176,9 +196,12 @@ export interface EditableUser {
     email: string;
     tipo_documento: 'dni' | 'ce' | 'passport' | 'ruc';
     numero_documento: string;
-    rol: 'client' | 'root' | 'admin';
+    // No hay rol a nivel de usuario: el rol es siempre por empresa, en
+    // EditableOrganization.roles (user_tenant_roles). El único rol global es
+    // 'root', que no se da de alta por carga masiva.
     estado: 'active' | 'inactive';
     telefono?: string;
+    birth_date?: string | null; // 'YYYY-MM-DD'
     organizaciones: EditableOrganization[];
     // Metadatos de validación
     _errors: Record<string, string>; // { email: "Email inválido" }

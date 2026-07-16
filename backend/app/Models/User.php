@@ -10,12 +10,54 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasApiTokens, SoftDeletes;
+
+    /**
+     * Convención de prioridad de roles operativos (no incluye 'root', que es
+     * global y siempre gana). Se usa para elegir el rol "activo" cuando un
+     * usuario tiene varios roles asignados en la misma empresa
+     * (ver getCurrentRole/getRolesForTenant).
+     *
+     * @var list<string>
+     */
+    public const ROLE_PRIORITY = [
+        'admin_tenant',
+        'admin',
+        'aprobador',
+        'client',
+    ];
+
+    /**
+     * Dado un conjunto de nombres de rol, retorna el de mayor prioridad según
+     * ROLE_PRIORITY. Un rol que no esté en la lista de prioridad se considera
+     * de menor prioridad que cualquiera que sí esté, pero igual se devuelve si
+     * es el único disponible.
+     *
+     * @param iterable<string|null> $roleNames
+     */
+    public static function highestPriorityRole(iterable $roleNames): ?string
+    {
+        $names = collect($roleNames)->filter()->unique()->values();
+
+        if ($names->isEmpty()) {
+            return null;
+        }
+
+        return $names->sort(function (string $a, string $b) {
+            $posA = array_search($a, self::ROLE_PRIORITY, true);
+            $posB = array_search($b, self::ROLE_PRIORITY, true);
+            $posA = $posA === false ? PHP_INT_MAX : $posA;
+            $posB = $posB === false ? PHP_INT_MAX : $posB;
+
+            return $posA <=> $posB;
+        })->first();
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -31,6 +73,7 @@ class User extends Authenticatable
         'document_type',
         'document_text',
         'phone',
+        'birth_date',
         'status',
         'last_login_at',
         'must_change_password',
@@ -63,6 +106,7 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'deleted_at' => 'datetime',
             'signature_terms_accepted_at' => 'datetime',
+            'birth_date' => 'date',
         ];
     }
 
@@ -111,8 +155,45 @@ class User extends Authenticatable
     public function tenants(): BelongsToMany
     {
         return $this->belongsToMany(Tenant::class, 'user_tenants')
-            ->withPivot(['is_primary', 'supervisor_id'])
+            ->withPivot(['is_primary', 'supervisor_id', 'hire_date', 'vacation_balance_initial', 'department', 'position'])
             ->withTimestamps();
+    }
+
+    /**
+     * Asignaciones de rol por empresa del usuario (tabla pivote user_tenant_roles).
+     *
+     * A diferencia de roles() (global, vía user_roles, donde vive únicamente 'root'),
+     * esta relación modela el híbrido: un usuario puede tener varios roles operativos
+     * (admin_tenant, admin, client, aprobador) distintos en cada empresa.
+     */
+    public function tenantRoles(): HasMany
+    {
+        return $this->hasMany(UserTenantRole::class);
+    }
+
+    /**
+     * Roles asignados al usuario dentro de una empresa específica.
+     *
+     * @return Collection<int, Role>
+     */
+    public function getRolesForTenant($tenantId): Collection
+    {
+        $roleIds = $this->tenantRoles()
+            ->where('tenant_id', $tenantId)
+            ->pluck('role_id');
+
+        return Role::whereIn('id', $roleIds)->get();
+    }
+
+    /**
+     * Verificar si el usuario tiene un rol específico dentro de una empresa.
+     */
+    public function hasRoleInTenant(string $roleName, $tenantId): bool
+    {
+        return $this->tenantRoles()
+            ->where('tenant_id', $tenantId)
+            ->whereHas('role', fn ($query) => $query->where('name', $roleName))
+            ->exists();
     }
 
     /**
@@ -174,7 +255,15 @@ class User extends Authenticatable
     // }
 
     /**
-     * Verificar si el usuario tiene un rol específico
+     * ¿El usuario tiene este rol GLOBAL (user_roles)?
+     *
+     * OJO: user_roles es la UNIÓN de los roles del usuario en todas sus
+     * empresas (ver UserService::syncGlobalRoleFallback), así que preguntar
+     * aquí por un rol operativo ('admin', 'client', …) responde "sí" aunque lo
+     * tenga en OTRA empresa. NO usar para autorizar: para eso están
+     * roleForTenant()/hasRoleInTenant()/hasAbility(), que resuelven contra una
+     * empresa concreta. El único rol que tiene sentido consultar aquí es
+     * 'root', que es global de plataforma por diseño (no tiene empresas).
      */
     public function hasRole(string $role): bool
     {
@@ -182,7 +271,14 @@ class User extends Authenticatable
     }
 
     /**
-     * Verificar si es usuario root
+     * ¿Es root? Único uso legítimo del rol global: root es de plataforma y no
+     * pertenece a ninguna empresa, así que su rol no puede vivir en
+     * user_tenant_roles.
+     *
+     * (Aquí vivían isAdmin() e isClient(); se eliminaron porque preguntaban por
+     * roles operativos contra la unión global: ser admin en la empresa B daba
+     * "true" al operar en la A. Su único llamador era TenantPolicy, que se
+     * eliminó por esa misma fuga.)
      */
     public function isRoot(): bool
     {
@@ -190,27 +286,99 @@ class User extends Authenticatable
     }
 
     /**
-     * Verificar si es admin
+     * Obtener el rol "actual" del usuario.
+     *
+     * Sin argumentos, mantiene el comportamiento actual (compatibilidad con
+     * llamadas existentes): el primero de sus roles globales (user_roles).
+     *
+     * Si se indica $tenantId, resuelve el rol de mayor prioridad (ver
+     * ROLE_PRIORITY/highestPriorityRole) entre los roles asignados en esa
+     * empresa (user_tenant_roles). 'root' es global y siempre tiene prioridad.
+     * Si el usuario no tiene ningún rol asignado en esa empresa, cae al
+     * comportamiento por defecto descrito arriba.
+     *
+     * TODO(RP1-B): cuando el workstream de auth/services resuelva el tenant
+     * activo (p. ej. header X-Tenant-Ids) de forma centralizada, los callers
+     * deberían pasar ese $tenantId explícitamente en vez de depender del
+     * comportamiento por defecto (primer rol global).
      */
-    public function isAdmin(): bool
+    public function getCurrentRole(?int $tenantId = null): ?string
     {
-        return $this->hasRole('admin');
-    }
+        if ($this->isRoot()) {
+            return 'root';
+        }
 
-    /**
-     * Verificar si es client
-     */
-    public function isClient(): bool
-    {
-        return $this->hasRole('client');
-    }
+        if ($tenantId !== null) {
+            $roleName = self::highestPriorityRole($this->getRolesForTenant($tenantId)->pluck('name'));
 
-    /**
-     * Obtener el rol principal del usuario (el primero)
-     */
-    public function getCurrentRole(): ?string
-    {
+            if ($roleName) {
+                return $roleName;
+            }
+        }
+
         return $this->roles()->first()?->name;
+    }
+
+    /**
+     * Rol EFECTIVO del usuario dentro de una empresa concreta, sin respaldo
+     * global. Es la primitiva correcta para AUTORIZAR.
+     *
+     * Diferencia clave con getCurrentRole($tenantId): ese método, si el usuario
+     * no tiene rol en la empresa indicada, cae al respaldo global
+     * (`user_roles`, la UNIÓN de los roles del usuario en TODAS sus empresas,
+     * resuelto con ->first() sin ORDER BY = no determinístico). Ese fallback es
+     * una fuga de privilegios entre empresas: un admin en la empresa A podría
+     * pasar checks operando en la B. Aquí NO hay fallback: sin rol en esa
+     * empresa, el resultado es null (fail-closed).
+     *
+     * getCurrentRole() sigue existiendo para usos de DISPLAY (UserResource,
+     * ProfileService, logs). No usarlo para autorizar.
+     */
+    public static function roleForTenant(?self $user, ?int $tenantId): ?string
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        // Root es global (plataforma): no depende de ninguna empresa.
+        if ($user->isRoot()) {
+            return 'root';
+        }
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return self::highestPriorityRole($user->getRolesForTenant($tenantId)->pluck('name'));
+    }
+
+    /**
+     * ¿El usuario tiene la ability dentro de la empresa indicada?
+     *
+     * Lee config/access_matrix.php (fuente única de verdad). No llamar
+     * directamente desde controllers/services: usar $user->can($ability, $tenantId)
+     * o $this->authorize($ability, $tenantId) — los Gates se registran desde este
+     * mismo config en AppServiceProvider::boot().
+     */
+    public function hasAbility(string $ability, ?int $tenantId = null): bool
+    {
+        // OJO: no usar config("access_matrix.{$ability}") — config() interpreta
+        // los puntos como anidamiento, y las abilities los llevan en el nombre
+        // ('tenants.manage'), así que buscaría ['access_matrix']['tenants']['manage'].
+        // Hay que leer el array completo e indexar con la clave literal.
+        $matrix = config('access_matrix', []);
+        $allowedRoles = $matrix[$ability] ?? null;
+
+        if (!is_array($allowedRoles)) {
+            // Ability inexistente: fail-closed y reportar (nunca permitir en silencio).
+            report(new \InvalidArgumentException("Unknown ability: {$ability}"));
+
+            return false;
+        }
+
+        $role = self::roleForTenant($this, $tenantId);
+
+        return $role !== null && in_array($role, $allowedRoles, true);
     }
 
     /**
@@ -219,22 +387,6 @@ class User extends Authenticatable
     public function getCurrentRoles(): array
     {
         return $this->roles()->pluck('name')->toArray();
-    }
-
-    /**
-     * Verificar si tiene un permiso específico (considera todos sus roles)
-     */
-    public function hasPermission(string $permission): bool
-    {
-        $roles = $this->roles()->get();
-
-        foreach ($roles as $role) {
-            if ($role->hasPermission($permission)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

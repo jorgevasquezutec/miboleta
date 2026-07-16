@@ -3,6 +3,8 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { RootLayout } from "./RootLayout";
 import { PageLoader } from "@/presentation/components/shared/PageLoader";
+import { useAuthStore } from "@/presentation/stores/authStore";
+import { useAccessMatrixReady, useFirstAllowed } from "@/presentation/hooks/useCan";
 
 // Auth pages (lazy loaded) - tienen export default
 const LoginView = lazy(() => import("@/presentation/pages/auth/LoginView"));
@@ -26,6 +28,9 @@ const AuditLogsPage = lazy(() => import("@/presentation/pages/admin/AuditLogsPag
 const UserBatchesListPage = lazy(() => import("@/presentation/pages/admin/UserBatchesListPage"));
 const UserBatchUploadPage = lazy(() => import("@/presentation/pages/admin/UserBatchUploadPage"));
 const UserBatchDetailPage = lazy(() => import("@/presentation/pages/admin/UserBatchDetailPage"));
+const SignatureSettingsPage = lazy(() => import("@/presentation/pages/admin/SignatureSettingsPage"));
+const PlatformSettingsPage = lazy(() => import("@/presentation/pages/admin/PlatformSettingsPage"));
+const AuditSettingsPage = lazy(() => import("@/presentation/pages/admin/AuditSettingsPage"));
 
 
 // Employee pages (lazy loaded)
@@ -46,24 +51,77 @@ function LazyPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 }
 
-// Helper component for role-based redirect
+/**
+ * Abilities que exige cada ruta con varias opciones, declaradas UNA vez y
+ * compartidas entre la ruta y RootRedirect.
+ *
+ * Que estén juntas no es estética: si RootRedirect manda a un destino con un
+ * criterio distinto del que la ruta exige, el usuario rebota entre "/" y el
+ * destino en bucle infinito. Compartir la lista hace que no puedan discrepar.
+ */
+const ROUTE_ABILITIES = {
+  admin: ["dashboard.global_metrics", "dashboard.org_metrics"],
+  dashboard: ["documents.view_own", "dashboard.own_summary"],
+  teamVacations: ["vacations.approve_reject_team", "vacations.view_team_calendar"],
+  vacations: ["vacations.request_own", "vacations.view_own_requests"],
+};
+
+/**
+ * Destinos de aterrizaje en orden de preferencia. Se elige el primero que el
+ * usuario pueda abrir DE VERDAD, con las mismas abilities que exige la ruta.
+ *
+ * Antes se decidía por nombre de rol (client/aprobador -> /dashboard, resto ->
+ * /admin) mientras las rutas ya gateaban por ability. Con la matriz aplicada
+ * literal el aprobador no tiene 'documents.view_own' ni 'dashboard.own_summary',
+ * así que aterrizaba en /dashboard, /dashboard lo devolvía a "/", y vuelta a
+ * empezar. Su sitio es "Mi Equipo": aprobar vacaciones es lo único que la
+ * matriz le concede.
+ */
+const HOME_CANDIDATES = [
+  { path: "/admin", abilities: ROUTE_ABILITIES.admin },
+  { path: "/dashboard", abilities: ROUTE_ABILITIES.dashboard },
+  { path: "/team-vacations", abilities: ROUTE_ABILITIES.teamVacations },
+  { path: "/vacations", abilities: ROUTE_ABILITIES.vacations },
+];
+
 function RootRedirect() {
-  const userRole = localStorage.getItem("auth-storage");
-  let role = null;
+  const user = useAuthStore((s) => s.user);
+  const matrixReady = useAccessMatrixReady();
+  const home = useFirstAllowed(HOME_CANDIDATES);
 
-  if (userRole) {
-    try {
-      const parsed = JSON.parse(userRole);
-      role = parsed.state?.user?.role;
-    } catch (e) {
-      console.error("Error parsing auth storage", e);
-    }
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
-  if (role === "client") {
-    return <Navigate to="/dashboard" replace />;
+  // Sin matriz no se puede elegir destino sin arriesgar un rebote: esperar.
+  if (!matrixReady) {
+    return <PageLoader />;
   }
-  return <Navigate to="/admin" replace />;
+
+  if (home) {
+    return <Navigate to={home} replace />;
+  }
+
+  // Ningún destino disponible (p. ej. sin rol en la empresa activa). Terminal a
+  // propósito: aquí NO se redirige a ningún lado, porque redirigir a una ruta
+  // que va a denegar es exactamente lo que produce el bucle infinito.
+  return <NoAccessPage />;
+}
+
+function NoAccessPage() {
+  const currentTenant = useAuthStore((s) => s.currentTenant);
+
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
+      <h1 className="text-xl font-semibold">Sin accesos disponibles</h1>
+      <p className="max-w-md text-sm text-gray-500">
+        Tu usuario no tiene permisos asignados
+        {currentTenant?.name ? ` en ${currentTenant.name}` : ""}. Si tienes más de
+        una empresa, prueba a cambiarla desde el menú superior; si no, contacta al
+        administrador.
+      </p>
+    </div>
+  );
 }
 
 export const router = createBrowserRouter([
@@ -99,7 +157,7 @@ export const router = createBrowserRouter([
       {
         path: "admin",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires={ROUTE_ABILITIES.admin}>
             <LazyPage>
               <AdminDashboardPage />
             </LazyPage>
@@ -109,7 +167,7 @@ export const router = createBrowserRouter([
       {
         path: "dashboard",
         element: (
-          <ProtectedRoute allowedRoles={["client", "admin", "root"]}>
+          <ProtectedRoute requires={ROUTE_ABILITIES.dashboard}>
             <LazyPage><EmployeeDashboardPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -117,7 +175,7 @@ export const router = createBrowserRouter([
       {
         path: "upload",
         element: (
-          <ProtectedRoute allowedRoles={["admin", "client"]}>
+          <ProtectedRoute requires="documents.bulk_upload_zip">
             <LazyPage>
               <DocumentUploadView />
             </LazyPage>
@@ -127,7 +185,7 @@ export const router = createBrowserRouter([
       {
         path: "viewer",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+          <ProtectedRoute requires={["documents.view_own", "documents.view_org"]}>
             <LazyPage>
               <DocumentViewerView />
             </LazyPage>
@@ -137,7 +195,7 @@ export const router = createBrowserRouter([
       {
         path: "users",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="users.view_list">
             <LazyPage><UsersListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -145,7 +203,7 @@ export const router = createBrowserRouter([
       {
         path: "users/new",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires={["users.create_any_role", "users.create_limited_role"]}>
             <LazyPage><UserFormPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -154,7 +212,7 @@ export const router = createBrowserRouter([
       {
         path: "users/batch",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="users.bulk_upload">
             <LazyPage><UserBatchesListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -162,7 +220,7 @@ export const router = createBrowserRouter([
       {
         path: "users/batch-upload",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="users.bulk_upload">
             <LazyPage><UserBatchUploadPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -170,7 +228,7 @@ export const router = createBrowserRouter([
       {
         path: "users/batch/:id",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="users.bulk_upload">
             <LazyPage><UserBatchDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -179,7 +237,7 @@ export const router = createBrowserRouter([
       {
         path: "users/:id",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="users.view_list">
             <LazyPage><UserDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -187,7 +245,7 @@ export const router = createBrowserRouter([
       {
         path: "users/:id/edit",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="users.update">
             <LazyPage><UserFormPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -195,7 +253,7 @@ export const router = createBrowserRouter([
       {
         path: "tenants",
         element: (
-          <ProtectedRoute allowedRoles={["root"]}>
+          <ProtectedRoute requires="tenants.manage">
             <LazyPage><TenantsListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -203,7 +261,7 @@ export const router = createBrowserRouter([
       {
         path: "tenants/new",
         element: (
-          <ProtectedRoute allowedRoles={["root"]}>
+          <ProtectedRoute requires="tenants.manage">
             <LazyPage><TenantFormPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -211,15 +269,39 @@ export const router = createBrowserRouter([
       {
         path: "tenants/:id",
         element: (
-          <ProtectedRoute allowedRoles={["root"]}>
+          <ProtectedRoute requires="tenants.manage">
             <LazyPage><TenantFormPage /></LazyPage>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "signature-settings",
+        element: (
+          <ProtectedRoute requires="platform.manage">
+            <LazyPage><SignatureSettingsPage /></LazyPage>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "platform-settings",
+        element: (
+          <ProtectedRoute requires="platform.manage">
+            <LazyPage><PlatformSettingsPage /></LazyPage>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "audit-settings",
+        element: (
+          <ProtectedRoute requires="platform.manage">
+            <LazyPage><AuditSettingsPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
       {
         path: "profile",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+          <ProtectedRoute requires={[]}>
             <LazyPage>
               <ProfilePage />
             </LazyPage>
@@ -229,7 +311,7 @@ export const router = createBrowserRouter([
       {
         path: "notifications",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+          <ProtectedRoute requires={[]}>
             <LazyPage><NotificationsPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -237,7 +319,7 @@ export const router = createBrowserRouter([
       {
         path: "batches",
         element: (
-          <ProtectedRoute allowedRoles={["admin"]}>
+          <ProtectedRoute requires="documents.view_batches">
             <LazyPage><BatchesListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -245,7 +327,7 @@ export const router = createBrowserRouter([
       {
         path: "batches/:id",
         element: (
-          <ProtectedRoute allowedRoles={["admin"]}>
+          <ProtectedRoute requires="documents.view_batches">
             <LazyPage><BatchDetailPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -253,7 +335,7 @@ export const router = createBrowserRouter([
       {
         path: "documents",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="documents.view_org">
             <LazyPage><DocumentsListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -262,7 +344,7 @@ export const router = createBrowserRouter([
       {
         path: "vacations",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+          <ProtectedRoute requires={ROUTE_ABILITIES.vacations}>
             <LazyPage><VacationRequestsListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -270,7 +352,7 @@ export const router = createBrowserRouter([
       {
         path: "vacations/new",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin", "client"]}>
+          <ProtectedRoute requires="vacations.request_own">
             <LazyPage><VacationRequestFormPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -278,7 +360,7 @@ export const router = createBrowserRouter([
       {
         path: "team-vacations",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires={ROUTE_ABILITIES.teamVacations}>
             <LazyPage><TeamVacationsPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -286,15 +368,17 @@ export const router = createBrowserRouter([
       {
         path: "vacation-history",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="vacations.view_history">
             <LazyPage><VacationHistoryPage /></LazyPage>
           </ProtectedRoute>
         ),
       },
       {
+        // Matriz de Accesos ("Ver registro de auditoría"): root, admin y
+        // admin_tenant. El aprobador NO tiene acceso a auditoría.
         path: "audit-logs",
         element: (
-          <ProtectedRoute allowedRoles={["root", "admin"]}>
+          <ProtectedRoute requires="audit.view">
             <LazyPage><AuditLogsPage /></LazyPage>
           </ProtectedRoute>
         ),

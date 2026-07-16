@@ -9,12 +9,14 @@ export const useAuth = () => {
   const {
     user,
     currentTenant,
+    currentRole,
     isLoading,
     error,
     login,
     logout,
     me,
     switchTenant,
+    switchRole,
     updateProfile,
     clearError,
   } = useAuthStore();
@@ -96,6 +98,13 @@ export const useAuth = () => {
     // State
     user,
     currentTenant,
+    /**
+     * Rol activo de la sesión, scoped a currentTenant (ver authStore). Es la
+     * fuente de verdad para menús/guards — preferir sobre `userRole` (que es
+     * solo el `user.role` global legado) cuando se necesite el rol operativo
+     * real dentro de la empresa activa.
+     */
+    currentRole,
     isLoading,
     error,
     isAuthenticated,
@@ -106,6 +115,7 @@ export const useAuth = () => {
     logout,
     me,
     switchTenant,
+    switchRole,
     updateProfile,
     clearError,
 

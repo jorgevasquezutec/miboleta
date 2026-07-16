@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Exports\GenericExport;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\User;
+use App\Services\ActiveTenantResolver;
 use App\Services\DocumentService;
 use App\Services\ReportsService;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +20,8 @@ class ReportsController extends Controller
 {
     public function __construct(
         private ReportsService $reportsService,
-        private DocumentService $documentService
+        private DocumentService $documentService,
+        private ActiveTenantResolver $activeTenantResolver
     ) {
     }
 
@@ -31,6 +34,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
@@ -79,6 +83,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
 
         $stats = $this->reportsService->getDocumentStats($tenantId);
 
@@ -97,6 +102,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
 
         $stats = $this->reportsService->getVacationStats($tenantId);
 
@@ -115,6 +121,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
 
         $stats = $this->reportsService->getUserStats($tenantId);
 
@@ -133,6 +140,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
         $limit = min($request->query('limit', 20), 100);
 
         $activity = $this->reportsService->getRecentActivity($tenantId, $limit);
@@ -151,15 +159,14 @@ class ReportsController extends Controller
     public function audit(Request $request): JsonResponse
     {
         $user = $request->user();
-        $role = $user->getCurrentRole();
+        [$tenantId, $role] = $this->resolveAuditContext($request, $user);
 
-        // Only root and admin can view audit logs
-        if (!in_array($role, ['root', 'admin'])) {
+        if (!in_array($role, self::AUDIT_ROLES, true)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
         $filters = [
-            'tenant_id' => $this->getTenantId($request, $user),
+            'tenant_id' => $tenantId,
             'user_id' => $request->query('user_id'),
             'action' => $request->query('action'),
             'entity_type' => $request->query('entity_type'),
@@ -189,38 +196,15 @@ class ReportsController extends Controller
      */
     public function auditActions(): JsonResponse
     {
-        $actions = [
-            'user' => [
-                AuditLog::ACTION_USER_LOGIN => 'Inicio de sesión',
-                AuditLog::ACTION_USER_LOGOUT => 'Cierre de sesión',
-                AuditLog::ACTION_USER_LOGIN_FAILED => 'Inicio fallido',
-                AuditLog::ACTION_PASSWORD_CHANGED => 'Cambio de contraseña',
-                AuditLog::ACTION_USER_CREATED => 'Usuario creado',
-                AuditLog::ACTION_USER_UPDATED => 'Usuario actualizado',
-                AuditLog::ACTION_USER_DELETED => 'Usuario eliminado',
-            ],
-            'document' => [
-                AuditLog::ACTION_DOCUMENT_UPLOADED => 'Documento cargado',
-                AuditLog::ACTION_DOCUMENT_VIEWED => 'Documento visualizado',
-                AuditLog::ACTION_DOCUMENT_DOWNLOADED => 'Documento descargado',
-                AuditLog::ACTION_DOCUMENT_SIGNED => 'Documento firmado',
-                AuditLog::ACTION_DOCUMENT_DELETED => 'Documento eliminado',
-                AuditLog::ACTION_BATCH_CREATED => 'Lote creado',
-                AuditLog::ACTION_BATCH_COMPLETED => 'Lote completado',
-            ],
-            'vacation' => [
-                AuditLog::ACTION_VACATION_REQUESTED => 'Vacaciones solicitadas',
-                AuditLog::ACTION_VACATION_APPROVED => 'Vacaciones aprobadas',
-                AuditLog::ACTION_VACATION_REJECTED => 'Vacaciones rechazadas',
-                AuditLog::ACTION_VACATION_CONFIRMED => 'Vacaciones confirmadas',
-                AuditLog::ACTION_VACATION_CANCELLED => 'Vacaciones canceladas',
-            ],
-            'tenant' => [
-                AuditLog::ACTION_TENANT_CREATED => 'Organización creada',
-                AuditLog::ACTION_TENANT_UPDATED => 'Organización actualizada',
-                AuditLog::ACTION_TENANT_DELETED => 'Organización eliminada',
-            ],
-        ];
+        // Fuente única de verdad: se construye desde el catálogo de acciones
+        // (AuditLog::allActions() + descripción), agrupado por categoría, para
+        // no mantener listas paralelas desincronizadas.
+        $actions = [];
+        foreach (AuditLog::allActions() as $action) {
+            $category = explode('.', $action)[0] ?? 'other';
+            $label = (new AuditLog(['action' => $action]))->description;
+            $actions[$category][$action] = $label;
+        }
 
         return response()->json(['data' => $actions]);
     }
@@ -234,6 +218,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
 
         $filters = [
             'tenant_id' => $tenantId,
@@ -257,6 +242,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
 
         $filters = [
             'tenant_id' => $tenantId,
@@ -282,6 +268,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
 
         $filters = [
             'tenant_id' => $tenantId,
@@ -303,13 +290,11 @@ class ReportsController extends Controller
     public function exportAudit(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
-        $role = $user->getCurrentRole();
+        [$tenantId, $role] = $this->resolveAuditContext($request, $user);
 
-        if (!in_array($role, ['root', 'admin'])) {
+        if (!in_array($role, self::AUDIT_ROLES, true)) {
             abort(403, 'No autorizado');
         }
-
-        $tenantId = $this->getTenantId($request, $user);
 
         $filters = [
             'tenant_id' => $tenantId,
@@ -347,6 +332,7 @@ class ReportsController extends Controller
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
+        $this->authorizeReports($user, $tenantId);
 
         $filters = [
             'tenant_id' => $tenantId,
@@ -368,9 +354,10 @@ class ReportsController extends Controller
     public function exportTenants(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
-        $role = $user->getCurrentRole();
 
-        if ($role !== 'root') {
+        // isRoot() en vez de getCurrentRole() !== 'root': determinístico y sin
+        // depender del respaldo global de roles.
+        if (!$user->isRoot()) {
             abort(403, 'No autorizado');
         }
 
@@ -391,30 +378,87 @@ class ReportsController extends Controller
      * - For admin users: use tenant_id from query (must belong to user) or primary tenant
      * - For other users: use primary tenant only
      */
+    /**
+     * Resuelve la empresa activa y el rol del usuario EN esa empresa, para el
+     * módulo de auditoría.
+     *
+     * A diferencia de getCurrentRole() sin argumentos —que cae al respaldo
+     * global `user_roles`, la UNIÓN de los roles del usuario en TODAS sus
+     * empresas (ver UserService::syncGlobalRoleFallback) y además resuelve con
+     * ->first() sin ORDER BY, o sea de forma no determinística—, aquí el rol se
+     * resuelve estrictamente contra la empresa activa (header X-Tenant-Ids, ya
+     * validado por el middleware TenantFilter en `_tenant_filter_ids`).
+     *
+     * Sin esto, un usuario que es admin en una empresa podía leer la auditoría
+     * de otra en la que solo es aprobador (fuga de privilegios entre empresas).
+     *
+     * @return array{0: ?int, 1: ?string} [tenantId, role]
+     */
+    private function resolveAuditContext(Request $request, $user): array
+    {
+        $tenantId = $this->activeTenantResolver->resolve($request, $user);
+
+        // Root es global: puede consultar una empresa concreta o todas.
+        if ($user->isRoot()) {
+            return [$tenantId, 'root'];
+        }
+
+        if (!$tenantId) {
+            return [null, null];
+        }
+
+        // Rol dentro de esa empresa (user_tenant_roles). Sin respaldo global:
+        // si no tiene rol ahí, queda null -> no autorizado.
+        return [$tenantId, User::roleForTenant($user, $tenantId)];
+    }
+
+    /**
+     * Roles autorizados para el módulo de auditoría, según la Matriz de Accesos
+     * (docs/sprintfix/Matriz de Accesos.xlsx → "AUDITORÍA Y REPORTES"):
+     * root y admin; admin_tenant solo en las organizaciones que gestiona.
+     * Cliente y aprobador NO tienen acceso.
+     */
+    private const AUDIT_ROLES = ['root', 'admin', 'admin_tenant'];
+
+    /**
+     * Gate del módulo de reportes, según la Matriz de Accesos
+     * ("AUDITORÍA Y REPORTES": root y admin; admin_tenant en las empresas que
+     * gestiona; cliente y aprobador NO). Se resuelve con las abilities de
+     * dashboard que ya existen en config/access_matrix.php — no se inventan
+     * abilities nuevas.
+     *
+     * No aplica a myStats(): ese endpoint opera sobre $request->user() y ya
+     * está scopeado a los datos propios del usuario, no hay fuga que cerrar.
+     */
+    private function authorizeReports($user, ?int $tenantId): void
+    {
+        if (!$user->hasAbility('dashboard.global_metrics', $tenantId)
+            && !$user->hasAbility('dashboard.org_metrics', $tenantId)) {
+            abort(403, 'No autorizado');
+        }
+    }
+
+    /**
+     * Empresa a la que se scopean los reportes.
+     *
+     * La resolución de la empresa activa la hace ActiveTenantResolver, que es
+     * el estándar del resto de controllers (DocumentController, etc.) para
+     * endpoints de listado/dashboard/reporte. Aquí solo se aplica el matiz
+     * propio de reportes:
+     *
+     * Root recibe null cuando no pide una empresa concreta (= todas). Un
+     * no-root sin empresa recibe el centinela -1 en vez de null, porque
+     * ReportsService trata null como "todas las empresas" y devolverlo aquí
+     * expondría la plataforma entera.
+     */
     private function getTenantId(Request $request, $user): ?int
     {
-        $role = $user->getCurrentRole();
-        $requestedTenantId = $request->query('tenant_id');
+        $tenantId = $this->activeTenantResolver->resolve($request, $user);
 
-        // Root users can query any tenant (or all if not specified)
-        if ($role === 'root') {
-            return $requestedTenantId ? (int) $requestedTenantId : null;
+        if ($user->isRoot()) {
+            return $tenantId;
         }
 
-        // Admin users can query tenants they belong to
-        if ($role === 'admin' && $requestedTenantId) {
-            // Verify user belongs to the requested tenant
-            if ($user->belongsToTenant((int) $requestedTenantId)) {
-                return (int) $requestedTenantId;
-            }
-        }
-
-        // Non-root: scope strictly to a tenant the user belongs to (primary, else first).
-        $tenantId = $user->primaryTenant()?->id ?? $user->tenants()->first()?->id;
-
-        // A non-root user must always be scoped to a tenant. If somehow they have none,
-        // return a non-matching id so the dashboard shows no data instead of exposing
-        // every tenant (getDashboardStats treats null as "all tenants").
         return $tenantId ?? -1;
     }
 

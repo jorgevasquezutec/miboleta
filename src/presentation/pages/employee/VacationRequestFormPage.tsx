@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -10,6 +10,7 @@ import {
     Info,
     AlertTriangle,
     Building2,
+    UserCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
@@ -25,7 +26,15 @@ import { toast } from "sonner";
 export function VacationRequestFormPage() {
     useDocumentTitle('Nueva Solicitud de Vacaciones');
     const navigate = useNavigate();
-    const { createVacationRequest, error, clearError } = useVacationsStore();
+    const {
+        createVacationRequest,
+        error,
+        clearError,
+        balance,
+        balanceLoading,
+        fetchVacationBalance,
+        clearBalance,
+    } = useVacationsStore();
     const { user } = useAuthStore();
 
     const [selectedTenantId, setSelectedTenantId] = useState<string>("");
@@ -55,12 +64,40 @@ export function VacationRequestFormPage() {
         return user.tenants[0];
     }, [user?.tenants, hasMultipleTenants, selectedTenantId]);
 
-    const hasSupervisor = selectedTenant?.supervisor_id != null;
+    // Cargar el saldo de vacaciones (y el aprobador) para la empresa seleccionada
+    useEffect(() => {
+        if (selectedTenant?.id) {
+            fetchVacationBalance(Number(selectedTenant.id));
+        } else {
+            clearBalance();
+        }
+    }, [selectedTenant?.id, fetchVacationBalance, clearBalance]);
+
+    // El saldo en el store solo es confiable para la empresa actualmente
+    // seleccionada (evita mostrar datos de una empresa anterior mientras
+    // se carga el nuevo saldo).
+    const balanceMatchesTenant =
+        !!balance && !!selectedTenant && balance.tenantId === Number(selectedTenant.id);
+
+    const approver = balanceMatchesTenant ? balance!.approver : null;
+    const availableDays = balanceMatchesTenant ? balance!.available : null;
+
+    // Mientras el saldo no ha cargado, usamos el supervisor_id del tenant
+    // (dato ya disponible en el usuario) como respaldo para no bloquear el
+    // formulario innecesariamente; en cuanto el saldo carga, la fuente de
+    // verdad pasa a ser `approver` (viene del mismo endpoint que calcula el
+    // saldo, por lo que refleja el aprobador real de la solicitud).
+    const hasSupervisor = balanceMatchesTenant
+        ? approver != null
+        : selectedTenant?.supervisor_id != null;
 
     console.log('🏢 [Vacation Form] Selected tenant:', {
         selectedTenantId,
         selectedTenant: selectedTenant ? { id: selectedTenant.id, name: selectedTenant.name, supervisor_id: selectedTenant.supervisor_id } : null,
         hasSupervisor,
+        balance,
+        approver,
+        availableDays,
     });
 
     // Calculate days requested (all calendar days)
@@ -97,8 +134,9 @@ export function VacationRequestFormPage() {
             // Validar días solicitados
             if (daysRequested <= 0) {
                 errors.days_requested = "Debes seleccionar al menos un día.";
-            } else if (daysRequested > 30) {
-                errors.days_requested = "No puedes solicitar más de 30 días en una sola solicitud.";
+            } else if (availableDays !== null && daysRequested > availableDays) {
+                errors.days_requested = `No puedes solicitar más de ${availableDays} ${availableDays === 1 ? "día disponible" : "días disponibles"
+                    }.`;
             }
         }
 
@@ -108,7 +146,7 @@ export function VacationRequestFormPage() {
         }
 
         return errors;
-    }, [dateRange, daysRequested, reason]);
+    }, [dateRange, daysRequested, reason, availableDays]);
 
     // Validation
     const isValid = useMemo(() => {
@@ -229,12 +267,44 @@ export function VacationRequestFormPage() {
                 </div>
             </div>
 
-            {/* Alerta cuando no hay supervisor asignado */}
-            {selectedTenant && !hasSupervisor && (
+            {/* Saldo disponible y aprobador de la empresa seleccionada */}
+            {selectedTenant && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 rounded-full">
+                            <CalendarDays className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-blue-700">
+                                Saldo disponible en {selectedTenant.name}
+                            </p>
+                            {balanceLoading || !balanceMatchesTenant ? (
+                                <p className="text-sm text-blue-600 flex items-center gap-1 mt-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Calculando saldo...
+                                </p>
+                            ) : (
+                                <p className="text-2xl font-bold text-blue-900">
+                                    {availableDays} {availableDays === 1 ? "día" : "días"}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    {balanceMatchesTenant && approver && (
+                        <div className="flex items-center gap-2 text-sm text-blue-800 pt-2 border-t border-blue-200">
+                            <UserCheck className="w-4 h-4 text-blue-600" />
+                            Tu solicitud será revisada por <strong>{approver.fullName}</strong>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Alerta cuando no hay aprobador asignado en la empresa seleccionada */}
+            {selectedTenant && balanceMatchesTenant && !approver && (
                 <Alert variant="destructive">
                     <AlertTriangle className="w-4 h-4" />
                     <AlertDescription>
-                        No tienes un supervisor asignado para <strong>{selectedTenant.name}</strong>.
+                        No tienes un aprobador asignado para <strong>{selectedTenant.name}</strong>.
                         Contacta a RRHH para poder solicitar vacaciones.
                     </AlertDescription>
                 </Alert>

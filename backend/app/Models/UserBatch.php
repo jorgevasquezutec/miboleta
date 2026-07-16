@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Scopes\TenantFilterScope;
+use App\Models\Tenant;
 use Illuminate\Bus\Batch;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,9 +38,7 @@ class UserBatch extends Model
         'completed_at',
     ];
 
-    protected $hidden = [
-        'updated_users', // No usamos actualización de usuarios en bulk uploads
-    ];
+    protected $hidden = [];
 
     protected $casts = [
         'file_size' => 'integer',
@@ -343,18 +342,74 @@ class UserBatch extends Model
     }
 
     /**
+     * Registrar los tenants afectados por este batch (unión acumulada entre
+     * chunks). Se guarda dentro de processing_options para no requerir una
+     * columna nueva. Es "mejor esfuerzo": bajo alta concurrencia entre
+     * chunks del mismo batch podría perderse algún id (read-modify-write no
+     * atómico), aceptable dado el volumen bajo de chunks concurrentes.
+     */
+    public function mergeAffectedTenantIds(array $tenantIds): void
+    {
+        $tenantIds = array_values(array_unique(array_filter(array_map('intval', $tenantIds))));
+
+        if (empty($tenantIds)) {
+            return;
+        }
+
+        $this->refresh();
+        $options = $this->processing_options ?? [];
+        $existing = $options['affected_tenant_ids'] ?? [];
+        $options['affected_tenant_ids'] = array_values(array_unique(array_merge($existing, $tenantIds)));
+
+        $this->update(['processing_options' => $options]);
+    }
+
+    /**
+     * Fijar el conteo inicial de empleados (tenants.initial_employee_count)
+     * para cada tenant afectado por este batch, de forma idempotente: solo
+     * si aún no tiene un valor (0/null). Se invoca al completar el batch.
+     */
+    public function syncInitialEmployeeCounts(): void
+    {
+        $tenantIds = $this->processing_options['affected_tenant_ids'] ?? [];
+
+        if (empty($tenantIds)) {
+            return;
+        }
+
+        foreach ($tenantIds as $tenantId) {
+            $tenant = Tenant::find($tenantId);
+
+            if (!$tenant || !empty($tenant->initial_employee_count)) {
+                continue; // tenant inexistente o ya fijado: no tocar (idempotente)
+            }
+
+            $currentCount = $tenant->users()->count();
+            $tenant->update(['initial_employee_count' => $currentCount]);
+
+            Log::info('📊 [BulkUserUpload] initial_employee_count fijado', [
+                'tenant_id' => $tenant->id,
+                'initial_employee_count' => $currentCount,
+                'batch_uuid' => $this->uuid,
+            ]);
+        }
+    }
+
+    /**
      * Callback cuando el batch se completa exitosamente
      */
     public static function onBatchCompleted(int $batchId): void
     {
         $batch = self::where('id', $batchId)->first();
-        
+
         if ($batch) {
             $batch->update([
                 'status' => 'completed',
                 'completed_at' => now(),
                 'progress_percentage' => 100,
             ]);
+
+            $batch->syncInitialEmployeeCounts();
 
             Log::info("✅ [BulkUserUpload] Batch completed", [
                 'batch_uuid' => $batch->uuid,
@@ -385,12 +440,16 @@ class UserBatch extends Model
     public static function onBatchFinished(int $batchId, int $failedJobs): void
     {
         $batch = self::where('id', $batchId)->first();
-        
+
         if ($batch && !$batch->completed_at) {
             $batch->update([
                 'status' => $failedJobs > 0 ? 'partial' : 'completed',
                 'completed_at' => now(),
             ]);
+
+            // Best-effort e idempotente: fija el contador de empleados aun
+            // si algún chunk falló por completo (then() no se ejecuta en ese caso).
+            $batch->syncInitialEmployeeCounts();
 
             Log::info("🏁 [BulkUserUpload] Batch finished", [
                 'batch_uuid' => $batch->uuid,

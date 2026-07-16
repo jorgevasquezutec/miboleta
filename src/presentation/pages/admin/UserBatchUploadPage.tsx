@@ -3,12 +3,14 @@ import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/presentation/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/presentation/components/ui/card';
-import { Upload, Download, FileText, Loader2, X, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Upload, Download, FileText, Loader2, X, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Mail } from 'lucide-react';
 import { TemplateConfigModal } from '@/presentation/components/bulkUpload/TemplateConfigModal';
 import { UserDataGrid } from '@/presentation/components/bulkUpload/UserDataGrid';
 import { useEditableUsers } from '@/presentation/hooks/useEditableUsers';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import type { BulkUploadConfigData, TemplateConfig } from '@/domain/types/bulkUserUpload.types';
+import { Switch } from '@/presentation/components/ui/switch';
+import { Label } from '@/presentation/components/ui/label';
 import { toast } from 'sonner';
 
 export function UserBatchUploadPage() {
@@ -19,7 +21,7 @@ export function UserBatchUploadPage() {
     const [configData, setConfigData] = useState<BulkUploadConfigData | null>(null);
     const [isValidating, setIsValidating] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [sendEmails] = useState(true);
+    const [sendEmails, setSendEmails] = useState(true);
     const [isDragging, setIsDragging] = useState(false);
 
     // Estados para el editor
@@ -145,6 +147,25 @@ export function UserBatchUploadPage() {
                 .map(org => ({
                     ruc: String(org.ruc || '').trim(),
                     supervisor_email: String(org.supervisor_email || '').trim(),
+                    // RP1-C: rol(es)/fecha de ingreso/saldo de vacaciones por
+                    // organización. null (no '') cuando están vacíos para que
+                    // las reglas 'date'/'numeric' del backend no fallen.
+                    roles: Array.isArray(org.roles) ? org.roles.filter(Boolean) : [],
+                    hire_date: org.hire_date && String(org.hire_date).trim() !== ''
+                        ? String(org.hire_date).trim()
+                        : null,
+                    vacation_balance_initial: org.vacation_balance_initial !== undefined
+                        && org.vacation_balance_initial !== null
+                        && String(org.vacation_balance_initial).trim() !== ''
+                        ? String(org.vacation_balance_initial).trim()
+                        : null,
+                    // RP-B3: departamento/cargo por organización.
+                    department: org.department && String(org.department).trim() !== ''
+                        ? String(org.department).trim()
+                        : null,
+                    position: org.position && String(org.position).trim() !== ''
+                        ? String(org.position).trim()
+                        : null,
                 }));
 
             return {
@@ -153,9 +174,14 @@ export function UserBatchUploadPage() {
                 email: user.email,
                 tipo_documento: user.tipo_documento,
                 numero_documento: user.numero_documento,
-                rol: user.rol,
                 estado: user.estado,
                 telefono: user.telefono || '',
+                // P1: null (no '') cuando está vacío, mismo criterio que
+                // hire_date/vacation_balance_initial, para que la regla
+                // 'date' del backend no falle con un string vacío.
+                birth_date: user.birth_date && String(user.birth_date).trim() !== ''
+                    ? String(user.birth_date).trim()
+                    : null,
                 organizaciones: cleanOrgs.length > 0 ? cleanOrgs : [],
                 row_number: user.row_number,
             };
@@ -178,7 +204,6 @@ export function UserBatchUploadPage() {
             // 2. Si pasó la validación, proceder con la carga
             const result = await bulkUserUploadService.uploadEditedData(formattedUsers, {
                 send_welcome_emails: sendEmails,
-                update_existing: false,
             });
 
             toast.success(`Carga iniciada: ${result.batch.total_rows} usuarios`);
@@ -383,7 +408,7 @@ export function UserBatchUploadPage() {
                                     {users.filter(u => !u._isValid).slice(0, 10).map(user => (
                                         <div key={user.id} className="text-xs text-red-700">
                                             <span className="font-medium">Fila {user.row_number}</span>{' '}
-                                            <span className="text-red-500">({user.rol})</span>:{' '}
+                                            <span className="text-red-500">({user.email || 'sin correo'})</span>:{' '}
                                             {Object.entries(user._errors).map(([field, msg]) => (
                                                 <span key={field} className="mr-2">
                                                     {field}: {msg}
@@ -414,13 +439,28 @@ export function UserBatchUploadPage() {
 
                         {/* Actions */}
                         <div className="p-4 border-t bg-gray-50 space-y-4">
-                            {/* Info sobre comportamiento */}
-                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <p className="font-medium text-sm text-blue-900">ℹ️ Comportamiento automático:</p>
-                                <ul className="text-sm text-blue-800 mt-1 ml-4 list-disc">
-                                    <li>Se generará una clave temporal aleatoria para cada usuario</li>
-                                    <li>Se enviará un email de bienvenida con instrucciones de acceso</li>
-                                </ul>
+                            {/* Opciones de procesamiento */}
+                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
+                                <p className="font-medium text-sm text-blue-900">Opciones de procesamiento</p>
+
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-2">
+                                        <Mail className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
+                                        <div>
+                                            <Label htmlFor="send-welcome-emails" className="text-sm text-blue-900 cursor-pointer">
+                                                Enviar correo de bienvenida
+                                            </Label>
+                                            <p className="text-xs text-blue-700">
+                                                Cada usuario creado recibirá una clave temporal por email.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        id="send-welcome-emails"
+                                        checked={sendEmails}
+                                        onCheckedChange={setSendEmails}
+                                    />
+                                </div>
                             </div>
 
                             <Button

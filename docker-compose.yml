@@ -23,8 +23,8 @@ services:
     container_name: miboleta_nginx
     tty: true
     ports:
-      - "80:80"
-      - "443:443"
+      - "${MIBOLETA_HTTP_PORT:-8090}:80"
+      - "${MIBOLETA_HTTPS_PORT:-8443}:443"
     volumes:
       - ./backend/public:/var/www/html/public:ro
       - ./backend/storage/app/public:/var/www/html/public/storage:ro
@@ -47,7 +47,7 @@ services:
     cap_add:
       - SYS_NICE  # CAP_SYS_NICE
     ports:
-      - "3307:3306"
+      - "${MIBOLETA_MYSQL_PORT:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
@@ -59,7 +59,7 @@ services:
     container_name: miboleta_redis
     # restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${MIBOLETA_REDIS_PORT:-6399}:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -94,7 +94,7 @@ services:
     working_dir: /var/www/html
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     ports:
-      - "8085:8080"
+      - "${MIBOLETA_REVERB_PORT:-8085}:8080"
     volumes:
       - ./backend:/var/www/html
       - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
@@ -109,11 +109,34 @@ services:
     command: [ "php", "-d", "memory_limit=4G", "-d", "upload_max_filesize=10G", "-d", "post_max_size=10G", "-S", "[::]:8080", "-t", "/var/www/html" ]
     container_name: miboleta_adminer
     ports:
-      - "8080:8080"
+      - "${MIBOLETA_ADMINER_PORT:-8091}:8080"
     environment:
       - ADMINER_DEFAULT_SERVER=db
     depends_on:
       - db
+    networks:
+      - miboleta_network
+
+  # Sidecar de firma digital legal (Ghostscript + pyHanko). No expone puerto al
+  # host (solo red interna); el backend lo alcanza vía http://signer:8000.
+  # Spike manual: docker compose run --rm signer python /opt/signer/spike_sign.py <pdf>
+  signer:
+    build:
+      context: ./signer
+      dockerfile: Dockerfile
+    container_name: miboleta_signer
+    working_dir: /var/www/html
+    command: ["uvicorn", "app:app", "--app-dir", "/opt/signer", "--host", "0.0.0.0", "--port", "8000"]
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - ./backend:/var/www/html
     networks:
       - miboleta_network
 

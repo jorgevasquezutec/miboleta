@@ -276,6 +276,18 @@ return [
             'timeout' => 300, // 5 minutos por chunk
             'nice' => 0,
         ],
+        'signing-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['signing'],
+            'balance' => 'simple',
+            'maxProcesses' => 1, // Solo 1 proceso: el sidecar signer procesa 1 PDF a la vez de forma predecible
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 180, // Ver SignDocument::$timeout (debe superar services.signer.timeout)
+            'nice' => 0,
+        ],
     ],
 
 

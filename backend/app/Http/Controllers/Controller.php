@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+
 /**
  * @OA\Info(
  *     title="MiBoleta API",
@@ -135,5 +137,5 @@ namespace App\Http\Controllers;
  */
 abstract class Controller
 {
-    //
+    use AuthorizesRequests;
 }

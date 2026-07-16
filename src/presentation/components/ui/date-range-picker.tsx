@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 'use client'
 
 import React, { type FC, useState, useEffect, useRef } from 'react'
@@ -290,8 +289,12 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
         )
     }
 
+    // Reevalúa qué preset corresponde cuando cambia el rango.
+    // checkPreset se recrea en cada render, así que no puede ser dependencia:
+    // el efecto se ejecutaría en cada render. El disparador real es `range`.
     useEffect(() => {
         checkPreset()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [range])
 
     const PresetButton = ({
@@ -329,11 +332,16 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
         )
     }
 
+    // Fotografía el rango en el INSTANTE de abrir, para poder comparar al
+    // cerrar. Depender solo de isOpen es lo correcto: con `range` y
+    // `rangeCompare` en las dependencias la foto se actualizaría mientras el
+    // popover está abierto y dejaría de ser el valor original.
     useEffect(() => {
         if (isOpen) {
             openedRangeRef.current = range
             openedRangeCompareRef.current = rangeCompare
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen])
 
     return (

@@ -6,13 +6,13 @@ use App\Mail\NewDocumentAvailableMail;
 use App\Models\Document;
 use App\Models\DocumentBatch;
 use App\Services\NotificationService;
+use App\Services\TenantMailerService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class SendBatchNotifications implements ShouldQueue
 {
@@ -31,8 +31,16 @@ class SendBatchNotifications implements ShouldQueue
 
     /**
      * Execute the job.
+     *
+     * El mailer de cada documento se resuelve por su tenant AQUÍ, dentro
+     * del handle() que ya corre en el worker (este job implementa
+     * ShouldQueue). NewDocumentAvailableMail también implementa
+     * ShouldQueue, por eso se envía vía TenantMailerService::send(), que
+     * usa sendNow() para entregarlo de forma síncrona en este mismo
+     * proceso en vez de volver a encolarlo (ver docblock de
+     * TenantMailerService).
      */
-    public function handle(NotificationService $notificationService): void
+    public function handle(NotificationService $notificationService, TenantMailerService $tenantMailerService): void
     {
         Log::info("SendBatchNotifications: Enviando notificaciones para batch {$this->batch->id}");
 
@@ -40,7 +48,7 @@ class SendBatchNotifications implements ShouldQueue
         $documents = Document::where('batch_id', $this->batch->id)
             ->where('status', '!=', 'orphan')
             ->where('notified', false)
-            ->with(['user', 'documentType'])
+            ->with(['user', 'documentType', 'tenant'])
             ->get();
 
         $notifiedCount = 0;
@@ -64,8 +72,11 @@ class SendBatchNotifications implements ShouldQueue
             }
 
             try {
-                // Email notification
-                Mail::to($document->user->email)->send(
+                // Email notification (enrutado por el mailer propio de la
+                // empresa del documento, con fallback al de la plataforma)
+                $tenantMailerService->send(
+                    $document->tenant,
+                    $document->user->email,
                     new NewDocumentAvailableMail($document)
                 );
 

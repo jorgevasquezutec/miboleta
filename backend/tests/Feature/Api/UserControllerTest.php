@@ -34,9 +34,22 @@ class UserControllerTest extends TestCase
 
         $this->admin = User::factory()->admin()->create(['status' => 'active']);
         $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // Los permisos operativos ahora se resuelven por empresa (user_tenant_roles),
+        // no por el rol global. Sin esta asignación el admin no pasa el chequeo
+        // hasRoleInTenant('admin', ...) de StoreUserRequest.
+        \App\Models\UserTenantRole::create([
+            'user_id' => $this->admin->id,
+            'tenant_id' => $this->tenant->id,
+            'role_id' => Role::where('name', 'admin')->first()->id,
+        ]);
 
         $this->client = User::factory()->client()->create(['status' => 'active']);
         $this->client->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        \App\Models\UserTenantRole::create([
+            'user_id' => $this->client->id,
+            'tenant_id' => $this->tenant->id,
+            'role_id' => $this->clientRole->id,
+        ]);
     }
 
     public function test_root_can_list_all_users(): void
@@ -116,9 +129,29 @@ class UserControllerTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'nuevo@example.com']);
     }
 
-    public function test_admin_can_create_user_in_tenant(): void
+    public function test_admin_cannot_create_user_in_tenant(): void
     {
+        // Matriz de Accesos: crear usuarios es de root ('users.create_any_role')
+        // y admin_tenant ('users.create_limited_role'). 'admin' no aparece, así
+        // que ya no puede — antes este test afirmaba lo contrario.
         $response = $this->actingAs($this->admin)->postJson('/api/users', [
+            'name' => 'Nuevo',
+            'last_name' => 'Usuario',
+            'email' => 'nuevo@example.com',
+            'role_id' => $this->clientRole->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('users', ['email' => 'nuevo@example.com']);
+    }
+
+    public function test_admin_tenant_can_create_user_in_tenant(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson('/api/users', [
             'name' => 'Nuevo',
             'last_name' => 'Usuario',
             'email' => 'nuevo@example.com',
@@ -168,9 +201,24 @@ class UserControllerTest extends TestCase
             ->assertJsonFragment(['name' => 'Actualizado']);
     }
 
-    public function test_admin_can_update_tenant_user(): void
+    public function test_admin_cannot_update_tenant_user(): void
     {
+        // Matriz de Accesos: 'users.update' = root, admin_tenant. 'admin' no
+        // aparece — antes este test afirmaba lo contrario.
         $response = $this->actingAs($this->admin)->putJson("/api/users/{$this->client->id}", [
+            'name' => 'Actualizado',
+        ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('users', ['id' => $this->client->id, 'name' => 'Actualizado']);
+    }
+
+    public function test_admin_tenant_can_update_tenant_user(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->putJson("/api/users/{$this->client->id}", [
             'name' => 'Actualizado',
         ]);
 
@@ -188,14 +236,29 @@ class UserControllerTest extends TestCase
         $this->assertSoftDeleted('users', ['id' => $user->id]);
     }
 
-    public function test_admin_can_delete_tenant_user(): void
+    public function test_admin_cannot_delete_tenant_user(): void
     {
+        // Item 28: solo root puede eliminar usuarios (ability 'users.delete' de
+        // la Matriz de Accesos). Admin y admin_tenant ya no pueden, aunque
+        // compartan tenant con el usuario objetivo.
         $user = User::factory()->client()->create();
         $user->tenants()->attach($this->tenant->id);
 
         $response = $this->actingAs($this->admin)->deleteJson("/api/users/{$user->id}");
 
-        $response->assertStatus(200);
+        $response->assertStatus(403);
+        $this->assertNotSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    public function test_root_cannot_delete_himself(): void
+    {
+        // La ability 'users.delete' permite a root, pero nadie puede eliminarse
+        // a sí mismo: esa regla es del par (actor, objetivo) y vive en
+        // UserController::destroy(), no en la matriz.
+        $response = $this->actingAs($this->root)->deleteJson("/api/users/{$this->root->id}");
+
+        $response->assertStatus(403);
+        $this->assertNotSoftDeleted('users', ['id' => $this->root->id]);
     }
 
     public function test_filter_users_by_search(): void

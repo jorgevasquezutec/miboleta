@@ -1,4 +1,4 @@
-import { IUserRepository, LoginResponse, GetUsersParams } from '@/core/domain/repositories/IUserRepository';
+import { IUserRepository, LoginResponse, GetUsersParams, MeResponse } from '@/core/domain/repositories/IUserRepository';
 import { User, CreateUserData, UpdateUserData } from '@/core/domain/entities';
 import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
 import { PaginatedResponse } from './types';
@@ -12,11 +12,12 @@ export class UserRepository implements IUserRepository {
   /**
    * Login - Autenticar usuario
    * Las cookies con access_token y refresh_token se establecen automáticamente
+   * @param login DNI o correo electrónico (el backend acepta ambos en el campo `login`)
    */
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(login: string, password: string): Promise<LoginResponse> {
     try {
       const response = await apiClient.post<LoginResponse>('/login', {
-        email,
+        login,
         password,
       });
       return response.data;
@@ -42,10 +43,29 @@ export class UserRepository implements IUserRepository {
    * Me - Obtener usuario actual
    * El access_token se envía automáticamente desde la cookie
    */
-  async me(): Promise<User> {
+  async me(): Promise<MeResponse> {
     try {
-      const response = await apiClient.get<User>('/me');
+      // /me devuelve el usuario plano en la raíz (a diferencia de /login, que
+      // lo envuelve en {user}) más `access_matrix` como campo hermano.
+      const response = await apiClient.get<MeResponse>('/me');
       return response.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Matriz de Accesos (config/access_matrix.php del backend).
+   *
+   * /login y /me ya la traen, pero este refetch es lo que permite recuperarla
+   * en una sesión que se restauró desde localStorage sin ella (el mapa se
+   * persiste, pero una sesión anterior al cambio no lo tiene guardado). Sin
+   * mapa, useCan() deniega TODO y las rutas rebotan contra RootRedirect.
+   */
+  async getAccessMatrix(): Promise<Record<string, string[]>> {
+    try {
+      const response = await apiClient.get<{ data: Record<string, string[]> }>('/access-matrix');
+      return response.data.data;
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }

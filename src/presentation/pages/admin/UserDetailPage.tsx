@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User } from '@/core/domain/entities/User';
 import { userRepository } from '@/infrastructure/persistence/repositories';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
-import { useAuthStore } from '@/presentation/stores/authStore';
+import { useCan } from '@/presentation/hooks/useCan';
 import { Button } from '@/presentation/components/ui/button';
 import { Badge } from '@/presentation/components/ui/badge';
 import {
@@ -42,7 +42,6 @@ export function UserDetailPage() {
     useDocumentTitle('Detalle de Usuario');
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
-    const { user: currentUser } = useAuthStore();
     const { tenants, fetchTenants } = useTenantsStore();
 
     const [user, setUser] = useState<User | null>(null);
@@ -53,16 +52,7 @@ export function UserDetailPage() {
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-    // Load user data
-    useEffect(() => {
-        if (id) {
-            loadUser(id);
-            loadSubordinates(id);
-            fetchTenants();
-        }
-    }, [id]);
-
-    const loadUser = async (userId: string) => {
+    const loadUser = useCallback(async (userId: string) => {
         setIsLoading(true);
         try {
             const userData = await userRepository.findById(userId);
@@ -78,9 +68,9 @@ export function UserDetailPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [navigate]);
 
-    const loadSubordinates = async (userId: string) => {
+    const loadSubordinates = useCallback(async (userId: string) => {
         try {
             const response = await apiClient.get<{ data: User[] }>(`/users/${userId}/subordinates`);
             setSubordinates(response.data.data || []);
@@ -88,7 +78,18 @@ export function UserDetailPage() {
             console.log('No subordinates endpoint or error:', error);
             setSubordinates([]);
         }
-    };
+    }, []);
+
+    // Carga inicial. Va DESPUÉS de las funciones a propósito: son dependencias
+    // del efecto, y en el array de deps se leen durante el render, así que
+    // declararlo antes daría un ReferenceError (TDZ).
+    useEffect(() => {
+        if (id) {
+            loadUser(id);
+            loadSubordinates(id);
+            fetchTenants();
+        }
+    }, [id, loadUser, loadSubordinates, fetchTenants]);
 
     const handleToggleStatus = () => {
         if (!user) return;
@@ -119,27 +120,19 @@ export function UserDetailPage() {
 
     const handleAddTenant = async (tenantId: string) => {
         if (!user) return;
-        try {
-            await apiClient.post(`/tenants/${tenantId}/users`, {
-                user_id: user.id,
-                is_primary: false,
-            });
-            // Reload user to get updated tenants
-            loadUser(user.id);
-        } catch (error) {
-            throw error;
-        }
+        await apiClient.post(`/tenants/${tenantId}/users`, {
+            user_id: user.id,
+            is_primary: false,
+        });
+        // Reload user to get updated tenants
+        loadUser(user.id);
     };
 
     const handleRemoveTenant = async (tenantId: string) => {
         if (!user) return;
-        try {
-            await apiClient.delete(`/tenants/${tenantId}/users/${user.id}`);
-            // Reload user to get updated tenants
-            loadUser(user.id);
-        } catch (error) {
-            throw error;
-        }
+        await apiClient.delete(`/tenants/${tenantId}/users/${user.id}`);
+        // Reload user to get updated tenants
+        loadUser(user.id);
     };
 
     const getStatusBadge = (status: string) => {
@@ -179,7 +172,10 @@ export function UserDetailPage() {
         );
     };
 
-    const canEdit = currentUser?.role === 'root';
+    // Permisos de la Matriz de Accesos, no el rol global (que dejaba fuera a
+  // admin_tenant, con permiso de editar/resetear según la matriz).
+  const canEdit = useCan('users.update');
+  const canResetPassword = useCan('users.reset_password');
 
     if (isLoading) {
         return (
@@ -233,14 +229,16 @@ export function UserDetailPage() {
 
                         {canEdit && (
                             <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setIsPasswordResetOpen(true)}
-                                    className="text-orange-600 hover:text-orange-700"
-                                >
-                                    <KeyRound className="h-4 w-4 mr-2" />
-                                    Restablecer Contraseña
-                                </Button>
+                                {canResetPassword && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setIsPasswordResetOpen(true)}
+                                        className="text-orange-600 hover:text-orange-700"
+                                    >
+                                        <KeyRound className="h-4 w-4 mr-2" />
+                                        Restablecer Contraseña
+                                    </Button>
+                                )}
                                 <Button
                                     variant="outline"
                                     onClick={handleToggleStatus}
@@ -375,7 +373,7 @@ export function UserDetailPage() {
                     <SubordinatesList
                         subordinates={subordinates}
                         compact={subordinates.length > 5}
-                        showActions={currentUser?.role === 'root'}
+                        showActions={canEdit}
                     />
                 </CardContent>
             </Card>

@@ -30,8 +30,13 @@ class UploadBatchValidationTest extends TestCase
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
         $this->docType = DocumentType::factory()->create();
 
-        $this->admin = User::factory()->admin()->create(['status' => 'active']);
-        $this->admin->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // withTenantRole asigna el rol DENTRO de la empresa (user_tenant_roles),
+        // que es lo que usa authorize() para resolver el rol; admin() solo
+        // escribe el rol global (user_roles), un respaldo de display.
+        $this->admin = User::factory()
+            ->admin()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
     }
 
     public function test_upload_requires_tenant_id(): void

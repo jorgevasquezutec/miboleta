@@ -19,9 +19,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/presentation/components/ui/select';
-import { ArrowLeft, Save, Loader2, Building2, X, ImageIcon } from 'lucide-react';
+import { Badge } from '@/presentation/components/ui/badge';
+import { ArrowLeft, Save, Loader2, Building2, X, ImageIcon, Mail, Users, PlugZap } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadTenantLogo, validateImageFile } from '@/infrastructure/http/fileUpload';
+import { tenantRepository } from '@/infrastructure/persistence/repositories/TenantRepository';
+import type { CreateTenantData, UpdateTenantData, MailEncryption } from '@/core/domain/entities/Tenant';
 
 export function TenantFormPage() {
     const navigate = useNavigate();
@@ -40,12 +43,30 @@ export function TenantFormPage() {
         phone: '',
         logo_path: '',
         status: 'active' as 'active' | 'inactive' | 'suspended',
+        labor_regime: 'general' as 'general' | 'micro' | 'pequena',
+        // SMTP por empresa (todos opcionales). mail_port se maneja como string
+        // en el input y se convierte a número al armar el payload.
+        // mail_encryption usa el centinela 'none' para "sin cifrado".
+        mail_host: '',
+        mail_port: '',
+        mail_username: '',
+        mail_encryption: 'none' as 'none' | MailEncryption,
+        mail_from_address: '',
+        mail_from_name: '',
     });
+
+    // La contraseña SMTP se maneja aparte: nunca se precarga (el backend no la
+    // devuelve) y solo se envía cuando el usuario escribe una nueva.
+    const [mailPassword, setMailPassword] = useState('');
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+    // Estado local del botón "Probar conexión" SMTP (ítem 24-menor). No usa
+    // el `isLoading` global del store porque ese ya controla los botones de
+    // Guardar/Cancelar del formulario.
+    const [isTestingSmtp, setIsTestingSmtp] = useState(false);
 
     // Clear currentTenant when creating new tenant
     useEffect(() => {
@@ -56,15 +77,16 @@ export function TenantFormPage() {
     }, [isEditing]);
 
     // Load tenant data if editing
+    //
+    // Se llama a fetchTenantById directamente: el envoltorio loadTenant que
+    // había aquí se recreaba en cada render, así que no podía estar en las
+    // dependencias sin provocar un fetch por render. fetchTenantById es una
+    // acción del store (identidad estable), así que sí puede.
     useEffect(() => {
         if (isEditing && id) {
-            loadTenant(id);
+            fetchTenantById(id);
         }
-    }, [id, isEditing]);
-
-    const loadTenant = async (tenantId: string) => {
-        await fetchTenantById(tenantId);
-    };
+    }, [id, isEditing, fetchTenantById]);
 
     // Update form when currentTenant changes (only when editing)
     useEffect(() => {
@@ -78,7 +100,16 @@ export function TenantFormPage() {
                 phone: currentTenant.phone || '',
                 logo_path: currentTenant.logo_path || '',
                 status: currentTenant.status,
+                labor_regime: currentTenant.labor_regime || 'general',
+                mail_host: currentTenant.mail_host || '',
+                mail_port: currentTenant.mail_port != null ? String(currentTenant.mail_port) : '',
+                mail_username: currentTenant.mail_username || '',
+                mail_encryption: currentTenant.mail_encryption || 'none',
+                mail_from_address: currentTenant.mail_from_address || '',
+                mail_from_name: currentTenant.mail_from_name || '',
             });
+            // La contraseña nunca se precarga (write-only en el backend).
+            setMailPassword('');
             // Set preview URL from backend-generated logo_url
             setLogoPreviewUrl(currentTenant.logo_url || null);
         }
@@ -112,14 +143,15 @@ export function TenantFormPage() {
         }
 
         try {
+            const payload = buildPayload();
             if (isEditing && id) {
-                const result = await updateTenant(id, formData);
+                const result = await updateTenant(id, payload as UpdateTenantData);
                 if (result) {
                     toast.success('Organización actualizada exitosamente');
                     navigate('/tenants');
                 }
             } else {
-                const result = await createTenant(formData);
+                const result = await createTenant(payload as CreateTenantData);
                 if (result) {
                     toast.success('Organización creada exitosamente');
                     navigate('/tenants');
@@ -127,6 +159,66 @@ export function TenantFormPage() {
             }
         } catch (error) {
             // Error already handled by store
+        }
+    };
+
+    /**
+     * Arma el payload de create/update.
+     * Regla crítica SMTP: la contraseña solo se incluye cuando el usuario
+     * escribe una nueva; si se deja vacía NO se envía `mail_password`, para no
+     * pisar/borrar la contraseña ya guardada en el backend (un
+     * mail_password:"" presente SÍ la borraría).
+     */
+    const buildPayload = (): CreateTenantData => {
+        const trimmed = (v: string) => v.trim();
+        const payload: CreateTenantData = {
+            name: formData.name,
+            ruc: formData.ruc,
+            business_name: formData.business_name,
+            address: formData.address,
+            phone: formData.phone,
+            logo_path: formData.logo_path,
+            status: formData.status,
+            labor_regime: formData.labor_regime,
+            // SMTP: normalizamos vacíos a null para no romper validaciones
+            // (ej. formato email) y permitir limpiar valores existentes.
+            mail_host: trimmed(formData.mail_host) || null,
+            mail_port: formData.mail_port ? Number(formData.mail_port) : null,
+            mail_username: trimmed(formData.mail_username) || null,
+            mail_encryption: formData.mail_encryption === 'none' ? null : formData.mail_encryption,
+            mail_from_address: trimmed(formData.mail_from_address) || null,
+            mail_from_name: trimmed(formData.mail_from_name) || null,
+        };
+
+        // Solo incluir la contraseña si el usuario escribió una nueva.
+        if (mailPassword.trim() !== '') {
+            payload.mail_password = mailPassword;
+        }
+
+        return payload;
+    };
+
+    /**
+     * Prueba la conexión SMTP ya guardada para esta empresa (POST
+     * /tenants/{id}/smtp/test, solo root). Prueba la configuración
+     * persistida en el backend, no los valores sin guardar del formulario
+     * (si el usuario cambió el host/puerto/etc. debe guardar primero).
+     */
+    const handleTestSmtp = async () => {
+        if (!id) return;
+
+        setIsTestingSmtp(true);
+        try {
+            const result = await tenantRepository.testSmtp(id);
+            if (result.success) {
+                toast.success(result.message);
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error: any) {
+            toast.error(error.message || 'Error al probar la conexión SMTP');
+        } finally {
+            setIsTestingSmtp(false);
         }
     };
 
@@ -325,6 +417,44 @@ export function TenantFormPage() {
                     </CardContent>
                 </Card>
 
+                {/* Employee Counters (RP1-C / ítem 19) - solo lectura, informativo */}
+                {isEditing && currentTenant && String(currentTenant.id) === String(id) && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Users className="h-5 w-5 text-blue-600" />
+                                Contador de empleados
+                            </CardTitle>
+                            <CardDescription>
+                                Información de solo lectura. El conteo inicial se fija automáticamente
+                                al completar la primera carga masiva de usuarios de esta organización.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="p-3 rounded-lg border bg-gray-50">
+                                    <p className="text-xs text-gray-500">Carga inicial</p>
+                                    <p className="text-xl font-semibold text-gray-900">
+                                        {currentTenant.initial_employee_count ?? 0}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg border bg-gray-50">
+                                    <p className="text-xs text-gray-500">Total actual</p>
+                                    <p className="text-xl font-semibold text-gray-900">
+                                        {currentTenant.current_employee_count ?? 0}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg border bg-gray-50">
+                                    <p className="text-xs text-gray-500">Agregados después</p>
+                                    <p className="text-xl font-semibold text-gray-900">
+                                        {currentTenant.subsequent_employee_count ?? 0}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {/* Basic Information */}
                 <Card>
                     <CardHeader>
@@ -407,6 +537,29 @@ export function TenantFormPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {/* Labor Regime */}
+                        <div className="space-y-2">
+                            <Label htmlFor="labor_regime">Régimen Laboral</Label>
+                            <Select
+                                value={formData.labor_regime}
+                                onValueChange={(value: 'general' | 'micro' | 'pequena') =>
+                                    handleChange('labor_regime', value)
+                                }
+                            >
+                                <SelectTrigger id="labor_regime">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="general">Régimen General (30 días)</SelectItem>
+                                    <SelectItem value="micro">Microempresa (15 días)</SelectItem>
+                                    <SelectItem value="pequena">Pequeña Empresa (15 días)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-gray-500">
+                                Determina los días de vacaciones que corresponden a los empleados por año.
+                            </p>
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -439,6 +592,176 @@ export function TenantFormPage() {
                                 onChange={(e) => handleChange('phone', e.target.value)}
                                 placeholder="Ej: +51 999 999 999"
                             />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* SMTP / Mail Server */}
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Mail className="h-5 w-5 text-blue-600" />
+                                    Servidor de correo (SMTP)
+                                </CardTitle>
+                                <CardDescription>
+                                    Opcional. Si no configuras un servidor propio, los correos de esta
+                                    organización se envían con el servidor por defecto de la plataforma.
+                                </CardDescription>
+                            </div>
+                            {isEditing && currentTenant && String(currentTenant.id) === String(id) && (
+                                <div className="flex items-center gap-2">
+                                    {currentTenant.has_custom_mailer ? (
+                                        <Badge variant="default" className="whitespace-nowrap">
+                                            Correo propio
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="secondary" className="whitespace-nowrap">
+                                            Correo de la plataforma
+                                        </Badge>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleTestSmtp}
+                                        disabled={isTestingSmtp || !currentTenant.has_custom_mailer}
+                                        title={
+                                            !currentTenant.has_custom_mailer
+                                                ? 'Guarda un host y correo remitente para poder probar la conexión'
+                                                : undefined
+                                        }
+                                    >
+                                        {isTestingSmtp ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Probando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <PlugZap className="mr-2 h-4 w-4" />
+                                                Probar conexión
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Host */}
+                            <div className="space-y-2">
+                                <Label htmlFor="mail_host">Host</Label>
+                                <Input
+                                    id="mail_host"
+                                    value={formData.mail_host}
+                                    onChange={(e) => handleChange('mail_host', e.target.value)}
+                                    placeholder="Ej: smtp.gmail.com"
+                                />
+                            </div>
+
+                            {/* Port */}
+                            <div className="space-y-2">
+                                <Label htmlFor="mail_port">Puerto</Label>
+                                <Input
+                                    id="mail_port"
+                                    type="number"
+                                    min={1}
+                                    max={65535}
+                                    value={formData.mail_port}
+                                    onChange={(e) => handleChange('mail_port', e.target.value)}
+                                    placeholder="Ej: 587"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Username */}
+                            <div className="space-y-2">
+                                <Label htmlFor="mail_username">Usuario</Label>
+                                <Input
+                                    id="mail_username"
+                                    value={formData.mail_username}
+                                    onChange={(e) => handleChange('mail_username', e.target.value)}
+                                    placeholder="Ej: no-reply@empresa.com"
+                                    autoComplete="off"
+                                />
+                            </div>
+
+                            {/* Password */}
+                            <div className="space-y-2">
+                                <Label htmlFor="mail_password">
+                                    {isEditing && currentTenant?.has_mail_password
+                                        ? 'Cambiar contraseña'
+                                        : 'Contraseña'}
+                                </Label>
+                                <Input
+                                    id="mail_password"
+                                    type="password"
+                                    value={mailPassword}
+                                    onChange={(e) => setMailPassword(e.target.value)}
+                                    placeholder={
+                                        isEditing && currentTenant?.has_mail_password
+                                            ? '•••••• (sin cambios)'
+                                            : 'Contraseña del servidor SMTP'
+                                    }
+                                    autoComplete="new-password"
+                                />
+                                {isEditing && currentTenant?.has_mail_password && (
+                                    <p className="text-xs text-gray-500">
+                                        Déjalo vacío para mantener la contraseña actual.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Encryption */}
+                            <div className="space-y-2">
+                                <Label htmlFor="mail_encryption">Cifrado</Label>
+                                <Select
+                                    value={formData.mail_encryption}
+                                    onValueChange={(value: 'none' | MailEncryption) =>
+                                        handleChange('mail_encryption', value)
+                                    }
+                                >
+                                    <SelectTrigger id="mail_encryption">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Ninguno</SelectItem>
+                                        <SelectItem value="tls">TLS</SelectItem>
+                                        <SelectItem value="ssl">SSL</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* From Address */}
+                            <div className="space-y-2">
+                                <Label htmlFor="mail_from_address">Correo remitente</Label>
+                                <Input
+                                    id="mail_from_address"
+                                    type="email"
+                                    value={formData.mail_from_address}
+                                    onChange={(e) => handleChange('mail_from_address', e.target.value)}
+                                    placeholder="Ej: no-reply@empresa.com"
+                                />
+                            </div>
+
+                            {/* From Name */}
+                            <div className="space-y-2">
+                                <Label htmlFor="mail_from_name">Nombre remitente</Label>
+                                <Input
+                                    id="mail_from_name"
+                                    value={formData.mail_from_name}
+                                    onChange={(e) => handleChange('mail_from_name', e.target.value)}
+                                    placeholder="Ej: Recursos Humanos ABC"
+                                />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

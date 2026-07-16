@@ -123,7 +123,7 @@ export function TenantAutocompleteSelector({
                                 </div>
                             ) : (
                                 <div className="py-6 text-center text-sm text-gray-500">
-                                    Escribe para buscar...
+                                    No hay organizaciones
                                 </div>
                             )}
                         </CommandEmpty>

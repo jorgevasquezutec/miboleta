@@ -22,7 +22,32 @@ class AuthenticationTest extends TestCase
         $user->tenants()->attach($tenant->id, ['is_primary' => true]);
 
         $response = $this->postJson('/api/login', [
-            'email' => 'test@example.com',
+            'login' => 'test@example.com',
+            'password' => 'password',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'user' => [
+                    'id',
+                    'name',
+                    'email',
+                ],
+            ]);
+    }
+
+    public function test_user_can_login_with_document_number(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->create([
+            'document_text' => '87654321',
+            'password' => bcrypt('password'),
+            'status' => 'active',
+        ]);
+        $user->tenants()->attach($tenant->id, ['is_primary' => true]);
+
+        $response = $this->postJson('/api/login', [
+            'login' => '87654321',
             'password' => 'password',
         ]);
 
@@ -47,12 +72,12 @@ class AuthenticationTest extends TestCase
         $user->tenants()->attach($tenant->id, ['is_primary' => true]);
 
         $response = $this->postJson('/api/login', [
-            'email' => 'test@example.com',
+            'login' => 'test@example.com',
             'password' => 'wrong-password',
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['login']);
     }
 
     public function test_inactive_user_cannot_login(): void
@@ -68,7 +93,7 @@ class AuthenticationTest extends TestCase
         $user->tenants()->attach($tenant->id, ['is_primary' => true]);
 
         $response = $this->postJson('/api/login', [
-            'email' => 'inactive@example.com',
+            'login' => 'inactive@example.com',
             'password' => 'password',
         ]);
 
@@ -109,22 +134,11 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_login_requires_email_and_password(): void
+    public function test_login_requires_login_and_password(): void
     {
         $response = $this->postJson('/api/login', []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email', 'password']);
-    }
-
-    public function test_login_requires_valid_email_format(): void
-    {
-        $response = $this->postJson('/api/login', [
-            'email' => 'not-an-email',
-            'password' => 'password',
-        ]);
-
-        $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['login', 'password']);
     }
 }

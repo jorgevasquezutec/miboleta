@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\Storage;
 
 class DocumentBatchService
 {
+    public function __construct(
+        protected AuditService $auditService
+    ) {
+    }
+
     /**
      * Get batches with filters based on user role.
      *
@@ -21,13 +26,14 @@ class DocumentBatchService
      */
     public function getBatches(User $user, array $filters = []): LengthAwarePaginator
     {
-        $role = $user->getCurrentRole();
         $tenantId = $filters['tenant_id'] ?? $user->tenants->first()?->id;
 
         $query = DocumentBatch::with(['documentType:id,name,display_name', 'uploader:id,name,last_name'])
             ->orderBy('created_at', 'desc');
 
-        if ($tenantId && $role !== 'root') {
+        // isRoot() en vez de getCurrentRole() !== 'root': determinístico y sin
+        // depender del respaldo global de roles.
+        if ($tenantId && !$user->isRoot()) {
             $query->where('tenant_id', $tenantId);
         }
 
@@ -63,18 +69,21 @@ class DocumentBatchService
      */
     public function getBatch(int $id, User $user): DocumentBatch
     {
-        $role = $user->getCurrentRole();
-
-        if ($role === 'client') {
-            throw new UnauthorizedAccessException('No autorizado');
-        }
-
-        return DocumentBatch::with([
+        $batch = DocumentBatch::with([
             'documentType',
             'uploader:id,name,last_name,email',
             'documents:id,batch_id,employee_document_number,status,user_id',
             'documents.user:id,name,last_name'
         ])->findOrFail($id);
+
+        // Autorizado contra la empresa DEL LOTE, no con el rol global: antes
+        // bastaba con que el rol global no fuera 'client', así que un usuario
+        // que fuera admin en la empresa A podía abrir lotes de la empresa B.
+        if (!$user->can('documents.view_batches', $batch->tenant_id)) {
+            throw new UnauthorizedAccessException('No autorizado');
+        }
+
+        return $batch;
     }
 
     /**
@@ -100,11 +109,20 @@ class DocumentBatchService
             'original_filename' => $file->getClientOriginalName(),
             'notify_employees' => $data['notify_employees'] ?? false,
             'requires_signature' => $data['requires_signature'] ?? false,
+            // Ítem 36: tamaño de página elegido por el usuario antes de la
+            // carga masiva, usado luego para calibrar la posición de la
+            // firma (ver PdfWatermarkService / config/signature.php).
+            'page_size' => $data['page_size'] ?? 'a10',
             'status' => 'pending',
         ]);
 
         // Dispatch job
         ProcessZipFile::dispatch($batch, $tempPath)->onQueue('documents');
+
+        // El conteo real de documentos se conoce al completar el lote
+        // (batch.completed, desde BatchCompletedCallback); aquí solo el evento
+        // de creación con el nombre del archivo cargado.
+        $this->auditService->logBatchCreated($batch->id, 0, $tenantId);
 
         return $batch;
     }
@@ -237,6 +255,7 @@ class DocumentBatchService
             'progress_percentage' => $batch->progress_percentage,
             'notify_employees' => $batch->notify_employees,
             'requires_signature' => $batch->requires_signature,
+            'page_size' => $batch->resolved_page_size,
             'started_at' => $batch->started_at,
             'completed_at' => $batch->completed_at,
             'created_at' => $batch->created_at,
@@ -267,13 +286,21 @@ class DocumentBatchService
     }
 
     /**
-     * Check if user can access batches.
+     * ¿El usuario puede ver el módulo de lotes de carga en la empresa indicada?
      *
-     * @param User $user
-     * @return bool
+     * Antes era `getCurrentRole() !== 'client'`: sin empresa (rol global) y por
+     * descarte, lo que concedía acceso a cualquiera que fuera algo distinto de
+     * client en CUALQUIER empresa suya. Ahora se evalúa la ability dentro de la
+     * empresa activa.
+     *
+     * Nota: según la Matriz de Accesos, 'documents.view_batches' es
+     * [admin, admin_tenant] — root NO ve lotes (el router del frontend ya lo
+     * excluía de /batches).
+     *
+     * @param int|null $tenantId Empresa activa (ver ActiveTenantResolver).
      */
-    public function canAccessBatches(User $user): bool
+    public function canAccessBatches(User $user, ?int $tenantId = null): bool
     {
-        return $user->getCurrentRole() !== 'client';
+        return $user->can('documents.view_batches', $tenantId);
     }
 }

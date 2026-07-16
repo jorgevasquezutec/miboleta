@@ -63,7 +63,11 @@ class TenantFilter
             // ]);
 
             // ✅ EXCEPCIÓN: Root users pueden acceder a TODOS los tenants sin validación
-            if ($user->getCurrentRole() === 'root') {
+            // isRoot() en vez de getCurrentRole() === 'root': determinístico y
+            // sin depender del respaldo global de roles (root es global por
+            // diseño). Aquí importa especialmente: este bypass decide si se
+            // valida o no que las empresas pedidas sean del usuario.
+            if ($user->isRoot()) {
                 $request->merge(['_tenant_filter_ids' => $requestedIds]);
 
                 // Log::info('✅ [TenantFilter] Root user - all tenants allowed', [

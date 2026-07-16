@@ -10,6 +10,7 @@ use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\PasswordService;
 use Illuminate\Http\JsonResponse;
 
@@ -22,7 +23,8 @@ use Illuminate\Http\JsonResponse;
 class PasswordController extends Controller
 {
     public function __construct(
-        protected PasswordService $passwordService
+        protected PasswordService $passwordService,
+        protected AuditService $auditService
     ) {
     }
 
@@ -52,6 +54,8 @@ class PasswordController extends Controller
     {
         $validated = $request->validated();
         $this->passwordService->requestPasswordReset($validated['email']);
+
+        $this->auditService->logPasswordResetRequested($validated['email']);
 
         return response()->json([
             'message' => 'Si el correo existe, recibirás un enlace de recuperación.',
@@ -106,6 +110,11 @@ class PasswordController extends Controller
             return response()->json(['message' => $result['message']], $statusCode);
         }
 
+        $resetUser = User::where('email', $validated['email'])->first();
+        if ($resetUser) {
+            $this->auditService->logPasswordReset($resetUser->id, ['via' => 'token']);
+        }
+
         return response()->json(['message' => $result['message']]);
     }
 
@@ -156,6 +165,8 @@ class PasswordController extends Controller
             return response()->json(['message' => $result['message']], 422);
         }
 
+        $this->auditService->logPasswordChanged($request->user()->id);
+
         return response()->json(['message' => $result['message']]);
     }
 
@@ -200,6 +211,8 @@ class PasswordController extends Controller
         if (!$result['success']) {
             return response()->json(['message' => $result['message']], 400);
         }
+
+        $this->auditService->logPasswordChanged($request->user()->id);
 
         return response()->json([
             'message' => $result['message'],
@@ -259,6 +272,12 @@ class PasswordController extends Controller
             $validated['password'] ?? null,
             $validated['must_change_password'] ?? false
         );
+
+        $this->auditService->logPasswordReset($user->id, [
+            'by_admin' => true,
+            'admin_id' => $request->user()?->id,
+            'action' => $validated['action'],
+        ]);
 
         return response()->json([
             'message' => 'Contraseña del usuario actualizada correctamente.',

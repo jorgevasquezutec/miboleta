@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useDocumentTitle } from "@/presentation/hooks";
 import { useNavigate, Link } from "react-router-dom";
-import { Building2, Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
+import { Building2, IdCard, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
@@ -14,7 +14,8 @@ export default function LoginView() {
   useDocumentTitle('Iniciar Sesión');
   const navigate = useNavigate();
   const { login, isLoading } = useAuth();
-  const [email, setEmail] = useState("");
+  // DNI o correo electrónico (el backend acepta ambos en el campo `login`)
+  const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -22,7 +23,7 @@ export default function LoginView() {
     e.preventDefault();
 
     try {
-      await login(email, password);
+      await login(loginValue, password);
 
       // Check if user needs to change password
       const currentUser = useAuthStore.getState().user;
@@ -40,8 +41,8 @@ export default function LoginView() {
   };
 
   // Quick login helper
-  const quickLogin = (testEmail: string) => {
-    setEmail(testEmail);
+  const quickLogin = (testLogin: string) => {
+    setLoginValue(testLogin);
     setPassword("password");
   };
 
@@ -82,16 +83,17 @@ export default function LoginView() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="email">Correo Electrónico</Label>
+                <Label htmlFor="login">DNI o correo electrónico</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#64748B]" />
+                  <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#64748B]" />
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="usuario@empresa.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="login"
+                    type="text"
+                    placeholder="DNI o correo electrónico"
+                    value={loginValue}
+                    onChange={(e) => setLoginValue(e.target.value)}
                     className="pl-10 h-11"
+                    autoComplete="username"
                     required
                     disabled={isLoading}
                   />

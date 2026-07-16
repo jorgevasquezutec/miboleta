@@ -10,13 +10,14 @@ use App\Models\User;
 use App\Models\VacationRequest;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class VacationService
 {
     public function __construct(
         protected NotificationService $notificationService,
-        protected AuditService $auditService
+        protected AuditService $auditService,
+        protected VacationBalanceService $vacationBalanceService,
+        protected TenantMailerService $tenantMailerService
     ) {
     }
     /**
@@ -38,6 +39,9 @@ class VacationService
 
         // Validate no overlap with existing approved vacations
         $this->validateNoOverlap($user->id, $data['start_date'], $data['end_date']);
+
+        // Validate the requested days do not exceed the available balance
+        $this->validateSufficientBalance($user, $tenantId, (float) $data['days_requested']);
 
         $vacationRequest = VacationRequest::create([
             'user_id' => $user->id,
@@ -127,9 +131,11 @@ class VacationService
             ]);
         }
 
-        // Email notification
+        // Email notification (enrutado por el mailer propio de la empresa
+        // de la solicitud, con fallback al de la plataforma; ver
+        // TenantMailerService)
         try {
-            Mail::to($supervisor->email)->send(new VacationRequestCreatedMail($request));
+            $this->tenantMailerService->send($request->tenant, $supervisor->email, new VacationRequestCreatedMail($request));
         } catch (\Exception $e) {
             Log::warning('[VacationService] Failed to send supervisor email', [
                 'request_id' => $request->id,
@@ -255,6 +261,8 @@ class VacationService
 
         $request->markAsTaken($confirmer);
 
+        $this->auditService->logVacationConfirmed($request->id, true);
+
         Log::info('[VacationService] Vacation marked as taken', [
             'request_id' => $request->id,
             'confirmed_by' => $confirmer->id,
@@ -280,6 +288,8 @@ class VacationService
         }
 
         $request->markAsNotTaken($confirmer);
+
+        $this->auditService->logVacationConfirmed($request->id, false);
 
         Log::info('[VacationService] Vacation marked as NOT taken', [
             'request_id' => $request->id,
@@ -438,7 +448,9 @@ class VacationService
      */
     public function getAllRequests(User $user, array $filters = []): LengthAwarePaginator
     {
-        $role = $user->getCurrentRole();
+        // isRoot() en vez de getCurrentRole() === 'root': determinístico y sin
+        // depender del respaldo global de roles (root es global por diseño).
+        $isRoot = $user->isRoot();
         $tenantId = $filters['tenant_id'] ?? $user->tenants->first()?->id;
 
         $query = VacationRequest::with(['user', 'approvedByUser', 'rejectedByUser', 'confirmedByUser'])
@@ -447,9 +459,9 @@ class VacationService
         // Apply tenant filter:
         // - Non-root users always filter by tenant
         // - Root users only filter if they explicitly specify a tenant_id
-        if ($role !== 'root' && $tenantId) {
+        if (!$isRoot && $tenantId) {
             $query->forTenant($tenantId);
-        } elseif ($role === 'root' && !empty($filters['tenant_id'])) {
+        } elseif ($isRoot && !empty($filters['tenant_id'])) {
             $query->forTenant($filters['tenant_id']);
         }
 
@@ -526,6 +538,28 @@ class VacationService
     }
 
     /**
+     * Validate that the requested days do not exceed the user's available
+     * vacation balance for this tenant (see VacationBalanceService).
+     *
+     * @param User $user
+     * @param int $tenantId
+     * @param float $daysRequested
+     * @throws \InvalidArgumentException
+     */
+    public function validateSufficientBalance(User $user, int $tenantId, float $daysRequested): void
+    {
+        $balance = $this->vacationBalanceService->getBalance($user, $tenantId);
+
+        if ($daysRequested > $balance['available']) {
+            throw new \InvalidArgumentException(sprintf(
+                'No tienes saldo de vacaciones suficiente. Disponible: %s día(s), solicitado: %s día(s).',
+                $balance['available'],
+                $daysRequested
+            ));
+        }
+    }
+
+    /**
      * Verify that the user is the supervisor of the request owner.
      *
      * @param VacationRequest $request
@@ -536,10 +570,19 @@ class VacationService
     {
         $request->load('user');
 
-        $role = $supervisor->getCurrentRole();
+        // El rol se resuelve dentro de la empresa DE LA SOLICITUD, no con el
+        // respaldo global. Antes, quien fuera 'admin' en cualquiera de sus
+        // empresas resolvía 'admin' vía getCurrentRole() y podía aprobar
+        // solicitudes de OTRA empresa donde no es admin (fuga entre empresas).
+        //
+        // Se preserva a propósito la misma política de hoy (root/admin saltan el
+        // chequeo de supervisor; el resto debe ser el supervisor asignado): este
+        // paso solo cierra la fuga. El realineamiento a la Matriz de Accesos
+        // ('vacations.approve_reject_team' excluye a root) va aparte.
+        $role = User::roleForTenant($supervisor, $request->tenant_id);
 
         // Root and admin can also approve
-        if (in_array($role, ['root', 'admin'])) {
+        if (in_array($role, ['root', 'admin'], true)) {
             return;
         }
 
@@ -577,7 +620,9 @@ class VacationService
             ]);
         }
 
-        // Email notification with CC to root users
+        // Email notification with CC to root users (enrutado por el mailer
+        // propio de la empresa de la solicitud, con fallback al de la
+        // plataforma; ver TenantMailerService)
         try {
             // Get all root users emails for CC
             $rootEmails = User::whereHas('roles', function ($query) {
@@ -586,14 +631,12 @@ class VacationService
                 ->pluck('email')
                 ->toArray();
 
-            $mail = Mail::to($request->user->email);
-
-            // Add CC if there are root users
-            if (!empty($rootEmails)) {
-                $mail->cc($rootEmails);
-            }
-
-            $mail->send(new VacationRequestApprovedMail($request));
+            $this->tenantMailerService->send(
+                $request->tenant,
+                $request->user->email,
+                new VacationRequestApprovedMail($request),
+                $rootEmails
+            );
         } catch (\Exception $e) {
             Log::warning('[VacationService] Failed to send approval email', [
                 'request_id' => $request->id,
@@ -627,9 +670,11 @@ class VacationService
             ]);
         }
 
-        // Email notification
+        // Email notification (enrutado por el mailer propio de la empresa
+        // de la solicitud, con fallback al de la plataforma; ver
+        // TenantMailerService)
         try {
-            Mail::to($request->user->email)->send(new VacationRequestRejectedMail($request));
+            $this->tenantMailerService->send($request->tenant, $request->user->email, new VacationRequestRejectedMail($request));
         } catch (\Exception $e) {
             Log::warning('[VacationService] Failed to send rejection email', [
                 'request_id' => $request->id,

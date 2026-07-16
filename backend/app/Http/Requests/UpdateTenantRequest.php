@@ -2,27 +2,25 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Tenant;
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Validation\Rule;
 
 class UpdateTenantRequest extends CustomFormRequest
 {
+    use ResolvesActiveRole;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        $tenantId = $this->route('tenant');
-        $user = $this->user();
-
-        // Root puede actualizar cualquier tenant
-        if ($user && $user->isRoot()) {
-            return true;
-        }
-
-        // Admin solo puede actualizar sus tenants
-        $tenant = Tenant::find($tenantId);
-        return $user && $tenant && $tenant->hasUser($user);
+        // Editar una empresa es 'tenants.manage' (matriz: solo root).
+        //
+        // Antes: root, o CUALQUIER usuario con $tenant->hasUser($user) — sin
+        // mirar el rol. Un client de la empresa podía editar los datos de su
+        // propia empresa (nombre, RUC...). No era solo una desviación de la
+        // matriz: era una escalada de privilegios.
+        return $this->allowsAbility('tenants.manage');
     }
 
     /**
@@ -49,6 +47,17 @@ class UpdateTenantRequest extends CustomFormRequest
             'phone' => 'nullable|string|max:20',
             'logo_path' => 'nullable|string|max:500',
             'status' => 'nullable|in:active,inactive,suspended',
+            'labor_regime' => 'nullable|in:general,micro,pequena',
+            // Configuración SMTP propia de la empresa (RP2-B). Todo nullable:
+            // si no se envía, se usa el mailer por defecto de la plataforma
+            // (ver TenantMailerService).
+            'mail_host' => 'nullable|string|max:255',
+            'mail_port' => 'nullable|integer|between:1,65535',
+            'mail_username' => 'nullable|string|max:255',
+            'mail_password' => 'nullable|string|max:255',
+            'mail_encryption' => 'nullable|in:tls,ssl',
+            'mail_from_address' => 'nullable|email|max:255',
+            'mail_from_name' => 'nullable|string|max:255',
         ];
     }
 
@@ -69,6 +78,11 @@ class UpdateTenantRequest extends CustomFormRequest
             'address.max' => 'La dirección no puede exceder 500 caracteres',
             'phone.max' => 'El teléfono no puede exceder 20 caracteres',
             'status.in' => 'El estado debe ser: active, inactive o suspended',
+            'labor_regime.in' => 'El régimen laboral debe ser: general, micro o pequena',
+            'mail_port.integer' => 'El puerto SMTP debe ser un número entero',
+            'mail_port.between' => 'El puerto SMTP debe estar entre 1 y 65535',
+            'mail_encryption.in' => 'La encriptación SMTP debe ser: tls o ssl',
+            'mail_from_address.email' => 'El correo remitente debe ser una dirección de correo válida',
         ];
     }
 

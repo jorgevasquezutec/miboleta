@@ -5,7 +5,8 @@ import {
   SignatureTermsResponse,
   RequestCodeResponse,
   SignDocumentResponse,
-  SignatureStatusResponse
+  SignatureStatusResponse,
+  VerifySignatureResponse
 } from '@/core/domain/repositories/IDocumentRepository';
 import { Document } from '@/core/domain/entities/Document';
 import { DocumentType } from '@/core/domain/entities/DocumentType';
@@ -145,6 +146,9 @@ export class DocumentRepository implements IDocumentRepository {
     if (data.tenantId) {
       formData.append('tenant_id', data.tenantId.toString());
     }
+    if (data.pageSize) {
+      formData.append('page_size', data.pageSize);
+    }
 
     const response = await apiClient.post<{ data: { batch_id: number; status: string } }>(
       '/document-batches/upload',
@@ -234,6 +238,25 @@ export class DocumentRepository implements IDocumentRepository {
     };
   }
 
+  async verifySignature(documentId: number): Promise<VerifySignatureResponse> {
+    const response = await apiClient.get<{ data: any }>(`/documents/${documentId}/verify-signature`);
+    const data = response.data.data;
+
+    return {
+      verifiable: data.verifiable,
+      reason: data.reason,
+      message: data.message,
+      intact: data.intact,
+      valid: data.valid,
+      trusted: data.trusted,
+      coversWholeFile: data.covers_whole_file,
+      signerSubject: data.signer_subject,
+      signingTime: data.signing_time,
+      tsaApplied: data.tsa_applied,
+      tsaTime: data.tsa_time,
+    };
+  }
+
   // ============ Mappers ============
 
   private mapDocumentType(data: any): DocumentType {
@@ -305,6 +328,7 @@ export class DocumentRepository implements IDocumentRepository {
       notifyEmployees: data.notify_employees,
       notificationsSent: data.notifications_sent,
       requiresSignature: data.requires_signature,
+      pageSize: data.page_size,
       status: data.status,
       progressPercentage: data.progress_percentage,
       startedAt: data.started_at,

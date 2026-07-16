@@ -35,4 +35,22 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Signer (sidecar de firma digital criptográfica PAdES)
+    |--------------------------------------------------------------------------
+    |
+    | Sidecar HTTP interno (FastAPI, ver signer/app.py) alcanzable SOLO desde
+    | la red interna de Docker (servicio "signer", sin puerto publicado al
+    | host). Expone GET /health, POST /sign, POST /verify. Consumido por
+    | App\Services\DocumentSigningService.
+    |
+    */
+
+    'signer' => [
+        'base_url' => env('SIGNER_BASE_URL', 'http://signer:8000'),
+        'timeout' => env('SIGNER_TIMEOUT', 120),
+        'connect_timeout' => env('SIGNER_CONNECT_TIMEOUT', 10),
+    ],
+
 ];

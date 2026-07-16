@@ -9,10 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/presentation/components/ui/dropdown-menu";
-import { TenantMultiSwitcher } from "@/presentation/components/shared/TenantMultiSwitcher";
+import { TenantSwitcher } from "@/presentation/components/shared/TenantSwitcher";
+import { RoleSwitcher } from "@/presentation/components/shared/RoleSwitcher";
 import { NotificationBell } from "@/presentation/components/notifications/NotificationBell";
 import { useNavigate } from "react-router-dom";
 import { User } from "@/core/domain/entities/User";
+import { useAuthStore } from "@/presentation/stores/authStore";
+import { USER_ROLE_DISPLAY_LABELS } from "@/shared/constants";
 
 interface NavbarProps {
   user: User | null;
@@ -28,10 +31,13 @@ export function Navbar({
   onToggleSidebar,
 }: NavbarProps) {
   const navigate = useNavigate();
+  const currentRole = useAuthStore((state) => state.currentRole);
   const brandingPrimaryColor = "#2563EB";
 
   const userName = user ? `${user.name || ''} ${user.last_name || ''}`.trim() || user.email : 'Usuario';
-  const userRole = user?.role || 'user';
+  const userRole = currentRole
+    ? (USER_ROLE_DISPLAY_LABELS as Record<string, string>)[currentRole] || currentRole
+    : (user?.role || 'user');
 
   // Get initials safely
   const getInitials = (name: string): string => {
@@ -65,8 +71,16 @@ export function Navbar({
             </button>
           )}
 
-          {/* Tenant Multi-Switcher - Selección múltiple de empresas */}
-          <TenantMultiSwitcher />
+          {/* Selector único de empresa activa + rol activo
+              (currentTenant/currentRole). Tanto root como no-root usan el
+              TenantSwitcher como control único de empresa: fija la empresa
+              activa y sincroniza el filtro de datos (tenantFilterStore,
+              X-Tenant-Ids). Visible también en móvil. RoleSwitcher no aplica
+              a root (retorna null). */}
+          <div className="flex items-center gap-2 md:pl-2 md:ml-2 md:border-l md:border-[rgba(0,0,0,0.1)]">
+            <TenantSwitcher />
+            <RoleSwitcher />
+          </div>
         </div>
 
         {/* Right Section */}

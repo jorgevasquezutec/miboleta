@@ -9,6 +9,7 @@ use App\Http\Resources\UserResource;
 use App\Services\ProfileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -184,5 +185,83 @@ class ProfileController extends Controller
         return response()->json([
             'message' => 'Foto de perfil eliminada exitosamente',
         ]);
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/profile/request-data-update",
+     *     tags={"Perfil"},
+     *     summary="Solicitar actualización de datos personales",
+     *     description="El usuario autenticado solicita actualizar sus datos personales. Se notifica por correo al/los administrador(es) de su empresa (o, en su defecto, a su supervisor o a la plataforma).",
+     *     security={{"sanctum":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"message"},
+     *             @OA\Property(property="message", type="string", maxLength=1000, example="Necesito actualizar mi número de teléfono y mi dirección"),
+     *             @OA\Property(property="requested_changes", type="string", nullable=true, example="Teléfono, dirección")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Solicitud enviada",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Tu solicitud fue enviada correctamente")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="No autenticado"
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Error de validación o no se pudo determinar la empresa/destinatarios"
+     *     )
+     * )
+     */
+    public function requestDataUpdate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:1000'],
+            'requested_changes' => ['nullable'],
+            'requested_changes.*' => ['string', 'max:255'],
+        ], [
+            'message.required' => 'Debes indicar qué deseas actualizar.',
+            'message.max' => 'El mensaje no puede exceder 1000 caracteres.',
+        ]);
+
+        // Empresa activa: si el frontend envió un único tenant vía
+        // X-Tenant-Ids (validado por TenantFilter en `_tenant_filter_ids`),
+        // se usa esa; si no, ProfileService cae a la empresa primaria.
+        $tenantFilterIds = $request->get('_tenant_filter_ids');
+        $activeTenantId = (is_array($tenantFilterIds) && count($tenantFilterIds) === 1)
+            ? (int) $tenantFilterIds[0]
+            : null;
+
+        try {
+            $this->profileService->requestDataUpdate(
+                $request->user(),
+                $validated['message'],
+                $validated['requested_changes'] ?? null,
+                $activeTenantId
+            );
+
+            return response()->json([
+                'message' => 'Tu solicitud fue enviada correctamente. El administrador de tu empresa la recibirá por correo.',
+            ]);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('[ProfileController] Error al enviar la solicitud de actualización de datos', [
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Ocurrió un error al enviar tu solicitud. Intenta nuevamente más tarde.',
+            ], 500);
+        }
     }
 }

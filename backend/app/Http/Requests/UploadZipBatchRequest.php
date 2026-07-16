@@ -2,14 +2,19 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesActiveRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UploadZipBatchRequest extends FormRequest
 {
+    use ResolvesActiveRole;
+
     public function authorize(): bool
     {
-        // Solo root y admin pueden subir lotes ZIP
-        return $this->user() && \in_array($this->user()->getCurrentRole(), ['root', 'admin'], true);
+        // Matriz: 'documents.bulk_upload_zip' = admin, admin_tenant. Cambia
+        // respecto del hardcode anterior ['root','admin']: la matriz no le
+        // concede a root la carga de ZIPs, y sí a admin_tenant.
+        return $this->allowsAbility('documents.bulk_upload_zip');
     }
 
     public function rules(): array
@@ -21,6 +26,11 @@ class UploadZipBatchRequest extends FormRequest
             'tenant_id' => 'required|exists:tenants,id',
             'notify_employees' => 'boolean',
             'requires_signature' => 'boolean',
+            // Ítem 36: tamaño de página de las boletas del lote, usado para
+            // calibrar la posición de la firma (ver config/signature.php).
+            // 'a10' es el formato calibrado por defecto (comportamiento
+            // histórico) si el campo no se envía.
+            'page_size' => 'nullable|string|in:a4,a5,a10,letter',
         ];
     }
 
@@ -39,6 +49,7 @@ class UploadZipBatchRequest extends FormRequest
             'period.regex' => 'El período debe tener el formato YYYY-MM',
             'notify_employees.boolean' => 'El campo debe ser verdadero o falso',
             'requires_signature.boolean' => 'El campo debe ser verdadero o falso',
+            'page_size.in' => 'El tamaño de página debe ser uno de: a4, a5, a10, letter',
         ];
     }
 }

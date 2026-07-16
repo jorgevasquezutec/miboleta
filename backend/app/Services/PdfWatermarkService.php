@@ -13,9 +13,16 @@ class PdfWatermarkService
      *
      * @param string $filePath Path relative to storage disk
      * @param array $signatureData Signature information
+     * @param string|null $pageSizeKey Tamaño de boleta (a4|a5|a10|letter) del
+     *        batch al que pertenece el documento (ítem 36). Selecciona el
+     *        sub-array de coordenadas correspondiente en
+     *        config('signature.watermark.sizes'). Si es null o no existe en
+     *        el config, cae a 'a10' (config('signature.watermark.default_size')),
+     *        que es el comportamiento histórico para no romper lotes viejos
+     *        sin page_size.
      * @return bool
      */
-    public function addSignatureWatermark(string $filePath, array $signatureData): bool
+    public function addSignatureWatermark(string $filePath, array $signatureData, ?string $pageSizeKey = null): bool
     {
         try {
             $disk = Storage::disk('documents');
@@ -53,7 +60,7 @@ class PdfWatermarkService
 
                 // Add watermark only on the last page
                 if ($pageNo === $pageCount) {
-                    $this->addWatermarkToPage($pdf, $signatureData, $size);
+                    $this->addWatermarkToPage($pdf, $signatureData, $size, $pageSizeKey);
                 }
             }
 
@@ -90,10 +97,11 @@ class PdfWatermarkService
      *
      * @param Fpdi $pdf
      * @param array $signatureData
-     * @param array $pageSize
+     * @param array $pageSize Dimensiones REALES de la página del PDF (width/height/orientation), tal como las reporta FPDI — no confundir con $pageSizeKey.
+     * @param string|null $pageSizeKey Tamaño de boleta (a4|a5|a10|letter) que selecciona el sub-array de coordenadas en config('signature.watermark.sizes'). Ver addSignatureWatermark().
      * @return void
      */
-    protected function addWatermarkToPage(Fpdi $pdf, array $signatureData, array $pageSize): void
+    protected function addWatermarkToPage(Fpdi $pdf, array $signatureData, array $pageSize, ?string $pageSizeKey = null): void
     {
         // Disable auto page break to prevent new pages from being created
         $pdf->SetAutoPageBreak(false, 0);
@@ -102,8 +110,17 @@ class PdfWatermarkService
         $pageWidth = $pageSize['width'];
         $pageHeight = $pageSize['height'];
 
-        // Read placement/size from config (config/signature.php) — adjustable without code changes
-        $cfg = config('signature.watermark', []);
+        // Read placement/size from config (config/signature.php) — adjustable
+        // without code changes. Ítem 36: las coordenadas ahora viven en un
+        // mapa por tamaño (signature.watermark.sizes.<key>); 'mode' sigue
+        // siendo global (no depende del tamaño). Fallback a 'a10' si el
+        // tamaño solicitado no existe en el config (defensivo).
+        $sizesConfig = config('signature.watermark.sizes', []);
+        $defaultSizeKey = config('signature.watermark.default_size', 'a10');
+        $resolvedSizeKey = ($pageSizeKey && isset($sizesConfig[$pageSizeKey])) ? $pageSizeKey : $defaultSizeKey;
+        $cfg = $sizesConfig[$resolvedSizeKey] ?? [];
+        $mode = config('signature.watermark.mode', 'absolute');
+
         $textWidth = (float) ($cfg['width'] ?? 50);
         $align = $cfg['align'] ?? 'C';
         $nameHeight = (float) ($cfg['name_height'] ?? 8);
@@ -111,7 +128,7 @@ class PdfWatermarkService
         $nameFontSize = (float) ($cfg['name_font_size'] ?? 12);
         $dateFontSize = (float) ($cfg['date_font_size'] ?? 7);
 
-        if (($cfg['mode'] ?? 'absolute') === 'absolute') {
+        if ($mode === 'absolute') {
             // Fixed position (mm from top-left) — fits the boleta's signature box
             $x = (float) ($cfg['x'] ?? ($pageWidth - $textWidth - 10));
             $y = (float) ($cfg['name_y'] ?? ($pageHeight - 33));

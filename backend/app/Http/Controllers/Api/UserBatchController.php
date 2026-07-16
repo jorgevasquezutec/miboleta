@@ -9,7 +9,10 @@ use App\Http\Requests\UploadUserBatchDataRequest;
 use App\Http\Requests\ValidateUserBatchDataRequest;
 use App\Http\Requests\ValidateUserBatchFileRequest;
 use App\Jobs\ProcessUserChunk;
+use App\Models\User;
+use App\Services\ActiveTenantResolver;
 use App\Models\UserBatch;
+use App\Services\AuditService;
 use App\Services\BulkUserUploadService;
 use Illuminate\Bus\Batch;
 use Illuminate\Http\Request;
@@ -20,8 +23,76 @@ use Illuminate\Support\Facades\Auth;
 class UserBatchController extends Controller
 {
     public function __construct(
-        private BulkUserUploadService $service
+        private BulkUserUploadService $service,
+        private AuditService $auditService,
+        private ActiveTenantResolver $activeTenantResolver
     ) {
+    }
+
+    /**
+     * FIX B2-r2: index/show/destroy/downloadErrors/getConfig solo estaban
+     * protegidos por el middleware auth:sanctum de la ruta (ver
+     * routes/api.php); cualquier usuario autenticado -incluido un
+     * 'client'- podía listar/ver/cancelar/eliminar batches de carga
+     * masiva. El global scope TenantFilterScope de UserBatch ya aísla por
+     * EMPRESA, pero no por ROL dentro de la misma empresa. Se exige aquí
+     * el mismo rol que ya exigen StoreUserBatchRequest/
+     * UploadUserBatchDataRequest para iniciar una carga (root/admin/
+     * admin_tenant).
+     */
+    private function authorizeBatchManager(): User
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        if (!$user) {
+            abort(403, 'No tienes permisos para gestionar cargas masivas.');
+        }
+
+        // El rol se resuelve dentro de la empresa ACTIVA, no con el respaldo
+        // global: antes, ser admin en cualquiera de sus empresas bastaba para
+        // gestionar cargas masivas de la empresa activa (fuga entre empresas).
+        //
+        // Se conserva a propósito el mismo conjunto de roles de hoy: este paso
+        // solo cierra la fuga. La Matriz de Accesos ('users.bulk_upload' =
+        // [root, admin_tenant], sin 'admin') se aplicará junto con el router y
+        // el sidebar del frontend, para no dejar un menú visible que el backend
+        // rechace con 403.
+        $role = User::roleForTenant($user, $this->activeTenantResolver->resolve(request(), $user));
+
+        if (!in_array($role, ['root', 'admin', 'admin_tenant'], true)) {
+            abort(403, 'No tienes permisos para gestionar cargas masivas.');
+        }
+
+        return $user;
+    }
+
+    /**
+     * FIX B2-r2: además del rol, para operaciones sobre UN batch puntual
+     * (show/destroy/downloadErrors) exige que pertenezca al usuario
+     * (created_by_user_id) o a un tenant que administre (admin/
+     * admin_tenant). root queda exceptuado. Sin esto, un admin de la
+     * Empresa A con acceso legítimo a la carga masiva podía ver/cancelar/
+     * eliminar batches de la Empresa B con solo adivinar/enumerar el id.
+     */
+    private function authorizeBatchOwnership(UserBatch $batch, User $user): void
+    {
+        if ($user->isRoot()) {
+            return;
+        }
+
+        if ($batch->created_by_user_id === $user->id) {
+            return;
+        }
+
+        if (
+            $batch->tenant_id
+            && ($user->hasRoleInTenant('admin', $batch->tenant_id) || $user->hasRoleInTenant('admin_tenant', $batch->tenant_id))
+        ) {
+            return;
+        }
+
+        abort(403, 'No tienes permisos para acceder a este batch.');
     }
 
     /**
@@ -30,6 +101,8 @@ class UserBatchController extends Controller
      */
     public function getConfig()
     {
+        $this->authorizeBatchManager();
+
         $config = $this->service->getConfigData();
 
         return response()->json($config);
@@ -55,11 +128,25 @@ class UserBatchController extends Controller
      */
     public function index(Request $request)
     {
+        $user = $this->authorizeBatchManager();
         $perPage = $request->get('per_page', 15);
 
         $batches = UserBatch::with(['tenant', 'createdBy'])
             ->when($request->has('status'), function ($q) use ($request) {
                 $q->where('status', $request->status);
+            })
+            // FIX B2-r2: root ve todo (TenantFilterScope ya no le aplica
+            // restricción); un admin/admin_tenant solo ve los batches que
+            // creó o los de un tenant que administra.
+            ->when(!$user->isRoot(), function ($q) use ($user) {
+                $managedTenantIds = $user->tenantRoles()
+                    ->whereHas('role', fn ($r) => $r->whereIn('name', ['admin', 'admin_tenant']))
+                    ->pluck('tenant_id');
+
+                $q->where(function ($q2) use ($user, $managedTenantIds) {
+                    $q2->where('created_by_user_id', $user->id)
+                        ->orWhereIn('tenant_id', $managedTenantIds);
+                });
             })
             ->orderBy('created_at', 'desc');
 
@@ -120,8 +207,12 @@ class UserBatchController extends Controller
      */
     public function show(int $id)
     {
+        $user = $this->authorizeBatchManager();
+
         $batch = UserBatch::with(['tenant', 'createdBy'])
             ->findOrFail($id);
+
+        $this->authorizeBatchOwnership($batch, $user);
 
         // Obtener progreso en tiempo real del Laravel Bus Batch si está disponible
         $batchProgress = $batch->batch_progress;
@@ -149,6 +240,7 @@ class UserBatchController extends Controller
                 'total_rows' => $batch->total_rows,
                 'processed_rows' => $batch->processed_rows,
                 'created_users' => $batch->created_users,
+                'updated_users' => $batch->updated_users,
                 'failed_rows' => $batch->failed_rows,
                 'percentage' => $batch->progress_percentage,
                 'formatted' => $batch->formatted_progress,
@@ -158,7 +250,9 @@ class UserBatchController extends Controller
             'batch_progress' => $batchProgress, // ✅ Progreso en tiempo real de Laravel Bus
             'errors' => $batch->error_summary,
             'summary' => $batch->success_summary,
-            'processing_options' => $batch->processing_options,
+            // 'affected_tenant_ids' es bookkeeping interno (ver
+            // UserBatch::mergeAffectedTenantIds), no se expone en la API.
+            'processing_options' => collect($batch->processing_options)->except('affected_tenant_ids')->all(),
             'duration' => $batch->duration,
             'has_errors' => $batch->hasErrors(),
             'is_processing' => $batch->isProcessing(),
@@ -244,9 +338,10 @@ class UserBatchController extends Controller
             'total_rows' => count($validation['data']),
             'processing_options' => [
                 'send_welcome_emails' => $validated['send_welcome_emails'] ?? false,
-                'update_existing' => $validated['update_existing'] ?? true,
             ],
         ]);
+
+        $this->auditService->logUserBatchCreated($batch->id, $batch->total_rows);
 
         // 5. Dividir usuarios en chunks y crear jobs
         $chunkSize = 50;
@@ -335,9 +430,10 @@ class UserBatchController extends Controller
             'total_rows' => count($users),
             'processing_options' => [
                 'send_welcome_emails' => $validated['send_welcome_emails'] ?? false,
-                'update_existing' => $validated['update_existing'] ?? true,
             ],
         ]);
+
+        $this->auditService->logUserBatchCreated($batch->id, $batch->total_rows);
 
         // 4. Dividir usuarios en chunks y crear jobs
         $chunkSize = 50;
@@ -384,7 +480,11 @@ class UserBatchController extends Controller
      */
     public function downloadErrors(int $id)
     {
+        $user = $this->authorizeBatchManager();
+
         $batch = UserBatch::findOrFail($id);
+
+        $this->authorizeBatchOwnership($batch, $user);
 
         if (!$batch->hasErrors()) {
             return response()->json([
@@ -407,7 +507,11 @@ class UserBatchController extends Controller
      */
     public function destroy(int $id)
     {
+        $user = $this->authorizeBatchManager();
+
         $batch = UserBatch::findOrFail($id);
+
+        $this->authorizeBatchOwnership($batch, $user);
 
         // Si está en procesamiento, intentar cancelar el batch
         if ($batch->isProcessing()) {

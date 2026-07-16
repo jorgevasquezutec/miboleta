@@ -359,4 +359,40 @@ class TenantController extends Controller
             return response()->json(['message' => $e->getMessage()], 403);
         }
     }
+
+    /**
+     * @OA\Post(
+     *     path="/api/tenants/{id}/smtp/test",
+     *     summary="Probar conexión SMTP del tenant",
+     *     description="Intenta abrir y cerrar una conexión con el servidor SMTP propio configurado para la empresa (ítem 24-menor). Solo accesible para root.",
+     *     tags={"Tenants"},
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Resultado de la prueba de conexión",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="No autorizado - Solo root"),
+     *     @OA\Response(response=404, description="Tenant no encontrado")
+     * )
+     */
+    public function testSmtpConnection(Request $request, $id)
+    {
+        try {
+            $result = $this->tenantService->testMailerConnection($id, $request->user());
+
+            return response()->json($result);
+        } catch (UnauthorizedAccessException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 403);
+        }
+    }
 }

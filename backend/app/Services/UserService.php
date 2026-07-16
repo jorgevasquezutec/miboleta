@@ -4,9 +4,10 @@ namespace App\Services;
 
 use App\Exceptions\UserCreationException;
 use App\Mail\EmailChangedNotificationMail;
-use App\Mail\WelcomeUserMail;
 use App\Models\Document;
+use App\Models\Role;
 use App\Models\User;
+use App\Models\UserTenantRole;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,17 @@ use Illuminate\Support\Facades\Auth;
 
 class UserService
 {
+    public function __construct(
+        protected AuditService $auditService
+    ) {
+    }
+
+    /**
+     * ID convencional del rol 'root' (ver RoleSeeder: es el primer rol
+     * insertado). Root es global: no tiene empresas ni roles por empresa.
+     */
+    protected const ROOT_ROLE_ID = 1;
+
     /**
      * Create a new user with all related data.
      *
@@ -45,19 +57,34 @@ class UserService
                 'document_type' => $data['document_type'] ?? null,
                 'document_text' => $data['document_text'] ?? null,
                 'phone' => $data['phone'] ?? null,
+                'birth_date' => $data['birth_date'] ?? null,
                 'status' => $data['status'] ?? 'active',
                 'must_change_password' => true,
             ]);
 
-            // Assign role
-            $this->assignRoles($user, [$data['role_id']], $creator);
+            $roleId = isset($data['role_id']) ? (int) $data['role_id'] : null;
 
-            // Assign tenants with supervisors
-            if (isset($data['tenants_config']) && is_array($data['tenants_config'])) {
-                $this->assignTenantsWithConfig($user, $data['tenants_config']);
-            } elseif (isset($data['tenant_id'])) {
-                // Fallback for simple creation
-                $this->assignTenants($user, [$data['tenant_id']], true);
+            if ($this->isRootRoleId($roleId)) {
+                // Root: rol global, sin empresas ni roles por empresa.
+                $this->assignGlobalRole($user, $roleId, $creator);
+            } else {
+                // Usuario operativo: los roles se asignan por empresa
+                // (user_tenant_roles), no de forma global.
+                if (isset($data['tenants_config']) && is_array($data['tenants_config'])) {
+                    $this->assignTenantsWithConfig($user, $data['tenants_config'], $roleId);
+                } elseif (isset($data['tenant_id'])) {
+                    // Fallback legacy: tenant simple sin desglose de tenants_config.
+                    $this->assignTenants($user, [$data['tenant_id']], true);
+
+                    if ($roleId) {
+                        $this->assignRoles($user, (int) $data['tenant_id'], [$roleId]);
+                    }
+                }
+
+                // Mantener el respaldo global (user_roles) para no romper el
+                // código existente que aún resuelve el rol sin contexto de
+                // empresa (ver syncGlobalRoleFallback).
+                $this->syncGlobalRoleFallback($user, $creator);
             }
 
             // Assign orphan documents if document_text is provided
@@ -80,7 +107,7 @@ class UserService
                 }
             }
 
-            return $user->load(['roles', 'tenants']);
+            return $user->load(['roles', 'tenants', 'tenantRoles.role']);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -97,16 +124,42 @@ class UserService
      *
      * @param User $user
      * @param array $data
+     * NOTA: los dos flags de abajo se introdujeron para la actualización de
+     * usuarios existentes de la carga masiva, que se eliminó (esa vía ahora
+     * solo da de alta usuarios nuevos). Hoy ningún llamador los pone en true:
+     * la edición individual (UserController@update) usa los defaults. Se
+     * conservan porque describen un comportamiento coherente y su borrado
+     * tocaría el camino de edición individual sin necesidad.
+     *
+     * @param bool $preserveTenantFieldsWhenMissing Cuando es true, los campos
+     *   "opcionales por empresa" (hire_date, vacation_balance_initial,
+     *   department, position, supervisor_id) que NO vengan explícitos en
+     *   $data['tenants_config'][n] conservan el valor ya guardado en el
+     *   pivote en vez de limpiarse a null (ver assignTenantsWithConfig). El
+     *   formulario de edición individual usa el comportamiento histórico
+     *   (false): un campo vacío en el formulario SÍ limpia el valor, porque
+     *   ahí "vacío" es una acción explícita del usuario.
+     * @param bool $mergeTenants FIX I3(b): cuando es true, la sincronización
+     *   de tenants_config usa MERGE (syncWithoutDetaching) en vez de sync
+     *   (que desengancha cualquier tenant no listado en $data). La edición
+     *   individual usa el comportamiento histórico (false): el formulario
+     *   reenvía la lista COMPLETA de tenants del usuario, así que un sync
+     *   explícito (con detach) es el comportamiento correcto ahí.
      * @return User
      */
-    public function updateUser(User $user, array $data): User
+    public function updateUser(User $user, array $data, bool $preserveTenantFieldsWhenMissing = false, bool $mergeTenants = false): User
     {
         DB::beginTransaction();
 
         try {
             $oldDocumentText = $user->document_text;
+            // NOTA: tras el modelo híbrido, roles() (user_roles) solo contiene
+            // 'root' más el respaldo global sincronizado por
+            // syncGlobalRoleFallback para usuarios operativos. $oldRoleId se
+            // usa para detectar cambios de rol y transiciones hacia/desde root.
             $oldRoleId = $user->roles()->first()?->id;
-            $userAuth = Auth::user(); // --- IGNORE ---
+            $wasRoot = $user->isRoot();
+            $userAuth = Auth::user();
 
             // Detect email change before update
             $emailChanged = isset($data['email']) && $data['email'] !== $user->email;
@@ -116,33 +169,34 @@ class UserService
                 $data['password'] = Hash::make($data['password']);
             }
 
+            $newRoleId = isset($data['role_id']) ? (int) $data['role_id'] : null;
+            $roleChanged = $newRoleId !== null && $newRoleId !== $oldRoleId;
+            $becomingRoot = $roleChanged && $this->isRootRoleId($newRoleId);
+            $tenantFieldsProvided = isset($data['tenants_config']) || isset($data['tenant_ids']) || isset($data['tenant_id']);
+
             // Handle role change
-            if (isset($data['role_id']) && $data['role_id'] != $oldRoleId) {
-                // Si el nuevo rol es root (role_id = 1), remover todos los tenants
-                if ($data['role_id'] == 1) {
+            if ($roleChanged) {
+                if ($becomingRoot) {
+                    // Si el nuevo rol es root, remover todos los tenants y roles por empresa
                     $user->tenants()->detach();
+                    UserTenantRole::where('user_id', $user->id)->delete();
                     unset($data['tenants_config'], $data['tenant_id'], $data['tenant_ids']);
+                    $tenantFieldsProvided = false;
+
+                    $this->assignGlobalRole($user, $newRoleId, $userAuth);
                 } else {
                     // Si cambió de root a otro rol y no viene config, asegurar tenant
-                    if ($oldRoleId == 1 && isset($data['tenant_id']) && !isset($data['tenants_config'])) {
+                    if ($wasRoot && isset($data['tenant_id']) && !isset($data['tenants_config'])) {
                         $this->assignTenants($user, [$data['tenant_id']], true);
                     }
                 }
-
-                // Actualizar el rol
-                $user->roles()->sync([
-                    $data['role_id'] => [
-                        'granted_by' => $userAuth->id,
-                        'granted_at' => now(),
-                    ]
-                ]);
             }
 
-            // Handle tenant assignment for non-root users
-            $currentRoleId = $data['role_id'] ?? $oldRoleId;
-            if ($currentRoleId != 1) { // Not root
+            // Handle tenant/role assignment for non-root users (solo si hay
+            // algo que aplicar: cambio de rol o datos de tenant en el request)
+            if (!$becomingRoot && ($roleChanged || $tenantFieldsProvided)) {
                 if (isset($data['tenants_config']) && is_array($data['tenants_config'])) {
-                    $this->assignTenantsWithConfig($user, $data['tenants_config']);
+                    $this->assignTenantsWithConfig($user, $data['tenants_config'], $newRoleId, $preserveTenantFieldsWhenMissing, $mergeTenants);
                 } elseif (isset($data['tenant_ids']) && is_array($data['tenant_ids'])) {
                     // Legacy/Simple assignment without supervisors update (or keeping existing)
                     // But sync deletes existing pivot data. We should be careful.
@@ -152,12 +206,38 @@ class UserService
                     foreach ($data['tenant_ids'] as $tenantId) {
                         $pivotData[$tenantId] = ['is_primary' => $tenantId == $primaryTenantId];
                     }
-                    $user->tenants()->sync($pivotData);
+                    // FIX I3(a): limpiar user_tenant_roles huérfanos de los
+                    // tenants que el sync haya desenganchado (ver doc de
+                    // syncTenantsAndCleanOrphanRoles).
+                    $this->syncTenantsAndCleanOrphanRoles($user, $pivotData, $mergeTenants);
+
+                    if ($newRoleId) {
+                        foreach ($data['tenant_ids'] as $tenantId) {
+                            $this->assignRoles($user, (int) $tenantId, [$newRoleId]);
+                        }
+                    }
                 } elseif (isset($data['tenant_id'])) {
-                    $user->tenants()->sync([
+                    // FIX I3(a): idem, ver comentario arriba.
+                    $this->syncTenantsAndCleanOrphanRoles($user, [
                         $data['tenant_id'] => ['is_primary' => true]
-                    ]);
+                    ], $mergeTenants);
+
+                    if ($newRoleId) {
+                        $this->assignRoles($user, (int) $data['tenant_id'], [$newRoleId]);
+                    }
+                } elseif ($roleChanged) {
+                    // Cambio de rol global "legacy" sin especificar tenant
+                    // explícito: aplicar el nuevo rol a todas las empresas ya
+                    // asignadas al usuario.
+                    foreach ($user->tenants()->pluck('tenants.id') as $tenantId) {
+                        $this->assignRoles($user, (int) $tenantId, [$newRoleId]);
+                    }
                 }
+
+                // Mantener sincronizado el respaldo global de roles tras
+                // cualquier cambio de roles/empresas (ver
+                // syncGlobalRoleFallback). Es una operación idempotente.
+                $this->syncGlobalRoleFallback($user, $userAuth);
             }
 
             // Remove tenant-related fields from user update
@@ -187,8 +267,13 @@ class UserService
             DB::commit();
 
             // Send email change notification AFTER commit (avoid sending if transaction fails)
+            // NOTA (SMTP por empresa): fuera del alcance actual del enrutado
+            // por tenant (ver TenantMailerService); se envía con el mailer
+            // por defecto de la plataforma. El usuario puede tener varias
+            // empresas, así que no hay un único tenant obvio para resolver.
             if ($emailChanged) {
                 $newEmail = $data['email'];
+                $this->auditService->logEmailChanged($user->id, $oldEmail, $newEmail);
                 try {
                     $notification = new EmailChangedNotificationMail($user, $oldEmail, $newEmail);
                     Mail::to($oldEmail)->send($notification);
@@ -203,7 +288,7 @@ class UserService
                 }
             }
 
-            return $user->load(['roles', 'tenants']);
+            return $user->load(['roles', 'tenants', 'tenantRoles.role']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('[UserService] Failed to update user', [
@@ -215,22 +300,146 @@ class UserService
     }
 
     /**
-     * Assign roles to a user.
+     * Determine if a role id corresponds to the global 'root' role.
+     */
+    protected function isRootRoleId(?int $roleId): bool
+    {
+        if (!$roleId) {
+            return false;
+        }
+
+        return Role::where('id', $roleId)->where('name', 'root')->exists();
+    }
+
+    /**
+     * Assign the global 'root' role to a user (user_roles, sin empresas).
      *
      * @param User $user
-     * @param array $roleIds
+     * @param int $roleId
      * @param User|null $grantedBy
      * @return void
      */
-    protected function assignRoles(User $user, array $roleIds, ?User $grantedBy): void
+    protected function assignGlobalRole(User $user, int $roleId, ?User $grantedBy): void
     {
+        $oldRoleIds = $user->roles()->pluck('roles.id')->all();
+
+        $user->roles()->sync([
+            $roleId => [
+                'granted_by' => $grantedBy?->id,
+                'granted_at' => now(),
+            ],
+        ]);
+
+        // Solo se audita en contexto interactivo (hay usuario autenticado). En
+        // cargas masivas (jobs, sin Auth) queda cubierto por user_batch.completed.
+        if (Auth::check()) {
+            $this->auditService->logRoleAssigned($user->id, null, [$roleId], $oldRoleIds);
+        }
+    }
+
+    /**
+     * Assign operational roles to a user within a specific tenant
+     * (user_tenant_roles). Reemplaza cualquier rol previo del usuario en esa
+     * empresa por el conjunto indicado (comportamiento tipo "sync" por
+     * empresa).
+     *
+     * @param User $user
+     * @param int $tenantId
+     * @param array<int> $roleIds Roles operativos (admin_tenant, admin, client, aprobador)
+     * @return void
+     */
+    protected function assignRoles(User $user, int $tenantId, array $roleIds): void
+    {
+        $oldRoleIds = UserTenantRole::where('user_id', $user->id)
+            ->where('tenant_id', $tenantId)
+            ->pluck('role_id')
+            ->all();
+
+        UserTenantRole::where('user_id', $user->id)
+            ->where('tenant_id', $tenantId)
+            ->delete();
+
+        $now = now();
+        $rows = [];
+        foreach (array_unique($roleIds) as $roleId) {
+            $rows[] = [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'role_id' => $roleId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if (!empty($rows)) {
+            UserTenantRole::insert($rows);
+        }
+
+        // Solo se audita en contexto interactivo (hay usuario autenticado). En
+        // cargas masivas (jobs, sin Auth) queda cubierto por user_batch.completed.
+        if (Auth::check()) {
+            $this->auditService->logRoleAssigned($user->id, $tenantId, $roleIds, $oldRoleIds);
+        }
+    }
+
+    /**
+     * Mantiene sincronizado el rol "global" de respaldo del usuario (tabla
+     * user_roles) con la unión de los roles operativos que tiene asignados
+     * en todas sus empresas (user_tenant_roles).
+     *
+     * Esto es un resto de transición: la fuente de verdad para roles operativos
+     * es user_tenant_roles, y la AUTORIZACIÓN ya no depende de este respaldo
+     * (las abilities de config/access_matrix.php resuelven el rol por empresa
+     * vía User::roleForTenant(), sin fallback global). Lo que todavía lee
+     * user_roles es getCurrentRole() sin empresa, hoy limitado a usos de
+     * DISPLAY (UserResource, ProfileService, logs, exportes) más el filtrado
+     * por fila de DocumentService::getDocuments() (ver Riesgo #2 del plan).
+     *
+     * TODO(RP1-D): eliminar este respaldo cuando el listado de documentos
+     * filtre por rol de la empresa de cada fila y los usos de display resuelvan
+     * el rol vía tenant activo. Nótese que, si un usuario tiene roles distintos
+     * en distintas empresas, este respaldo expone la UNIÓN de todos ellos (no
+     * solo el de la empresa "activa"), lo cual es más permisivo de lo ideal.
+     *
+     * @param User $user
+     * @param User|null $grantedBy
+     * @return void
+     */
+    protected function syncGlobalRoleFallback(User $user, ?User $grantedBy = null): void
+    {
+        if ($user->isRoot()) {
+            return; // root se gestiona aparte (assignGlobalRole), no se toca aquí
+        }
+
+        $grantedBy = $grantedBy ?? Auth::user() ?? $user;
+
+        $roleIds = UserTenantRole::where('user_id', $user->id)
+            ->distinct()
+            ->pluck('role_id');
+
+        // Guard anti-erosión: si el usuario NO tiene roles por empresa pero
+        // SÍ sigue teniendo empresas asignadas, el vacío es un estado
+        // transitorio/inconsistente (p.ej. usuario aún no backfilleado), no
+        // una revocación intencional. Ejecutar sync([]) aquí borraría su rol
+        // global en user_roles y lo dejaría sin rol en los usos que aún lo leen
+        // (display y el filtrado por fila de documentos). Preservamos
+        // user_roles tal cual. Si el usuario ya no tiene NINGUNA empresa,
+        // caemos al sync([]) de abajo (revocación legítima del fallback).
+        if ($roleIds->isEmpty() && $user->tenants()->exists()) {
+            Log::warning('[UserService] syncGlobalRoleFallback: user_tenant_roles vacío con tenants asignados; se omite sync([]) para no erosionar user_roles', [
+                'user_id' => $user->id,
+            ]);
+            return;
+        }
+
         $pivotData = [];
         foreach ($roleIds as $roleId) {
             $pivotData[$roleId] = [
-                'granted_by' => $grantedBy?->id,
+                'granted_by' => $grantedBy->id,
                 'granted_at' => now(),
             ];
         }
+
         $user->roles()->sync($pivotData);
     }
 
@@ -255,30 +464,139 @@ class UserService
     }
 
     /**
-     * Assign tenants with supervisor configuration.
-     * 
+     * Assign tenants with supervisor/role configuration.
+     *
      * @param User $user
-     * @param array $config Array of ['tenant_id' => int, 'supervisor_id' => ?int, 'is_primary' => bool]
+     * @param array $config Array de:
+     *   [
+     *     'tenant_id' => int,
+     *     'role_ids' => int[],               // roles operativos para esa empresa (user_tenant_roles); opcional
+     *     'supervisor_id' => ?int,           // o 'supervisors' => int[] (compat carga masiva, se usa el primero)
+     *     'is_primary' => bool,
+     *     'hire_date' => ?string,
+     *     'vacation_balance_initial' => ?float,
+     *     'department' => ?string,
+     *     'position' => ?string,
+     *   ]
+     * @param int|null $fallbackRoleId Rol a aplicar en las empresas cuyo item no traiga 'role_ids'.
+     * @param bool $preserveWhenMissing Ver doc de updateUser(). false (default) = comportamiento
+     *   histórico: un item sin un campo opcional lo deja en null (equivalente a un "PUT" completo
+     *   del pivote). true = un campo opcional ausente/vacío conserva el valor ya guardado en el
+     *   pivote existente.
+     * @param bool $mergeTenants FIX I3(b): ver doc de updateUser(). true = MERGE
+     *   (syncWithoutDetaching); false (default) = sync explícito con detach (comportamiento
+     *   histórico, usado por la edición individual).
      */
-    protected function assignTenantsWithConfig(User $user, array $config): void
+    protected function assignTenantsWithConfig(User $user, array $config, ?int $fallbackRoleId = null, bool $preserveWhenMissing = false, bool $mergeTenants = false): void
     {
+        // Pivotes actuales (solo se consultan si hace falta preservar valores
+        // ausentes; evita una query extra en el camino histórico).
+        $existingPivots = ($preserveWhenMissing && $user->exists)
+            ? $user->tenants()->get()->keyBy('id')
+            : collect();
+
         $pivotData = [];
         foreach ($config as $item) {
+            $tenantId = (int) $item['tenant_id'];
+            $existingPivot = $existingPivots->get($tenantId)?->pivot;
+
             // Manejar tanto 'supervisor_id' como 'supervisors' (array)
             $supervisorId = null;
+            $supervisorProvided = isset($item['supervisor_id'])
+                || (isset($item['supervisors']) && is_array($item['supervisors']) && !empty($item['supervisors']));
             if (isset($item['supervisor_id'])) {
                 $supervisorId = $item['supervisor_id'];
             } elseif (isset($item['supervisors']) && is_array($item['supervisors']) && !empty($item['supervisors'])) {
                 // Tomar el primer supervisor si viene como array
                 $supervisorId = $item['supervisors'][0];
             }
+            if (!$supervisorProvided && $preserveWhenMissing && $existingPivot) {
+                $supervisorId = $existingPivot->supervisor_id;
+            }
 
-            $pivotData[$item['tenant_id']] = [
+            $pivotData[$tenantId] = [
                 'supervisor_id' => $supervisorId,
                 'is_primary' => $item['is_primary'] ?? false,
+                'hire_date' => $this->resolvePivotValue($item['hire_date'] ?? null, $existingPivot?->hire_date, $preserveWhenMissing),
+                'vacation_balance_initial' => $this->resolvePivotValue($item['vacation_balance_initial'] ?? null, $existingPivot?->vacation_balance_initial, $preserveWhenMissing),
+                'department' => $this->resolvePivotValue($item['department'] ?? null, $existingPivot?->department, $preserveWhenMissing),
+                'position' => $this->resolvePivotValue($item['position'] ?? null, $existingPivot?->position, $preserveWhenMissing),
             ];
         }
-        $user->tenants()->sync($pivotData);
+
+        // FIX I3(a): limpiar user_tenant_roles huérfanos de los tenants que
+        // el sync haya desenganchado (ver doc del helper).
+        $this->syncTenantsAndCleanOrphanRoles($user, $pivotData, $mergeTenants);
+
+        // Asignar roles operativos por empresa. Si un item no trae role_ids
+        // explícitos, se usa el rol global de respaldo (fallbackRoleId) para
+        // esa empresa; si tampoco hay fallback, no se toca user_tenant_roles
+        // para ese tenant (se preserva lo que ya existiera).
+        foreach ($config as $item) {
+            $roleIds = $item['role_ids'] ?? ($fallbackRoleId ? [$fallbackRoleId] : []);
+            if (!empty($roleIds)) {
+                $this->assignRoles($user, (int) $item['tenant_id'], $roleIds);
+            }
+        }
+    }
+
+    /**
+     * FIX I3: sincroniza el pivote user_tenants del usuario y, si el sync
+     * desengancha algún tenant (solo puede pasar cuando $mergeTenants es
+     * false), elimina también las filas de user_tenant_roles de ese
+     * usuario para esos tenants.
+     *
+     * Antes de este fix, tenants()->sync() desenganchaba tenants no
+     * listados en $pivotData pero NO tocaba user_tenant_roles: el usuario
+     * quedaba sin membresía en user_tenants para esa empresa, pero
+     * hasRoleInTenant() (y por tanto getCurrentRole($tenantId) y todo el
+     * middleware/autorización que depende de ella) seguía devolviendo
+     * true/el rol viejo para una empresa de la que, a todos los efectos
+     * visibles, el usuario ya había sido removido.
+     *
+     * $mergeTenants = true usa syncWithoutDetaching (nunca desengancha, ver
+     * doc de updateUser()/assignTenantsWithConfig), por lo que en ese modo
+     * esta limpieza es naturalmente un no-op ('detached' siempre viene
+     * vacío).
+     *
+     * @param User $user
+     * @param array<int, array<string, mixed>> $pivotData Datos de pivote keyed por tenant_id, formato esperado por BelongsToMany::sync()/syncWithoutDetaching().
+     * @param bool $mergeTenants
+     * @return array{attached: array<int, int|string>, detached: array<int, int|string>, updated: array<int, int|string>}
+     */
+    private function syncTenantsAndCleanOrphanRoles(User $user, array $pivotData, bool $mergeTenants = false): array
+    {
+        $syncResult = $mergeTenants
+            ? $user->tenants()->syncWithoutDetaching($pivotData)
+            : $user->tenants()->sync($pivotData);
+
+        if (!empty($syncResult['detached'])) {
+            UserTenantRole::where('user_id', $user->id)
+                ->whereIn('tenant_id', $syncResult['detached'])
+                ->delete();
+        }
+
+        return $syncResult;
+    }
+
+    /**
+     * Resuelve el valor a persistir en el pivote user_tenants para un campo
+     * "opcional por empresa" (hire_date, vacation_balance_initial,
+     * department, position): si $newValue viene explícito (no vacío) se usa
+     * ese; si no viene y $preserve es true, se conserva $existingValue en
+     * vez de pisarlo con null. Ver doc de updateUser()/assignTenantsWithConfig.
+     *
+     * @param mixed $newValue
+     * @param mixed $existingValue
+     * @return mixed
+     */
+    private function resolvePivotValue($newValue, $existingValue, bool $preserve)
+    {
+        if ($newValue !== null && $newValue !== '') {
+            return $newValue;
+        }
+
+        return $preserve ? $existingValue : null;
     }
 
     /**
@@ -294,6 +612,14 @@ class UserService
     /**
      * Send welcome email with credentials.
      *
+     * Despachado vía SendWelcomeEmailJob (sin delay) en vez de enviarse
+     * aquí mismo: WelcomeUserMail implementa ShouldQueue, y el mailer del
+     * tenant del usuario solo puede resolverse de forma segura dentro del
+     * handle() del job que efectivamente lo procesa en el worker (ver
+     * TenantMailerService y SendWelcomeEmailJob::handle()). Así, la
+     * creación individual y la carga masiva (que sí usa delay) comparten
+     * exactamente la misma ruta de envío.
+     *
      * @param User $user
      * @param string $password
      * @return void
@@ -301,9 +627,9 @@ class UserService
     public function sendWelcomeEmail(User $user, string $password): void
     {
         try {
-            Mail::to($user->email)->send(new WelcomeUserMail($user, $password));
+            \App\Jobs\SendWelcomeEmailJob::dispatch($user->id, $password);
         } catch (\Exception $e) {
-            Log::warning('[UserService] Failed to send welcome email', [
+            Log::warning('[UserService] Failed to dispatch welcome email job', [
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'error' => $e->getMessage(),

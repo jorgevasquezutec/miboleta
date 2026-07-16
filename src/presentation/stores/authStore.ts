@@ -3,17 +3,117 @@ import { persist } from "zustand/middleware";
 import { User, TenantAssociation } from "@/core/domain/entities";
 import { userRepository } from "@/infrastructure/persistence/repositories";
 
+/**
+ * Prioridad de roles operativos (no incluye 'root', que es global y siempre
+ * gana) para elegir el rol activo por defecto al entrar a una empresa.
+ * Debe reflejar exactamente User::ROLE_PRIORITY en el backend.
+ */
+const ROLE_PRIORITY = ["admin_tenant", "admin", "aprobador", "client"] as const;
+
+/**
+ * Dado un conjunto de nombres de rol (los que el usuario tiene en una
+ * empresa específica), retorna el de mayor prioridad según ROLE_PRIORITY.
+ * Un rol que no esté en la lista de prioridad se considera de menor
+ * prioridad que cualquiera que sí esté, pero igual se devuelve si es el
+ * único disponible. Replica User::highestPriorityRole del backend para no
+ * depender exclusivamente del valor precalculado que ya viene en
+ * `tenant.role`.
+ */
+function resolveHighestPriorityRole(roleNames?: string[] | null): string | null {
+  if (!roleNames || roleNames.length === 0) return null;
+
+  const unique = Array.from(new Set(roleNames.filter(Boolean)));
+  if (unique.length === 0) return null;
+
+  return [...unique].sort((a, b) => {
+    const posA = ROLE_PRIORITY.indexOf(a as (typeof ROLE_PRIORITY)[number]);
+    const posB = ROLE_PRIORITY.indexOf(b as (typeof ROLE_PRIORITY)[number]);
+    const rankA = posA === -1 ? ROLE_PRIORITY.length : posA;
+    const rankB = posB === -1 ? ROLE_PRIORITY.length : posB;
+    return rankA - rankB;
+  })[0];
+}
+
+/**
+ * Calcula el rol activo por defecto para una empresa dada: 'root' si el
+ * usuario es root (global), o el de mayor prioridad entre los roles que
+ * tiene en esa empresa (con fallback al `role` ya calculado por backend, y
+ * al `role` global del usuario si no hay empresa activa).
+ */
+function resolveCurrentRole(user: User | null, tenant: TenantAssociation | null): string | null {
+  if (!user) return null;
+  if (user.role === "root") return "root";
+  if (!tenant) return user.role ?? null;
+  return resolveHighestPriorityRole(tenant.roles) ?? tenant.role ?? null;
+}
+
 interface AuthState {
   user: User | null;
   currentTenant: TenantAssociation | null;
+  /**
+   * Rol activo de la sesión, scoped a `currentTenant` (o 'root' si el
+   * usuario es root, que es global y no depende de la empresa activa).
+   * Fuente de verdad para el menú (Sidebar/RootLayout) y los guards
+   * (ProtectedRoute) — no usar `user.role` para eso, que es solo un
+   * respaldo global legado.
+   */
+  currentRole: string | null;
+  /**
+   * Matriz de Accesos (ability -> roles permitidos), servida por el backend
+   * desde config/access_matrix.php — la fuente única de verdad. Llega en el
+   * payload de /login y /me.
+   *
+   * No se refetchea al cambiar de empresa o rol: la matriz no depende de la
+   * empresa, solo cambia cuál rol está activo, y de eso ya se encarga
+   * `currentRole`. Usar con el helper `can()/useCan()` (hooks/useCan.ts), nunca
+   * comparando nombres de rol a mano.
+   */
+  accessMatrix: Record<string, string[]> | null;
+  /**
+   * ¿Ya se refrescó la matriz contra el backend en esta carga de la app?
+   *
+   * NO se persiste (ver `partialize`), así que arranca en false en cada carga
+   * y fuerza un refetch por sesión de navegador. Sin esto, la copia de
+   * localStorage se quedaba congelada para siempre: al cambiar
+   * config/access_matrix.php en el backend, quien tuviera sesión abierta
+   * seguía viendo el menú viejo hasta desloguearse (una ability nueva no
+   * existía en su mapa y `evaluate()` la denegaba por fail-closed).
+   */
+  accessMatrixRefreshed: boolean;
   isLoading: boolean;
   error: string | null;
 
   // Actions
-  login: (email: string, password: string) => Promise<void>;
+  /**
+   * @param login DNI o correo electrónico (el backend acepta ambos en el
+   * campo `login`).
+   */
+  login: (login: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   me: () => Promise<void>;
-  switchTenant: (tenantId: string) => void;
+  /**
+   * Recupera la Matriz de Accesos desde el backend.
+   *
+   * Necesario para sesiones restauradas de localStorage que no la tienen
+   * guardada (las anteriores a que se persistiera). Sin mapa, useCan() deniega
+   * todo. No lanza: ante un fallo conserva la matriz que hubiera.
+   */
+  fetchAccessMatrix: () => Promise<void>;
+  /**
+   * Cambia la empresa activa.
+   * - `tenantId` puede ser `null` para "Todas las empresas" (god mode, solo
+   *   válido para root).
+   * - `tenantOverride` permite pasar los datos de una empresa que no está en
+   *   `user.tenants` (caso de root, que no tiene fila en user_tenants y ve
+   *   el catálogo completo de empresas vía TenantSwitcher).
+   * Recalcula `currentRole` automáticamente.
+   */
+  switchTenant: (tenantId: string | null, tenantOverride?: TenantAssociation) => void;
+  /**
+   * Cambia el rol activo dentro de la empresa actual, validando que el
+   * usuario efectivamente tenga ese rol allí. No aplica a root.
+   */
+  switchRole: (roleName: string) => void;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   uploadAvatar: (file: File) => Promise<string>;
   deleteAvatar: () => Promise<void>;
@@ -25,17 +125,20 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       currentTenant: null,
+      currentRole: null,
+      accessMatrix: null,
+      accessMatrixRefreshed: false,
       isLoading: false,
       error: null,
 
-      login: async (email: string, password: string) => {
+      login: async (login: string, password: string) => {
         set({ isLoading: true, error: null });
 
         try {
-          console.log('[AuthStore] Attempting login for:', email);
+          console.log('[AuthStore] Attempting login for:', login);
 
           // Llamar directamente al repositorio (cookies se manejan automáticamente)
-          const response = await userRepository.login(email, password);
+          const response = await userRepository.login(login, password);
 
           console.log('[AuthStore] Login successful, user:', response.user.name);
           console.log('[AuthStore] Checking cookies after login...');
@@ -47,11 +150,16 @@ export const useAuthStore = create<AuthState>()(
             response.user.tenants?.[0] ||
             null;
 
+          const currentRole = resolveCurrentRole(response.user, currentTenant);
+
           console.log('🏢 [AuthStore] Current tenant:', currentTenant?.name || 'None');
+          console.log('🎭 [AuthStore] Current role:', currentRole || 'None');
 
           set({
             user: response.user,
             currentTenant,
+            currentRole,
+            accessMatrix: response.access_matrix ?? null,
             isLoading: false,
             error: null,
           });
@@ -62,6 +170,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             user: null,
             currentTenant: null,
+            currentRole: null,
           });
           throw error;
         }
@@ -76,10 +185,14 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
-          // Limpiar estado local independientemente del resultado
+          // Limpiar estado local independientemente del resultado.
+          // accessMatrixRefreshed vuelve a false para que la próxima sesión en
+          // esta misma pestaña refresque la matriz en vez de heredar la marca.
           set({
             user: null,
             currentTenant: null,
+            currentRole: null,
+            accessMatrixRefreshed: false,
             isLoading: false,
             error: null,
           });
@@ -90,6 +203,21 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem('pusherTransportNonTLS');
           localStorage.removeItem('TanstackQueryDevtools.open');
 
+        }
+      },
+
+      fetchAccessMatrix: async () => {
+        try {
+          set({ accessMatrix: await userRepository.getAccessMatrix() });
+        } catch (error) {
+          // Silencioso a propósito: es una recuperación de respaldo. Si falla,
+          // el usuario ve la UI mínima pero el backend sigue autorizando bien.
+          console.error('[AuthStore] No se pudo obtener la Matriz de Accesos:', error);
+        } finally {
+          // En `finally`: si el fetch falla, marcarlo igual evita que el efecto
+          // que lo dispara vuelva a intentarlo en bucle. Se reintenta en la
+          // próxima carga (o al relogear, que trae la matriz en el payload).
+          set({ accessMatrixRefreshed: true });
         }
       },
 
@@ -105,15 +233,33 @@ export const useAuthStore = create<AuthState>()(
             tenants: user.tenants,
           });
 
-          // Actualizar tenant actual si el usuario cambió
-          const currentTenant =
-            user.tenants?.find(t => t.is_primary) ||
-            user.tenants?.[0] ||
-            null;
+          // Actualizar tenant actual si el usuario cambió, intentando
+          // preservar la empresa activa previa si el usuario sigue teniendo
+          // acceso a ella (evita "saltar" de empresa en cada refresh de /me).
+          const { currentTenant: previousTenant } = get();
+          const isRoot = user.role === 'root';
+
+          // Root no tiene fila en user_tenants (ve el catálogo completo vía
+          // TenantSwitcher, no user.tenants), así que su selección previa
+          // ("Todas" o una empresa puntual) se preserva tal cual en vez de
+          // intentar resolverla contra user.tenants (que para root siempre
+          // viene vacío, y la resetearía a "Todas" en cada refresh).
+          const currentTenant = isRoot
+            ? (previousTenant ?? null)
+            : (previousTenant && user.tenants?.find(t => t.id === previousTenant.id)) ||
+              user.tenants?.find(t => t.is_primary) ||
+              user.tenants?.[0] ||
+              null;
+
+          const currentRole = resolveCurrentRole(user, currentTenant);
 
           set({
             user,
             currentTenant,
+            currentRole,
+            // Si el backend no la envía (versión anterior), conservar la que ya
+            // hubiera en el store en vez de borrarla.
+            accessMatrix: user.access_matrix ?? get().accessMatrix,
             isLoading: false,
           });
         } catch (error) {
@@ -125,18 +271,72 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      switchTenant: (tenantId: string) => {
+      switchTenant: (tenantId: string | null, tenantOverride?: TenantAssociation) => {
         const { user } = get();
-        if (!user || !user.tenants) {
+        if (!user) {
           throw new Error('No user or tenants available');
         }
 
-        const tenant = user.tenants.find(t => t.id === tenantId);
+        const isRoot = user.role === 'root';
+
+        // "Todas las empresas" (god mode): solo root puede operar sin
+        // empresa activa.
+        if (tenantId === null) {
+          if (!isRoot) {
+            throw new Error('Solo el rol root puede operar sin una empresa activa');
+          }
+          set({ currentTenant: null, currentRole: 'root' });
+          return;
+        }
+
+        if (!isRoot && !user.tenants) {
+          throw new Error('No user or tenants available');
+        }
+
+        // Root no tiene fila en user_tenants (ve el catálogo completo vía
+        // TenantSwitcher), así que aceptamos un `tenantOverride` para ese
+        // caso. Para el resto de roles, el tenant debe existir en
+        // user.tenants (las empresas a las que realmente pertenece).
+        const tenant =
+          user.tenants?.find(t => t.id === tenantId) ||
+          (isRoot ? tenantOverride : undefined);
+
         if (!tenant) {
           throw new Error('Tenant not found');
         }
 
-        set({ currentTenant: tenant });
+        const currentRole = isRoot ? 'root' : resolveCurrentRole(user, tenant);
+
+        set({ currentTenant: tenant, currentRole });
+      },
+
+      switchRole: (roleName: string) => {
+        const { user, currentTenant } = get();
+        if (!user) {
+          throw new Error('No user logged in');
+        }
+
+        if (user.role === 'root') {
+          // root es global: no tiene selector de rol por empresa.
+          throw new Error('El usuario root no tiene selector de rol');
+        }
+
+        if (!currentTenant) {
+          throw new Error('No hay una empresa activa para cambiar de rol');
+        }
+
+        const availableRoles =
+          currentTenant.roles && currentTenant.roles.length > 0
+            ? currentTenant.roles
+            : currentTenant.role
+              ? [currentTenant.role]
+              : [];
+
+        if (!availableRoles.includes(roleName)) {
+          throw new Error('El usuario no tiene ese rol en la empresa activa');
+        }
+
+        set({ currentRole: roleName });
       },
 
       updateProfile: async (updates: Partial<User>) => {
@@ -229,6 +429,20 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         currentTenant: state.currentTenant,
+        currentRole: state.currentRole,
+        // La Matriz de Accesos se persiste como CACHÉ de arranque: sin ella
+        // useCan() deniega TODO, y cualquier F5 dejaba al usuario rebotando
+        // entre "/" y su ruta hasta agotar la pila de React ("Maximum update
+        // depth exceeded"). Con la copia local se puede pintar de inmediato.
+        //
+        // Es caché, no fuente de verdad: useAccessMatrixReady la refresca
+        // contra el backend una vez por carga (ver accessMatrixRefreshed), así
+        // que un cambio en config/access_matrix.php llega sin desloguear.
+        //
+        // No es información sensible: es el mismo mapa para todos y el backend
+        // lo sirve en /login, /me y GET /api/access-matrix. Quien autoriza es
+        // el backend; esto es solo gating de UI.
+        accessMatrix: state.accessMatrix,
         // No persistimos token porque ahora está en cookies HttpOnly
       }),
     }

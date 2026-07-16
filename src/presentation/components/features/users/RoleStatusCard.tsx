@@ -15,7 +15,13 @@ import {
 } from '@/presentation/components/ui/select';
 
 interface RoleStatusCardProps {
-    role: 'root' | 'admin' | 'client';
+    /**
+     * Toggle de alto nivel: 'root' (usuario global de plataforma, sin
+     * empresas) o 'client' (usuario de empresa). Los roles operativos reales
+     * (admin_tenant, admin, client, aprobador) se asignan por
+     * empresa en TenantAssignmentCard, no aquí.
+     */
+    role: 'root' | 'client';
     status: 'active' | 'inactive';
     canChangeRole: boolean;
     onChange: (field: string, value: string | null) => void;
@@ -37,13 +43,13 @@ export function RoleStatusCard({
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Rol y Estado</CardTitle>
-                <CardDescription>Permisos y estado del usuario</CardDescription>
+                <CardTitle>Tipo de Cuenta y Estado</CardTitle>
+                <CardDescription>Alcance de la cuenta y estado del usuario</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="role">Rol</Label>
+                        <Label htmlFor="role">Tipo de Cuenta</Label>
                         <Select
                             value={role}
                             onValueChange={handleRoleChange}
@@ -54,15 +60,20 @@ export function RoleStatusCard({
                             </SelectTrigger>
                             <SelectContent>
                                 {canChangeRole && (
-                                    <SelectItem value="root">Root</SelectItem>
+                                    <SelectItem value="root">Root (Plataforma)</SelectItem>
                                 )}
-                                <SelectItem value="admin">Administrador</SelectItem>
-                                <SelectItem value="client">Usuario</SelectItem>
+                                <SelectItem value="client">Usuario de Empresa</SelectItem>
                             </SelectContent>
                         </Select>
                         {!canChangeRole && (
                             <p className="text-xs text-gray-500">
-                                Solo Root puede cambiar roles
+                                Solo Root puede crear otros usuarios Root
+                            </p>
+                        )}
+                        {role !== 'root' && (
+                            <p className="text-xs text-gray-500">
+                                Los roles concretos (Administrador, Cliente, Aprobador, etc.) se
+                                asignan por cada empresa más abajo.
                             </p>
                         )}
                     </div>
