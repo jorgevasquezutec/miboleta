@@ -35,7 +35,6 @@ describe('useEditableUsers', () => {
           email: 'juan@test.com',
           tipo_documento: 'dni',
           numero_documento: '12345678',
-          rol: 'client',
           estado: 'active',
         },
       ];
@@ -59,7 +58,6 @@ describe('useEditableUsers', () => {
           email: 'juan@test.com',
           tipo_documento: 'dni',
           numero_documento: '12345678',
-          rol: 'client',
           estado: 'active',
         },
       ];
@@ -87,7 +85,6 @@ describe('useEditableUsers', () => {
           email: 'juan@test.com',
           tipo_documento: 'dni',
           numero_documento: '12345678',
-          rol: 'client',
           estado: 'active',
           organizaciones: [],
         },
@@ -117,7 +114,6 @@ describe('useEditableUsers', () => {
         email: '',
         tipo_documento: 'dni',
         numero_documento: '',
-        rol: 'client',
         estado: 'active',
         telefono: '',
         organizaciones: [],
@@ -147,7 +143,6 @@ describe('useEditableUsers', () => {
         email: 'juan@test.com',
         tipo_documento: 'DNI',
         numero_documento: '123', // Invalid - too short
-        rol: 'client',
         estado: 'active',
         telefono: '',
         organizaciones: [],
@@ -174,7 +169,6 @@ describe('useEditableUsers', () => {
         email: 'juan@test.com',
         tipo_documento: 'RUC',
         numero_documento: '123456789', // Invalid - too short
-        rol: 'client',
         estado: 'active',
         telefono: '',
         organizaciones: [],
@@ -201,7 +195,6 @@ describe('useEditableUsers', () => {
         email: 'invalid-email',
         tipo_documento: 'dni',
         numero_documento: '12345678',
-        rol: 'client',
         estado: 'active',
         telefono: '',
         organizaciones: [],
@@ -228,10 +221,11 @@ describe('useEditableUsers', () => {
         email: 'juan@test.com',
         tipo_documento: 'dni',
         numero_documento: '12345678',
-        rol: 'client',
         estado: 'active',
         telefono: '999888777',
-        organizaciones: [],
+        // Un usuario válido necesita al menos una empresa con al menos un rol:
+        // el rol vive en la empresa, no en la fila.
+        organizaciones: [{ ruc: '20123456789', supervisor_email: '', roles: ['client'] }],
         _errors: {},
         _warnings: {},
         _isValid: false,
@@ -257,7 +251,6 @@ describe('useEditableUsers', () => {
           email: 'juan@test.com',
           tipo_documento: 'dni',
           numero_documento: '12345678',
-          rol: 'client',
           estado: 'active',
         },
       ];
@@ -287,8 +280,8 @@ describe('useEditableUsers', () => {
           email: 'juan@test.com',
           tipo_documento: 'dni',
           numero_documento: '12345678',
-          rol: 'client',
           estado: 'active',
+          organizaciones: [{ ruc: '20123456789', supervisor_email: '', roles: ['client'] }],
         },
       ];
 
@@ -322,7 +315,6 @@ describe('useEditableUsers', () => {
 
       expect(result.current.users).toHaveLength(1);
       expect(result.current.users[0]._isNew).toBe(true);
-      expect(result.current.users[0].rol).toBe('client');
       expect(result.current.users[0].estado).toBe('active');
       expect(result.current.users[0].tipo_documento).toBe('dni');
     });
@@ -362,7 +354,10 @@ describe('useEditableUsers', () => {
     });
   });
 
-  describe('rol validation (P3 - alineado con backend)', () => {
+  // El rol es SIEMPRE por empresa (user_tenant_roles): no existe un rol de
+  // nivel de fila. El único rol global es 'root', que no se da de alta por
+  // carga masiva.
+  describe('validación de rol por empresa', () => {
     const baseUser = {
       id: '1',
       row_number: 2,
@@ -381,31 +376,59 @@ describe('useEditableUsers', () => {
       _isModified: false,
     };
 
-    it('should accept admin_tenant as a valid row role', () => {
-      const { result } = renderHook(() => useEditableUsers());
-      const user = { ...baseUser, rol: 'admin_tenant' };
-
-      const validation = result.current.validateUser(user as any);
-
-      expect(validation.errors.rol).toBeUndefined();
+    const withOrg = (roles: string[]) => ({
+      ...baseUser,
+      organizaciones: [{ ruc: '20123456789', supervisor_email: '', roles }],
     });
 
-    it('should accept aprobador as a valid row role', () => {
+    it('should accept admin_tenant as a valid org role', () => {
       const { result } = renderHook(() => useEditableUsers());
-      const user = { ...baseUser, rol: 'aprobador' };
 
-      const validation = result.current.validateUser(user as any);
+      const validation = result.current.validateUser(withOrg(['admin_tenant']) as any);
 
-      expect(validation.errors.rol).toBeUndefined();
+      expect(validation.errors['organizaciones.0.roles']).toBeUndefined();
     });
 
-    it('should reject root as a row role', () => {
+    it('should accept aprobador as a valid org role', () => {
       const { result } = renderHook(() => useEditableUsers());
-      const user = { ...baseUser, rol: 'root' };
 
-      const validation = result.current.validateUser(user as any);
+      const validation = result.current.validateUser(withOrg(['aprobador']) as any);
 
-      expect(validation.errors.rol).toBe('Rol inválido (client, admin, admin_tenant o aprobador)');
+      expect(validation.errors['organizaciones.0.roles']).toBeUndefined();
+    });
+
+    it('should accept several roles in the same company', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const validation = result.current.validateUser(withOrg(['admin', 'aprobador']) as any);
+
+      expect(validation.errors['organizaciones.0.roles']).toBeUndefined();
+    });
+
+    it('should reject root as an org role', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const validation = result.current.validateUser(withOrg(['root']) as any);
+
+      expect(validation.errors['organizaciones.0.roles']).toBe(
+        'Rol inválido en organización 1: root'
+      );
+    });
+
+    it('should require a role in every company', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const validation = result.current.validateUser(withOrg([]) as any);
+
+      expect(validation.errors['organizaciones.0.roles']).toBe('Rol requerido en organización 1');
+    });
+
+    it('should require at least one company per user', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const validation = result.current.validateUser(baseUser as any);
+
+      expect(validation.errors.organizaciones).toBe('Debes asignar al menos una empresa');
     });
   });
 
@@ -418,7 +441,6 @@ describe('useEditableUsers', () => {
       email: 'juan@test.com',
       tipo_documento: 'dni',
       numero_documento: '12345678',
-      rol: 'client',
       estado: 'active',
       telefono: '',
       organizaciones: [],
@@ -472,7 +494,7 @@ describe('useEditableUsers', () => {
       const { result } = renderHook(() => useEditableUsers());
 
       const data = [
-        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', rol: 'client', estado: 'active', organizaciones: [] },
+        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', estado: 'active', organizaciones: [] },
       ];
 
       act(() => {
@@ -494,7 +516,7 @@ describe('useEditableUsers', () => {
       const { result } = renderHook(() => useEditableUsers());
 
       const data = [
-        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', rol: 'client', estado: 'active', organizaciones: [{ ruc: '11111111111', supervisor_email: '' }] },
+        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', estado: 'active', organizaciones: [{ ruc: '11111111111', supervisor_email: '' }] },
       ];
 
       act(() => {
@@ -522,7 +544,6 @@ describe('useEditableUsers', () => {
           email: 'juan@test.com',
           tipo_documento: 'dni',
           numero_documento: '12345678',
-          rol: 'client',
           estado: 'active',
           organizaciones: [
             { ruc: '11111111111', supervisor_email: '' },
@@ -551,9 +572,9 @@ describe('useEditableUsers', () => {
       const { result } = renderHook(() => useEditableUsers());
 
       const data = [
-        { row_number: 2, nombre: '', apellido: 'A', email: 'a@test.com', tipo_documento: 'dni', numero_documento: '12345678', rol: 'client', estado: 'active' },
-        { row_number: 3, nombre: 'B', apellido: '', email: 'b@test.com', tipo_documento: 'dni', numero_documento: '87654321', rol: 'client', estado: 'active' },
-        { row_number: 4, nombre: 'C', apellido: 'C', email: 'c@test.com', tipo_documento: 'dni', numero_documento: '11111111', rol: 'client', estado: 'active' },
+        { row_number: 2, nombre: '', apellido: 'A', email: 'a@test.com', tipo_documento: 'dni', numero_documento: '12345678', estado: 'active' },
+        { row_number: 3, nombre: 'B', apellido: '', email: 'b@test.com', tipo_documento: 'dni', numero_documento: '87654321', estado: 'active' },
+        { row_number: 4, nombre: 'C', apellido: 'C', email: 'c@test.com', tipo_documento: 'dni', numero_documento: '11111111', estado: 'active' },
       ];
 
       const errors: ValidationError[] = [
@@ -573,7 +594,7 @@ describe('useEditableUsers', () => {
       const { result } = renderHook(() => useEditableUsers());
 
       const data = [
-        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', rol: 'client', estado: 'active' },
+        { row_number: 2, nombre: 'Juan', apellido: 'Perez', email: 'juan@test.com', tipo_documento: 'dni', numero_documento: '12345678', estado: 'active' },
       ];
 
       act(() => {

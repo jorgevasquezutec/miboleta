@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\BulkUserColumns;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -16,17 +17,16 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
 {
     /**
      * Roles operativos asignables por organización (RP1-C). 'root' queda
-     * excluido a propósito: es un rol global, no se asigna por empresa.
+     * excluido a propósito: es un rol global, no se asigna por empresa, y
+     * solo un root puede dar de alta a otro root (ver StoreUserRequest/
+     * UpdateUserRequest::FIX B1), jerarquía que la carga masiva no tiene
+     * forma de verificar por fila. Los usuarios root se crean a mano desde
+     * el alta individual.
+     *
+     * Este es el ÚNICO lugar donde la carga masiva asigna roles: no existe
+     * una columna 'rol' de nivel de fila. El rol siempre es por empresa.
      */
     private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
-
-    /**
-     * FIX B2.2: roles admitidos en la columna 'rol' (nivel de fila, no por
-     * organización). 'root' queda excluido a propósito: solo root puede dar
-     * de alta a otro root (ver StoreUserRequest/UpdateUserRequest::FIX B1),
-     * y la carga masiva no tiene forma de verificar esa jerarquía por fila.
-     */
-    private const ALLOWED_TOP_LEVEL_ROLES = ['client', 'admin', 'admin_tenant', 'aprobador'];
 
     private array $parsedData = [];
     private array $errors = [];
@@ -42,10 +42,17 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
         // Detectar si es una hoja de usuarios verificando headers
         if ($rows->isNotEmpty()) {
             $firstRow = $rows->first();
-            $keys = $firstRow->keys()->toArray();
 
-            // Si la hoja no tiene columna "email", no es la hoja de usuarios
-            if (!in_array('email', $keys)) {
+            // Los encabezados se traducen a claves canónicas antes de mirarlos:
+            // la plantilla trae títulos legibles ("Correo electrónico"), no la
+            // clave 'email'.
+            $keys = array_map(
+                fn($key) => BulkUserColumns::canonicalKey((string) $key),
+                $firstRow->keys()->toArray()
+            );
+
+            // Si la hoja no tiene columna de correo, no es la hoja de usuarios
+            if (!in_array('email', $keys, true)) {
                 $this->isProcessingUsersSheet = false;
                 return; // Skip esta hoja
             }
@@ -181,17 +188,6 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             $errors[] = ['field' => 'numero_documento', 'message' => 'Número de documento es requerido'];
         }
 
-        if (empty($row['rol'])) {
-            $errors[] = ['field' => 'rol', 'message' => 'Rol es requerido'];
-        } elseif (!in_array($row['rol'], self::ALLOWED_TOP_LEVEL_ROLES, true)) {
-            // FIX B2.2: 'root' queda excluido a propósito. Antes, cualquier
-            // admin/admin_tenant con acceso a la carga masiva podía subir
-            // un Excel con una fila rol=root y, sin más chequeos aguas
-            // abajo (ProcessUserChunk::getRoleId mapea 'root' => id 1), el
-            // usuario se creaba/actualizaba como root (escalada directa).
-            $errors[] = ['field' => 'rol', 'message' => 'Rol inválido (client, admin, admin_tenant, aprobador)'];
-        }
-
         if (empty($row['estado'])) {
             $errors[] = ['field' => 'estado', 'message' => 'Estado es requerido'];
         } elseif (!in_array($row['estado'], ['active', 'inactive'])) {
@@ -203,7 +199,7 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
         // ────────────────────────────────────────────────────────
 
         $birthDate = null;
-        $birthDateRaw = $row['fecha_nacimiento'] ?? $row['birth_date'] ?? null;
+        $birthDateRaw = $row['fecha_nacimiento'] ?? null;
         if (!empty($birthDateRaw)) {
             $birthDate = $this->parseExcelDate($birthDateRaw);
             if ($birthDate === null) {
@@ -215,13 +211,20 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
         // VALIDAR Y PARSEAR ORGANIZACIONES
         // ────────────────────────────────────────────────────────
 
+        $errorsBeforeOrgs = count($errors);
         $organizaciones = $this->parseOrganizations($row, $errors);
 
-        // Si no tiene organizaciones, agregar warning
-        if (empty($organizaciones) && in_array($row['rol'], ['admin', 'client'])) {
-            $warnings[] = [
-                'field' => 'organizaciones',
-                'message' => 'Usuario sin organizaciones asignadas'
+        // Toda fila debe traer al menos una empresa: el rol del usuario vive
+        // en la empresa (user_tenant_roles), así que una fila sin empresa
+        // crearía un usuario sin ninguna empresa y sin ningún rol. El único
+        // rol global es 'root', que no se da de alta por carga masiva.
+        // Se omite si parseOrganizations ya reportó un error de RUC/permisos
+        // para no apilar dos mensajes sobre la misma causa.
+        if (empty($organizaciones) && count($errors) === $errorsBeforeOrgs) {
+            $errors[] = [
+                'field' => 'org1_ruc',
+                'message' => 'Debes asignar al menos una empresa (columna "'
+                    . BulkUserColumns::labelFor('org1_ruc') . '")',
             ];
         }
 
@@ -233,16 +236,10 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             $warnings[] = ['field' => 'telefono', 'message' => 'Teléfono no especificado'];
         }
 
-        // Verificar si email ya existe en BD
-        if (!empty($row['email'])) {
-            $existingUser = User::where('email', $row['email'])->first();
-            if ($existingUser) {
-                $warnings[] = [
-                    'field' => 'email',
-                    'message' => 'Usuario ya existe en sistema (se actualizará)'
-                ];
-            }
-        }
+        // Que el email ya exista NO se avisa aquí: BulkUserUploadService
+        // (validateFile/validateData) ya lo reporta como error, con el nombre
+        // del usuario con el que choca. Avisarlo también aquí mostraba el
+        // mismo hecho dos veces, como error y como advertencia.
 
         // ────────────────────────────────────────────────────────
         // RETORNAR RESULTADO
@@ -265,7 +262,6 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
                 'email' => strtolower(trim($row['email'])),
                 'tipo_documento' => $row['tipo_documento'],
                 'numero_documento' => trim($row['numero_documento']),
-                'rol' => $row['rol'],
                 'estado' => $row['estado'],
                 'telefono' => $row['telefono'] ?? null,
                 'birth_date' => $birthDate,
@@ -299,12 +295,14 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
      */
     private function normalizeRow(array $row, array &$warnings): array
     {
-        // 1) Normalizar las CLAVES del array (minúsculas, sin tildes) de
-        // forma defensiva, por si el heading row formatter de Laravel Excel
-        // no estuviera en modo 'slug' en algún entorno.
+        // 1) Traducir las CLAVES del array a claves canónicas. Cubre los tres
+        // orígenes posibles de un encabezado: el título legible de nuestra
+        // plantilla ("Número de documento"), la clave canónica misma
+        // ('numero_documento') y los alias de la plantilla del cliente
+        // ('DOCIDEN'). Ver BulkUserColumns::canonicalKey.
         $normalized = [];
         foreach ($row as $key => $value) {
-            $normalized[$this->normalizeHeaderKey((string) $key)] = $value;
+            $normalized[BulkUserColumns::canonicalKey((string) $key)] = $value;
         }
         $row = $normalized;
 
@@ -315,31 +313,18 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             $row['apellido'] = trim("{$apepat} {$apemat}");
         }
 
-        // 3) tipdoc -> tipo_documento (DNI→dni, CE→ce, PAS/PASAPORTE→passport, RUC→ruc)
-        if (empty($row['tipo_documento']) && isset($row['tipdoc'])) {
-            $row['tipo_documento'] = $this->normalizeDocumentType($row['tipdoc']);
+        // 3) tipo_documento: DNI→dni, CE→ce, PAS/PASAPORTE→passport, RUC→ruc
+        // (la plantilla del cliente trae la columna TIPDOC en mayúsculas)
+        if (!empty($row['tipo_documento'])) {
+            $row['tipo_documento'] = $this->normalizeDocumentType($row['tipo_documento']);
         }
 
-        // 4) dociden -> numero_documento
-        if (empty($row['numero_documento']) && isset($row['dociden'])) {
-            $row['numero_documento'] = $row['dociden'];
-        }
-
-        // 5) estado: ACTIVO/ACTIVA -> active, INACTIVO/INACTIVA -> inactive
+        // 4) estado: ACTIVO/ACTIVA -> active, INACTIVO/INACTIVA -> inactive
         if (!empty($row['estado'])) {
             $row['estado'] = $this->normalizeEstadoValue($row['estado']);
         }
 
-        // 5b) fecnac/fec_nacimiento -> fecha_nacimiento (P1, alias opcional)
-        if (empty($row['fecha_nacimiento'])) {
-            if (!empty($row['fecnac'])) {
-                $row['fecha_nacimiento'] = $row['fecnac'];
-            } elseif (!empty($row['fec_nacimiento'])) {
-                $row['fecha_nacimiento'] = $row['fec_nacimiento'];
-            }
-        }
-
-        // 6) organizacion (nombre/razón social o RUC) -> org1_ruc
+        // 5) organizacion (nombre/razón social o RUC) -> org1_ruc
         if (empty($row['org1_ruc']) && !empty($row['organizacion'])) {
             $resolvedRuc = $this->resolveOrganizationToRuc((string) $row['organizacion']);
             if ($resolvedRuc !== null) {
@@ -352,7 +337,7 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             }
         }
 
-        // 7) departamento/cargo (sin número de organización) -> org1_departamento/org1_cargo
+        // 6) departamento/cargo (sin número de organización) -> org1_departamento/org1_cargo
         if (empty($row['org1_departamento']) && !empty($row['departamento'])) {
             $row['org1_departamento'] = $row['departamento'];
         }
@@ -360,12 +345,12 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             $row['org1_cargo'] = $row['cargo'];
         }
 
-        // 8) saldo_de_vacaciones -> org1_saldo_vacaciones
+        // 7) saldo_de_vacaciones -> org1_saldo_vacaciones
         if (empty($row['org1_saldo_vacaciones']) && isset($row['saldo_de_vacaciones']) && $row['saldo_de_vacaciones'] !== '') {
             $row['org1_saldo_vacaciones'] = $row['saldo_de_vacaciones'];
         }
 
-        // 9) periodo_de_vacaciones: se interpreta como el AÑO/PERIODO al que
+        // 8) periodo_de_vacaciones: se interpreta como el AÑO/PERIODO al que
         // corresponde el saldo inicial de vacaciones. No existe una columna
         // dedicada a "periodo" en el pivote (user_tenants solo tiene
         // vacation_balance_initial), así que NO se persiste tal cual ni
@@ -388,21 +373,6 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
         }
 
         return $row;
-    }
-
-    /**
-     * Normalizar una clave de encabezado: minúsculas, sin tildes/diacríticos
-     * y separadores no alfanuméricos colapsados a guion bajo. Replica lo que
-     * hace el heading row formatter 'slug' de Laravel Excel, de forma
-     * defensiva por si no estuviera activo.
-     */
-    private function normalizeHeaderKey(string $key): string
-    {
-        $key = \Illuminate\Support\Str::ascii(trim($key));
-        $key = strtolower($key);
-        $key = preg_replace('/[^a-z0-9]+/', '_', $key) ?? '';
-
-        return trim($key, '_');
     }
 
     /**
@@ -494,8 +464,8 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
      *
      * Por organización, además de RUC/supervisor, se admiten (RP1-C):
      * - org{n}_rol (u org{n}_roles): rol(es) operativos, separados por coma
-     *   (ej: "admin,aprobador"). Si viene vacío, la fila usará el rol
-     *   global (columna 'rol') como fallback para esa empresa.
+     *   (ej: "admin,aprobador"). Obligatorio para cada organización con RUC:
+     *   es el único lugar donde la fila declara el rol del usuario.
      * - org{n}_fecha_ingreso: fecha de inicio laboral en esa empresa.
      * - org{n}_saldo_vacaciones: saldo inicial de vacaciones (días) en esa empresa.
      */
@@ -569,10 +539,20 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
                 $supervisorId = $supervisor->id;
             }
 
-            // Validar rol(es) operativos para esta organización
+            // Validar rol(es) operativos para esta organización. Es
+            // obligatorio: es el único lugar donde la fila declara el rol del
+            // usuario, y sin él quedaría asignado a la empresa sin permisos.
             $rolesRaw = $row[$rolesKey] ?? $row[$rolesKeyAlt] ?? null;
             $roles = [];
-            if (!empty($rolesRaw)) {
+            $rolLabel = BulkUserColumns::labelFor($rolesKey);
+
+            if (empty($rolesRaw)) {
+                $errors[] = [
+                    'field' => $rolesKey,
+                    'message' => "Rol es requerido en \"{$rolLabel}\" (permitidos: "
+                        . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                ];
+            } else {
                 $roles = array_values(array_filter(array_map(
                     fn($r) => strtolower(trim((string) $r)),
                     explode(',', (string) $rolesRaw)
@@ -582,7 +562,8 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
                     if (!in_array($roleName, self::ALLOWED_ORG_ROLES, true)) {
                         $errors[] = [
                             'field' => $rolesKey,
-                            'message' => "Rol '{$roleName}' inválido en {$rolesKey} (permitidos: " . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                            'message' => "Rol '{$roleName}' inválido en \"{$rolLabel}\" (permitidos: "
+                                . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
                         ];
                     }
                 }

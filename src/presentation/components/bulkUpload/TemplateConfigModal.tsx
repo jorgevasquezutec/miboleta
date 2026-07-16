@@ -64,23 +64,29 @@ export function TemplateConfigModal({
                             <div className="text-sm space-y-2 font-mono">
                                 <div className="text-gray-600 font-semibold">Datos del usuario:</div>
                                 <div className="text-xs text-gray-500 ml-2 grid grid-cols-2 gap-1">
-                                    <span>• nombre</span>
-                                    <span>• apellido</span>
-                                    <span>• email</span>
-                                    <span>• tipo_documento</span>
-                                    <span>• numero_documento</span>
-                                    <span>• rol</span>
-                                    <span>• estado</span>
-                                    <span>• telefono</span>
+                                    <span>• Nombre</span>
+                                    <span>• Apellidos</span>
+                                    <span>• Correo electrónico</span>
+                                    <span>• Tipo de documento</span>
+                                    <span>• Número de documento</span>
+                                    <span>• Estado</span>
+                                    <span>• Teléfono</span>
+                                    <span>• Fecha de nacimiento</span>
                                 </div>
-                                <div className="text-gray-600 font-semibold mt-3">Organización:</div>
+                                <div className="text-gray-600 font-semibold mt-3">Por cada empresa:</div>
                                 <div className="text-xs text-gray-500 ml-2 space-y-0.5">
-                                    <div>• org1_ruc</div>
-                                    <div>• org1_supervisor_email</div>
-                                    <div>• org1_rol <span className="text-gray-400">(admin, client, aprobador, admin_tenant)</span></div>
-                                    <div>• org1_fecha_ingreso</div>
-                                    <div>• org1_saldo_vacaciones</div>
+                                    <div>• RUC empresa 1</div>
+                                    <div>• Supervisor empresa 1 (correo)</div>
+                                    <div>• Rol en empresa 1 <span className="text-gray-400">(admin, client, aprobador, admin_tenant)</span></div>
+                                    <div>• Fecha de ingreso empresa 1</div>
+                                    <div>• Saldo de vacaciones empresa 1</div>
+                                    <div>• Departamento empresa 1</div>
+                                    <div>• Cargo empresa 1</div>
                                 </div>
+                                <p className="text-xs text-gray-400 mt-3 font-sans">
+                                    El rol se asigna por empresa: un mismo usuario puede ser
+                                    cliente en una y aprobador en otra.
+                                </p>
                             </div>
                         </div>
                     </div>

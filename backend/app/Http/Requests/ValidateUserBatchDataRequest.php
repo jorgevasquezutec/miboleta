@@ -36,7 +36,6 @@ class ValidateUserBatchDataRequest extends FormRequest
             'users.*.email' => 'nullable|string',
             'users.*.tipo_documento' => 'nullable|string',
             'users.*.numero_documento' => 'nullable|string',
-            'users.*.rol' => 'nullable|string',
             'users.*.estado' => 'nullable|string',
             'users.*.telefono' => 'nullable|string',
             // P1: birth_date debe declararse aquí para que FormRequest::validated()

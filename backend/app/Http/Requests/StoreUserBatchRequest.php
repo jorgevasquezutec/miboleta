@@ -33,7 +33,6 @@ class StoreUserBatchRequest extends FormRequest
         return [
             'file' => 'required|file|mimes:xlsx,xls|max:10240', // 10MB max
             'send_welcome_emails' => 'boolean',
-            'update_existing' => 'boolean',
         ];
     }
 

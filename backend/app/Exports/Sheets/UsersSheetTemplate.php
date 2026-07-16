@@ -2,16 +2,17 @@
 
 namespace App\Exports\Sheets;
 
+use App\Support\BulkUserColumns;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyles, WithColumnWidths
 {
@@ -33,121 +34,63 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
     }
 
     /**
-     * Encabezados de columnas (dinámicos según maxOrganizations)
+     * Encabezados legibles de las columnas (dinámicos según maxOrganizations).
+     * El orden y los textos salen de BulkUserColumns, que es también quien le
+     * enseña al importador a traducirlos de vuelta a claves canónicas.
      */
     public function headings(): array
     {
-        $baseHeaders = [
-            'nombre',
-            'apellido',
-            'email',
-            'tipo_documento',
-            'numero_documento',
-            'rol',
-            'estado',
-            'telefono',
-        ];
-
-        // Agregar columnas de organizaciones dinámicamente (RUC + supervisor,
-        // posiciones sin cambios respecto al formato anterior)
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            $baseHeaders[] = "org{$i}_ruc";
-            $baseHeaders[] = "org{$i}_supervisor_email";
-        }
-
-        // Bloque nuevo (RP1-C): rol(es), fecha de ingreso y saldo inicial de
-        // vacaciones por organización. Se agrega DESPUÉS del bloque anterior
-        // para no correr las columnas org{n}_ruc/org{n}_supervisor_email ya
-        // existentes.
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            $baseHeaders[] = "org{$i}_rol";
-            $baseHeaders[] = "org{$i}_fecha_ingreso";
-            $baseHeaders[] = "org{$i}_saldo_vacaciones";
-        }
-
-        // Bloque nuevo (RP-B3): departamento/cargo por organización. Igual
-        // que el bloque anterior, se agrega al final para no correr las
-        // columnas ya existentes.
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            $baseHeaders[] = "org{$i}_departamento";
-            $baseHeaders[] = "org{$i}_cargo";
-        }
-
-        // P1: fecha de nacimiento del usuario (campo de users, no por
-        // organización). Se agrega AL FINAL para no correr las columnas ya
-        // existentes.
-        $baseHeaders[] = 'fecha_nacimiento';
-
-        return $baseHeaders;
+        return BulkUserColumns::labels($this->maxOrganizations);
     }
 
     /**
-     * Datos iniciales (5 filas de ejemplo)
+     * Datos iniciales: una fila de ejemplo + 4 vacías.
      */
     public function array(): array
     {
-        $examples = [];
+        $examples = [$this->exampleRow()];
 
-        // Fila de ejemplo 1
-        $row1 = [
-            'Juan',
-            'Pérez García',
-            'juan.perez@ejemplo.com',
-            'dni',
-            '12345678',
-            'client',
-            'active',
-            '+51 999 999 999',
-        ];
-
-        // Agregar org placeholders
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            if ($i === 1 && count($this->organizations) > 0) {
-                // Primera org con ejemplo
-                $row1[] = $this->organizations[0]['ruc'] ?? '';
-                $row1[] = ''; // Supervisor opcional
-            } else {
-                $row1[] = '';
-                $row1[] = '';
-            }
-        }
-
-        // Ejemplo de rol/fecha de ingreso/saldo para la primera organización
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            if ($i === 1) {
-                $row1[] = 'client';
-                $row1[] = now()->subYear()->format('Y-m-d');
-                $row1[] = '15';
-            } else {
-                $row1[] = '';
-                $row1[] = '';
-                $row1[] = '';
-            }
-        }
-
-        // Ejemplo de departamento/cargo para la primera organización
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            if ($i === 1) {
-                $row1[] = 'Sistemas';
-                $row1[] = 'Analista Programador';
-            } else {
-                $row1[] = '';
-                $row1[] = '';
-            }
-        }
-
-        // P1: ejemplo de fecha de nacimiento (campo de users, al final)
-        $row1[] = '1990-05-15';
-
-        $examples[] = $row1;
-
-        // 4 filas vacías más
         for ($j = 0; $j < 4; $j++) {
-            $emptyRow = array_fill(0, count($this->headings()), '');
-            $examples[] = $emptyRow;
+            $examples[] = array_fill(0, count($this->headings()), '');
         }
 
         return $examples;
+    }
+
+    /**
+     * Fila de ejemplo. Se arma por clave canónica y se ordena al final según
+     * el layout, para no depender de la posición de cada columna.
+     *
+     * Las fechas se escriben como número de serie de Excel, no como texto:
+     * el value binder por defecto de Laravel Excel no interpreta un string
+     * 'Y-m-d' como fecha, así que un texto quedaría como texto y la celda
+     * incumpliría la validación de fecha de su propia columna.
+     */
+    private function exampleRow(): array
+    {
+        $values = [
+            'nombre' => 'Juan',
+            'apellido' => 'Pérez García',
+            'email' => 'juan.perez@ejemplo.com',
+            'tipo_documento' => 'dni',
+            'numero_documento' => '12345678',
+            'estado' => 'active',
+            'telefono' => '+51 999 999 999',
+            'fecha_nacimiento' => ExcelDate::PHPToExcel(new \DateTimeImmutable('1990-05-15')),
+            // Solo la primera organización lleva ejemplo; el resto queda en
+            // blanco para que se vea que las demás son opcionales.
+            'org1_ruc' => $this->organizations[0]['ruc'] ?? '',
+            'org1_rol' => 'client',
+            'org1_fecha_ingreso' => ExcelDate::PHPToExcel(now()->subYear()->startOfDay()),
+            'org1_saldo_vacaciones' => '15',
+            'org1_departamento' => 'Sistemas',
+            'org1_cargo' => 'Analista Programador',
+        ];
+
+        return array_map(
+            fn(string $key) => $values[$key] ?? '',
+            BulkUserColumns::keys($this->maxOrganizations)
+        );
     }
 
     /**
@@ -171,6 +114,19 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
             ],
         ]);
 
+        // Formato de fecha en las columnas de fecha, de la fila 2 al final del
+        // rango editable. No es solo cosmético: una celda con formato de fecha
+        // hace que Excel/LibreOffice conviertan a fecha lo que el usuario
+        // tipea, en vez de dejarlo como texto (y el backend, que acepta ambos,
+        // recibe así un valor sin ambigüedad de formato ni de locale).
+        $lastRow = BulkUserColumns::MAX_USER_ROWS;
+        foreach (BulkUserColumns::dateKeys($this->maxOrganizations) as $key) {
+            $letter = BulkUserColumns::letterFor($key, $this->maxOrganizations);
+            $sheet->getStyle("{$letter}2:{$letter}{$lastRow}")
+                ->getNumberFormat()
+                ->setFormatCode(NumberFormat::FORMAT_DATE_YYYYMMDD);
+        }
+
         // Freeze primera fila
         $sheet->freezePane('A2');
 
@@ -185,41 +141,6 @@ class UsersSheetTemplate implements FromArray, WithTitle, WithHeadings, WithStyl
      */
     public function columnWidths(): array
     {
-        $widths = [
-            'A' => 15, // nombre
-            'B' => 20, // apellido
-            'C' => 30, // email
-            'D' => 18, // tipo_documento
-            'E' => 18, // numero_documento
-            'F' => 15, // rol
-            'G' => 12, // estado
-            'H' => 18, // telefono
-        ];
-
-        // Agregar anchos para columnas de org (bloque ruc/supervisor)
-        $col = 'I';
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            $widths[$col++] = 15; // org_ruc
-            $widths[$col++] = 30; // org_supervisor_email
-        }
-
-        // Anchos para el bloque nuevo: rol/fecha_ingreso/saldo_vacaciones
-        $colIndex = 8 + (2 * $this->maxOrganizations) + 1;
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 22; // org_rol
-            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // org_fecha_ingreso
-            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // org_saldo_vacaciones
-        }
-
-        // Anchos para el bloque nuevo: departamento/cargo (RP-B3)
-        for ($i = 1; $i <= $this->maxOrganizations; $i++) {
-            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 22; // org_departamento
-            $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 22; // org_cargo
-        }
-
-        // P1: ancho para fecha_nacimiento (columna final, campo de users)
-        $widths[Coordinate::stringFromColumnIndex($colIndex++)] = 18; // fecha_nacimiento
-
-        return $widths;
+        return BulkUserColumns::widths($this->maxOrganizations);
     }
 }

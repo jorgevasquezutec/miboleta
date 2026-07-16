@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { EditableUser, EditableOrganization, ValidationError, ValidationWarning } from '@/domain/types/bulkUserUpload.types';
-import { BULK_UPLOAD_ROW_ROLES } from '@/shared/constants';
+import { BULK_UPLOAD_ORG_ROLES } from '@/shared/constants';
 
 interface UseEditableUsersReturn {
     users: EditableUser[];
@@ -27,9 +27,7 @@ interface UseEditableUsersReturn {
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Roles operativos asignables por organización (RP1-C). 'root' es un rol
-// global y no se asigna por empresa.
-const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
+const ALLOWED_ORG_ROLES: readonly string[] = BULK_UPLOAD_ORG_ROLES;
 
 // Función helper para convertir data a EditableUser
 function convertToEditableUsers(
@@ -64,7 +62,6 @@ function convertToEditableUsers(
             email: user.email || '',
             tipo_documento: user.tipo_documento || 'dni',
             numero_documento: user.numero_documento || '',
-            rol: user.rol || 'client',
             estado: user.estado || 'active',
             telefono: user.telefono || '',
             birth_date: user.birth_date || '',
@@ -119,15 +116,6 @@ export function useEditableUsers(): UseEditableUsersReturn {
                 // La validación de formato se hace en validateUser porque necesita tipo_documento
                 return null;
             
-            case 'rol':
-                // P3: alineado con lo que el backend acepta en la columna de
-                // fila (UploadUserBatchDataRequest/UsersImport::ALLOWED_TOP_LEVEL_ROLES).
-                // 'root' queda excluido a propósito.
-                if (!(BULK_UPLOAD_ROW_ROLES as readonly string[]).includes(value)) {
-                    return 'Rol inválido (client, admin, admin_tenant o aprobador)';
-                }
-                return null;
-            
             case 'estado':
                 if (!['active', 'inactive'].includes(value)) {
                     return 'Estado inválido (active o inactive)';
@@ -156,7 +144,7 @@ export function useEditableUsers(): UseEditableUsersReturn {
         
         // Validar campos requeridos
         const requiredFields: (keyof EditableUser)[] = [
-            'nombre', 'apellido', 'email', 'tipo_documento', 'numero_documento', 'rol', 'estado'
+            'nombre', 'apellido', 'email', 'tipo_documento', 'numero_documento', 'estado'
         ];
         
         requiredFields.forEach(field => {
@@ -209,15 +197,36 @@ export function useEditableUsers(): UseEditableUsersReturn {
             }
         }
         
-        // Validar organizaciones (solo validar formato si existen, no son requeridas)
+        // Toda fila debe traer al menos una empresa: el rol del usuario vive en
+        // la empresa (user_tenant_roles), así que un usuario sin empresa
+        // quedaría sin ningún rol. El único rol global es 'root', que no se da
+        // de alta por carga masiva.
+        const orgsWithRuc = (user.organizaciones || []).filter(
+            org => org && org.ruc && String(org.ruc).trim() !== ''
+        );
+
+        if (orgsWithRuc.length === 0) {
+            errors['organizaciones'] = 'Debes asignar al menos una empresa';
+        }
+
+        // Validar formato de las organizaciones que sí tienen empresa. Las
+        // filas sin RUC son filas en blanco del grid y no se validan (mismo
+        // criterio que BulkUserUploadService::validateUserRow).
         if (user.organizaciones && user.organizaciones.length > 0) {
             user.organizaciones.forEach((org, idx) => {
+                if (!org || !org.ruc || String(org.ruc).trim() === '') {
+                    return;
+                }
+
                 if (org.supervisor_email && !emailRegex.test(org.supervisor_email)) {
                     errors[`organizaciones.${idx}.supervisor_email`] = `Email supervisor inválido en organización ${idx + 1}`;
                 }
 
-                // RP1-C: rol(es)/fecha de ingreso/saldo de vacaciones por organización
-                if (org.roles && org.roles.length > 0) {
+                // RP1-C: rol(es) por organización. Requerido: es el único lugar
+                // donde se declara el rol del usuario.
+                if (!org.roles || org.roles.length === 0) {
+                    errors[`organizaciones.${idx}.roles`] = `Rol requerido en organización ${idx + 1}`;
+                } else {
                     const invalidRoles = org.roles.filter(r => !ALLOWED_ORG_ROLES.includes(r));
                     if (invalidRoles.length > 0) {
                         errors[`organizaciones.${idx}.roles`] = `Rol inválido en organización ${idx + 1}: ${invalidRoles.join(', ')}`;
@@ -252,7 +261,7 @@ export function useEditableUsers(): UseEditableUsersReturn {
             const preservedErrors: Record<string, string> = {};
             
             // Campos que al editarse deben limpiar errores de duplicados
-            const duplicateRelatedFields = ['email', 'numero_documento', 'rol', 'nombre', 'apellido', 'tipo_documento', 'estado'];
+            const duplicateRelatedFields = ['email', 'numero_documento', 'nombre', 'apellido', 'tipo_documento', 'estado'];
             const isDuplicateRelated = duplicateRelatedFields.includes(field as string);
             
             Object.entries(user._errors || {}).forEach(([key, msg]) => {
@@ -375,7 +384,6 @@ export function useEditableUsers(): UseEditableUsersReturn {
             email: '',
             tipo_documento: 'dni',
             numero_documento: '',
-            rol: 'client',
             estado: 'active',
             telefono: '',
             birth_date: '',
@@ -385,8 +393,9 @@ export function useEditableUsers(): UseEditableUsersReturn {
                 apellido: 'Apellido es requerido',
                 email: 'Email es requerido',
                 numero_documento: 'Número de documento es requerido',
+                organizaciones: 'Debes asignar al menos una empresa',
             },
-            _warnings: { organizaciones: 'Usuario sin organizaciones asignadas' },
+            _warnings: {},
             _isValid: false,
             _isNew: true,
             _isModified: false,

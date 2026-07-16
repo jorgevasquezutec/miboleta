@@ -124,31 +124,27 @@ class UserService
      *
      * @param User $user
      * @param array $data
+     * NOTA: los dos flags de abajo se introdujeron para la actualización de
+     * usuarios existentes de la carga masiva, que se eliminó (esa vía ahora
+     * solo da de alta usuarios nuevos). Hoy ningún llamador los pone en true:
+     * la edición individual (UserController@update) usa los defaults. Se
+     * conservan porque describen un comportamiento coherente y su borrado
+     * tocaría el camino de edición individual sin necesidad.
+     *
      * @param bool $preserveTenantFieldsWhenMissing Cuando es true, los campos
      *   "opcionales por empresa" (hire_date, vacation_balance_initial,
      *   department, position, supervisor_id) que NO vengan explícitos en
      *   $data['tenants_config'][n] conservan el valor ya guardado en el
-     *   pivote en vez de limpiarse a null (ver assignTenantsWithConfig). Lo
-     *   usa la actualización de existentes de la carga masiva
-     *   (ProcessUserChunk::update_existing) para no borrar, por ejemplo, un
-     *   saldo de vacaciones ya devengado cuando la fila reprocesada no trae
-     *   ese dato. El formulario de edición individual (UserController@update)
-     *   sigue usando el comportamiento histórico (false): un campo vacío en
-     *   el formulario SÍ limpia el valor, porque ahí "vacío" es una acción
-     *   explícita del usuario.
+     *   pivote en vez de limpiarse a null (ver assignTenantsWithConfig). El
+     *   formulario de edición individual usa el comportamiento histórico
+     *   (false): un campo vacío en el formulario SÍ limpia el valor, porque
+     *   ahí "vacío" es una acción explícita del usuario.
      * @param bool $mergeTenants FIX I3(b): cuando es true, la sincronización
      *   de tenants_config usa MERGE (syncWithoutDetaching) en vez de sync
-     *   (que desengancha cualquier tenant no listado en $data). Lo usa
-     *   exclusivamente la actualización de existentes de la carga masiva
-     *   (ProcessUserChunk::update_existing), porque una fila reprocesada
-     *   solo trae las organizaciones que le conciernen a quien subió el
-     *   archivo: no se debe interpretar la ausencia de otras organizaciones
-     *   del usuario como "quítaselas" (eso desengancharía silenciosamente al
-     *   usuario de empresas con las que la fila del Excel no tenía nada que
-     *   ver). La edición individual (UserController@update) sigue usando el
-     *   comportamiento histórico (false): el formulario reenvía la lista
-     *   COMPLETA de tenants del usuario, así que un sync explícito (con
-     *   detach) es el comportamiento correcto ahí.
+     *   (que desengancha cualquier tenant no listado en $data). La edición
+     *   individual usa el comportamiento histórico (false): el formulario
+     *   reenvía la lista COMPLETA de tenants del usuario, así que un sync
+     *   explícito (con detach) es el comportamiento correcto ahí.
      * @return User
      */
     public function updateUser(User $user, array $data, bool $preserveTenantFieldsWhenMissing = false, bool $mergeTenants = false): User
@@ -482,16 +478,14 @@ class UserService
      *     'department' => ?string,
      *     'position' => ?string,
      *   ]
-     * @param int|null $fallbackRoleId Rol a aplicar en las empresas cuyo item no traiga 'role_ids'
-     *   (compatibilidad con la carga masiva, que hoy envía un único role_id global
-     *   junto con tenants_config sin desglose de roles por empresa).
+     * @param int|null $fallbackRoleId Rol a aplicar en las empresas cuyo item no traiga 'role_ids'.
      * @param bool $preserveWhenMissing Ver doc de updateUser(). false (default) = comportamiento
      *   histórico: un item sin un campo opcional lo deja en null (equivalente a un "PUT" completo
      *   del pivote). true = un campo opcional ausente/vacío conserva el valor ya guardado en el
-     *   pivote existente (usado solo por la actualización de existentes de la carga masiva).
+     *   pivote existente.
      * @param bool $mergeTenants FIX I3(b): ver doc de updateUser(). true = MERGE
-     *   (syncWithoutDetaching, usado solo por update_existing de la carga masiva); false (default)
-     *   = sync explícito con detach (comportamiento histórico, usado por la edición individual).
+     *   (syncWithoutDetaching); false (default) = sync explícito con detach (comportamiento
+     *   histórico, usado por la edición individual).
      */
     protected function assignTenantsWithConfig(User $user, array $config, ?int $fallbackRoleId = null, bool $preserveWhenMissing = false, bool $mergeTenants = false): void
     {

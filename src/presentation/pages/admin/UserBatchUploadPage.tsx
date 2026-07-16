@@ -3,7 +3,7 @@ import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/presentation/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/presentation/components/ui/card';
-import { Upload, Download, FileText, Loader2, X, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Mail, RefreshCw } from 'lucide-react';
+import { Upload, Download, FileText, Loader2, X, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Mail } from 'lucide-react';
 import { TemplateConfigModal } from '@/presentation/components/bulkUpload/TemplateConfigModal';
 import { UserDataGrid } from '@/presentation/components/bulkUpload/UserDataGrid';
 import { useEditableUsers } from '@/presentation/hooks/useEditableUsers';
@@ -22,7 +22,6 @@ export function UserBatchUploadPage() {
     const [isValidating, setIsValidating] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [sendEmails, setSendEmails] = useState(true);
-    const [updateExisting, setUpdateExisting] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
 
     // Estados para el editor
@@ -175,7 +174,6 @@ export function UserBatchUploadPage() {
                 email: user.email,
                 tipo_documento: user.tipo_documento,
                 numero_documento: user.numero_documento,
-                rol: user.rol,
                 estado: user.estado,
                 telefono: user.telefono || '',
                 // P1: null (no '') cuando está vacío, mismo criterio que
@@ -206,7 +204,6 @@ export function UserBatchUploadPage() {
             // 2. Si pasó la validación, proceder con la carga
             const result = await bulkUserUploadService.uploadEditedData(formattedUsers, {
                 send_welcome_emails: sendEmails,
-                update_existing: updateExisting,
             });
 
             toast.success(`Carga iniciada: ${result.batch.total_rows} usuarios`);
@@ -411,7 +408,7 @@ export function UserBatchUploadPage() {
                                     {users.filter(u => !u._isValid).slice(0, 10).map(user => (
                                         <div key={user.id} className="text-xs text-red-700">
                                             <span className="font-medium">Fila {user.row_number}</span>{' '}
-                                            <span className="text-red-500">({user.rol})</span>:{' '}
+                                            <span className="text-red-500">({user.email || 'sin correo'})</span>:{' '}
                                             {Object.entries(user._errors).map(([field, msg]) => (
                                                 <span key={field} className="mr-2">
                                                     {field}: {msg}
@@ -462,28 +459,6 @@ export function UserBatchUploadPage() {
                                         id="send-welcome-emails"
                                         checked={sendEmails}
                                         onCheckedChange={setSendEmails}
-                                    />
-                                </div>
-
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-start gap-2">
-                                        <RefreshCw className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
-                                        <div>
-                                            <Label htmlFor="update-existing" className="text-sm text-blue-900 cursor-pointer">
-                                                Actualizar usuarios existentes
-                                            </Label>
-                                            <p className="text-xs text-blue-700">
-                                                Si un usuario ya existe (mismo documento o email), se actualizan sus
-                                                datos y sus empresas asignadas en vez de omitirlo. No se modifica su
-                                                contraseña ni el saldo de vacaciones ya devengado si esta fila no lo
-                                                trae explícito.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Switch
-                                        id="update-existing"
-                                        checked={updateExisting}
-                                        onCheckedChange={setUpdateExisting}
                                     />
                                 </div>
                             </div>

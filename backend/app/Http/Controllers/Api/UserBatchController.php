@@ -338,13 +338,6 @@ class UserBatchController extends Controller
             'total_rows' => count($validation['data']),
             'processing_options' => [
                 'send_welcome_emails' => $validated['send_welcome_emails'] ?? false,
-                // FIX M1: default false (comportamiento histórico: no
-                // actualizar salvo que se pida explícitamente). Antes,
-                // omitir el flag equivalía a update_existing=true, lo que
-                // podía pisar silenciosamente datos de usuarios existentes
-                // (incluido, antes del fix I3, el email/rol) sin que quien
-                // sube el archivo lo haya pedido.
-                'update_existing' => $validated['update_existing'] ?? false,
             ],
         ]);
 
@@ -437,13 +430,6 @@ class UserBatchController extends Controller
             'total_rows' => count($users),
             'processing_options' => [
                 'send_welcome_emails' => $validated['send_welcome_emails'] ?? false,
-                // FIX M1: default false (comportamiento histórico: no
-                // actualizar salvo que se pida explícitamente). Antes,
-                // omitir el flag equivalía a update_existing=true, lo que
-                // podía pisar silenciosamente datos de usuarios existentes
-                // (incluido, antes del fix I3, el email/rol) sin que quien
-                // sube el archivo lo haya pedido.
-                'update_existing' => $validated['update_existing'] ?? false,
             ],
         ]);
 

@@ -1,9 +1,15 @@
 # Mapeo de carga masiva de usuarios: plantilla del cliente → formato interno
 
 Este documento describe la capa de alias/normalización de encabezados
-agregada en `backend/app/Imports/UsersImport.php` (método `normalizeRow()`)
-para aceptar, además de nuestro formato canónico (`org{n}_*`), el formato de
-encabezados que trae la plantilla real del cliente.
+(`backend/app/Support/BulkUserColumns.php` + `UsersImport::normalizeRow()`)
+que permite aceptar, en un mismo importador, tres formatos de encabezado:
+
+1. Los **títulos legibles** de la plantilla que genera el sistema
+   ("Número de documento", "Rol en empresa 1").
+2. Nuestro **formato canónico** en snake_case (`numero_documento`, `org1_rol`),
+   que es el que se usa internamente.
+3. Los **encabezados de la plantilla real del cliente** (APEPAT, TIPDOC,
+   DOCIDEN, ORGANIZACIÓN...).
 
 La normalización corre **antes** de cualquier validación, fila por fila. No
 se elimina el soporte del formato canónico: si una clave canónica ya viene
@@ -11,12 +17,22 @@ presente y con valor en la fila, el alias correspondiente NO la sobrescribe.
 
 ## Normalización de encabezados
 
-Laravel Excel (`WithHeadingRow`) ya slugifica los encabezados por defecto
-(minúsculas, sin tildes, separadores → `_`). Como capa defensiva adicional
-(por si ese comportamiento no estuviera activo en algún entorno),
-`normalizeRow()` vuelve a normalizar las claves del array con el mismo
-criterio (`Str::ascii` + minúsculas + `[^a-z0-9]+` → `_`) antes de aplicar el
-mapeo de alias.
+`BulkUserColumns::canonicalKey()` normaliza el encabezado (`Str::ascii` +
+minúsculas + `[^a-z0-9]+` → `_`, el mismo criterio que el heading row
+formatter 'slug' de Laravel Excel) y luego lo busca en el mapa de alias, que
+se construye a partir de los propios títulos de la plantilla. Eso mantiene la
+plantilla y el importador sincronizados: cambiar un título en
+`BulkUserColumns` cambia a la vez lo que se escribe en el Excel y lo que el
+importador sabe leer.
+
+## El rol es por empresa
+
+No existe una columna de rol a nivel de fila. El rol vive siempre en la
+empresa (`org{n}_rol` → `user_tenant_roles`) y es **obligatorio** para cada
+empresa que la fila declare; toda fila necesita al menos una empresa. El único
+rol global es `root`, que **no se da de alta por carga masiva**: solo un root
+puede crear otro root (jerarquía que esta vía no puede verificar por fila), así
+que se crea a mano desde el alta individual de usuarios.
 
 ## Mapeo columna cliente → campo interno
 
@@ -29,7 +45,7 @@ mapeo de alias.
 | DOCIDEN                              | `dociden`                 | `numero_documento`                   |                                                                          |
 | EMAIL                                | `email`                   | `email`                              | Ya es canónico, sin alias                                             |
 | TELEFONO                             | `telefono`                | `telefono`                           | Ya es canónico, sin alias                                             |
-| ROL                                  | `rol`                     | `rol`                                | Ya es canónico, sin alias                                             |
+| ROL                                  | `rol`                     | —                                    | **Se ignora.** El rol es por empresa: usar `org{n}_rol` ("Rol en empresa {n}") |
 | ESTADO                               | `estado`                  | `estado`                             | ACTIVO/ACTIVA→`active`, INACTIVO/INACTIVA→`inactive` (case-insensitive) |
 | ORGANIZACIÓN                         | `organizacion`             | `org1_ruc`                           | Ver "Resolución de ORGANIZACIÓN" abajo                                |
 | DEPARTAMENTO                         | `departamento`             | `org1_departamento`                  | Solo si no viene ya `org{n}_departamento` explícito                   |

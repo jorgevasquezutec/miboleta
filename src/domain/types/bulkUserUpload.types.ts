@@ -135,9 +135,11 @@ export interface ValidationSummary {
     consolidated_users?: number;
 }
 
+// La carga masiva solo da de alta usuarios nuevos: no existe una opción de
+// actualizar a los que ya existen (esas filas se reportan como error para que
+// se quiten del archivo).
 export interface BulkUploadOptions {
     send_welcome_emails: boolean;
-    update_existing: boolean;
 }
 
 export interface BatchProgressEvent {
@@ -194,10 +196,9 @@ export interface EditableUser {
     email: string;
     tipo_documento: 'dni' | 'ce' | 'passport' | 'ruc';
     numero_documento: string;
-    // P3: alineado con los roles que el backend acepta en la columna de fila
-    // (UploadUserBatchDataRequest::rules(), UsersImport::ALLOWED_TOP_LEVEL_ROLES).
-    // 'root' queda excluido a propósito.
-    rol: 'client' | 'admin' | 'admin_tenant' | 'aprobador';
+    // No hay rol a nivel de usuario: el rol es siempre por empresa, en
+    // EditableOrganization.roles (user_tenant_roles). El único rol global es
+    // 'root', que no se da de alta por carga masiva.
     estado: 'active' | 'inactive';
     telefono?: string;
     birth_date?: string | null; // 'YYYY-MM-DD'

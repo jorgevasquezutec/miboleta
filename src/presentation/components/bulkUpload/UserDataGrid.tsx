@@ -3,7 +3,6 @@ import type { EditableUser, BulkUploadConfigData } from '@/domain/types/bulkUser
 import { Trash2, AlertCircle } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
 import { cn } from '@/presentation/components/ui/utils';
-import { BULK_UPLOAD_ROW_ROLES, USER_ROLE_LABELS } from '@/shared/constants';
 
 interface UserDataGridProps {
     users: EditableUser[];
@@ -402,12 +401,13 @@ export function UserDataGrid({
         );
     };
 
-    // RP1-C: rol(es) operativos para esta organización (vacío = usa el rol
-    // general de la fila para esa empresa)
+    // RP1-C: rol(es) operativos para esta organización. Requerido: es el único
+    // lugar donde se declara el rol del usuario (no hay rol de nivel de fila).
     const renderOrgRolesSelect = (user: EditableUser, orgIndex: number) => {
         const org = user.organizaciones?.[orgIndex];
         const currentRoles = org?.roles || [];
         const availableRoles = configData?.available_roles || [];
+        const hasError = Boolean(user._errors[`organizaciones.${orgIndex}.roles`]);
 
         return (
             <select
@@ -417,8 +417,12 @@ export function UserDataGrid({
                     const selected = Array.from(e.target.selectedOptions).map(o => o.value);
                     handleOrgRolesChange(user.id, orgIndex, selected);
                 }}
-                className="w-full h-14 px-1 text-xs border rounded bg-white hover:border-blue-400 focus:border-blue-500 outline-none border-gray-200"
-                title="Vacío = usa el rol general de la fila para esta empresa"
+                className={cn(
+                    "w-full h-14 px-1 text-xs border rounded hover:border-blue-400 focus:border-blue-500 outline-none",
+                    hasError ? "bg-red-50 border-red-400" : "bg-white border-gray-200"
+                )}
+                title={user._errors[`organizaciones.${orgIndex}.roles`]
+                    ?? "Rol del usuario en esta empresa (requerido)"}
             >
                 {availableRoles.map(r => (
                     <option key={r.id} value={r.name}>{r.display_name}</option>
@@ -515,19 +519,18 @@ export function UserDataGrid({
                     <tr>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r w-8"></th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r w-10">#</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">nombre</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">apellido</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-40">email</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-20">tipo_doc</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">numero_doc</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-16">rol</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-16">estado</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">telefono</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32">fecha_nac</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">Nombre</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">Apellidos</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-40">Correo electrónico</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-20">Tipo doc.</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">N° documento</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-16">Estado</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-24">Teléfono</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32">Fecha de nacimiento</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-36 bg-blue-50">Empresa</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-44 bg-blue-50">Organización</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-48 bg-blue-50">Supervisor</th>
-                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32 bg-blue-50">Roles empresa</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32 bg-blue-50">Rol en empresa</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-32 bg-blue-50">Fecha ingreso</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-28 bg-blue-50">Saldo vacac.</th>
                         <th className="px-2 py-2 text-left font-semibold text-gray-700 border-b border-r min-w-28 bg-blue-50">Departamento</th>
@@ -585,12 +588,6 @@ export function UserDataGrid({
                                 </td>
                                 <td className={cn("px-2 py-1 border-b border-r", user._errors.numero_documento && "bg-red-50")}>
                                     {renderEditableCell(user, 'numero_documento')}
-                                </td>
-                                <td className={cn("px-2 py-1 border-b border-r", user._errors.rol && "bg-red-50")}>
-                                    {renderSelectCell(user, 'rol', BULK_UPLOAD_ROW_ROLES.map(role => ({
-                                        value: role,
-                                        label: USER_ROLE_LABELS[role] ?? role,
-                                    })))}
                                 </td>
                                 <td className={cn("px-2 py-1 border-b border-r", user._errors.estado && "bg-red-50")}>
                                     {renderSelectCell(user, 'estado', [

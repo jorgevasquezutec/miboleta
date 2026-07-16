@@ -49,15 +49,17 @@ export const USER_ROLE_DISPLAY_LABELS = {
   admin_tenant: 'Administrador de Empresa (Tenant)',
 } as const;
 
-// P3: roles asignables en la columna 'rol' (nivel de fila) de la carga
-// masiva de usuarios. Debe coincidir EXACTAMENTE con las reglas de
-// validación del backend:
-//   - UploadUserBatchDataRequest::rules() -> 'users.*.rol' => 'required|in:client,admin,admin_tenant,aprobador'
-//   - UsersImport::ALLOWED_TOP_LEVEL_ROLES
-// 'root' queda excluido a propósito (rol global; ver FIX B2.2): solo root
-// puede dar de alta a otro root, y la carga masiva no puede verificar esa
-// jerarquía por fila.
-export const BULK_UPLOAD_ROW_ROLES = [
+// Roles asignables POR EMPRESA en la carga masiva de usuarios (columna
+// "Rol en empresa {n}" del Excel). No existe un rol de nivel de fila: el rol
+// siempre vive en la empresa (user_tenant_roles). Debe coincidir EXACTAMENTE
+// con las reglas de validación del backend:
+//   - UploadUserBatchDataRequest::rules() -> 'users.*.organizaciones.*.roles.*'
+//   - UsersImport::ALLOWED_ORG_ROLES
+// 'root' queda excluido a propósito: es un rol global, no se asigna por
+// empresa, y solo un root puede dar de alta a otro root (jerarquía que la
+// carga masiva no puede verificar por fila), así que los root se crean a mano
+// desde el alta individual.
+export const BULK_UPLOAD_ORG_ROLES = [
   USER_ROLES.CLIENT,
   USER_ROLES.ADMIN,
   USER_ROLES.ADMIN_TENANT,
