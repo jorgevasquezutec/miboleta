@@ -161,8 +161,8 @@ export function UserDetailPage() {
         };
         const labels: Record<string, string> = {
             root: 'Root',
-            admin: 'Administrador',
-            client: 'Usuario',
+            admin: 'Admin Empleados',
+            client: 'Empleado',
         };
         return (
             <Badge className={variants[role] || variants.client}>

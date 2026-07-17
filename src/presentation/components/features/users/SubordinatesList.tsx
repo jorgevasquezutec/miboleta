@@ -79,8 +79,8 @@ export function SubordinatesList({
 
         const labels: Record<string, string> = {
             root: 'Root',
-            admin: 'Admin',
-            client: 'Usuario',
+            admin: 'Admin Empleados',
+            client: 'Empleado',
         };
 
         return (

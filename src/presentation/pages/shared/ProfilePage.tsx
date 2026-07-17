@@ -147,9 +147,9 @@ export function ProfilePage() {
       case "root":
         return "Administrador Plataforma";
       case "admin":
-        return "Administrador";
+        return "Admin Empleados";
       case "client":
-        return "Cliente";
+        return "Empleado";
       default:
         return "Usuario";
     }
