@@ -1,311 +1,295 @@
-# MiBoleta - Sistema de Gestión Documental
+# MiBoleta — Sistema de Gestión Documental Multi-Tenant
 
-Sistema multi-tenant de gestión de documentos, vacaciones y boletas para empresas.
+Plataforma **multi-tenant** para gestión de boletas/documentos, usuarios, vacaciones (régimen laboral Perú), **firma digital legal (PAdES)** y carga masiva, con panel por empresa y administración de plataforma.
 
-## 🚀 Quick Start
+- **Frontend:** React 18 + TypeScript + Vite + Tailwind
+- **Backend:** Laravel 12 + PHP 8.4 (Sanctum, Horizon, Reverb)
+- **Firma legal:** sidecar Python (Ghostscript + pyHanko) que produce PDF/A-2b firmado con PAdES + sellado de tiempo
+- **Infra:** Docker Compose (dev) · Docker Swarm + GitHub Actions (prod)
+
+---
+
+## 🚀 Quick Start (desarrollo)
 
 ### Requisitos
 - Node.js 18+
 - Docker y Docker Compose
 - Git
 
-### Instalación Rápida
+### Instalación
 
 ```bash
-# Clonar el repositorio
 git clone https://github.com/jorgevasquezutec/miboleta.git
 cd miboleta
 
-# Instalar dependencias frontend
-npm install
-
-# Levantar backend (Laravel + MySQL + Redis + Nginx)
-docker compose up -d
-
-# Ejecutar migraciones y seeds
-npm run laravel:fresh
-
-# Iniciar frontend en modo desarrollo
-npm run dev
+npm install                 # dependencias frontend
+docker compose up -d        # app (Laravel) + nginx + MySQL + Redis + Horizon + Reverb + signer + adminer
+npm run laravel:fresh       # migraciones + seeds
+npm run dev                 # frontend en modo desarrollo
 ```
 
-### Accesos por Defecto
+### Usuarios de prueba
 
-| Servicio | URL | Puerto |
-|----------|-----|--------|
-| **Frontend** | http://localhost:5173 | 5173 |
-| **Backend API** | http://localhost/api | 80 |
-| **Adminer (DB)** | http://localhost:8080 | 8080 |
-| **MySQL** | localhost:3307 | 3307 |
-| **Redis** | localhost:6379 | 6379 |
-| **Reverb (WebSocket)** | localhost:8085 | 8085 |
+| Identificador | Rol | Password |
+|---|---|---|
+| platform@miboleta.com | Platform Admin (root) | password |
+| admin@corporacionabc.com | Admin de empresa | password |
+| jorge.perez@corporacionabc.com | Empleado | password |
 
-### Usuarios de Prueba
-
-| Email | Rol | Password |
-|-------|-----|----------|
-| platform@miboleta.com | Platform Admin | password |
-| admin@corporacionabc.com | Tenant Admin | password |
-| jorge.perez@corporacionabc.com | Employee | password |
+> El login acepta **DNI o correo**. Los roles operativos son **por empresa**; el rol root es de plataforma. Ver [docs/AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md).
 
 ---
 
-## 📦 Scripts NPM
+## ✨ Módulos y capacidades
 
-### Desarrollo
-
-```bash
-npm run dev           # Desarrollo local (localhost)
-npm run dev:mobile    # Desarrollo para móvil (auto-detecta IP de red)
-npm run dev:local     # Restaurar configuración localhost
-```
-
-### Docker
-
-```bash
-npm run docker:up      # Levantar contenedores
-npm run docker:down    # Parar contenedores
-npm run docker:logs    # Ver logs en tiempo real
-npm run docker:restart # Reiniciar contenedores
-```
-
-### Laravel
-
-```bash
-npm run laravel:migrate  # Ejecutar migraciones
-npm run laravel:fresh    # Reset DB + seeds
-npm run laravel:shell    # Acceder al contenedor PHP
-npm run laravel:cache    # Cachear config y rutas
-```
-
-### Build
-
-```bash
-npm run build         # Compilar frontend para producción
-npm run build:copy    # Build + copiar a backend/public
-```
+- **Multi-tenant con roles por empresa.** Un usuario puede pertenecer a varias empresas; sus roles operativos viven por empresa (pivote), y hay un switcher de empresa + rol. Root = plataforma.
+- **Login por DNI o correo.**
+- **Gestión de documentos/boletas** con visor PDF y descarga.
+- **Firma digital legal (PAdES).** Normaliza a PDF/A-2b (Ghostscript) y firma con pyHanko + TSA usando un certificado único de plataforma (cifrado). Ver [Firma digital](#-firma-digital-legal-signer).
+- **Vacaciones (Perú).** Saldo por empresa, 30/15 días según régimen, devengo por aniversario, flujo de solicitud/aprobación.
+- **Carga masiva de usuarios.** Import asíncrono escalable (patrón de batches) — una fila por (usuario × empresa) agrupada por DNI.
+- **Correo por empresa.** SMTP configurable por empresa con fallback al default de la plataforma.
+- **Auditoría** por dominio (AuditService).
 
 ---
 
-## 📱 Desarrollo Móvil
-
-Para probar la aplicación desde tu celular (en la misma red WiFi):
+## 📦 Scripts NPM (dev)
 
 ```bash
-npm run dev:mobile
+# Desarrollo
+npm run dev           # localhost
+npm run dev:mobile    # auto-detecta IP de red (probar desde el celular)
+npm run dev:local     # restaurar configuración localhost
+
+# Docker (dev)
+npm run docker:up | docker:down | docker:logs | docker:restart
+
+# Laravel (dev)
+npm run laravel:migrate   # migraciones
+npm run laravel:fresh     # reset DB + seeds
+npm run laravel:shell     # shell en el contenedor PHP
+npm run laravel:cache     # cachear config y rutas
+
+# Build
+npm run build             # compilar frontend
+npm run build:copy        # build + copiar a backend/public
 ```
 
-Este comando automáticamente:
-1. ✅ Detecta tu IP local actual
-2. ✅ Actualiza `.env.local` (frontend)
-3. ✅ Actualiza `backend/.env` (backend)
-4. ✅ Inicia Vite con `--host`
-
-**Importante:** Después de cambiar, reinicia Docker:
-```bash
-docker compose restart
-```
-
-Para volver a localhost:
-```bash
-npm run dev:local
-docker compose restart
-```
+### Desarrollo móvil
+`npm run dev:mobile` detecta tu IP local, actualiza `.env.local` y `backend/.env`, y arranca Vite con `--host`. Luego `docker compose restart`. Volver con `npm run dev:local`.
 
 ---
 
 ## 🏗️ Arquitectura
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        FRONTEND                              │
-│  React 18 + TypeScript + Vite + Tailwind CSS                │
-│  Puerto: 5173 (desarrollo)                                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       NGINX (proxy)                          │
-│  Puerto: 80 (HTTP) / 443 (HTTPS)                            │
-│  - Sirve frontend compilado                                  │
-│  - Proxy /api -> PHP-FPM                                    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      LARAVEL (API)                           │
-│  PHP 8.3 + Laravel 11 + Sanctum                             │
-│  Puerto: 9000 (PHP-FPM interno)                             │
-└─────────────────────────────────────────────────────────────┘
-          │              │              │
-          ▼              ▼              ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│   MySQL 8   │  │    Redis    │  │   Reverb    │
-│ Puerto:3307 │  │ Puerto:6379 │  │ Puerto:8085 │
-└─────────────┘  └─────────────┘  └─────────────┘
+                         ┌───────────────────────────┐
+                         │   Frontend React + Vite    │
+                         │   (compilado en la imagen  │
+                         │    del app y servido por    │
+                         │    nginx en producción)     │
+                         └─────────────┬─────────────┘
+                                       ▼
+                         ┌───────────────────────────┐
+                         │           NGINX            │
+                         │  sirve SPA + /storage +    │
+                         │  proxy /api,/horizon,/app  │
+                         └─────────────┬─────────────┘
+                                       ▼
+       ┌───────────────────────────────────────────────────────┐
+       │                 LARAVEL 12 (PHP 8.4-fpm)               │
+       │        app · horizon (queues) · reverb (WS)           │
+       │            (misma imagen, distinto command)           │
+       └───┬───────────┬───────────┬──────────────┬────────────┘
+           ▼           ▼           ▼              ▼
+     ┌─────────┐ ┌─────────┐ ┌──────────┐  ┌──────────────┐
+     │ MySQL 8 │ │  Redis  │ │  Reverb  │  │   signer     │
+     │         │ │ (queues │ │  (WS)    │  │ Ghostscript  │
+     │         │ │ +cache) │ │          │  │ + pyHanko    │
+     └─────────┘ └─────────┘ └──────────┘  └──────────────┘
+                                            (firma PAdES, red interna)
 ```
 
-### Tecnologías
+**Nota clave:** el frontend y el backend van en **la misma imagen** (`ghcr.io/<repo>/miboleta`). El `signer` es una **imagen aparte** (`...-signer`). Ver [Deploy](#-deploy-a-producción-docker-swarm).
 
-**Frontend:**
-- React 18 + TypeScript
-- Vite (build tool)
-- Tailwind CSS v4
-- shadcn/ui (componentes)
-- Zustand (estado)
-- React Router v7
-- React Query
-- Recharts (gráficos)
+### Stack
 
-**Backend:**
-- Laravel 11 + PHP 8.3
-- Laravel Sanctum (autenticación)
-- Laravel Reverb (WebSockets)
-- Laravel Horizon (queues)
-- MySQL 8 + Redis
-
-**Infraestructura:**
-- Docker Compose (desarrollo)
-- Docker Swarm (producción)
-- GitHub Actions (CI/CD)
-- Nginx (reverse proxy)
+**Frontend:** React 18 · TypeScript · Vite · Tailwind v4 · shadcn/ui · Zustand · React Router v7 · React Query · Recharts
+**Backend:** Laravel 12 · PHP 8.4 · Sanctum (auth) · Reverb (WebSockets) · Horizon (queues) · MySQL 8 · Redis
+**Firma:** Python 3.12 · FastAPI/uvicorn · Ghostscript · pyHanko (PAdES + TSA)
+**Infra:** Docker Compose (dev) · Docker Swarm (prod) · GitHub Actions (CI/CD) · Nginx · GHCR (registro de imágenes)
 
 ---
 
-## 📁 Estructura del Proyecto
+## 📁 Estructura del proyecto
 
 ```
 miboleta/
-├── src/                          # Frontend React
-│   ├── application/              # Casos de uso
-│   ├── domain/                   # Entidades y modelos
-│   ├── infrastructure/           # HTTP, repositories
-│   └── presentation/             # UI
-│       ├── components/           # Componentes reutilizables
-│       ├── pages/                # Páginas por rol
-│       │   ├── admin/            # Páginas de administrador
-│       │   ├── employee/         # Páginas de empleado
-│       │   └── shared/           # Páginas compartidas
-│       ├── hooks/                # Custom hooks
-│       ├── stores/               # Zustand stores
-│       └── routes/               # React Router
-├── backend/                      # Laravel API
-│   ├── app/
-│   │   ├── Http/Controllers/     # Controladores API
-│   │   ├── Models/               # Eloquent models
-│   │   └── Services/             # Lógica de negocio
-│   ├── database/
-│   │   ├── migrations/           # Migraciones DB
-│   │   └── seeders/              # Datos de prueba
-│   └── routes/
-│       └── api.php               # Rutas API
-├── docker/                       # Configuración Docker
-│   ├── nginx/                    # Nginx config
-│   └── php/                      # PHP-FPM config
-├── scripts/                      # Scripts de utilidad
-│   ├── dev-mobile.sh             # Config desarrollo móvil
-│   └── dev-local.sh              # Config desarrollo local
-├── .github/workflows/            # GitHub Actions
-│   └── docker-build-deploy.yml   # CI/CD pipeline
-├── docker-compose.yml            # Docker desarrollo
-└── docker-stack.yml              # Docker Swarm producción
+├── src/                      # Frontend React (application/domain/infrastructure/presentation)
+├── backend/                  # Laravel API (Http/Models/Services, migrations, seeders, routes/api.php)
+├── signer/                   # Sidecar de firma legal (app.py FastAPI, pipeline.py, Dockerfile)
+├── config/                   # Config de PRODUCCIÓN (nginx.conf, my.cnf, .env, .env.stack, .env.vite.swarm)
+├── docker/                   # Config de DEV (nginx/default.conf, php/)
+├── scripts/                  # Utilidades (dev-mobile.sh, dev-local.sh)
+├── .github/workflows/
+│   ├── tests.yml             # Suite de tests (gatilla el deploy)
+│   └── docker-build-deploy.yml  # CI/CD: build imágenes + deploy a Swarm
+├── docker-compose.yml        # Stack de DESARROLLO (bind-mounts)
+├── docker-stack.yml          # Stack de PRODUCCIÓN (Swarm, imágenes de GHCR)
+└── Makefile                  # Despliegue MANUAL a prod (plan B del CI) — ver abajo
 ```
 
 ---
 
-## 🔐 Sistema de Autenticación
+## 🔐 Autenticación y roles
 
-- **Método:** Laravel Sanctum con cookies HttpOnly
-- **Access Token:** 1 hora (renovación automática)
-- **Refresh Token:** 30 días
-- **Multi-tenant:** Usuarios pueden pertenecer a múltiples empresas
+- **Método:** Laravel Sanctum con cookies HttpOnly. Access token 1h (renovación automática), refresh 30 días.
+- **Login:** por **DNI o correo**.
+- **Multi-tenant:** roles operativos **por empresa** (pivote), rol **root** global de plataforma. Dos switchers (empresa + rol).
 
-Ver [AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md) para documentación detallada.
-
----
-
-## 👥 Roles de Usuario
-
-| Rol | Permisos |
-|-----|----------|
-| **Platform Admin** | Gestión de toda la plataforma y empresas |
-| **Tenant Admin** | Gestión de usuarios y documentos de su empresa |
+| Rol | Alcance |
+|---|---|
+| **Platform Admin (root)** | Toda la plataforma y empresas |
+| **Admin de empresa** | Usuarios y documentos de su empresa |
 | **Supervisor** | Aprobación de vacaciones de su equipo |
-| **Employee** | Visualización de documentos y solicitud de vacaciones |
+| **Empleado** | Sus documentos y solicitudes de vacaciones |
+
+Detalle en [docs/AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md).
 
 ---
 
-## 🚀 Deploy a Producción (Docker Swarm)
+## ✍️ Firma digital legal (signer)
 
-El proyecto incluye CI/CD con GitHub Actions que despliega automáticamente a Docker Swarm.
+El `signer` es un **sidecar HTTP interno** (FastAPI) que:
+1. Normaliza el PDF a **PDF/A-2b** con Ghostscript.
+2. Lo firma con **pyHanko** (PAdES) + **sellado de tiempo (TSA)** usando el certificado único de plataforma (cifrado).
 
-### Secrets necesarios en GitHub:
+**Importante (diseño):** el backend le pasa al signer **rutas absolutas del filesystem** (`input_path`, `output_path`, `certificate_path`) que viven en `storage/app/{documents,certificates}`. Por eso, en producción, el servicio `signer` **monta el mismo volumen `storage_data`** que `app`/`horizon` en `/var/www/html/storage`, y no publica puerto (solo alcanzable en la red interna vía `http://signer:8000`).
 
-```
-# Conexión VPN
-VPN_HOST, VPN_PORT, VPN_USER, VPN_PASS, VPN_CERT
-
-# Conexión SSH al servidor
-SSH_HOST, SSH_PORT, SSH_USER, SSH_PASS
-
-# Frontend Vite
-VITE_REVERB_APP_KEY, VITE_REVERB_HOST
+Spike manual de diagnóstico:
+```bash
+docker compose run --rm signer python /opt/signer/spike_sign.py <pdf>
 ```
 
-### Trigger del deploy:
-- ✅ Automático en push a `main`
-- ✅ Manual desde GitHub Actions
+---
 
-Ver [docker-stack.yml](docker-stack.yml) para la configuración de Swarm.
+## 🚀 Deploy a producción (Docker Swarm)
+
+Producción corre en **Docker Swarm** (`/opt/miboleta` en el servidor) con imágenes publicadas en **GHCR**. El código NO se monta por bind-mount: va **horneado en la imagen** (por eso un `git pull` en el server no despliega nada — hay que reconstruir imagen).
+
+### Flujo automático (CI/CD)
+
+```
+push a main  →  workflow "Tests"  →  (si pasa)  →  workflow "Build & Deploy"
+                                                     ├─ build+push imagen app     (front+back)  → GHCR :latest
+                                                     ├─ build+push imagen signer                → GHCR -signer:latest
+                                                     └─ VPN → SSH al server:
+                                                          docker pull (app + signer)
+                                                          docker stack deploy -c docker-stack.yml
+                                                          artisan migrate --force
+                                                          artisan config:cache / route:cache / view:cache
+```
+
+Servicios del stack: `app`, `nginx`, `db`, `redis`, `horizon`, `reverb`, `adminer`, `signer`.
+
+### Secrets requeridos en GitHub
+
+```
+VPN_HOST, VPN_PORT, VPN_USER, VPN_PASS, VPN_CERT   # conexión VPN del runner
+SSH_HOST, SSH_PORT, SSH_USER, SSH_PASS             # SSH al servidor
+VITE_REVERB_APP_KEY, VITE_REVERB_HOST              # se hornean en el frontend en build time
+```
+
+### Deploy MANUAL desde tu Mac (`Makefile`) — plan B del CI
+
+Fallback para cuando el CI no despliega (típico: *build OK pero el paso de deploy falló por VPN/SSH*). Requiere el alias SSH `miboleta` configurado; **la VPN la pones tú** al correr `make`.
+
+| Comando | Qué hace |
+|---|---|
+| `make publish` | **Todo lo que se puede a mano:** build+push del signer (amd64) → copia `docker-stack.yml` → deploy en el server (pull imágenes + `stack deploy` + migrate + caches + estado) |
+| `make deploy` | Solo el lado servidor (las imágenes ya están en GHCR) |
+| `make nginx` | Copia `config/nginx.conf` al server y **recarga nginx sin rebuild** (con fallback a `service update --force`) |
+| `make signer-build` | Construye+sube solo la imagen del signer |
+| `make stack` | Copia solo el `docker-stack.yml` al server |
+| `make help` | Lista los targets |
+
+Gotchas que el Makefile ya resuelve:
+- **Mac arm64 vs server amd64:** la imagen del signer se construye con `--platform linux/amd64` (si no, no corre en el server).
+- **`.env.stack`** se carga con `set -a; . ./.env.stack` (nunca con `xargs`, o `REDIS_PASSWORD` queda vacío y tumba redis/horizon/reverb).
+- El server necesita el `docker-stack.yml` nuevo → se copia antes del deploy.
+
+> ⚠️ El deploy manual **no reconstruye el frontend** (el app image se deja al CI, porque el build del frontend necesita los secrets de Vite que no están en local). Cubre: desplegar la imagen del app que el CI ya subió + signer + migraciones + caches.
 
 ---
 
-## 📱 Diseño Responsive
+## 💾 Almacenamiento, volúmenes y persistencia
 
-La aplicación está optimizada para:
-- 📱 Móvil (< 640px)
-- 📱 Tablet (640px - 1024px)
-- 💻 Desktop (> 1024px)
+Los archivos subidos (logos, documentos, certificados) se guardan en el volumen **`storage_data`** (`/var/www/html/storage`), montado por `app`, `horizon`, `nginx` y `signer`. Discos de Laravel (`backend/config/filesystems.php`):
 
-Características responsive:
-- Sidebar colapsable en móvil
-- Títulos y subtítulos adaptativos
-- PDFViewer con zoom automático (50% en móvil)
-- Botones y controles compactos en móvil
-- Scroll horizontal para tablas
+| Disco | Ruta | Uso | Acceso |
+|---|---|---|---|
+| `public` | `storage/app/public` | logos y assets públicos | nginx `/storage` (alias directo) |
+| `documents` | `storage/app/documents` | boletas/documentos | privado (streaming por controlador) |
+| `certificates` | `storage/app/certificates` | certificado de firma | privado |
+
+**Persistencia:** reconstruir/redesplegar la imagen **NO borra** estos archivos — viven en el volumen, no en la imagen. La única forma de perderlos es **borrar/recrear el volumen** (`docker volume rm`, cambiar su nombre, o `docker stack rm` + prune). → Recomendado: **backup del volumen `storage_data`** (cron con `tar`/`restic`).
+
+**Cómo sirve nginx `/storage` (y un gotcha resuelto):** en `config/nginx.conf`, `/storage` usa un **`alias`** directo al volumen. Debe declararse con `location ^~ /storage { ... }`. Sin el `^~`, la `location` de estáticos por regex (`~* \.(jpg|png|...)$`) **gana en precedencia** e intercepta las imágenes bajo `/storage`, sirviéndolas desde el `root` equivocado → **404 en todos los logos**. Ver [Troubleshooting](#-troubleshooting).
+
+**Migración a dominio (IP → dominio):** las URLs de archivos **no se guardan en la BD** — se computan desde `APP_URL`. Para pasar de IP a dominio: cambiar `APP_URL=https://tudominio` en `config/.env`, `artisan config:cache`, y configurar `TrustProxies`. No requiere migrar datos.
 
 ---
 
-## 📚 Documentación Adicional
+## 🧭 Notas operativas (decisiones)
 
-| Documento | Descripción |
-|-----------|-------------|
-| [AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md) | Sistema de autenticación |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Guía de desarrollo |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Guía de deployment |
-| [TABLE_PAGINATION.md](TABLE_PAGINATION.md) | Sistema de paginación |
+- **MinIO / object storage:** evaluado y **descartado por ahora**. Los problemas de "no veo imágenes" eran de **nginx**, no de storage; la persistencia ya funciona en el volumen. Además, mover documentos/certificados a object storage **rompería el signer** (que firma por ruta absoluta del filesystem). Reconsiderar solo si se va a **multi-nodo** o se quieren **URLs firmadas**.
+- **Monitoreo (Beszel u otro):** opcional. El servidor está holgado (disco/RAM/CPU con mucho margen); útil solo por **alertas de caída/uptime y tendencias**, no por presión de recursos. Antes de instalar nada: limpiar imágenes colgantes (`docker image prune -f`, opcional en cron).
 
 ---
 
 ## 🛠️ Troubleshooting
 
-### Error: "Network Error" al hacer login
-- Verifica que Docker esté corriendo: `docker compose ps`
-- Revisa los logs: `npm run docker:logs`
+### Logos / imágenes de `/storage` dan 404 en producción
+Causa: precedencia de `location` en nginx (la regex de estáticos gana sobre `/storage`). Fix: `location ^~ /storage` en `config/nginx.conf`, luego aplicar sin rebuild:
+```bash
+make nginx     # copia config/nginx.conf al server + nginx -t + reload (con fallback a service update --force)
+```
+Verificar que el archivo exista en el volumen:
+```bash
+ssh miboleta 'docker exec $(docker ps -qf name=miboleta_app|head -1) ls -la /var/www/html/storage/app/public/tenants/logos/'
+```
 
-### Error: Puerto en uso
-- Mata procesos en el puerto: `lsof -i :5173` / `kill -9 <PID>`
-- O usa otro puerto: `npx vite --port 3000 --host`
+### El signer no firma / no responde
+```bash
+ssh miboleta 'docker stack services miboleta | grep signer'                         # debe estar N/N
+ssh miboleta 'docker exec $(docker ps -qf name=miboleta_app|head -1) sh -c "php artisan tinker --execute=\"echo file_get_contents(\\\"http://signer:8000/health\\\");\""'
+```
+Recordar que la firma real necesita el **certificado cargado en prod** (se sube por la UI → `storage/app/certificates`).
 
-### Móvil no conecta
-- Verifica que estés en la misma red WiFi
-- Ejecuta `npm run dev:mobile` para configurar la IP
-- Reinicia Docker: `docker compose restart`
+### El deploy del CI "pasa" pero no veo cambios
+Revisar el run: `gh run view <id> --log`. Si el build fue OK pero el deploy falló (VPN), usar `make deploy` (o `make publish`).
+
+### Dev: "Network Error" al login / puerto en uso / móvil no conecta
+- `docker compose ps` y `npm run docker:logs`
+- Puerto ocupado: `lsof -i :5173` → `kill -9 <PID>`
+- Móvil: misma red WiFi + `npm run dev:mobile` + `docker compose restart`
+
+---
+
+## 📚 Documentación adicional
+
+| Documento | Descripción |
+|---|---|
+| [docs/AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md) | Sistema de autenticación y roles |
+| [docs/CLEAN_ARCHITECTURE.md](docs/CLEAN_ARCHITECTURE.md) | Arquitectura del frontend |
+| [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) | Análisis de arquitectura |
+| [docs/CONSTANTS.md](docs/CONSTANTS.md) | Constantes compartidas |
+| [docs/COTIZACION_MODULO_VACACIONES.md](docs/COTIZACION_MODULO_VACACIONES.md) | Módulo de vacaciones |
+| [docs/sprintfix/MAPEO-CARGA-MASIVA.md](docs/sprintfix/MAPEO-CARGA-MASIVA.md) | Formato de carga masiva |
+| [signer/README.md](signer/README.md) | Sidecar de firma digital |
 
 ---
 
 ## 📄 Licencia
 
-Este proyecto es privado y confidencial.
-
-© 2024-2025 MiBoleta
+Proyecto privado y confidencial. © 2024–2026 MiBoleta
