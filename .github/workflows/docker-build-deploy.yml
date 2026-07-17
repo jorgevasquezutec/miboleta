@@ -10,6 +10,15 @@ on:
       - main
   workflow_dispatch:
 
+# Un solo despliegue a producción a la vez. `cancel-in-progress: false` a
+# propósito: NO interrumpir un deploy a mitad de `stack deploy`/`migrate`
+# (dejaría el stack a medio aplicar). Si llegan varios, se serializan y GitHub
+# conserva solo el pending más reciente (cancela los intermedios) -> el burst
+# converge al último estado, nunca en paralelo. Group constante = un target.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
