@@ -28,7 +28,7 @@ class RoleController extends Controller
      *             @OA\Property(property="data", type="array", @OA\Items(
      *                 @OA\Property(property="id", type="integer", example=2),
      *                 @OA\Property(property="name", type="string", example="admin"),
-     *                 @OA\Property(property="display_name", type="string", example="Administrador de Tenant")
+     *                 @OA\Property(property="display_name", type="string", example="Admin Empleados")
      *             ))
      *         )
      *     ),

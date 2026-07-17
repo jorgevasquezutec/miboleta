@@ -31,7 +31,7 @@ class RoleSeeder extends Seeder
             ],
             [
                 'name' => 'admin',
-                'display_name' => 'Administrador',
+                'display_name' => 'Admin Empleados',
                 'description' => 'Administrador con acceso completo dentro de su organización',
                 'guard_name' => 'web',
                 'permissions' => [
@@ -45,7 +45,7 @@ class RoleSeeder extends Seeder
             ],
             [
                 'name' => 'client',
-                'display_name' => 'Cliente',
+                'display_name' => 'Empleado',
                 'description' => 'Usuario final con permisos básicos',
                 'guard_name' => 'web',
                 'permissions' => [
@@ -57,7 +57,7 @@ class RoleSeeder extends Seeder
             ],
             [
                 'name' => 'aprobador',
-                'display_name' => 'Aprobador',
+                'display_name' => 'Aprobador Empleado',
                 'description' => 'Usuario con permisos para aprobar solicitudes de vacaciones dentro de su empresa',
                 'guard_name' => 'web',
                 'permissions' => [
@@ -71,7 +71,7 @@ class RoleSeeder extends Seeder
             ],
             [
                 'name' => 'admin_tenant',
-                'display_name' => 'Administrador de Empresa (Tenant)',
+                'display_name' => 'Admin Clientes',
                 'description' => 'Administrador de la empresa (tenant), con permisos superiores a Admin: gestiona usuarios (incluidos Admin y Aprobador), documentos, vacaciones, reportes y configuración de su empresa',
                 'guard_name' => 'web',
                 'permissions' => [

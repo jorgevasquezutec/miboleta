@@ -275,7 +275,7 @@ class UpdateUserRequest extends FormRequest
                     $tenantIdAttribute = preg_replace('/supervisor_id$/', 'tenant_id', $attribute);
                     $tenantId = $this->input($tenantIdAttribute);
                     if ($tenantId && !$this->supervisorRoleIsValid($supervisor, $tenantId)) {
-                        $fail('El jefe inmediato debe tener rol Administrador, Administrador de Empresa (Tenant) o Aprobador en esa empresa.');
+                        $fail('El jefe inmediato debe tener rol Admin Empleados, Admin Clientes o Aprobador Empleado en esa empresa.');
                     }
                 },
             ],

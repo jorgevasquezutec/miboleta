@@ -133,9 +133,9 @@ export function SupervisorSelector({
             aprobador: 'bg-amber-100 text-amber-800',
         };
         const labels: Record<string, string> = {
-            admin: 'Admin',
-            admin_tenant: 'Admin Tenant',
-            aprobador: 'Aprobador',
+            admin: 'Admin Empleados',
+            admin_tenant: 'Admin Clientes',
+            aprobador: 'Aprobador Empleado',
         };
         return (
             <Badge variant="outline" className={variants[role] || ''}>
@@ -279,7 +279,7 @@ export function SupervisorSelector({
                     <div className="border-t px-3 py-2 text-xs text-gray-500">
                         {tenantIds.length === 0
                             ? 'Selecciona al menos una organización para ver los supervisores disponibles'
-                            : 'Solo usuarios Administrador, Administrador de Empresa (Tenant) o Aprobador de las organizaciones seleccionadas'}
+                            : 'Solo usuarios Admin Empleados, Admin Clientes o Aprobador Empleado de las organizaciones seleccionadas'}
                     </div>
                 </PopoverContent>
             </Popover>
