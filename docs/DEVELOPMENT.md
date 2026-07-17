@@ -271,4 +271,4 @@ docker compose -f docker-compose.dev.yml up -d
 
 ---
 
-**¿Dudas?** Lee [QUICKSTART.md](QUICKSTART.md) o [SETUP.md](SETUP.md)
+**¿Dudas?** Lee el [README principal](../README.md)
