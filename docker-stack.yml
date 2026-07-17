@@ -136,6 +136,33 @@ services:
     depends_on:
       - db
 
+  # Sidecar de firma digital legal (Ghostscript + pyHanko). Imagen aparte,
+  # construida y publicada por el workflow Build & Deploy (Swarm no construye
+  # `build:`). No publica puerto: solo alcanzable desde miboleta_network vía
+  # http://signer:8000. Monta el MISMO volumen storage_data que app/horizon en
+  # /var/www/html/storage: el backend le pasa rutas absolutas (input/output PDF
+  # y certificado) que viven en storage/app/{documents,certificates}, así que
+  # ambos contenedores deben ver ese árbol en la misma ruta.
+  signer:
+    image: ghcr.io/jorgevasquezutec/miboleta-signer:${IMAGE_TAG:-latest}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+    working_dir: /var/www/html
+    command: ["uvicorn", "app:app", "--app-dir", "/opt/signer", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - storage_data:/var/www/html/storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - miboleta_network
+
 volumes:
   mysql_data:
     name: miboleta_swarm_mysql_data

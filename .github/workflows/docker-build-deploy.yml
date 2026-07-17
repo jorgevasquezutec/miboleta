@@ -72,6 +72,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Imagen aparte para el sidecar de firma legal (signer/). Swarm no puede
+      # construir `build:`, así que la publicamos aquí y el stack la referencia
+      # por `image:` (ghcr.io/<repo>-signer). Ver docker-stack.yml servicio signer.
+      - name: Extract metadata (signer)
+        id: meta-signer
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-signer
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+
+      - name: Build and push (signer)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./signer
+          push: true
+          tags: ${{ steps.meta-signer.outputs.tags }}
+          labels: ${{ steps.meta-signer.outputs.labels }}
+          cache-from: type=gha,scope=signer
+          cache-to: type=gha,mode=max,scope=signer
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -168,7 +191,8 @@ jobs:
           
           echo "=== Pulling latest image ==="
           docker pull ghcr.io/${{ github.repository }}:latest
-          
+          docker pull ghcr.io/${{ github.repository }}-signer:latest
+
           echo "=== Deploying stack ==="
           docker stack deploy -c docker-stack.yml miboleta --with-registry-auth
           
