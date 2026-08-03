@@ -440,9 +440,14 @@ class User extends Authenticatable
      * buildAllRequestsQuery y DocumentService::applyOptionalFilters — los
      * tres listados que antes repetían (mal) el mismo patrón.
      */
-    public function scopeMatchingFullName(Builder $query, string $search): Builder
+    public function scopeMatchingFullName(Builder $query, ?string $search): Builder
     {
-        $terms = preg_split('/\s+/', trim($search), -1, PREG_SPLIT_NO_EMPTY);
+        // $search es nullable a propósito: ConvertEmptyStringsToNull (activo
+        // por defecto en Laravel) convierte un `?search=` vacío de la query
+        // string en null, así que un call site que solo compruebe la
+        // presencia del parámetro nos entrega null y con la firma `string`
+        // esto era un TypeError 500 en vez de "no filtrar nada".
+        $terms = preg_split('/\s+/', trim($search ?? ''), -1, PREG_SPLIT_NO_EMPTY);
         if (empty($terms)) {
             return $query;
         }

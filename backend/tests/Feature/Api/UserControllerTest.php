@@ -68,6 +68,45 @@ class UserControllerTest extends TestCase
             ]);
     }
 
+    /**
+     * Regresión: UsersListPage manda siempre `search` y `status` en la query
+     * string (vacíos mientras no se filtre nada) y ConvertEmptyStringsToNull
+     * los convierte en null. index() usaba has('search'), que es true para
+     * una clave presente aunque valga null, y le pasaba ese null a
+     * User::scopeMatchingFullName (tipado string): 500 al abrir Gestión de
+     * Usuarios. Un filtro vacío significa "no filtrar", no un error.
+     */
+    public function test_index_ignores_empty_search_and_status_filters(): void
+    {
+        User::factory()->count(3)->create();
+
+        $sinFiltros = $this->actingAs($this->root)->getJson('/api/users');
+        $sinFiltros->assertStatus(200);
+
+        $response = $this->actingAs($this->root)
+            ->getJson('/api/users?page=1&per_page=10&search=&status=');
+
+        $response->assertStatus(200);
+        $this->assertSame($sinFiltros->json('meta.total'), $response->json('meta.total'));
+    }
+
+    /**
+     * Mismo patrón que el search vacío, sin llegar a 500: el default de
+     * get('per_page', 10) solo aplica cuando la clave falta, así que un
+     * `?per_page=` vacío (null tras ConvertEmptyStringsToNull) hacía
+     * paginate(null) y devolvía páginas de 15 (el perPage del modelo) en vez
+     * de las 10 que promete el controller.
+     */
+    public function test_index_falls_back_to_default_per_page_when_param_is_empty(): void
+    {
+        User::factory()->count(3)->create();
+
+        $response = $this->actingAs($this->root)->getJson('/api/users?per_page=');
+
+        $response->assertStatus(200);
+        $this->assertSame(10, $response->json('meta.per_page'));
+    }
+
     public function test_admin_can_list_tenant_users(): void
     {
         User::factory()->count(3)->create()->each(function ($user) {

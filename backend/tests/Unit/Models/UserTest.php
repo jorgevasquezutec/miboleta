@@ -185,4 +185,20 @@ class UserTest extends TestCase
         $this->assertCount(1, User::query()->matchingFullName('Solo')->get());
         $this->assertCount(0, User::query()->matchingFullName('Solo Apellido')->get());
     }
+
+    /**
+     * Regresión: `?search=` vacío llega como null (ConvertEmptyStringsToNull),
+     * y con la firma `string $search` el listado de usuarios devolvía 500
+     * ("Argument #2 ($search) must be of type string, null given"). Un search
+     * nulo o en blanco significa "no filtrar", nunca un error.
+     */
+    public function test_matching_full_name_ignores_null_or_blank_search(): void
+    {
+        User::factory()->create(['name' => 'Juan', 'last_name' => 'Pérez']);
+        User::factory()->create(['name' => 'Luis', 'last_name' => 'Ramos']);
+
+        $this->assertCount(2, User::query()->matchingFullName(null)->get());
+        $this->assertCount(2, User::query()->matchingFullName('')->get());
+        $this->assertCount(2, User::query()->matchingFullName('   ')->get());
+    }
 }

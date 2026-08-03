@@ -137,7 +137,13 @@ class UserController extends Controller
         // vía User::scopeMatchingFullName: antes 'name' y 'last_name' se
         // comparaban por separado, así que "Juan Pérez" no encontraba al
         // empleado con name=Juan, last_name=Pérez.
-        if ($request->has('search')) {
+        // filled() y no has(): el frontend manda siempre la clave `search`
+        // (vacía cuando no hay término), y ConvertEmptyStringsToNull la
+        // convierte en null. Con has() eso pasaba null al scope (500) y, para
+        // un search vacío, armaba `email LIKE '%%'`, un OR que anulaba el
+        // resto del where. Mismo criterio que el filled('status') de abajo y
+        // que el !empty($filters['search']) de los servicios.
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->matchingFullName($search)
@@ -151,8 +157,12 @@ class UserController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Paginación
-        $perPage = $request->get('per_page', 10);
+        // Paginación. filled() y no get('per_page', 10): el default de get()
+        // solo aplica cuando la clave FALTA, y un `?per_page=` vacío llega
+        // como null (ConvertEmptyStringsToNull), con lo que paginate(null)
+        // caía al perPage del modelo (15) en vez de al 10 que promete esta
+        // línea. Mismo criterio que search y status arriba.
+        $perPage = $request->filled('per_page') ? (int) $request->per_page : 10;
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         // B3: saldo de vacaciones de la página actual, en 2 queries totales
