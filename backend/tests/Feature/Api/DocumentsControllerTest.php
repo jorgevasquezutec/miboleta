@@ -173,6 +173,48 @@ class DocumentsControllerTest extends TestCase
         $this->assertCount(3, $data);
     }
 
+    /**
+     * Regresión: antes 'name' y 'last_name' del empleado se comparaban por
+     * separado contra el término completo, así que buscar "Juan Pérez" no
+     * encontraba el documento de un empleado con name=Juan, last_name=Pérez.
+     * Ver User::scopeMatchingFullName, reutilizado por
+     * DocumentService::applyOptionalFilters.
+     */
+    public function test_admin_can_filter_documents_by_employee_full_name_search(): void
+    {
+        $juanPerez = User::factory()
+            ->client()
+            ->withTenantRole($this->tenant, 'client', true)
+            ->create(['status' => 'active', 'name' => 'Juan', 'last_name' => 'Pérez']);
+
+        $luisRamos = User::factory()
+            ->client()
+            ->withTenantRole($this->tenant, 'client', true)
+            ->create(['status' => 'active', 'name' => 'Luis', 'last_name' => 'Ramos']);
+
+        $matchingDoc = Document::factory()->create([
+            'user_id' => $juanPerez->id,
+            'tenant_id' => $this->tenant->id,
+            'doc_type_id' => $this->docType->id,
+            'uploaded_by' => $this->admin->id,
+        ]);
+
+        Document::factory()->create([
+            'user_id' => $luisRamos->id,
+            'tenant_id' => $this->tenant->id,
+            'doc_type_id' => $this->docType->id,
+            'uploaded_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->getJson('/api/documents?search=' . urlencode('Juan Pérez'));
+
+        $response->assertStatus(200);
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($matchingDoc->id));
+        $this->assertCount(1, $ids);
+    }
+
     public function test_admin_can_delete_document(): void
     {
         $document = Document::factory()->create([

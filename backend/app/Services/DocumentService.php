@@ -326,13 +326,16 @@ class DocumentService
             $query->where('period', $filters['period']);
         }
 
+        // Búsqueda por número de documento o nombre completo del empleado.
+        // Nombre completo vía User::scopeMatchingFullName: antes 'name' y
+        // 'last_name' se comparaban por separado, así que "Juan Pérez" no
+        // encontraba al empleado con name=Juan, last_name=Pérez.
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('employee_document_number', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($uq) use ($search) {
-                        $uq->where('name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%");
+                        $uq->matchingFullName($search);
                     });
             });
         }

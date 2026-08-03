@@ -383,7 +383,12 @@ class AuditService
 
     public function logUserBatchCompleted(int $batchId, array $summary, ?int $userId = null, ?int $tenantId = null): ?AuditLog
     {
-        // Invocado desde ProcessBulkUserUpload (job): userId/tenantId explícitos.
+        // [OBS-CLIENTE 2026-08] Huérfano: su único invocador, el job
+        // ProcessBulkUserUpload, se eliminó por ser código muerto (nunca se
+        // despachaba; el pipeline vivo de carga masiva es Bus::batch +
+        // ProcessUserChunk). Se conserva el método -no se borra código sin
+        // pedido explícito- pero hoy no lo llama nadie; userId/tenantId
+        // quedan explícitos por si se retoma un flujo de "batch completado".
         return $this->log(
             action: AuditLog::ACTION_USER_BATCH_COMPLETED,
             entityType: 'UserBatch',
