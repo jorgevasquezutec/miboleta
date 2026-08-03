@@ -49,6 +49,23 @@ export const USER_ROLE_DISPLAY_LABELS = {
   admin_tenant: 'Admin Clientes',
 } as const;
 
+// Jerarquía RBAC de "quién puede asignar/administrar a quién" DENTRO de una
+// misma empresa. Espeja backend: UserService::MANAGEABLE_ROLES (fuente única
+// de verdad; ver también UserService::canManageUser — Decisión C1 del plan de
+// observaciones del cliente, 2026-07). root y admin_tenant NO aparecen como
+// target de nadie no-root; se resuelve aparte:
+//   - root: acceso total, no consulta este mapa.
+//   - admin_tenant como TARGET: intocable para cualquier no-root (rule 3 de
+//     canManageUser), sin importar el rol del actor.
+// Usado por:
+//   - TenantAssignmentCard.tsx (qué roles puede asignar el actor al crear/
+//     editar un usuario en una empresa).
+//   - UsersListPage.tsx (gating del botón Editar por fila: canEditTarget()).
+export const ASSIGNABLE_ROLES_BY_ACTOR: Record<string, string[]> = {
+  admin_tenant: [USER_ROLES.ADMIN, USER_ROLES.APROBADOR, USER_ROLES.CLIENT],
+  admin: [USER_ROLES.APROBADOR, USER_ROLES.CLIENT],
+};
+
 // Roles asignables POR EMPRESA en la carga masiva de usuarios (columna
 // "Rol en empresa {n}" del Excel). No existe un rol de nivel de fila: el rol
 // siempre vive en la empresa (user_tenant_roles). Debe coincidir EXACTAMENTE

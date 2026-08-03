@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\Role;
 use App\Models\User;
 use App\Http\Requests\Concerns\ResolvesActiveRole;
+use App\Services\UserService;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreUserRequest extends FormRequest
@@ -36,27 +37,15 @@ class StoreUserRequest extends FormRequest
 
     /**
      * Roles operativos que $creator puede asignar dentro de la empresa
-     * $tenantId, según el rol que el propio $creator tiene EN ESA empresa
-     * (jerarquía RBAC: root > admin_tenant > admin > aprobador/client).
-     * Root no tiene rol por empresa (es global), así que se resuelve aparte.
+     * $tenantId. Delega en UserService::assignableRoleNamesFor() — fuente
+     * única compartida con UpdateUserRequest (antes duplicado literal en
+     * ambos archivos).
      *
      * @return list<string> Nombres de rol permitidos (vacío si no puede asignar ninguno).
      */
     private function assignableRoleNamesFor(User $creator, int $tenantId): array
     {
-        if ($creator->isRoot()) {
-            return ['admin_tenant', 'admin', 'aprobador', 'client'];
-        }
-
-        if ($creator->hasRoleInTenant('admin_tenant', $tenantId)) {
-            return ['admin', 'aprobador', 'client'];
-        }
-
-        if ($creator->hasRoleInTenant('admin', $tenantId)) {
-            return ['aprobador', 'client'];
-        }
-
-        return [];
+        return UserService::assignableRoleNamesFor($creator, $tenantId);
     }
 
     /**
@@ -214,7 +203,10 @@ class StoreUserRequest extends FormRequest
                     }
                 },
             ],
-            'tenants_config.*.hire_date' => 'nullable|date',
+            // before_or_equal:today: sin este guard, un hire_date futuro (dato
+            // mal tipeado) produce años de servicio negativos en
+            // VacationBalanceService (ver guard defensivo ahí también).
+            'tenants_config.*.hire_date' => 'nullable|date|before_or_equal:today',
             'tenants_config.*.vacation_balance_initial' => 'nullable|numeric|min:0',
             'tenants_config.*.supervisor_id' => [
                 'nullable',
@@ -320,6 +312,7 @@ class StoreUserRequest extends FormRequest
             'tenants_config.*.tenant_id.exists' => 'Una de las empresas configuradas no existe',
             'tenants_config.*.role_ids.*.exists' => 'Uno de los roles seleccionados no existe',
             'tenants_config.*.hire_date.date' => 'La fecha de inicio laboral no es válida',
+            'tenants_config.*.hire_date.before_or_equal' => 'La fecha de inicio laboral no puede ser una fecha futura',
             'tenants_config.*.vacation_balance_initial.numeric' => 'El saldo inicial de vacaciones debe ser numérico',
             'tenants_config.*.vacation_balance_initial.min' => 'El saldo inicial de vacaciones no puede ser negativo',
             'status.in' => 'El estado debe ser: active, inactive o pending',

@@ -207,7 +207,19 @@ class TenantService
             throw new UnauthorizedAccessException('No autorizado para ver usuarios de este tenant');
         }
 
-        return $tenant->users()->with('roles')->get();
+        $query = $tenant->users()->with('roles');
+
+        // Decisión C1 (misma exclusión que UserController::index): para
+        // no-root, ocultar la fila propia y cualquier usuario con rol
+        // admin_tenant en CUALQUIER empresa. Root ve todo.
+        if (!$currentUser->isRoot()) {
+            $query->where('users.id', '!=', $currentUser->id)
+                ->whereDoesntHave('tenantRoles', function ($q) {
+                    $q->whereHas('role', fn ($r) => $r->where('name', 'admin_tenant'));
+                });
+        }
+
+        return $query->get();
     }
 
     /**
@@ -367,8 +379,9 @@ class TenantService
      */
     public function transformTenantForList(Tenant $tenant): array
     {
-        $usersCount = $tenant->users()->count();
-        $initialEmployeeCount = (int) ($tenant->initial_employee_count ?? 0);
+        // Contador de empleados (RP1-C): fórmula única en Tenant::employeeCounts(),
+        // compartida con TenantResource (store/update) — ver docblock ahí.
+        $employeeCounts = $tenant->employeeCounts();
 
         return [
             'id' => $tenant->id,
@@ -380,11 +393,10 @@ class TenantService
             'logo_path' => $tenant->logo_path,
             'logo_url' => $tenant->logo_url,
             'status' => $tenant->status,
-            'users_count' => $usersCount,
-            // Contador de empleados (RP1-C): ver UserBatch::syncInitialEmployeeCounts
-            'initial_employee_count' => $initialEmployeeCount,
-            'current_employee_count' => $usersCount,
-            'subsequent_employee_count' => max(0, $usersCount - $initialEmployeeCount),
+            'users_count' => $employeeCounts['current_employee_count'],
+            'initial_employee_count' => $employeeCounts['initial_employee_count'],
+            'current_employee_count' => $employeeCounts['current_employee_count'],
+            'subsequent_employee_count' => $employeeCounts['subsequent_employee_count'],
             // Régimen laboral para el cómputo de vacaciones (RP2-A)
             'labor_regime' => $tenant->labor_regime,
             // Configuración SMTP propia de la empresa (RP2-B). mail_password

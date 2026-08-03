@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -171,5 +172,102 @@ class PasswordControllerTest extends TestCase
         ]);
 
         $response->assertStatus(401);
+    }
+
+    // ── adminResetPassword: hallazgo de seguridad fuera del pedido del
+    // cliente (hermano de C1). Antes, este endpoint solo chequeaba la
+    // ability 'users.reset_password' (root, admin_tenant) sin mirar el
+    // usuario OBJETIVO en ningún punto: cualquier admin_tenant podía
+    // resetear la contraseña de CUALQUIER usuario por id arbitrario,
+    // incluido otro admin_tenant o un root — toma de control de cuenta, no
+    // solo fuga de datos. Ahora aplica UserService::canManageUser(), mismo
+    // patrón que UserController::update(). ──
+
+    public function test_root_can_reset_password_of_any_user(): void
+    {
+        $root = User::factory()->root()->create(['status' => 'active']);
+
+        $response = $this->actingAs($root)->postJson("/api/users/{$this->user->id}/reset-password", [
+            'action' => 'force_change_only',
+        ]);
+
+        $response->assertStatus(200);
+    }
+
+    public function test_admin_tenant_can_reset_password_of_client_in_own_tenant(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        $adminTenant = User::factory()->withTenantRole($tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $client = User::factory()->withTenantRole($tenant, 'client', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson("/api/users/{$client->id}/reset-password", [
+            'action' => 'force_change_only',
+        ]);
+
+        $response->assertStatus(200);
+    }
+
+    public function test_admin_tenant_cannot_reset_password_of_user_in_tenant_it_does_not_manage(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+        $adminTenant = User::factory()->withTenantRole($tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $outsider = User::factory()->withTenantRole($otherTenant, 'client', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson("/api/users/{$outsider->id}/reset-password", [
+            'action' => 'force_change_only',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_cannot_reset_password_of_another_admin_tenant(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        $adminTenant = User::factory()->withTenantRole($tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $peerAdminTenant = User::factory()->withTenantRole($tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson("/api/users/{$peerAdminTenant->id}/reset-password", [
+            'action' => 'force_change_only',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_cannot_reset_password_of_root(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        $adminTenant = User::factory()->withTenantRole($tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $root = User::factory()->root()->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson("/api/users/{$root->id}/reset-password", [
+            'action' => 'force_change_only',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_cannot_reset_own_password_via_admin_endpoint(): void
+    {
+        // Decisión: sin excepción de self-reset. La cuenta propia se
+        // administra desde /profile -> POST /password/change (requiere la
+        // contraseña actual); este endpoint no tiene un caso de uso
+        // legítimo sobre uno mismo.
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        $adminTenant = User::factory()->withTenantRole($tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson("/api/users/{$adminTenant->id}/reset-password", [
+            'action' => 'force_change_only',
+        ]);
+
+        $response->assertStatus(403);
     }
 }

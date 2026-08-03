@@ -11,8 +11,10 @@ use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserSummaryResource;
 use App\Models\User;
+use App\Services\ActiveTenantResolver;
 use App\Services\AuditService;
 use App\Services\UserService;
+use App\Services\VacationBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -33,7 +35,9 @@ class UserController extends Controller
 
     public function __construct(
         protected UserService $userService,
-        protected AuditService $auditService
+        protected AuditService $auditService,
+        protected ActiveTenantResolver $activeTenantResolver,
+        protected VacationBalanceService $vacationBalanceService
     ) {
     }
 
@@ -58,6 +62,15 @@ class UserController extends Controller
     {
         $user = $request->user();
 
+        // E1 [seguridad]: este endpoint no llamaba a authorize() en ningún
+        // punto — cualquier autenticado (incluido un 'client') podía listar
+        // usuarios vía API; la ability 'users.view_list' solo se aplicaba en
+        // el frontend (ProtectedRoute). Es un endpoint de listado sin un
+        // recurso puntual del cual tomar el tenant, así que corresponde
+        // ActiveTenantResolver (empresa activa del switcher / query
+        // ?tenant_id para root), no un tenant de recurso.
+        $this->authorize('users.view_list', $this->activeTenantResolver->resolve($request, $user));
+
         // Query base
         $query = User::with(['roles', 'tenants', 'tenantRoles.role']);
 
@@ -70,6 +83,29 @@ class UserController extends Controller
             });
         }
 
+        // C1: para no-root, ocultar del listado la fila propia (la gestión de
+        // la cuenta propia va por /profile, no por Gestión de Usuarios) y
+        // cualquier usuario con rol admin_tenant en CUALQUIER empresa (solo
+        // root administra cuentas admin_tenant — ver
+        // UserService::canManageUser). Root no tiene este filtro: ve el
+        // catálogo completo, incluidos los admin_tenant y su propia fila si
+        // aplicara.
+        if (!$user->isRoot()) {
+            $query->where('users.id', '!=', $user->id)
+                ->whereDoesntHave('tenantRoles', function ($q) {
+                    $q->whereHas('role', fn ($r) => $r->where('name', 'admin_tenant'));
+                });
+        }
+
+        // B3: empresa activa efectiva de este listado, para el saldo de
+        // vacaciones en lote de más abajo — captura EXACTAMENTE el mismo
+        // tenant que ya decide el whereHas de cada rama (no una resolución
+        // nueva), para que "empresa que scopea el listado" y "empresa cuyo
+        // saldo se muestra" nunca diverjan. null cuando ninguna rama estrecha
+        // a una sola empresa (root en modo "todas las empresas"): ahí el
+        // saldo por usuario es ambiguo (ver VacationBalanceService).
+        $activeTenantId = null;
+
         if ($request->filled('tenant_id')) {
             // Override explícito a una empresa concreta. Lo usan el dropdown de
             // root y SupervisorSelector, que consulta ?tenant_id por CADA empresa
@@ -77,6 +113,7 @@ class UserController extends Controller
             // param tiene que ganarle al header en vez de intersecarse con él.
             // Para un no-root sigue acotado por el whereHas de arriba, o sea no
             // puede alcanzar una empresa ajena.
+            $activeTenantId = (int) $request->tenant_id;
             $query->whereHas('tenants', function ($q) use ($request) {
                 $q->where('tenants.id', $request->tenant_id);
             });
@@ -89,18 +126,21 @@ class UserController extends Controller
             // Sin header (cliente antiguo) no se estrecha nada: queda el techo.
             $filterIds = $request->input('_tenant_filter_ids');
             if (is_array($filterIds) && !empty($filterIds)) {
+                $activeTenantId = (int) $filterIds[0];
                 $query->whereHas('tenants', function ($q) use ($filterIds) {
                     $q->whereIn('tenants.id', $filterIds);
                 });
             }
         }
 
-        // Búsqueda por nombre, email o documento
+        // Búsqueda por nombre completo, email o documento. Nombre completo
+        // vía User::scopeMatchingFullName: antes 'name' y 'last_name' se
+        // comparaban por separado, así que "Juan Pérez" no encontraba al
+        // empleado con name=Juan, last_name=Pérez.
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
+                $q->matchingFullName($search)
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('document_text', 'like', "%{$search}%");
             });
@@ -115,8 +155,18 @@ class UserController extends Controller
         $perPage = $request->get('per_page', 10);
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
+        // B3: saldo de vacaciones de la página actual, en 2 queries totales
+        // (ver VacationBalanceService::getBalancesForUsers) — sin importar
+        // per_page. Solo cuando hay una empresa activa inequívoca; en modo
+        // "todas las empresas" (root) no se calcula: cada usuario listado
+        // podría pertenecer a empresas distintas con hire_date/saldo propios,
+        // y sumarlos no tendría significado legal (ver SPEC-VACACIONES v2).
+        $vacationBalances = $activeTenantId
+            ? $this->vacationBalanceService->getBalancesForUsers($users->getCollection(), $activeTenantId)
+            : [];
+
         return response()->json([
-            'data' => $users->map(function ($u) use ($user) {
+            'data' => $users->map(function ($u) use ($user, $vacationBalances) {
                 // 🔒 SECURITY: Filter tenants to only show those the current admin has access to
                 $visibleTenants = $u->tenants;
 
@@ -181,6 +231,16 @@ class UserController extends Controller
                             'role' => \App\Models\User::highestPriorityRole($tenantRoleNames),
                         ];
                     })->values(),  // ✅ Reset array keys after filter
+                    // B3: los 4 conceptos del cliente (Pendientes/Gozadas/
+                    // Truncas/Saldo) para la empresa activa de este listado.
+                    // null cuando no hay una única empresa activa (ver arriba).
+                    'vacation_balance' => isset($vacationBalances[$u->id]) ? [
+                        'tenant_id' => $vacationBalances[$u->id]['tenant_id'],
+                        'pending' => $vacationBalances[$u->id]['pending'],
+                        'taken' => $vacationBalances[$u->id]['taken'],
+                        'truncated' => $vacationBalances[$u->id]['truncated'],
+                        'balance' => $vacationBalances[$u->id]['balance'],
+                    ] : null,
                     'created_at' => $u->created_at,
                 ];
             }),
@@ -218,9 +278,12 @@ class UserController extends Controller
     {
         $user = User::with(['roles', 'tenants', 'tenantRoles.role'])->findOrFail($id);
 
-        // Verificar acceso
+        // Verificar acceso. Excepción de solo-lectura: aunque canManageUser()
+        // bloquea la auto-administración (ver Decisión C1), el propio detalle
+        // debe seguir siendo visible para no romper deep-links al perfil
+        // propio (p. ej. desde notificaciones o el historial de auditoría).
         $currentUser = $request->user();
-        if (!$this->userService->canAccessUser($currentUser, $user)) {
+        if (!$this->userService->canManageUser($currentUser, $user) && $currentUser->id !== $user->id) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
@@ -268,9 +331,12 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        // Verificar acceso
+        // Verificar acceso (Decisión C1: jerarquía de roles, no solo
+        // solapamiento de tenant — ver UserService::canManageUser). A
+        // diferencia de show(), aquí NO hay excepción de solo-lectura: nadie
+        // se edita a sí mismo desde Gestión de Usuarios.
         $currentUser = $request->user();
-        if (!$this->userService->canAccessUser($currentUser, $user)) {
+        if (!$this->userService->canManageUser($currentUser, $user)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
@@ -330,7 +396,9 @@ class UserController extends Controller
         if ($currentUser->id === $user->id) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
-        if (!$this->userService->canAccessUser($currentUser, $user)) {
+        // Decisión C1: jerarquía de roles (ver UserService::canManageUser),
+        // no solo solapamiento de tenant.
+        if (!$this->userService->canManageUser($currentUser, $user)) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
 
@@ -366,9 +434,12 @@ class UserController extends Controller
         if ($id) {
             $user = User::findOrFail($id);
 
-            // Verificar acceso
+            // Verificar acceso. Misma excepción de solo-lectura que show():
+            // este endpoint alimenta la sub-sección "Subordinados" del
+            // detalle de usuario, así que quien puede ver el detalle (propio
+            // o de alguien que administra) también debe poder ver esto.
             $currentUser = $request->user();
-            if (!$this->userService->canAccessUser($currentUser, $user)) {
+            if (!$this->userService->canManageUser($currentUser, $user) && $currentUser->id !== $user->id) {
                 return response()->json(['message' => 'No autorizado'], 403);
             }
         } else {

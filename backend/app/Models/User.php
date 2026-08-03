@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -419,5 +420,40 @@ class User extends Authenticatable
     public function getFullNameAttribute(): string
     {
         return trim($this->name . ' ' . $this->last_name);
+    }
+
+    /**
+     * Filtra por coincidencia de NOMBRE COMPLETO: cada palabra de $search
+     * debe aparecer en `name` o en `last_name` (no necesariamente en la
+     * misma columna), así "Juan Pérez" encuentra a un usuario con
+     * name=Juan, last_name=Pérez aunque ninguna columna por separado
+     * contenga la cadena completa (el bug que este scope corrige: antes se
+     * comparaba cada campo contra el término completo).
+     *
+     * Portable en sqlite (tests) y MySQL (producción) a propósito: solo usa
+     * LIKE/AND/OR de la query builder, sin CONCAT (en MySQL, CONCAT con un
+     * `last_name` NULL devuelve NULL y anularía el match) ni el operador
+     * `||` (concatenación en sqlite, pero no en MySQL salvo con
+     * PIPES_AS_CONCAT, que no es el modo por defecto).
+     *
+     * Reutilizado desde UserController::index, VacationService::
+     * buildAllRequestsQuery y DocumentService::applyOptionalFilters — los
+     * tres listados que antes repetían (mal) el mismo patrón.
+     */
+    public function scopeMatchingFullName(Builder $query, string $search): Builder
+    {
+        $terms = preg_split('/\s+/', trim($search), -1, PREG_SPLIT_NO_EMPTY);
+        if (empty($terms)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($terms) {
+            foreach ($terms as $term) {
+                $q->where(function (Builder $termQuery) use ($term) {
+                    $termQuery->where('name', 'like', "%{$term}%")
+                        ->orWhere('last_name', 'like', "%{$term}%");
+                });
+            }
+        });
     }
 }

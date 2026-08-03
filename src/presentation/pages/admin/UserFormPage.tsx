@@ -3,6 +3,8 @@ import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { userRepository, roleRepository } from '@/infrastructure/persistence/repositories';
 import { useCan } from '@/presentation/hooks/useCan';
+import { useAuthStore } from '@/presentation/stores/authStore';
+import { canEditTarget } from '@/presentation/utils/userPermissions';
 import { Button } from '@/presentation/components/ui/button';
 import {
     PersonalInfoCard,
@@ -10,9 +12,9 @@ import {
     TenantAssignmentCard,
 } from '@/presentation/components/features/users';
 import { EMPTY_TENANT_EXTRA, TenantExtra } from '@/presentation/components/features/users/TenantAssignmentCard';
-import { ArrowLeft, Save, Loader2, UserPlus, UserCircle } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, UserPlus, UserCircle, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
-import { TenantAssociation } from '@/core/domain/entities/User';
+import { TenantAssociation, User } from '@/core/domain/entities/User';
 import { Role } from '@/core/domain/entities';
 
 interface FormData {
@@ -62,6 +64,9 @@ export function UserFormPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [formData, setFormData] = useState<FormData>(initialFormData);
+    // Usuario OBJETIVO tal como vino del backend, conservado (además de
+    // volcarlo a formData) para poder evaluar canEditTarget() abajo.
+    const [targetUser, setTargetUser] = useState<User | null>(null);
 
     // Catálogo de roles (para el multi-select por empresa)
     const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
@@ -96,6 +101,7 @@ export function UserFormPage() {
         try {
             const user = await userRepository.findById(userId);
             if (user) {
+                setTargetUser(user);
                 setFormData({
                     name: user.name || '',
                     last_name: user.last_name || '',
@@ -335,12 +341,45 @@ export function UserFormPage() {
   const canChangeRole = useCan('users.create_any_role');
     const nonRootRoles = availableRoles.filter(r => r.name !== 'root');
 
+    // La ruta "/users/:id/edit" solo protege por ability ('users.update'), es
+    // decir que el actor puede editar EN GENERAL, no que pueda editar a ESTE
+    // usuario objetivo. Sin este chequeo, p.ej. un admin que navega
+    // directamente a la URL de edición de un admin_tenant ve el formulario
+    // cargado y recién al guardar recibe el 403 del backend (mismo patrón
+    // "botón/pantalla visible -> 403" que UsersListPage/UserDetailPage ya
+    // resuelven con canEditTarget). Solo aplica al editar: en alta (isEditing
+    // = false) no hay usuario objetivo que evaluar.
+    const { user: currentUser, currentTenant, currentRole } = useAuthStore();
+    const canManageTargetUser = !isEditing || (
+        !!targetUser && canEditTarget(targetUser, currentUser?.id, currentRole, currentTenant?.id)
+    );
+
     if (isLoading) {
         return (
             <div className="container mx-auto py-6 flex items-center justify-center min-h-[400px]">
                 <div className="text-center">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                     <p className="mt-2 text-gray-500">Cargando usuario...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!canManageTargetUser) {
+        return (
+            <div className="container mx-auto py-6 max-w-3xl">
+                <div className="mb-6">
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/users')}>
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Volver a Usuarios
+                    </Button>
+                </div>
+                <div className="flex flex-col items-center justify-center text-center py-16 border rounded-lg bg-gray-50">
+                    <ShieldAlert className="h-10 w-10 text-amber-500 mb-3" />
+                    <h2 className="text-lg font-semibold text-gray-900">No puedes editar a este usuario</h2>
+                    <p className="text-gray-500 mt-1 max-w-md">
+                        Tu rol no tiene permisos para administrar a este usuario en la empresa activa.
+                    </p>
                 </div>
             </div>
         );

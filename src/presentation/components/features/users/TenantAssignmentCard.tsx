@@ -16,23 +16,28 @@ import { Building2 } from 'lucide-react';
 import { TenantAssociation } from '@/core/domain/entities/User';
 import { Role } from '@/core/domain/entities';
 import { useAuthStore } from '@/presentation/stores/authStore';
+import { ASSIGNABLE_ROLES_BY_ACTOR } from '@/shared/constants';
 
 /**
  * Roles que un usuario autenticado con los roles `actorRoleNames` (los que
  * tiene EN LA EMPRESA que se está configurando, no su rol global) puede
  * asignar a otro usuario en esa empresa. Espeja la misma jerarquía RBAC que
- * StoreUserRequest/UpdateUserRequest en el backend (ítems 29/30):
+ * UserService::MANAGEABLE_ROLES/assignableRoleNamesFor en el backend, vía
+ * ASSIGNABLE_ROLES_BY_ACTOR (fuente única compartida con UsersListPage):
  * - admin_tenant: puede asignar admin, aprobador, client (no admin_tenant ni root).
  * - admin: puede asignar aprobador, client (no admin ni admin_tenant).
  * - cualquier otro caso (o ninguno): no puede asignar roles operativos aquí
  *   (no debería ocurrir: solo root/admin/admin_tenant llegan a este formulario).
  */
 function assignableRoleNamesFor(actorRoleNames: string[]): string[] {
-    if (actorRoleNames.includes('admin_tenant')) {
-        return ['admin', 'aprobador', 'client'];
-    }
-    if (actorRoleNames.includes('admin')) {
-        return ['aprobador', 'client'];
+    // Recorre las claves del mapa EN SU ORDEN DE DECLARACIÓN (admin_tenant
+    // antes que admin), no el de actorRoleNames: preserva la precedencia de
+    // la jerarquía RBAC aunque un usuario llegue a tener varios roles en la
+    // misma empresa.
+    for (const actorRole of Object.keys(ASSIGNABLE_ROLES_BY_ACTOR)) {
+        if (actorRoleNames.includes(actorRole)) {
+            return ASSIGNABLE_ROLES_BY_ACTOR[actorRole];
+        }
     }
     return [];
 }

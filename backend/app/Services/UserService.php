@@ -29,6 +29,53 @@ class UserService
     protected const ROOT_ROLE_ID = 1;
 
     /**
+     * Jerarquía RBAC de "quién puede asignar/administrar a quién" DENTRO de
+     * una misma empresa: rol del actor => roles operativos que puede asignar
+     * o administrar. Root no aparece como clave: se resuelve aparte (puede
+     * asignar/administrar cualquier rol operativo) porque no tiene rol por
+     * empresa. 'client' y 'aprobador' tampoco aparecen: no administran a
+     * nadie.
+     *
+     * Fuente única de verdad para:
+     *  - canManageUser() (ver abajo — Decisión C1 del plan de observaciones
+     *    del cliente 2026-07).
+     *  - assignableRoleNamesFor() (usado por StoreUserRequest y
+     *    UpdateUserRequest; antes duplicado literal en ambos).
+     */
+    public const MANAGEABLE_ROLES = [
+        'admin_tenant' => ['admin', 'aprobador', 'client'],
+        'admin' => ['aprobador', 'client'],
+    ];
+
+    /**
+     * Roles operativos que $actor puede asignar a otro usuario dentro de la
+     * empresa $tenantId, según el rol que el propio $actor tiene EN ESA
+     * empresa (jerarquía RBAC: root > admin_tenant > admin > aprobador/
+     * client). Root no tiene rol por empresa (es global), así que se
+     * resuelve aparte.
+     *
+     * Fuente única para StoreUserRequest::assignableRoleNamesFor() y
+     * UpdateUserRequest::assignableRoleNamesFor() (antes duplicado literal
+     * en ambos archivos).
+     *
+     * @return list<string> Nombres de rol permitidos (vacío si no puede asignar ninguno).
+     */
+    public static function assignableRoleNamesFor(User $actor, int $tenantId): array
+    {
+        if ($actor->isRoot()) {
+            return ['admin_tenant', 'admin', 'aprobador', 'client'];
+        }
+
+        foreach (self::MANAGEABLE_ROLES as $actorRole => $allowedRoles) {
+            if ($actor->hasRoleInTenant($actorRole, $tenantId)) {
+                return $allowedRoles;
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Create a new user with all related data.
      *
      * @param array $data Validated user data
@@ -680,21 +727,70 @@ class UserService
     }
 
     /**
-     * Check if current user can access target user.
+     * Regla centralizada de "quién puede ADMINISTRAR (editar, resetear
+     * contraseña, eliminar) a quién" desde Gestión de Usuarios. Reemplaza a
+     * la vieja canAccessUser(), que solo miraba solapamiento de tenant sin
+     * ninguna jerarquía de rol — permitía, p. ej., que un admin_tenant
+     * editara a otro admin_tenant o a sí mismo (Decisión C1 del plan de
+     * observaciones del cliente, 2026-07).
      *
-     * @param User $currentUser
-     * @param User $targetUser
+     * Reglas, en orden:
+     * 1. root administra a cualquiera.
+     * 2. nadie se administra a sí mismo desde esta pantalla (el perfil
+     *    propio va por /profile). Ver excepción de solo-lectura que aplican
+     *    los callers de show()/subordinates() (canManageUser() || self).
+     * 3. nadie no-root puede administrar a otro root ni a un usuario con rol
+     *    admin_tenant en CUALQUIER empresa: editar users.* (email,
+     *    password, estado) tiene efecto global, no acotado a una empresa.
+     * 4. si no, hace falta una empresa compartida T donde el rol de $actor
+     *    en T sea una clave de MANAGEABLE_ROLES y el rol de $target en T
+     *    esté en el conjunto que ese rol puede administrar.
+     *
+     * @param User $actor
+     * @param User $target
      * @return bool
      */
-    public function canAccessUser(User $currentUser, User $targetUser): bool
+    public function canManageUser(User $actor, User $target): bool
     {
-        if ($currentUser->isRoot()) {
+        if ($actor->isRoot()) {
             return true;
         }
 
-        // Check if they share at least one tenant
-        return $currentUser->tenants->pluck('id')
-            ->intersect($targetUser->tenants->pluck('id'))
-            ->count() > 0;
+        if ($actor->id === $target->id) {
+            return false;
+        }
+
+        if ($target->isRoot() || $this->hasRoleInAnyTenant($target, 'admin_tenant')) {
+            return false;
+        }
+
+        foreach ($actor->tenants as $tenant) {
+            $allowedTargetRoles = self::MANAGEABLE_ROLES[User::roleForTenant($actor, $tenant->id)] ?? null;
+
+            if ($allowedTargetRoles === null) {
+                continue;
+            }
+
+            $targetRole = User::roleForTenant($target, $tenant->id);
+            if ($targetRole !== null && in_array($targetRole, $allowedTargetRoles, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿$user tiene el rol $roleName en AL MENOS UNA empresa? Usado por
+     * canManageUser() para blindar a los admin_tenant (regla 3): un
+     * admin_tenant de la empresa A sigue siendo intocable para un actor
+     * no-root aunque lo comparta con él en una empresa B con un rol
+     * distinto.
+     */
+    private function hasRoleInAnyTenant(User $user, string $roleName): bool
+    {
+        return $user->tenantRoles()
+            ->whereHas('role', fn ($q) => $q->where('name', $roleName))
+            ->exists();
     }
 }
