@@ -111,13 +111,17 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
             ? getDateAdjustedForTimezone(initialDateTo)
             : getDateAdjustedForTimezone(initialDateFrom)
     })
+    // Usa getDateAdjustedForTimezone (no `new Date(string)` directo) por la
+    // misma razón que `range` arriba: si initialCompareFrom/To llega como
+    // string `YYYY-MM-DD`, `new Date(string)` lo interpreta en UTC y en
+    // zonas detrás de UTC (Perú, UTC-5) retrocede un día.
     const [rangeCompare, setRangeCompare] = useState<DateRange | undefined>(
         initialCompareFrom
             ? {
-                from: new Date(new Date(initialCompareFrom).setHours(0, 0, 0, 0)),
+                from: getDateAdjustedForTimezone(initialCompareFrom),
                 to: initialCompareTo
-                    ? new Date(new Date(initialCompareTo).setHours(0, 0, 0, 0))
-                    : new Date(new Date(initialCompareFrom).setHours(0, 0, 0, 0))
+                    ? getDateAdjustedForTimezone(initialCompareTo)
+                    : getDateAdjustedForTimezone(initialCompareFrom)
             }
             : undefined
     )

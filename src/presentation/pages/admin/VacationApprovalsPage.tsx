@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { format, parse } from "date-fns";
+import { format, parse, parseISO } from "date-fns";
 import {
     ClipboardCheck,
     Loader2,
@@ -128,7 +128,11 @@ export function VacationApprovalsPage() {
     // Filter pending approvals by date range
     const filteredApprovals = pendingApprovals.filter((request) => {
         if (!filters.date_from) return true;
-        const requestDate = new Date(request.startDate);
+        // request.startDate es `YYYY-MM-DD` (solo fecha); parseISO lo
+        // interpreta en zona local igual que `parse` de más abajo, evitando
+        // el desfase de un día que introducía `new Date(string)` en zonas
+        // detrás de UTC (Perú, UTC-5) al comparar contra fromDate/toDate.
+        const requestDate = parseISO(request.startDate);
         const fromDate = parse(filters.date_from, 'yyyy-MM-dd', new Date());
         const toDate = filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined;
 

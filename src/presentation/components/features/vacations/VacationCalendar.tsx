@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card';
@@ -83,8 +84,12 @@ export function VacationCalendar({ vacations, isLoading }: VacationCalendarProps
     // Get vacations for a specific date
     const getVacationsForDate = (date: Date) => {
         return vacations.filter(vacation => {
-            const startDate = new Date(vacation.startDate);
-            const endDate = new Date(vacation.endDate);
+            // vacation.startDate/endDate son `YYYY-MM-DD` (solo fecha).
+            // `parseISO` los interpreta en la zona LOCAL en vez de UTC, a
+            // diferencia de `new Date(...)`, que en zonas detrás de UTC
+            // (Perú, UTC-5) los retrocedía un día y desalineaba el calendario.
+            const startDate = parseISO(vacation.startDate);
+            const endDate = parseISO(vacation.endDate);
 
             // Normalize dates to compare only date part
             startDate.setHours(0, 0, 0, 0);

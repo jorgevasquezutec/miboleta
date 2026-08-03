@@ -1,6 +1,9 @@
+import { parseISO, isValid } from "date-fns";
+
 /**
  * Formatea una fecha a formato local peruano
- * @param dateString - Fecha en formato ISO string
+ * @param dateString - Fecha en formato ISO string: solo fecha (`YYYY-MM-DD`)
+ *   o timestamp completo con hora/zona (ej. `2026-07-16T14:30:00Z`)
  * @param includeTime - Si incluir hora y minutos
  * @returns Fecha formateada
  */
@@ -15,7 +18,16 @@ export function formatDate(
 
   const { includeTime = false, locale = "es-PE" } = options || {};
 
-  return new Date(dateString).toLocaleDateString(locale, {
+  // `parseISO` (a diferencia de `new Date(...)`) interpreta una fecha sin
+  // componente horario (`YYYY-MM-DD`) como medianoche en la zona LOCAL, no
+  // en UTC. `new Date('2026-07-16')` en cambio la trata como UTC, y al
+  // mostrarla en una zona detrás de UTC (Perú, UTC-5) retrocede un día.
+  // Para timestamps completos con hora y offset/"Z" el resultado es el
+  // mismo que antes: se convierten correctamente a la hora local.
+  const date = parseISO(dateString);
+  if (!isValid(date)) return "-";
+
+  return date.toLocaleDateString(locale, {
     day: "2-digit",
     month: includeTime ? "2-digit" : "short",
     year: "numeric",
