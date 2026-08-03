@@ -35,6 +35,7 @@ import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload } from
 import { toast } from "sonner";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { canEditTarget } from "@/presentation/utils/userPermissions";
+import { formatVacationDays } from "@/presentation/utils";
 
 export function UsersListPage() {
   useDocumentTitle('Usuarios');
@@ -209,14 +210,6 @@ export function UsersListPage() {
         return { backgroundColor: "#6b7280", color: "white", borderColor: "transparent" };
     }
   };
-
-  // El backend ya redondea a 2 decimales (VacationBalanceService); esto solo
-  // recorta ceros sobrantes para la tabla ("70" en vez de "70.00", "27.5" en
-  // vez de "27.50"). No hay un formateador compartido para cifras de
-  // vacaciones en el resto del código (ver VacationRequestsListPage /
-  // VacationRequestFormPage, que interpolan el número tal cual) — se resuelve
-  // acá porque la tabla es más angosta que esas tarjetas.
-  const formatVacationDays = (value: number): string => String(Number(value.toFixed(2)));
 
   const getStatusBadgeStyle = (status: string) => {
     switch (status) {

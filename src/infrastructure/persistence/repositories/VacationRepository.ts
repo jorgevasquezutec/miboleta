@@ -269,6 +269,18 @@ export class VacationRepository implements IVacationRepository {
             confirmedBy: data.confirmed_by,
             confirmedByUser: data.confirmed_by_user ? this.mapUser(data.confirmed_by_user) : null,
             confirmedAt: data.confirmed_at,
+            // Solo llega en los listados del aprobador; en el resto de
+            // endpoints la clave no viene y queda null.
+            vacationBalance: data.vacation_balance
+                ? {
+                    tenantId: data.vacation_balance.tenant_id,
+                    daysPerYear: Number(data.vacation_balance.days_per_year),
+                    pending: Number(data.vacation_balance.pending),
+                    taken: Number(data.vacation_balance.taken),
+                    truncated: Number(data.vacation_balance.truncated),
+                    balance: Number(data.vacation_balance.balance),
+                }
+                : null,
             durationText: data.duration_text,
             dateRange: data.date_range,
             createdAt: data.created_at,

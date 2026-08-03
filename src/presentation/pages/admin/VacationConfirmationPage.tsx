@@ -109,7 +109,9 @@ export function VacationConfirmationPage() {
     }
 
     return (
-        <div className="space-y-6">
+        // max-w-7xl: ver nota en TeamVacationsPage — sin tope, las filas de
+        // solicitud se estiran y abren un hueco entre datos y acciones.
+        <div className="space-y-6 max-w-7xl">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -209,7 +211,9 @@ export function VacationConfirmationPage() {
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
+                        // Ver nota en TeamVacationsPage: lista con hairlines a
+                        // sangre del Card en vez de tarjetas sueltas.
+                        <div className="-mx-6 divide-y divide-border border-t border-border">
                             {pendingConfirmations.map((request) => (
                                 <VacationRequestCard
                                     key={request.id}

@@ -48,6 +48,21 @@ class VacationRequestResource extends JsonResource
                 ] : null;
             }),
 
+            // Saldo de vacaciones del EMPLEADO SOLICITANTE para la empresa de
+            // ESTA solicitud (no la activa del switcher: el saldo es por
+            // empresa). Lo adjunta VacationRequestController::
+            // attachVacationBalances() solo en los listados del aprobador
+            // (pending-approval / pending-confirmation / my-decisions); en el
+            // resto de endpoints la clave no aparece.
+            'vacation_balance' => $this->when(!is_null($this->vacation_balance), fn () => [
+                'tenant_id' => $this->vacation_balance['tenant_id'],
+                'days_per_year' => $this->vacation_balance['days_per_year'],
+                'pending' => $this->vacation_balance['pending'],
+                'taken' => $this->vacation_balance['taken'],
+                'truncated' => $this->vacation_balance['truncated'],
+                'balance' => $this->vacation_balance['balance'],
+            ]),
+
             // Approval info
             'approved_by' => $this->approved_by,
             'approved_by_user' => $this->when($this->relationLoaded('approvedByUser') && $this->approvedByUser, function () {

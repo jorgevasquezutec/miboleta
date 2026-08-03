@@ -15,6 +15,7 @@ use App\Services\VacationBalanceService;
 use App\Services\VacationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
@@ -155,13 +156,16 @@ class VacationRequestController extends Controller
         ];
 
         // Conteos de "Aprobadas" / "Tomadas" para las tarjetas de
-        // VacationHistoryPage, calculados sobre TODO el conjunto filtrado
-        // (no solo la página actual). Ver VacationService::getAllRequestsCounts.
-        if ($isTenantScope) {
-            $counts = $this->vacationService->getAllRequestsCounts($user, $filters);
-            $meta['approved_count'] = $counts['approved'];
-            $meta['taken_count'] = $counts['taken'];
-        }
+        // VacationHistoryPage, calculados sobre TODO el conjunto filtrado (no
+        // solo la página actual). Se calculan en las DOS ramas: antes solo en
+        // la de empresa, así que a quien no fuera root/admin no le llegaban y
+        // las tarjetas mostraban 0 aunque la tabla listara aprobadas.
+        $counts = $isTenantScope
+            ? $this->vacationService->getAllRequestsCounts($user, $filters)
+            : $this->vacationService->getOwnRequestsCounts($user, $filters);
+
+        $meta['approved_count'] = $counts['approved'];
+        $meta['taken_count'] = $counts['taken'];
 
         return response()->json([
             'data' => VacationRequestResource::collection($requests),
@@ -439,6 +443,7 @@ class VacationRequestController extends Controller
         ];
 
         $requests = $this->vacationService->getPendingApprovals($user, $filters);
+        $this->attachVacationBalances($requests);
 
         return response()->json([
             'data' => VacationRequestResource::collection($requests),
@@ -474,6 +479,7 @@ class VacationRequestController extends Controller
         ];
 
         $requests = $this->vacationService->getPendingConfirmations($user, $filters);
+        $this->attachVacationBalances($requests);
 
         return response()->json([
             'data' => VacationRequestResource::collection($requests),
@@ -548,6 +554,7 @@ class VacationRequestController extends Controller
         ];
 
         $requests = $this->vacationService->getMyDecisions($user, $filters);
+        $this->attachVacationBalances($requests);
 
         return response()->json([
             'data' => VacationRequestResource::collection($requests),
@@ -558,5 +565,47 @@ class VacationRequestController extends Controller
                 'total' => $requests->total(),
             ],
         ]);
+    }
+
+    /**
+     * Adjunta a cada solicitud de la página el saldo de vacaciones del
+     * EMPLEADO SOLICITANTE (los 4 conceptos del cliente: Pendientes, Gozadas,
+     * Truncas y Saldo), para que quien aprueba decida con contexto:
+     * approveRequest() NO revalida el saldo —solo se valida al crear la
+     * solicitud, ver VacationRequestFormPage—, así que entre la solicitud y la
+     * aprobación el saldo pudo bajar por otras aprobaciones y hoy nada avisa.
+     *
+     * Agrupado por tenant_id porque el saldo es POR EMPRESA (hire_date y
+     * régimen laboral propios de cada una, ver VacationBalanceService) y una
+     * misma página puede mezclar empresas cuando el switcher está en "todas".
+     * Coste: 2 queries por empresa presente en la página —no 2 por solicitud—,
+     * porque getBalancesForUsers() resuelve el lote completo con un whereIn y
+     * un agregado con groupBy.
+     *
+     * El saldo se cuelga como atributo dinámico del modelo (no es columna de
+     * `vacation_requests`) únicamente para que VacationRequestResource lo
+     * serialice. Los tres endpoints que llaman a este helper son de solo
+     * lectura y nunca hacen save() sobre estas instancias.
+     */
+    private function attachVacationBalances(LengthAwarePaginator $requests): void
+    {
+        $requests->getCollection()
+            ->groupBy('tenant_id')
+            ->each(function ($group, $tenantId) {
+                // `user` viene eager-loaded en los tres listados. Si faltara
+                // (usuario borrado), esa solicitud simplemente queda sin saldo
+                // en vez de romper el listado entero.
+                $users = $group->pluck('user')->filter()->unique('id')->values();
+
+                if ($users->isEmpty()) {
+                    return;
+                }
+
+                $balances = $this->vacationBalanceService->getBalancesForUsers($users, (int) $tenantId);
+
+                $group->each(function ($vacationRequest) use ($balances) {
+                    $vacationRequest->vacation_balance = $balances[$vacationRequest->user_id] ?? null;
+                });
+            });
     }
 }

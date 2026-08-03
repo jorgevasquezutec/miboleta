@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\VacationRequest;
+use App\Services\VacationBalanceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -196,6 +197,127 @@ class VacationRequestControllerTest extends TestCase
             ->getJson('/api/vacation-requests/pending-approval');
 
         $response->assertStatus(200);
+    }
+
+    /**
+     * El aprobador decide sin contexto si no ve el saldo del solicitante:
+     * approveRequest() NO revalida el saldo (solo se valida al crear la
+     * solicitud), así que entre la solicitud y la aprobación pudo bajar por
+     * otras aprobaciones. El backend lo embebe en el listado porque el front no
+     * tiene de dónde sacarlo: GET /vacation-requests/balance solo devuelve el
+     * del usuario autenticado, no el de un subordinado.
+     */
+    public function test_pending_approvals_include_requester_vacation_balance(): void
+    {
+        // El empleado del setUp no tiene hire_date, así que accrued y truncas
+        // son 0 y las cifras salen solo del vacation_balance_initial (30)
+        // menos lo gozado: deterministas, sin depender de la fecha de hoy.
+        VacationRequest::factory()->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'approved',
+            'days_requested' => 4,
+        ]);
+
+        VacationRequest::factory()->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'pending',
+            'days_requested' => 5,
+        ]);
+
+        $response = $this->actingAs($this->supervisor)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/pending-approval');
+
+        $response->assertStatus(200);
+
+        $balance = $response->json('data.0.vacation_balance');
+
+        $this->assertNotNull($balance, 'La solicitud pendiente debe traer el saldo del solicitante.');
+        $this->assertSame($this->tenant->id, $balance['tenant_id']);
+        $this->assertEqualsWithDelta(30, $balance['pending'], 0.01);
+        $this->assertEqualsWithDelta(4, $balance['taken'], 0.01);
+        $this->assertEqualsWithDelta(0, $balance['truncated'], 0.01);
+        // Saldo = Pendientes + Truncas − Gozadas (SPEC-VACACIONES v2).
+        $this->assertEqualsWithDelta(26, $balance['balance'], 0.01);
+    }
+
+    /**
+     * El saldo es POR EMPRESA (hire_date, régimen laboral y saldo inicial
+     * propios de cada una). Con el switcher en varias empresas, una misma
+     * página mezcla solicitudes de empresas distintas y cada una debe traer el
+     * saldo de LA SUYA — no el de la primera empresa del aprobador.
+     */
+    public function test_pending_approvals_balance_is_scoped_to_each_request_tenant(): void
+    {
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+        $this->supervisor->tenants()->attach($otherTenant->id);
+        $this->employee->tenants()->attach($otherTenant->id, [
+            'supervisor_id' => $this->supervisor->id,
+            'vacation_balance_initial' => 10,
+        ]);
+
+        VacationRequest::factory()->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'pending',
+            'days_requested' => 3,
+        ]);
+
+        VacationRequest::factory()->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $otherTenant->id,
+            'status' => 'pending',
+            'days_requested' => 3,
+        ]);
+
+        $response = $this->actingAs($this->supervisor)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id . ',' . $otherTenant->id)
+            ->getJson('/api/vacation-requests/pending-approval');
+
+        $response->assertStatus(200);
+
+        $balancesByTenant = collect($response->json('data'))
+            ->mapWithKeys(fn ($r) => [$r['tenant_id'] => $r['vacation_balance']]);
+
+        $this->assertCount(2, $balancesByTenant);
+        $this->assertEqualsWithDelta(30, $balancesByTenant[$this->tenant->id]['pending'], 0.01);
+        $this->assertEqualsWithDelta(10, $balancesByTenant[$otherTenant->id]['pending'], 0.01);
+    }
+
+    /**
+     * El saldo se resuelve EN LOTE: una sola llamada a getBalancesForUsers()
+     * por empresa presente en la página (2 queries), no una por solicitud. Si
+     * alguien lo cambiara por un getBalance() dentro del loop, esta expectativa
+     * de "exactamente una vez" fallaría con 5 solicitudes.
+     */
+    public function test_pending_approvals_resolve_balances_in_a_single_batch(): void
+    {
+        foreach (range(1, 5) as $i) {
+            $subordinate = User::factory()->client()->create(['status' => 'active']);
+            $subordinate->tenants()->attach($this->tenant->id, [
+                'is_primary' => true,
+                'supervisor_id' => $this->supervisor->id,
+                'vacation_balance_initial' => 30,
+            ]);
+
+            VacationRequest::factory()->create([
+                'user_id' => $subordinate->id,
+                'tenant_id' => $this->tenant->id,
+                'status' => 'pending',
+                'days_requested' => 2,
+            ]);
+        }
+
+        $this->mock(VacationBalanceService::class, function ($mock) {
+            $mock->shouldReceive('getBalancesForUsers')->once()->andReturn([]);
+        });
+
+        $this->actingAs($this->supervisor)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/pending-approval')
+            ->assertStatus(200);
     }
 
     public function test_supervisor_can_get_team_requests(): void
@@ -480,17 +602,94 @@ class VacationRequestControllerTest extends TestCase
         $this->assertSame(0, $response->json('meta.taken_count'));
     }
 
-    public function test_history_counts_not_present_for_non_admin_scope(): void
+    /**
+     * scope=tenant solo aplica para root/admin (VacationRequestController::
+     * index); un employee siempre cae en getRequestsForUser(). Esa rama no
+     * calculaba los conteos, así que las tarjetas de resumen del Histórico le
+     * mostraban "Aprobadas 0" aunque la tabla listara solicitudes aprobadas.
+     * Ahora se calculan en las dos ramas, y sobre las solicitudes PROPIAS.
+     */
+    public function test_history_counts_are_present_and_own_scoped_for_non_admin(): void
     {
-        // scope=tenant solo aplica para root/admin (VacationRequestController::index).
-        // Un employee siempre cae en getRequestsForUser(), que no calcula
-        // estos conteos: no deben aparecer en la respuesta.
+        VacationRequest::factory()->count(2)->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'approved',
+        ]);
+
+        $otherEmployee = User::factory()->client()->create(['status' => 'active']);
+        $otherEmployee->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        VacationRequest::factory()->count(3)->create([
+            'user_id' => $otherEmployee->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'approved',
+        ]);
+
         $response = $this->actingAs($this->employee)
             ->withHeader('X-Tenant-Ids', $this->tenant->id)
             ->getJson('/api/vacation-requests?scope=tenant');
 
         $response->assertStatus(200);
-        $this->assertArrayNotHasKey('approved_count', $response->json('meta'));
-        $this->assertArrayNotHasKey('taken_count', $response->json('meta'));
+        // Las 3 del otro empleado no cuentan ni aparecen: scope=tenant no lo
+        // habilita a ver la empresa entera.
+        $this->assertSame(2, $response->json('meta.total'));
+        $this->assertSame(2, $response->json('meta.approved_count'));
+        $this->assertSame(0, $response->json('meta.taken_count'));
+    }
+
+    /**
+     * Sin 'user' en el eager load, VacationRequestResource omite la clave
+     * entera (va con when(relationLoaded('user'))) y el Histórico del empleado
+     * pintaba "Usuario desconocido", mientras el admin —que cae en
+     * getAllRequests, donde sí estaba— veía el nombre correctamente.
+     */
+    public function test_own_history_includes_requester_name(): void
+    {
+        VacationRequest::factory()->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'approved',
+        ]);
+
+        $response = $this->actingAs($this->employee)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests?scope=tenant');
+
+        $response->assertStatus(200);
+        $this->assertSame(
+            $this->employee->full_name,
+            $response->json('data.0.user.full_name')
+        );
+    }
+
+    /**
+     * date_from/date_to solo se aplicaban en la rama de empresa, así que para
+     * el empleado el filtro "Rango de fechas" del Histórico no hacía nada: la
+     * pantalla ofrecía un control que se ignoraba en silencio. Filtra por
+     * created_at ("cuándo se solicitó"), igual que la rama de empresa.
+     */
+    public function test_own_history_applies_date_range_filter(): void
+    {
+        $old = VacationRequest::factory()->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+        $old->forceFill(['created_at' => now()->subMonths(2)])->save();
+
+        $recent = VacationRequest::factory()->create([
+            'user_id' => $this->employee->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response = $this->actingAs($this->employee)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson(
+                '/api/vacation-requests?scope=tenant&date_from='
+                . now()->subDays(7)->format('Y-m-d')
+            );
+
+        $response->assertStatus(200);
+        $this->assertSame(1, $response->json('meta.total'));
+        $this->assertSame($recent->id, $response->json('data.0.id'));
     }
 }

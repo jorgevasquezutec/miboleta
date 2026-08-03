@@ -308,9 +308,58 @@ class VacationService
      */
     public function getRequestsForUser(User $user, array $filters = []): LengthAwarePaginator
     {
-        $query = VacationRequest::with(['approvedByUser', 'rejectedByUser', 'confirmedByUser'])
-            ->forUser($user->id)
-            ->orderBy('created_at', 'desc');
+        // 'user' en el eager load: sin él, VacationRequestResource omite la
+        // clave entera (va con when(relationLoaded('user'))) y el front pintaba
+        // "Usuario desconocido" en el Histórico del empleado, mientras el admin
+        // —que cae en getAllRequests, donde sí estaba— veía el nombre bien.
+        // Arrastraba también el bloque 'approver', gateado por la misma
+        // relación.
+        return $this->buildOwnRequestsQuery($user, $filters)
+            ->with(['user', 'approvedByUser', 'rejectedByUser', 'confirmedByUser'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($filters['per_page'] ?? 15);
+    }
+
+    /**
+     * Conteos de "Aprobadas" / "Tomadas" sobre las solicitudes PROPIAS, para
+     * las tarjetas de resumen del Histórico cuando lo abre alguien que no es
+     * root ni admin. Espeja getAllRequestsCounts(): antes solo existía la
+     * versión de empresa, así que al empleado no le llegaban los conteos y las
+     * tarjetas mostraban 0 aunque la tabla listara solicitudes aprobadas.
+     *
+     * @param User $user
+     * @param array $filters
+     * @return array{total:int, approved:int, taken:int}
+     */
+    public function getOwnRequestsCounts(User $user, array $filters = []): array
+    {
+        $base = $this->buildOwnRequestsQuery($user, $filters);
+
+        return [
+            'total' => (clone $base)->count(),
+            'approved' => (clone $base)->where('status', VacationRequest::STATUS_APPROVED)->count(),
+            'taken' => (clone $base)->where('was_taken', true)->count(),
+        ];
+    }
+
+    /**
+     * Query base (sin eager loads, sin orden, sin paginar) de las solicitudes
+     * PROPIAS, compartida por getRequestsForUser() y getOwnRequestsCounts()
+     * para que listado y conteos apliquen exactamente los mismos filtros —
+     * mismo patrón que buildAllRequestsQuery() para la vista de empresa.
+     *
+     * Aplica date_from/date_to/search además de tenant/status/year: el
+     * Histórico muestra esos tres controles a cualquier rol, pero solo la rama
+     * de empresa los filtraba, así que para el empleado el rango de fechas y
+     * el buscador se ignoraban en silencio.
+     *
+     * @param User $user
+     * @param array $filters
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function buildOwnRequestsQuery(User $user, array $filters = [])
+    {
+        $query = VacationRequest::query()->forUser($user->id);
 
         // Filter by tenant if provided
         if (!empty($filters['tenant_id'])) {
@@ -325,7 +374,25 @@ class VacationService
             $query->whereYear('start_date', $filters['year']);
         }
 
-        return $query->paginate($filters['per_page'] ?? 15);
+        // Por created_at, igual que buildAllRequestsQuery: el rango del
+        // Histórico es "cuándo se solicitó", no "cuándo se vacaciona".
+        if (!empty($filters['date_from'])) {
+            $query->where('created_at', '>=', $filters['date_from'] . ' 00:00:00');
+        }
+
+        if (!empty($filters['date_to'])) {
+            $query->where('created_at', '<=', $filters['date_to'] . ' 23:59:59');
+        }
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->matchingFullName($search)
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        return $query;
     }
 
     /**

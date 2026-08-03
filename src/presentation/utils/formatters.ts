@@ -79,6 +79,22 @@ export function formatFileSize(bytes: number): string {
 }
 
 /**
+ * Formatea una cifra de días de vacaciones recortando ceros sobrantes:
+ * "70" en vez de "70.00", "27.5" en vez de "27.50". El backend
+ * (VacationBalanceService) ya redondea a 2 decimales; esto solo limpia la
+ * presentación.
+ *
+ * Vive aquí, y no en la página que lo estrenó (UsersListPage), porque las
+ * cifras de vacaciones se pintan en más de un sitio —el listado de usuarios y
+ * la tarjeta de solicitudes del aprobador— y deben verse igual en todos.
+ * @param value - Días con hasta 2 decimales
+ * @returns Cifra sin ceros de relleno
+ */
+export function formatVacationDays(value: number): string {
+  return String(Number(value.toFixed(2)));
+}
+
+/**
  * Trunca un texto largo agregando puntos suspensivos
  * @param text - Texto a truncar
  * @param maxLength - Longitud máxima

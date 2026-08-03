@@ -23,5 +23,6 @@ export {
   formatDateTime,
   formatPeriod,
   formatFileSize,
+  formatVacationDays,
   truncateText,
 } from "./formatters";

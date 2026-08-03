@@ -35,6 +35,12 @@ export interface VacationRequest {
     confirmedByUser?: VacationUser | null;
     confirmedAt?: string | null;
 
+    // Saldo del EMPLEADO SOLICITANTE en la empresa de esta solicitud, que el
+    // backend embebe en los listados del aprobador. Ausente en el resto de
+    // endpoints (p.ej. "Mis Vacaciones", donde el saldo propio se pide aparte
+    // con GET /vacation-requests/balance).
+    vacationBalance?: VacationRequestBalance | null;
+
     // Computed
     durationText: string;
     dateRange: string;
@@ -42,6 +48,20 @@ export interface VacationRequest {
     // Timestamps
     createdAt: string;
     updatedAt: string;
+}
+
+// Saldo del solicitante embebido en cada solicitud de los listados del
+// aprobador (pending-approval / pending-confirmation / my-decisions), para que
+// la tarjeta muestre los 4 conceptos sin un fetch por fila. Es un subconjunto
+// de `VacationBalance` (más abajo): solo las cifras que se pintan, sin los
+// metadatos del período ni el aprobador, que ahí no aportan.
+export interface VacationRequestBalance {
+    tenantId: number;
+    daysPerYear: number;
+    pending: number;
+    taken: number;
+    truncated: number;
+    balance: number;
 }
 
 export type VacationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
