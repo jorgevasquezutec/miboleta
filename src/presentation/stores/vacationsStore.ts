@@ -38,6 +38,10 @@ interface VacationsState {
     historyRequests: VacationRequest[];
     historyTotal: number;
     historyTotalPages: number;
+    // Conteos sobre TODO el conjunto filtrado (no solo la página actual);
+    // ver VacationService::getAllRequestsCounts en el backend.
+    historyApprovedCount: number;
+    historyTakenCount: number;
 
     // Supervisor decision history
     myDecisions: VacationRequest[];
@@ -106,6 +110,8 @@ const initialState = {
     historyRequests: [],
     historyTotal: 0,
     historyTotalPages: 0,
+    historyApprovedCount: 0,
+    historyTakenCount: 0,
     myDecisions: [],
     myDecisionsTotal: 0,
     myDecisionsTotalPages: 0,
@@ -287,6 +293,8 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
                 page: result.meta.currentPage,
                 historyTotalPages: result.meta.lastPage,
                 historyTotal: result.meta.total,
+                historyApprovedCount: result.meta.approvedCount ?? 0,
+                historyTakenCount: result.meta.takenCount ?? 0,
                 isLoading: false,
             });
         } catch (error: any) {

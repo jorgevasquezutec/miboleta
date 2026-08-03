@@ -24,6 +24,11 @@ export interface PaginatedVacationRequests {
     lastPage: number;
     perPage: number;
     total: number;
+    // Solo presentes en getAllHistory(): conteos de "Aprobadas" / "Tomadas"
+    // sobre TODO el conjunto filtrado (no solo la página actual). Ver
+    // VacationService::getAllRequestsCounts en el backend.
+    approvedCount?: number;
+    takenCount?: number;
   };
 }
 

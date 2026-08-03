@@ -219,6 +219,8 @@ export class VacationRepository implements IVacationRepository {
                 lastPage: response.data.meta.last_page,
                 perPage: response.data.meta.per_page,
                 total: response.data.meta.total,
+                approvedCount: response.data.meta.approved_count,
+                takenCount: response.data.meta.taken_count,
             },
         };
     }
@@ -294,8 +296,13 @@ export class VacationRepository implements IVacationRepository {
             accrued: Number(data.accrued),
             taken: Number(data.taken),
             available: Number(data.available),
+            // Vacaciones Pendientes / Truncas / Saldo (SPEC-VACACIONES v2).
+            pending: Number(data.pending ?? 0),
+            truncated: Number(data.truncated ?? 0),
+            balance: Number(data.balance ?? 0),
             hireDate: data.hire_date ?? null,
             yearsOfService: Number(data.years_of_service),
+            monthsCompleted: Number(data.months_completed ?? 0),
             approver: data.approver
                 ? {
                     id: data.approver.id,
@@ -303,6 +310,12 @@ export class VacationRepository implements IVacationRepository {
                     email: data.approver.email,
                 }
                 : null,
+            currentPeriodStart: data.current_period_start ?? null,
+            currentPeriodEnd: data.current_period_end ?? null,
+            requests: {
+                pending: Number(data.requests?.pending ?? 0),
+                approved: Number(data.requests?.approved ?? 0),
+            },
         };
     }
 }

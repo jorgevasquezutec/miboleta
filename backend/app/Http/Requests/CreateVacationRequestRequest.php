@@ -26,8 +26,9 @@ class CreateVacationRequestRequest extends FormRequest
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             // Tope de sanidad (1 año calendario). El límite real de negocio
             // lo aplica VacationService::validateSufficientBalance contra el
-            // saldo disponible del usuario (VacationBalanceService), que
-            // puede superar los 30 días si acumuló varios años de servicio.
+            // Saldo Vacaciones del usuario (VacationBalanceService::getBalance
+            // ()['balance']), que puede superar los 30 días si acumuló varios
+            // años de servicio.
             'days_requested' => ['required', 'numeric', 'min:0.5', 'max:365'],
             'reason' => ['nullable', 'string', 'max:1000'],
         ];

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Calendar,
@@ -9,7 +9,11 @@ import {
     Loader2,
     AlertCircle,
     Filter,
-    CalendarDays,
+    CalendarClock,
+    CalendarCheck,
+    Wallet,
+    ClipboardList,
+    ClipboardCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
@@ -23,6 +27,7 @@ import {
 import { Badge } from "@/presentation/components/ui/badge";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
+import { useAuthStore } from "@/presentation/stores";
 import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { VacationStatus } from "@/core/domain/entities";
 import { formatDate } from "@/presentation/utils";
@@ -40,7 +45,12 @@ export function VacationRequestsListPage() {
         error,
         total,
         totalPages,
+        balance,
+        balanceLoading,
+        fetchVacationBalance,
+        clearBalance,
     } = useVacationsStore();
+    const { currentTenant } = useAuthStore();
 
     // URL-synced filters
     const { filters, setFilters } = useUrlFilters({
@@ -62,6 +72,22 @@ export function VacationRequestsListPage() {
             perPage: filters.per_page,
         });
     }, [fetchVacationRequests, filters.page, filters.per_page, filters.status]);
+
+    // Saldo de vacaciones (6 tarjetas de resumen): se recalcula al montar y
+    // cada vez que cambia la empresa activa (TenantSwitcher del navbar).
+    // Mismo patrón que ProfilePage.tsx para este mismo endpoint.
+    useEffect(() => {
+        if (currentTenant?.id) {
+            fetchVacationBalance(Number(currentTenant.id));
+        } else {
+            clearBalance();
+        }
+
+        return () => {
+            clearBalance();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentTenant?.id]);
 
     const handleStatusChange = (value: string) => {
         setFilters({ status: value, page: 1 });
@@ -143,10 +169,6 @@ export function VacationRequestsListPage() {
         );
     };
 
-    // Statistics
-    const pendingCount = vacationRequests.filter((r) => r.status === "pending").length;
-    const approvedCount = vacationRequests.filter((r) => r.status === "approved").length;
-
     if (error) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -185,37 +207,128 @@ export function VacationRequestsListPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/*
+                6 tarjetas según definiciones del cliente (SPEC-VACACIONES v2,
+                confirmadas 31/07/2026 — SUPERSEDE el mapeo original de la Fase 2):
+                - Pendientes: initial + accrued, SIN restar gozadas (balance.pending).
+                  Antes usaba balance.available (que sí restaba); era el error a
+                  corregir.
+                - Gozadas: todas las tomadas a la fecha (balance.taken).
+                - Truncas: perMonth × mesesCompletos del año laboral EN CURSO
+                  (balance.truncated), nunca supera daysPerYear — de ahí el
+                  subtexto con el rango del período. Antes se mostraba (mal
+                  nombrado y con otra fórmula) como "Saldo Vacaciones".
+                - Saldo: Pendientes + Truncas − Gozadas (balance.balance). Es el
+                  tope real contra el que valida el formulario de nueva solicitud.
+                - Solicitudes Pendiente / Aprobada: conteo real de solicitudes por
+                  estado (balance.requests), no un filtro sobre la página actual
+                  del listado (ver E2).
+            */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                <Card>
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-3 rounded-full bg-orange-100">
+                            <CalendarClock className="w-6 h-6 text-orange-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-600">Vacaciones Pendientes</p>
+                            <p className="text-2xl font-bold text-orange-600">
+                                {balanceLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    balance?.pending ?? 0
+                                )}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-3 rounded-full bg-emerald-100">
+                            <CalendarCheck className="w-6 h-6 text-emerald-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-600">Vacaciones Gozadas</p>
+                            <p className="text-2xl font-bold text-emerald-600">
+                                {balanceLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    balance?.taken ?? 0
+                                )}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-3 rounded-full bg-purple-100">
+                            <Clock className="w-6 h-6 text-purple-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-600">Vacaciones Truncas</p>
+                            <p className="text-2xl font-bold text-purple-600">
+                                {balanceLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    balance?.truncated ?? 0
+                                )}
+                            </p>
+                            {!balanceLoading && balance?.currentPeriodStart && balance?.currentPeriodEnd && (
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    Año laboral en curso: {formatDate(balance.currentPeriodStart)} – {formatDate(balance.currentPeriodEnd)}
+                                </p>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-blue-100">
-                            <CalendarDays className="w-6 h-6 text-blue-600" />
+                            <Wallet className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Total Solicitudes</p>
-                            <p className="text-2xl font-bold text-gray-900">{total}</p>
+                            <p className="text-sm text-gray-600">Saldo Vacaciones</p>
+                            <p className="text-2xl font-bold text-blue-600">
+                                {balanceLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    balance?.balance ?? 0
+                                )}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-yellow-100">
-                            <Clock className="w-6 h-6 text-yellow-600" />
+                            <ClipboardList className="w-6 h-6 text-yellow-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Pendientes</p>
-                            <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
+                            <p className="text-sm text-gray-600">Solicitudes Pendiente</p>
+                            <p className="text-2xl font-bold text-yellow-600">
+                                {balanceLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    balance?.requests.pending ?? 0
+                                )}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-green-100">
-                            <CheckCircle className="w-6 h-6 text-green-600" />
+                            <ClipboardCheck className="w-6 h-6 text-green-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Aprobadas</p>
-                            <p className="text-2xl font-bold text-green-600">{approvedCount}</p>
+                            <p className="text-sm text-gray-600">Aprobada</p>
+                            <p className="text-2xl font-bold text-green-600">
+                                {balanceLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    balance?.requests.approved ?? 0
+                                )}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>

@@ -19,6 +19,7 @@ vi.mock('@/infrastructure/persistence/repositories', () => ({
     reject: vi.fn(),
     markAsTaken: vi.fn(),
     markAsNotTaken: vi.fn(),
+    getBalance: vi.fn(),
   },
 }));
 
@@ -256,6 +257,134 @@ describe('vacationsStore', () => {
 
       const state = useVacationsStore.getState();
       expect(state.pendingConfirmations).toHaveLength(0);
+    });
+  });
+
+  describe('fetchHistoryRequests', () => {
+    // Bug corregido: "Aprobadas" y "Tomadas" en VacationHistoryPage se
+    // calculaban con Array.filter sobre la página actual (historyRequests),
+    // así que nunca superaban `per_page`. Ahora el backend manda los
+    // conteos sobre el total filtrado en meta.approved_count /
+    // meta.taken_count, y el store los expone tal cual (sin recalcular).
+    it('should store approvedCount/takenCount from meta, independent of the page size', async () => {
+      const mockResponse = {
+        data: [mockVacationRequest], // solo 1 elemento en esta página...
+        meta: {
+          currentPage: 1,
+          perPage: 10,
+          total: 25,
+          lastPage: 3,
+          approvedCount: 18, // ...pero el conteo real filtrado es mayor que la página
+          takenCount: 12,
+        },
+      };
+
+      vi.mocked(vacationRepository.getAllHistory).mockResolvedValueOnce(mockResponse);
+
+      await act(async () => {
+        await useVacationsStore.getState().fetchHistoryRequests();
+      });
+
+      const state = useVacationsStore.getState();
+      expect(state.historyRequests).toHaveLength(1);
+      expect(state.historyTotal).toBe(25);
+      expect(state.historyApprovedCount).toBe(18);
+      expect(state.historyTakenCount).toBe(12);
+    });
+
+    it('should default counts to 0 when the backend omits them', async () => {
+      const mockResponse = {
+        data: [],
+        meta: { currentPage: 1, perPage: 10, total: 0, lastPage: 0 },
+      };
+
+      vi.mocked(vacationRepository.getAllHistory).mockResolvedValueOnce(mockResponse);
+
+      await act(async () => {
+        await useVacationsStore.getState().fetchHistoryRequests();
+      });
+
+      const state = useVacationsStore.getState();
+      expect(state.historyApprovedCount).toBe(0);
+      expect(state.historyTakenCount).toBe(0);
+    });
+
+    it('should handle fetch error', async () => {
+      vi.mocked(vacationRepository.getAllHistory).mockRejectedValueOnce(new Error('Network error'));
+
+      await act(async () => {
+        await useVacationsStore.getState().fetchHistoryRequests();
+      });
+
+      const state = useVacationsStore.getState();
+      expect(state.error).toBe('Network error');
+      expect(state.isLoading).toBe(false);
+    });
+  });
+
+  describe('balance actions', () => {
+    // Los 4 conceptos del cliente (SPEC-VACACIONES v2, 31/07/2026 — SUPERSEDE
+    // el mapeo de la Fase 2): pending = initial + accrued (SIN restar taken),
+    // truncated = perMonth * mesesCompletos, balance = pending + truncated - taken.
+    const mockBalance = {
+      tenantId: 1,
+      laborRegime: 'general',
+      daysPerYear: 30,
+      initial: 0,
+      accrued: 60,
+      taken: 7,
+      available: 53, // atajo interno: pending - taken = 60 - 7
+      pending: 60,
+      truncated: 15,
+      balance: 68, // pending + truncated - taken = 60 + 15 - 7
+      hireDate: '2024-01-31',
+      yearsOfService: 2,
+      monthsCompleted: 6,
+      approver: null,
+      currentPeriodStart: '2026-01-31',
+      currentPeriodEnd: '2027-01-31',
+      requests: { pending: 11, approved: 2 },
+    };
+
+    it('should fetch vacation balance, including the 4 client figures and request counts', async () => {
+      vi.mocked(vacationRepository.getBalance).mockResolvedValueOnce(mockBalance as any);
+
+      await act(async () => {
+        await useVacationsStore.getState().fetchVacationBalance(1);
+      });
+
+      const state = useVacationsStore.getState();
+      expect(state.balance).toEqual(mockBalance);
+      expect(state.balanceLoading).toBe(false);
+      // E2: los conteos de solicitudes deben reflejar el total real, no una
+      // página del listado (aquí 11 > el per_page de 10 del listado).
+      expect(state.balance?.requests.pending).toBe(11);
+    });
+
+    it('should handle balance fetch error without keeping stale data', async () => {
+      useVacationsStore.setState({ balance: mockBalance as any });
+      vi.mocked(vacationRepository.getBalance).mockRejectedValueOnce(new Error('Network error'));
+
+      await act(async () => {
+        await useVacationsStore.getState().fetchVacationBalance(1);
+      });
+
+      const state = useVacationsStore.getState();
+      expect(state.balance).toBeNull();
+      expect(state.balanceLoading).toBe(false);
+      expect(state.error).toBeTruthy();
+    });
+
+    it('should clear balance', () => {
+      useVacationsStore.setState({ balance: mockBalance as any, balanceLoading: true });
+
+      act(() => {
+        useVacationsStore.getState().clearBalance();
+      });
+
+      const state = useVacationsStore.getState();
+      expect(state.balance).toBeNull();
+      expect(state.balanceLoading).toBe(false);
     });
   });
 

@@ -16,11 +16,16 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Reports Service
- * 
+ *
  * Provides statistics and report data for the dashboard and exports.
  */
 class ReportsService
 {
+    public function __construct(
+        protected VacationBalanceService $vacationBalanceService
+    ) {
+    }
+
     /**
      * Get complete dashboard statistics.
      */
@@ -174,14 +179,22 @@ class ReportsService
         $currentYear = Carbon::now()->year;
         $query->whereYear('created_at', $currentYear);
 
+        // El enum real de VacationRequest::status es
+        // [pending, approved, rejected, cancelled] — 'pending_confirmation',
+        // 'confirmed' y 'taken' nunca existieron como status; con ellos estos
+        // conteos daban 0 siempre. "¿Tomó las vacaciones?" es un campo aparte
+        // (was_taken, boolean), no un status.
         $total = (clone $query)->count();
-        $pending = (clone $query)->whereIn('status', ['pending', 'pending_confirmation'])->count();
-        $approved = (clone $query)->whereIn('status', ['approved', 'confirmed'])->count();
-        $rejected = (clone $query)->where('status', 'rejected')->count();
+        $pending = (clone $query)->where('status', VacationRequest::STATUS_PENDING)->count();
+        $approved = (clone $query)->where('status', VacationRequest::STATUS_APPROVED)->count();
+        $rejected = (clone $query)->where('status', VacationRequest::STATUS_REJECTED)->count();
 
-        // Total days used (only approved/confirmed/taken)
+        // Días efectivamente gozados: aprobadas Y confirmadas como tomadas
+        // (was_taken=true), no solo aprobadas (que pueden seguir pendientes
+        // de tomar).
         $totalDaysUsed = (clone $query)
-            ->whereIn('status', ['approved', 'confirmed', 'taken'])
+            ->where('status', VacationRequest::STATUS_APPROVED)
+            ->where('was_taken', true)
             ->sum('days_requested');
 
         // Requests by status for pie chart
@@ -474,20 +487,49 @@ class ReportsService
             $query->where('status', $filters['status']);
         }
 
-        return $query->get()->map(function ($user) {
+        $users = $query->get();
+
+        // B3: saldo de vacaciones (Pendientes/Gozadas/Truncas/Saldo) en lote
+        // — VacationBalanceService::getBalancesForUsers hace 2 queries
+        // totales sin importar N, nunca un getBalance() por usuario dentro
+        // de este map(). Solo se calcula cuando el export está acotado a UNA
+        // empresa concreta (mismo $filters['tenant_id'] que ya filtra la
+        // query de arriba, resuelto en ReportsController::getTenantId). Un
+        // export "todas las empresas" (root sin empresa activa, tenant_id
+        // null) puede mezclar usuarios de distintas empresas, cada uno con
+        // su propio hire_date/saldo — no hay una única cifra correcta por
+        // fila, así que se deja "N/A" en vez de inventar una suma entre
+        // empresas (ver SPEC-VACACIONES v2).
+        $tenantIdForBalance = $filters['tenant_id'] ?? null;
+        $vacationBalances = (is_int($tenantIdForBalance) && $tenantIdForBalance > 0)
+            ? $this->vacationBalanceService->getBalancesForUsers($users, $tenantIdForBalance)
+            : [];
+
+        return $users->map(function ($user) use ($vacationBalances) {
             $role = $user->getCurrentRole();
             $tenantNames = $user->tenants->pluck('name')->join(', ');
+            $balance = $vacationBalances[$user->id] ?? null;
 
+            // Las claves de este array SON los encabezados del Excel:
+            // GenericExport usa array_keys() de la primera fila cuando no se
+            // pasan headings explícitos. Por eso van en Title Case legible y
+            // no en snake_case — este archivo lo abre el cliente, no un
+            // proceso. Las 4 de vacaciones usan su vocabulario (mensaje del
+            // 31/07/2026), normalizado al mismo estilo que el resto.
             return [
-                'id' => $user->id,
-                'nombre' => $user->name,
-                'email' => $user->email,
-                'rol' => $role ?? 'N/A',
-                'activo' => $user->status === 'active' ? 'Sí' : 'No',
-                'estado' => $user->status ?? 'N/A',
-                'organizaciones' => $tenantNames ?: 'N/A',
-                'fecha_registro' => $user->created_at?->format('Y-m-d'),
-                'ultimo_acceso' => $user->last_login_at?->format('Y-m-d H:i') ?? 'N/A',
+                'ID' => $user->id,
+                'Nombre' => $user->name,
+                'Email' => $user->email,
+                'Rol' => $role ?? 'N/A',
+                'Activo' => $user->status === 'active' ? 'Sí' : 'No',
+                'Estado' => $user->status ?? 'N/A',
+                'Organizaciones' => $tenantNames ?: 'N/A',
+                'Fecha de registro' => $user->created_at?->format('Y-m-d'),
+                'Último acceso' => $user->last_login_at?->format('Y-m-d H:i') ?? 'N/A',
+                'Vacaciones Pendientes' => $balance['pending'] ?? 'N/A',
+                'Vacaciones Gozadas' => $balance['taken'] ?? 'N/A',
+                'Vacaciones Truncas' => $balance['truncated'] ?? 'N/A',
+                'Saldo Vacaciones' => $balance['balance'] ?? 'N/A',
             ];
         });
     }
