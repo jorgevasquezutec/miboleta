@@ -41,8 +41,24 @@ SSH_HOST     ?= miboleta
 REMOTE_DIR   ?= /opt/miboleta
 STACK        ?= miboleta
 
+# Copia local de producción (targets *-pull)
+COMPOSE      ?= docker-compose.yml
+LOCAL_DB     ?= miboleta
+LOCAL_DB_PWD ?= root
+DUMP_DIR     ?= /tmp
+# Clave que db-pull deja a TODOS los usuarios de la copia local (los hashes de
+# producción no se pueden revertir, así que sin esto no podrías entrar a nada).
+LOCAL_PWD    ?= password
+# Nombre literal del volumen en el server (docker-stack.yml lo fija con `name:`,
+# así que NO se deriva de $(STACK) aunque hoy coincidan).
+STORAGE_VOL  ?= miboleta_swarm_storage_data
+
+# MYSQL_PWD por entorno y no `-p<clave>`: evita el warning "Using a password on
+# the command line interface can be insecure" en cada una de las ~10 llamadas.
+MYSQL = docker compose -f $(COMPOSE) exec -T -e MYSQL_PWD=$(LOCAL_DB_PWD) db mysql -uroot
+
 .DEFAULT_GOAL := help
-.PHONY: help publish signer-build stack deploy nginx
+.PHONY: help publish signer-build stack deploy nginx db-pull storage-pull prod-pull db-sanitize db-archives db-restore db-passwords
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -102,3 +118,147 @@ deploy: ## Server: pull imágenes + stack deploy + migrate + caches + estado
 	  docker exec $$APP php artisan view:cache; \
 	  echo "== estado final =="; \
 	  docker stack services $(STACK)'
+
+# ---------------------------------------------------------------------------
+# Copia de producción -> local
+# ---------------------------------------------------------------------------
+# La VPN la pones tú (igual que en `deploy`): estos targets solo corren
+# `ssh $(SSH_HOST)` desde tu Mac.
+#
+# El dump SALE con datos personales reales (DNIs, boletas, correos de
+# empleados). `db-pull` borra el .sql.gz local al terminar; usa KEEP_DUMP=1 si
+# necesitas conservarlo, y bórralo tú cuando acabes.
+#
+# db-sanitize NO es opcional y por eso va dentro de db-pull: `tenants` y
+# `platform_settings` guardan credenciales SMTP en la BASE DE DATOS, y
+# Tenant::hasCustomMailer() decide el mailer leyendo esas filas — no tu .env.
+# Sin sanear, un job de correo en tu local saldría por el SMTP real hacia los
+# correos reales de los empleados. De paso anula los tres campos con cast
+# `encrypted` (cifrados con el APP_KEY de producción), que si no revientan con
+# DecryptException al leerlos en local.
+# ---------------------------------------------------------------------------
+
+db-pull: ## Archiva tu BD local (renombrándola) e importa la de producción
+	@echo "⚠  Tu BD local '$(LOCAL_DB)' se ARCHIVA con otro nombre (no se borra) y en su"
+	@echo "   lugar queda la de PRODUCCIÓN. Reversible con 'make db-restore'."
+	@if [ "$(FORCE)" != "1" ]; then \
+	  printf "   Escribe 'si' para continuar: "; read ans; \
+	  [ "$$ans" = "si" ] || { echo "Cancelado."; exit 1; }; \
+	fi
+	@echo "==> dump en $(SSH_HOST)"
+	ssh $(SSH_HOST) 'CID=$$(docker ps -qf name=$(STACK)_db | head -1); \
+	  if [ -z "$$CID" ]; then echo "❌ contenedor de MySQL no encontrado"; exit 1; fi; \
+	  echo "  db=$$CID"; \
+	  docker exec $$CID bash -c "MYSQL_PWD=\"\$$MYSQL_ROOT_PASSWORD\" mysqldump -u root \
+	    --single-transaction --quick --routines --no-tablespaces \
+	    \"\$$MYSQL_DATABASE\" | gzip > /backups/miboleta.sql.gz"; \
+	  docker cp $$CID:/backups/miboleta.sql.gz /tmp/miboleta.sql.gz; \
+	  docker exec $$CID rm -f /backups/miboleta.sql.gz'
+	@echo "==> descargando a $(DUMP_DIR)/miboleta.sql.gz"
+	scp $(SSH_HOST):/tmp/miboleta.sql.gz $(DUMP_DIR)/miboleta.sql.gz
+	ssh $(SSH_HOST) 'rm -f /tmp/miboleta.sql.gz'
+	@echo "==> archivando la BD local (se renombra, no se borra)"
+	@set -e; \
+	  ARCHIVE="$(LOCAL_DB)_local_$$(date +%Y%m%d_%H%M%S)"; \
+	  if [ "$$($(MYSQL) -N -B -e "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='$(LOCAL_DB)'")" = "1" ]; then \
+	    EXTRA=$$($(MYSQL) -N -B -e "SELECT (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$(LOCAL_DB)' AND table_type='VIEW') + (SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema='$(LOCAL_DB)') + (SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='$(LOCAL_DB)')"); \
+	    if [ "$$EXTRA" != "0" ]; then \
+	      echo "⚠  la BD local tiene $$EXTRA vistas/rutinas/triggers: RENAME TABLE NO los mueve y se perderán."; \
+	      echo "   Aborto. Sácalos con mysqldump antes de continuar."; exit 1; \
+	    fi; \
+	    $(MYSQL) -e "CREATE DATABASE $$ARCHIVE CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"; \
+	    $(MYSQL) -N -B -e "SELECT CONCAT('RENAME TABLE \`$(LOCAL_DB)\`.\`', table_name, '\` TO \`$$ARCHIVE\`.\`', table_name, '\`;') FROM information_schema.tables WHERE table_schema='$(LOCAL_DB)' AND table_type='BASE TABLE'" | $(MYSQL); \
+	    $(MYSQL) -e "DROP DATABASE $(LOCAL_DB)"; \
+	    echo "  archivada como '$$ARCHIVE' (RENAME TABLE: instantáneo, no copia datos)"; \
+	  else \
+	    echo "  no existía '$(LOCAL_DB)': nada que archivar"; \
+	  fi; \
+	  $(MYSQL) -e "CREATE DATABASE $(LOCAL_DB) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+	@echo "==> importando (puede tardar)"
+	gunzip -c $(DUMP_DIR)/miboleta.sql.gz | $(MYSQL) $(LOCAL_DB)
+	@$(MAKE) --no-print-directory db-sanitize
+	@if [ "$(KEEP_PASSWORDS)" = "1" ]; then \
+	  echo "==> contraseñas intactas (KEEP_PASSWORDS=1): no vas a poder loguearte"; \
+	else \
+	  $(MAKE) --no-print-directory db-passwords; \
+	fi
+	@echo "==> migraciones pendientes de tu rama + limpiar caches"
+	docker compose -f $(COMPOSE) exec -T app php artisan migrate --force
+	docker compose -f $(COMPOSE) exec -T app php artisan optimize:clear
+	@if [ "$(KEEP_DUMP)" != "1" ]; then \
+	  rm -f $(DUMP_DIR)/miboleta.sql.gz; \
+	  echo "==> dump local borrado (KEEP_DUMP=1 para conservarlo)"; \
+	else \
+	  echo "⚠  dump conservado en $(DUMP_DIR)/miboleta.sql.gz — contiene datos personales reales"; \
+	fi
+	@echo "✅ BD de producción corriendo en local. Tu BD anterior sigue ahí:"
+	@$(MAKE) --no-print-directory db-archives
+
+db-sanitize: ## Anula SMTP y secretos cifrados de la BD local (ya lo hace db-pull)
+	@echo "==> saneando SMTP y campos cifrados"
+	@$(MYSQL) $(LOCAL_DB) -e "UPDATE tenants SET mail_host=NULL, mail_password=NULL;" \
+	  || { echo "❌ no se pudo sanear 'tenants': la BD local podría enviar correos REALES"; exit 1; }
+	@$(MYSQL) $(LOCAL_DB) -e "UPDATE platform_settings SET mail_host=NULL, mail_password=NULL;" \
+	  || echo "⚠  'platform_settings' no saneada (¿tabla ausente?) — revísala antes de levantar horizon"
+	@$(MYSQL) $(LOCAL_DB) -e "UPDATE signature_settings SET certificate_password=NULL;" \
+	  || echo "⚠  'signature_settings' no saneada (¿tabla ausente?)"
+	@echo "  SMTP por empresa y de plataforma anulados: el mailer cae al .env local."
+
+db-passwords: ## Pone la clave '$(LOCAL_PWD)' a TODOS los usuarios locales (ya lo hace db-pull)
+	@echo "==> poniendo la clave '$(LOCAL_PWD)' a todos los usuarios"
+	@docker compose -f $(COMPOSE) exec -T app php artisan tinker --execute="\
+	  \$$n = \App\Models\User::query()->update([ \
+	    'password' => \Illuminate\Support\Facades\Hash::make('$(LOCAL_PWD)'), \
+	    'must_change_password' => false, \
+	  ]); \
+	  echo \"  \$$n usuarios actualizados\n\";"
+	@echo "  Nota: los usuarios con status != 'active' siguen sin poder entrar."
+
+db-archives: ## Lista las BD locales archivadas por db-pull
+	@$(MYSQL) -N -B -e "SELECT CONCAT('  ', schema_name) FROM information_schema.schemata \
+	  WHERE schema_name LIKE '$(LOCAL_DB)\_local\_%' ORDER BY schema_name DESC" \
+	  | grep . || echo "  (ninguna)"
+	@echo "  Restaurar:  make db-restore ARCHIVE=<nombre>"
+
+db-restore: ## Vuelve a una BD archivada (ARCHIVE=...). Descarta la local actual
+	@if [ -z "$(ARCHIVE)" ]; then \
+	  echo "❌ Falta ARCHIVE. Mira las disponibles con 'make db-archives'."; exit 1; \
+	fi
+	@if [ "$$($(MYSQL) -N -B -e "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='$(ARCHIVE)'")" != "1" ]; then \
+	  echo "❌ '$(ARCHIVE)' no existe. Mira 'make db-archives'."; exit 1; \
+	fi
+	@echo "⚠  Se DESCARTA la BD local '$(LOCAL_DB)' actual (la copia de producción) y"
+	@echo "   '$(ARCHIVE)' vuelve a ocupar su lugar."
+	@if [ "$(FORCE)" != "1" ]; then \
+	  printf "   Escribe 'si' para continuar: "; read ans; \
+	  [ "$$ans" = "si" ] || { echo "Cancelado."; exit 1; }; \
+	fi
+	@set -e; \
+	  $(MYSQL) -e "DROP DATABASE IF EXISTS $(LOCAL_DB)"; \
+	  $(MYSQL) -e "CREATE DATABASE $(LOCAL_DB) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"; \
+	  $(MYSQL) -N -B -e "SELECT CONCAT('RENAME TABLE \`$(ARCHIVE)\`.\`', table_name, '\` TO \`$(LOCAL_DB)\`.\`', table_name, '\`;') FROM information_schema.tables WHERE table_schema='$(ARCHIVE)' AND table_type='BASE TABLE'" | $(MYSQL); \
+	  $(MYSQL) -e "DROP DATABASE $(ARCHIVE)"
+	@echo "✅ '$(ARCHIVE)' restaurada como '$(LOCAL_DB)'."
+
+# El chown del tar NO es cosmético: el contenedor corre como root, así que el
+# .tgz queda root en /tmp del server y, con el sticky bit de /tmp, tu usuario
+# SSH no puede borrarlo después ("Operation not permitted").
+storage-pull: ## Copia storage/app de producción (boletas y PDFs firmados) a tu local
+	@echo "==> empaquetando storage/app en $(SSH_HOST)"
+	ssh $(SSH_HOST) 'docker run --rm \
+	  -v $(STORAGE_VOL):/data:ro -v /tmp:/out alpine \
+	  sh -c "tar czf /out/miboleta_storage.tgz -C /data app && \
+	         chown $$(id -u):$$(id -g) /out/miboleta_storage.tgz"'
+	@echo "==> descargando"
+	scp $(SSH_HOST):/tmp/miboleta_storage.tgz $(DUMP_DIR)/miboleta_storage.tgz
+	ssh $(SSH_HOST) 'rm -f /tmp/miboleta_storage.tgz'
+	@echo "==> extrayendo en el contenedor del app"
+	docker compose -f $(COMPOSE) cp $(DUMP_DIR)/miboleta_storage.tgz app:/tmp/miboleta_storage.tgz
+	docker compose -f $(COMPOSE) exec -T app tar xzf /tmp/miboleta_storage.tgz -C /var/www/html/storage
+	docker compose -f $(COMPOSE) exec -T app rm -f /tmp/miboleta_storage.tgz
+	docker compose -f $(COMPOSE) exec -T app chown -R www-data:www-data /var/www/html/storage
+	@if [ "$(KEEP_DUMP)" != "1" ]; then rm -f $(DUMP_DIR)/miboleta_storage.tgz; fi
+	@echo "✅ storage/app de producción copiado."
+
+prod-pull: db-pull storage-pull ## BD + archivos de producción en tu local, de una
+	@echo "✅ Copia completa. Recuerda: NO levantes horizon si vas a tocar datos reales."
