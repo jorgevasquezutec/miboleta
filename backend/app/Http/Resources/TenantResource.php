@@ -14,11 +14,10 @@ class TenantResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        // Contador de empleados (RP1-C): initial_employee_count se fija una
-        // sola vez (idempotente) al completar la primera carga masiva sobre
-        // el tenant (ver UserBatch::syncInitialEmployeeCounts).
-        $currentEmployeeCount = $this->users()->count();
-        $initialEmployeeCount = (int) ($this->initial_employee_count ?? 0);
+        // Contador de empleados (RP1-C): fórmula única en Tenant::employeeCounts(),
+        // compartida con TenantService::transformTenantForList (index/show)
+        // — ver docblock ahí.
+        $employeeCounts = $this->employeeCounts();
 
         return [
             'id' => $this->id,
@@ -30,9 +29,9 @@ class TenantResource extends JsonResource
             'email' => $this->email,
             'address' => $this->address,
             'status' => $this->status,
-            'initial_employee_count' => $initialEmployeeCount,
-            'current_employee_count' => $currentEmployeeCount,
-            'subsequent_employee_count' => max(0, $currentEmployeeCount - $initialEmployeeCount),
+            'initial_employee_count' => $employeeCounts['initial_employee_count'],
+            'current_employee_count' => $employeeCounts['current_employee_count'],
+            'subsequent_employee_count' => $employeeCounts['subsequent_employee_count'],
             // Régimen laboral para el cómputo de vacaciones (RP2-A)
             'labor_regime' => $this->labor_regime,
             // Configuración SMTP propia de la empresa (RP2-B). mail_password

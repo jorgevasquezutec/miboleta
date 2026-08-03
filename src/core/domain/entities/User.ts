@@ -31,6 +31,20 @@ export interface User {
   tenants?: TenantAssociation[];
   primary_tenant?: TenantBasic | null;
 
+  /**
+   * Los 4 conceptos de vacaciones del cliente (VacationBalanceService::
+   * computeFourFigures) para la empresa ACTIVA de la petición — el mismo
+   * criterio de scoping que ya usa el resto del listado (header
+   * X-Tenant-Ids, o `?tenant_id` explícito para root). Backend:
+   * UserController::index().
+   *
+   * `null` cuando no hay una empresa activa inequívoca (root en modo "todas
+   * las empresas"): el saldo de un usuario depende de su hire_date /
+   * vacation_balance_initial POR empresa, así que no existe una única cifra
+   * correcta en ese modo — no se inventa una suma entre empresas.
+   */
+  vacation_balance?: VacationBalanceSummary | null;
+
   //Supervisor (DEPRECATED - usar tenants[].supervisor_id)
   /** @deprecated Use tenants[].supervisor_id instead */
   immediate_supervisor?: SupervisorBasic | null;
@@ -85,6 +99,23 @@ export interface TenantAssociation {
   department?: string | null;
   /** Cargo/puesto del usuario en esta empresa. */
   position?: string | null;
+}
+
+/**
+ * Saldo de vacaciones de un usuario en una empresa concreta, con el
+ * vocabulario del cliente (mensaje del 31/07/2026 — ver
+ * SPEC-VACACIONES v2 y VacationBalanceService en el backend):
+ *   - pending:   Vacaciones Pendientes (initial + acumulado de años completos)
+ *   - taken:     Vacaciones Gozadas (tomadas, acumulado)
+ *   - truncated: Vacaciones Truncas (del año laboral en curso, 2.5 x mes)
+ *   - balance:   Saldo Vacaciones (pending + truncated - taken)
+ */
+export interface VacationBalanceSummary {
+  tenant_id: string | number;
+  pending: number;
+  taken: number;
+  truncated: number;
+  balance: number;
 }
 
 // Información básica de tenant

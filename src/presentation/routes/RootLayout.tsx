@@ -456,7 +456,15 @@ export function RootLayout() {
           onNavigate={handleCloseSidebar}
         />
         <main className={cn(
-          "flex-1 p-4 sm:p-6 min-h-[calc(100vh-73px)] transition-all duration-300 bg-[#F8FAFC] max-w-full",
+          // min-w-0: sin esto, un flex item con contenido ancho (p.ej. una
+          // tabla) fuerza su propio ancho en vez de encogerse al espacio
+          // disponible; como `body { overflow-x: hidden }` (index.css) recorta
+          // cualquier desborde sin dejar scroll alcanzable, el contenido que
+          // no entraba (incluyendo botones de "Acciones" de las tablas)
+          // quedaba fuera de pantalla y sin forma de llegar a él. Con
+          // min-w-0, main se ajusta al ancho real y es el overflow-x-auto
+          // interno de cada tabla el que scrollea.
+          "flex-1 min-w-0 p-4 sm:p-6 min-h-[calc(100vh-73px)] transition-all duration-300 bg-[#F8FAFC] max-w-full",
           // On mobile, no margin; on desktop, margin based on sidebar width
           isMobile ? "ml-0" : (isSidebarExpanded ? "ml-64" : "ml-16")
         )}>
