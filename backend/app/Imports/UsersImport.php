@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\BulkUserUploadService;
 use App\Support\BulkUserColumns;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -15,18 +16,18 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 
 class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
 {
-    /**
-     * Roles operativos asignables por organización (RP1-C). 'root' queda
-     * excluido a propósito: es un rol global, no se asigna por empresa, y
-     * solo un root puede dar de alta a otro root (ver StoreUserRequest/
-     * UpdateUserRequest::FIX B1), jerarquía que la carga masiva no tiene
-     * forma de verificar por fila. Los usuarios root se crean a mano desde
-     * el alta individual.
-     *
-     * Este es el ÚNICO lugar donde la carga masiva asigna roles: no existe
-     * una columna 'rol' de nivel de fila. El rol siempre es por empresa.
-     */
-    private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
+    // Roles operativos asignables por organización (RP1-C): fuente única en
+    // BulkUserUploadService::allowedOrgRolesFor($importer). 'root' queda
+    // excluido a propósito: es un rol global, no se asigna por empresa, y
+    // solo un root puede dar de alta a otro root (ver StoreUserRequest/
+    // UpdateUserRequest::FIX B1), jerarquía que la carga masiva no tiene
+    // forma de verificar por fila. 'admin_tenant' quedó excluido para TODOS
+    // desde [OBS-CLIENTE 2026-07]; [OBS-CLIENTE 2026-08] aclaró que un
+    // importador root sí puede asignarlo (admin_tenant/admin siguen sin
+    // poder); ver el uso de $importer más abajo en parseOrganizations().
+    //
+    // Este es el ÚNICO lugar donde la carga masiva asigna roles: no existe
+    // una columna 'rol' de nivel de fila. El rol siempre es por empresa.
 
     private array $parsedData = [];
     private array $errors = [];
@@ -542,15 +543,19 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             // Validar rol(es) operativos para esta organización. Es
             // obligatorio: es el único lugar donde la fila declara el rol del
             // usuario, y sin él quedaría asignado a la empresa sin permisos.
+            // $importer ya se resolvió arriba (chequeo de tenant ownership);
+            // se reutiliza para que 'admin_tenant' solo pase cuando quien
+            // sube el archivo es root [OBS-CLIENTE 2026-08].
             $rolesRaw = $row[$rolesKey] ?? $row[$rolesKeyAlt] ?? null;
             $roles = [];
             $rolLabel = BulkUserColumns::labelFor($rolesKey);
+            $allowedRoles = BulkUserUploadService::allowedOrgRolesFor($importer);
 
             if (empty($rolesRaw)) {
                 $errors[] = [
                     'field' => $rolesKey,
                     'message' => "Rol es requerido en \"{$rolLabel}\" (permitidos: "
-                        . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                        . implode(', ', $allowedRoles) . ')',
                 ];
             } else {
                 $roles = array_values(array_filter(array_map(
@@ -559,11 +564,11 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
                 )));
 
                 foreach ($roles as $roleName) {
-                    if (!in_array($roleName, self::ALLOWED_ORG_ROLES, true)) {
+                    if (!in_array($roleName, $allowedRoles, true)) {
                         $errors[] = [
                             'field' => $rolesKey,
                             'message' => "Rol '{$roleName}' inválido en \"{$rolLabel}\" (permitidos: "
-                                . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                                . implode(', ', $allowedRoles) . ')',
                         ];
                     }
                 }

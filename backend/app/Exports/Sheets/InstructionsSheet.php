@@ -2,6 +2,8 @@
 
 namespace App\Exports\Sheets;
 
+use App\Models\User;
+use App\Services\BulkUserUploadService;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -14,10 +16,15 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 class InstructionsSheet implements FromArray, WithTitle, WithStyles, WithColumnWidths
 {
     private int $maxOrganizations;
+    private array $allowedOrgRoles;
 
-    public function __construct(int $maxOrganizations)
+    public function __construct(int $maxOrganizations, ?User $actor = null)
     {
         $this->maxOrganizations = $maxOrganizations;
+        // [OBS-CLIENTE 2026-08]: 'admin_tenant' se lista aquí solo si quien
+        // descarga la plantilla es root (ver BulkUserUploadService::
+        // allowedOrgRolesFor); admin/admin_tenant siguen sin poder asignarlo.
+        $this->allowedOrgRoles = BulkUserUploadService::allowedOrgRolesFor($actor);
     }
 
     public function title(): string
@@ -56,7 +63,7 @@ class InstructionsSheet implements FromArray, WithTitle, WithStyles, WithColumnW
             ['Para cada empresa {N}:'],
             ['1. RUC empresa {N}: (Obligatorio) Selecciona el RUC de la lista desplegable'],
             ['2. Rol en empresa {N}: (Obligatorio) Rol del usuario EN ESA empresa.'],
-            ['   Permitidos: admin, client, aprobador, admin_tenant.'],
+            ['   Permitidos: ' . implode(', ', $this->allowedOrgRoles) . '.'],
             ['   Para asignar varios roles en la misma empresa, sepáralos con coma'],
             ['   (ej: admin,aprobador).'],
             ['3. Supervisor empresa {N} (correo): (Opcional) Email del supervisor en esa empresa'],

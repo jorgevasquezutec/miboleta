@@ -11,16 +11,54 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Maatwebsite\Excel\Facades\Excel;
-use Generator;
 use Illuminate\Support\Facades\Auth;
 
 class BulkUserUploadService
 {
     /**
-     * Roles operativos asignables por organización (RP1-C). 'root' queda
-     * excluido a propósito: es un rol global, no se asigna por empresa.
+     * Roles operativos asignables por organización (RP1-C) para un actor NO
+     * root. 'root' queda excluido a propósito: es un rol global, no se
+     * asigna por empresa.
+     *
+     * 'admin_tenant' quedó excluido desde [OBS-CLIENTE 2026-07] para TODOS
+     * los actores; [OBS-CLIENTE 2026-08] aclaró que root sí debe poder
+     * asignarlo por carga masiva (admin_tenant/admin siguen sin poder). Ver
+     * allowedOrgRolesFor(), que resuelve la lista según quién sube el
+     * archivo/grid.
+     *
+     * Fuente única: ValidationRulesSheet, InstructionsSheet, UsersImport,
+     * UploadUserBatchDataRequest y ProcessUserChunk llaman a
+     * allowedOrgRolesFor() en vez de mantener su propia copia de la lista.
+     * Pública a propósito para que esas clases (otro namespace) puedan leerla.
      */
-    private const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
+    public const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador'];
+
+    /**
+     * Rol operativo por organización que solo un actor root puede asignar
+     * por carga masiva [OBS-CLIENTE 2026-08]. Ver allowedOrgRolesFor().
+     */
+    private const ROOT_ONLY_ORG_ROLE = 'admin_tenant';
+
+    /**
+     * Lista de roles operativos por organización permitidos en la carga
+     * masiva, según quién sube el archivo/grid. root puede asignar
+     * 'admin_tenant' además de los roles base; cualquier otro actor
+     * (incluido admin_tenant) solo puede asignar ALLOWED_ORG_ROLES.
+     *
+     * $actor null se trata como NO-root (fail-closed): los contextos en cola
+     * (ProcessUserChunk) que no logran resolver al creador del batch deben
+     * caer al conjunto más restrictivo, no al más permisivo.
+     *
+     * @return array<string>
+     */
+    public static function allowedOrgRolesFor(?User $actor): array
+    {
+        if ($actor && $actor->isRoot()) {
+            return [...self::ALLOWED_ORG_ROLES, self::ROOT_ONLY_ORG_ROLE];
+        }
+
+        return self::ALLOWED_ORG_ROLES;
+    }
 
     // ────────────────────────────────────────────────────────────
     // CONFIGURACIÓN
@@ -69,8 +107,10 @@ class BulkUserUploadService
             'default_organizations' => 1,
             // Roles operativos asignables por organización (org{n}_rol en el
             // Excel / selector por empresa en el editor). Se expone desde BD
-            // (sin hardcode) para que el frontend no tenga que duplicar la lista.
-            'available_roles' => Role::whereIn('name', self::ALLOWED_ORG_ROLES)
+            // (sin hardcode) para que el frontend no tenga que duplicar la
+            // lista. admin_tenant solo se incluye si quien pide la config es
+            // root [OBS-CLIENTE 2026-08] (ver allowedOrgRolesFor).
+            'available_roles' => Role::whereIn('name', self::allowedOrgRolesFor($user))
                 ->select('id', 'name', 'display_name')
                 ->get(),
         ];
@@ -290,10 +330,15 @@ class BulkUserUploadService
             $warnings = [];
             $validUsers = [];
 
+            // Roles operativos permitidos según quién sube el grid
+            // [OBS-CLIENTE 2026-08]: se resuelve una sola vez por request,
+            // no por fila (el actor no cambia entre filas del mismo batch).
+            $allowedRoles = self::allowedOrgRolesFor(Auth::user());
+
             // Validar cada usuario
             foreach ($users as $index => $user) {
                 $rowNumber = $user['row_number'] ?? $index + 2;
-                $rowErrors = $this->validateUserRow($user, $rowNumber);
+                $rowErrors = $this->validateUserRow($user, $rowNumber, $allowedRoles);
                 $errors = array_merge($errors, $rowErrors);
             }
 
@@ -381,8 +426,11 @@ class BulkUserUploadService
 
     /**
      * Validar una fila de usuario
+     *
+     * @param array<string> $allowedRoles Roles operativos por organización
+     *   permitidos para el actor que sube el grid (ver allowedOrgRolesFor).
      */
-    private function validateUserRow(array $user, int $rowNumber): array
+    private function validateUserRow(array $user, int $rowNumber, array $allowedRoles): array
     {
         $errors = [];
 
@@ -574,16 +622,16 @@ class BulkUserUploadService
                         'row' => $rowNumber,
                         'field' => "organizaciones.{$orgIndex}.roles",
                         'message' => 'Rol requerido en organización ' . ($orgIndex + 1)
-                            . ' (permitidos: ' . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                            . ' (permitidos: ' . implode(', ', $allowedRoles) . ')',
                     ];
                 }
 
                 foreach ($orgRoles as $roleName) {
-                    if (!in_array($roleName, self::ALLOWED_ORG_ROLES, true)) {
+                    if (!in_array($roleName, $allowedRoles, true)) {
                         $errors[] = [
                             'row' => $rowNumber,
                             'field' => "organizaciones.{$orgIndex}.roles",
-                            'message' => "Rol '{$roleName}' inválido en organización " . ($orgIndex + 1) . ' (permitidos: ' . implode(', ', self::ALLOWED_ORG_ROLES) . ')',
+                            'message' => "Rol '{$roleName}' inválido en organización " . ($orgIndex + 1) . ' (permitidos: ' . implode(', ', $allowedRoles) . ')',
                         ];
                     }
                 }
@@ -873,253 +921,6 @@ class BulkUserUploadService
         }
 
         return $duplicates;
-    }
-
-    // ────────────────────────────────────────────────────────────
-    // PROCESAMIENTO POR CHUNKS
-    // ────────────────────────────────────────────────────────────
-
-    /**
-     * Procesar usuarios en chunks (Generator para streaming)
-     */
-    public function processUsersInChunks(array $users, int $chunkSize = 50): Generator
-    {
-        $chunks = array_chunk($users, $chunkSize);
-        $totalChunks = count($chunks);
-        $processed = 0;
-        $created = 0;
-        $updated = 0;
-        $errors = [];
-
-        foreach ($chunks as $index => $chunk) {
-            DB::beginTransaction();
-
-            try {
-                $result = $this->processChunk($chunk);
-                DB::commit();
-
-                $created += $result['created'];
-                $updated += $result['updated'];
-                $processed += count($chunk);
-
-                yield [
-                    'type' => 'progress',
-                    'chunk' => $index + 1,
-                    'total_chunks' => $totalChunks,
-                    'processed' => $processed,
-                    'total' => count($users),
-                    'percentage' => round(($processed / count($users)) * 100, 1),
-                    'created' => $created,
-                    'updated' => $updated,
-                    'failed' => count($errors),
-                ];
-
-                // Pequeña pausa para no saturar BD
-                usleep(100000); // 0.1 seg
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-
-                $errors[] = [
-                    'chunk' => $index + 1,
-                    'message' => $e->getMessage(),
-                ];
-
-                Log::error('Bulk user upload chunk failed', [
-                    'chunk' => $index + 1,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-
-                yield [
-                    'type' => 'error',
-                    'chunk' => $index + 1,
-                    'message' => $e->getMessage(),
-                ];
-            }
-        }
-
-        yield [
-            'type' => 'complete',
-            'summary' => [
-                'total' => count($users),
-                'processed' => $processed,
-                'created' => $created,
-                'updated' => $updated,
-                'failed_rows' => count($errors),
-                'error_details' => $errors,
-            ],
-        ];
-    }
-
-    /**
-     * Procesar un chunk de usuarios
-     */
-    private function processChunk(array $users): array
-    {
-        $created = 0;
-        $updated = 0;
-        $userService = app(\App\Services\UserService::class);
-
-        foreach ($users as $userData) {
-            // Verificar si usuario existe
-            $existingUser = User::where('email', $userData['email'])->first();
-
-            if ($existingUser) {
-                // TODO: Implementar actualización de usuarios existentes
-                // Por ahora, omitir usuarios que ya existen
-                continue;
-            }
-
-            try {
-                // Preparar datos en el formato que espera UserService
-                $userDataForService = [
-                    'name' => $userData['nombre'],
-                    'last_name' => $userData['apellido'],
-                    'email' => $userData['email'],
-                    'document_type' => $userData['tipo_documento'],
-                    'document_text' => $userData['numero_documento'],
-                    'phone' => $userData['telefono'] ?? null,
-                    'status' => $userData['estado'],
-                    // Los roles van por empresa dentro de tenants_config; no hay
-                    // rol de nivel de fila (ver formatTenantsConfig).
-                    'tenants_config' => $this->formatTenantsConfig($userData['organizaciones']),
-                ];
-
-                // Usar UserService para crear el usuario
-                // Esto automáticamente:
-                // - Genera password temporal aleatorio
-                // - Envía email de bienvenida
-                // - Asigna must_change_password = true
-                // - Asigna roles y tenants con supervisores
-                $user = $userService->createUser($userDataForService);
-
-                $created++;
-            } catch (\Exception $e) {
-                Log::error('Error creating user in bulk upload', [
-                    'email' => $userData['email'],
-                    'error' => $e->getMessage(),
-                ]);
-                // Continuar con el siguiente usuario
-                continue;
-            }
-        }
-
-        return [
-            'created' => $created,
-            'updated' => $updated,
-        ];
-    }
-
-    /**
-     * Resolver IDs de roles operativos a partir de sus nombres (lookup en BD,
-     * sin hardcode). Ignora nombres inexistentes o el rol 'root' (que no se
-     * asigna por empresa).
-     *
-     * @param array<string> $roleNames
-     * @return array<int>
-     */
-    private function resolveRoleIdsByNames(array $roleNames): array
-    {
-        $names = array_values(array_unique(array_filter(array_map(
-            fn($name) => strtolower(trim((string) $name)),
-            $roleNames
-        ))));
-
-        if (empty($names)) {
-            return [];
-        }
-
-        return Role::whereIn('name', $names)
-            ->where('name', '!=', 'root')
-            ->pluck('id')
-            ->map(fn($id) => (int) $id)
-            ->all();
-    }
-
-    /**
-     * Formatear organizaciones al formato que espera UserService
-     *
-     * Por cada organización se emite tenant_id, is_primary, supervisor_id y,
-     * si vienen en el Excel/grid (RP1-C), role_ids (resueltos por nombre),
-     * hire_date y vacation_balance_initial. Los roles son la única fuente de
-     * permisos de la carga masiva (no hay rol de nivel de fila), y validateData
-     * exige al menos uno por organización.
-     */
-    private function formatTenantsConfig(array $organizations): array
-    {
-        $tenantsConfig = [];
-
-        foreach ($organizations as $index => $org) {
-            $tenant = Tenant::where('ruc', $org['ruc'])->first();
-
-            if (!$tenant) {
-                continue;
-            }
-
-            $supervisorId = null;
-            if (!empty($org['supervisor_email'])) {
-                $supervisor = User::where('email', $org['supervisor_email'])->first();
-                $supervisorId = $supervisor?->id;
-            }
-
-            $item = [
-                'tenant_id' => $tenant->id,
-                'is_primary' => $index === 0, // Primera organización es primaria
-                'supervisor_id' => $supervisorId,
-            ];
-
-            if (!empty($org['roles'])) {
-                $roleIds = $this->resolveRoleIdsByNames(
-                    is_array($org['roles']) ? $org['roles'] : explode(',', (string) $org['roles'])
-                );
-                if (!empty($roleIds)) {
-                    $item['role_ids'] = $roleIds;
-                }
-            }
-
-            if (!empty($org['hire_date'])) {
-                $item['hire_date'] = $org['hire_date'];
-            }
-
-            if (isset($org['vacation_balance_initial']) && $org['vacation_balance_initial'] !== null && $org['vacation_balance_initial'] !== '') {
-                $item['vacation_balance_initial'] = $org['vacation_balance_initial'];
-            }
-
-            $tenantsConfig[] = $item;
-        }
-
-        return $tenantsConfig;
-    }
-
-    /**
-     * Asignar organizaciones y supervisores a un usuario
-     * @deprecated Ya no se usa - UserService->createUser() maneja esto automáticamente
-     */
-    private function assignOrganizations(User $user, array $organizations): void
-    {
-        foreach ($organizations as $org) {
-            $tenant = Tenant::where('ruc', $org['ruc'])->first();
-
-            if (!$tenant) {
-                continue;
-            }
-
-            // Buscar supervisor si está especificado
-            $supervisorId = null;
-            if (!empty($org['supervisor_email'])) {
-                $supervisor = User::where('email', $org['supervisor_email'])->first();
-                $supervisorId = $supervisor?->id;
-            }
-
-            // Sincronizar relación (attach si no existe, update si existe)
-            $user->tenants()->syncWithoutDetaching([
-                $tenant->id => [
-                    'supervisor_id' => $supervisorId,
-                    'is_primary' => false, // Se define después
-                ]
-            ]);
-        }
     }
 
     // ────────────────────────────────────────────────────────────

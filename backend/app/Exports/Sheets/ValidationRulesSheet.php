@@ -2,6 +2,8 @@
 
 namespace App\Exports\Sheets;
 
+use App\Models\User;
+use App\Services\BulkUserUploadService;
 use App\Support\BulkUserColumns;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithTitle;
@@ -21,22 +23,22 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
     private const DOC_TYPES = ['dni', 'ce', 'passport', 'ruc'];
     private const STATUSES = ['active', 'inactive'];
 
-    /**
-     * Roles operativos asignables por organización (org{n}_rol). 'root' queda
-     * excluido: es un rol global, no se asigna por empresa y no se da de alta
-     * por carga masiva.
-     */
-    private const ORG_ROLES = ['admin', 'client', 'aprobador', 'admin_tenant'];
+    // Roles operativos asignables por organización (org{n}_rol): fuente única
+    // en BulkUserUploadService::allowedOrgRolesFor($actor). [OBS-CLIENTE
+    // 2026-07] sacó 'admin_tenant' para todos; [OBS-CLIENTE 2026-08] lo
+    // repuso solo para quien descarga la plantilla siendo root.
 
     private array $organizations;
     private array $supervisorsByOrg;
     private int $maxOrganizations;
+    private array $allowedOrgRoles;
 
-    public function __construct(array $organizations, array $supervisorsByOrg, int $maxOrganizations)
+    public function __construct(array $organizations, array $supervisorsByOrg, int $maxOrganizations, ?User $actor = null)
     {
         $this->organizations = $organizations;
         $this->supervisorsByOrg = $supervisorsByOrg;
         $this->maxOrganizations = $maxOrganizations;
+        $this->allowedOrgRoles = BulkUserUploadService::allowedOrgRolesFor($actor);
     }
 
     public function title(): string
@@ -101,7 +103,7 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
         $data[] = [''];
         $data[] = [''];
         $data[] = [self::SECTION_ORG_ROLES];
-        foreach (self::ORG_ROLES as $role) {
+        foreach ($this->allowedOrgRoles as $role) {
             $data[] = [$role];
         }
 
@@ -128,7 +130,7 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
                 $rucRange = $this->findSectionRange($sheet, self::SECTION_RUCS, count($this->organizations));
                 $docTypeRange = $this->findSectionRange($sheet, self::SECTION_DOC_TYPES, count(self::DOC_TYPES));
                 $statusRange = $this->findSectionRange($sheet, self::SECTION_STATUSES, count(self::STATUSES));
-                $orgRolesRange = $this->findSectionRange($sheet, self::SECTION_ORG_ROLES, count(self::ORG_ROLES));
+                $orgRolesRange = $this->findSectionRange($sheet, self::SECTION_ORG_ROLES, count($this->allowedOrgRoles));
 
                 if ($docTypeRange) {
                     $this->applyDropdown($usersSheet, $this->columnRange('tipo_documento', $lastRow), $docTypeRange);

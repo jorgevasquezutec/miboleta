@@ -10,6 +10,7 @@ class UsersTemplateExport implements WithMultipleSheets
     private int $maxOrganizations;
     private array $organizations;
     private array $supervisorsByOrg;
+    private ?\App\Models\User $actor;
 
     public function __construct(
         int $maxOrganizations = 3,
@@ -20,6 +21,10 @@ class UsersTemplateExport implements WithMultipleSheets
         // Obtener organizaciones disponibles
         /** @var \App\Models\User $user */
         $user = Auth::user();
+        // [OBS-CLIENTE 2026-08]: se propaga a ValidationRulesSheet/
+        // InstructionsSheet para que el dropdown/instrucciones de
+        // admin_tenant en la plantilla dependan de quién la descarga.
+        $this->actor = $user;
 
         if ($organizationIds) {
             // Filtrar solo las organizaciones seleccionadas
@@ -96,12 +101,14 @@ class UsersTemplateExport implements WithMultipleSheets
             new Sheets\ValidationRulesSheet(
                 $this->organizations,
                 $this->supervisorsByOrg,
-                $this->maxOrganizations
+                $this->maxOrganizations,
+                $this->actor
             ),
 
             // Hoja 5: Instrucciones de uso
             new Sheets\InstructionsSheet(
-                $this->maxOrganizations
+                $this->maxOrganizations,
+                $this->actor
             ),
         ];
     }

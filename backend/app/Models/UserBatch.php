@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Scopes\TenantFilterScope;
 use App\Models\Tenant;
 use Illuminate\Bus\Batch;
 use Illuminate\Database\Eloquent\Model;
@@ -66,8 +65,20 @@ class UserBatch extends Model
             }
         });
 
-        // ✅ Aplicar TenantFilterScope para multi-tenant isolation
-        static::addGlobalScope(new TenantFilterScope());
+        // FASE 4 (OBS-CLIENTE 2026-07, D3/D6): se retira TenantFilterScope.
+        // Un batch puede afectar VARIAS empresas (processing_options.
+        // affected_tenant_ids) y tenant_id es un único valor -la empresa
+        // activa al crearlo, NULL para root en vista global- que nunca puede
+        // gobernar correctamente su visibilidad. Con el scope activo, un
+        // batch se volvía invisible en cuanto la empresa activa del switcher
+        // dejaba de coincidir con ese tenant_id (para root, SIEMPRE, porque
+        // su tenant_id es NULL y NULL nunca matchea un IN(...)).
+        // La visibilidad correcta ya la resuelven explícitamente
+        // UserBatchController::index() (created_by OR tenants administrados)
+        // y ::authorizeBatchOwnership() (show/destroy/downloadErrors). Ver
+        // UserBatchController::store()/uploadData(), que ahora fijan
+        // tenant_id con ActiveTenantResolver (metadato informativo, no de
+        // autorización).
     }
 
     // ────────────────────────────────────────────────────────────
@@ -143,19 +154,6 @@ class UserBatch extends Model
             'failed_rows' => $data['failed'] ?? $this->failed_rows,
             'progress_percentage' => $data['percentage'] ?? $this->progress_percentage,
             'status' => 'processing',
-        ]);
-    }
-
-    /**
-     * Marcar batch como completado
-     */
-    public function markAsCompleted(array $summary): void
-    {
-        $this->update([
-            'status' => $summary['failed_rows'] > 0 ? 'partial' : 'completed',
-            'completed_at' => now(),
-            'success_summary' => $summary,
-            'progress_percentage' => 100,
         ]);
     }
 
@@ -396,36 +394,18 @@ class UserBatch extends Model
     }
 
     /**
-     * Callback cuando el batch se completa exitosamente
-     */
-    public static function onBatchCompleted(int $batchId): void
-    {
-        $batch = self::where('id', $batchId)->first();
-
-        if ($batch) {
-            $batch->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-                'progress_percentage' => 100,
-            ]);
-
-            $batch->syncInitialEmployeeCounts();
-
-            Log::info("✅ [BulkUserUpload] Batch completed", [
-                'batch_uuid' => $batch->uuid,
-                'batch_id' => $batch->batch_id,
-            ]);
-        }
-    }
-
-    /**
-     * Callback cuando el batch falla
+     * Callback cuando el batch falla por un error de infraestructura (job sin
+     * capturar, no fila individual: las filas inválidas nunca llegan aquí,
+     * quedan en failed_rows/error_summary y el status lo decide
+     * onBatchFinished). Único caller real de markAsFailed() -antes huérfano-.
      */
     public static function onBatchFailed(int $batchId, string $error): void
     {
         $batch = self::where('id', $batchId)->first();
-        
+
         if ($batch) {
+            $batch->markAsFailed($error);
+
             Log::error("❌ [BulkUserUpload] Batch failed", [
                 'batch_uuid' => $batch->uuid,
                 'batch_id' => $batch->batch_id,
@@ -435,16 +415,37 @@ class UserBatch extends Model
     }
 
     /**
-     * Callback cuando el batch finaliza (éxito o fallo)
+     * Callback cuando el batch finaliza (todos sus chunks terminaron, con o
+     * sin errores). Única fuente de verdad del status final -D4
+     * (OBS-CLIENTE 2026-07)-: se decide por los contadores reales de filas
+     * (created_users/failed_rows), no solo por $failedJobs de Laravel Bus,
+     * porque un chunk puede terminar como job "exitoso" y aun así contener
+     * filas fallidas (los errores por fila no relanzan la excepción, ver
+     * ProcessUserChunk::handle).
+     *
+     * Regla: failed = 0 creados y ≥1 fila/job fallido · partial = ≥1 creado y
+     * ≥1 fallo · completed = 0 fallos.
+     *
+     * El guard `!$batch->completed_at` evita pisar un status ya fijado por
+     * onBatchFailed() (que también marca completed_at).
      */
     public static function onBatchFinished(int $batchId, int $failedJobs): void
     {
         $batch = self::where('id', $batchId)->first();
 
         if ($batch && !$batch->completed_at) {
+            $batch->refresh();
+
+            $status = match (true) {
+                $batch->created_users === 0 && ($batch->failed_rows > 0 || $failedJobs > 0) => 'failed',
+                $batch->failed_rows > 0 || $failedJobs > 0 => 'partial',
+                default => 'completed',
+            };
+
             $batch->update([
-                'status' => $failedJobs > 0 ? 'partial' : 'completed',
+                'status' => $status,
                 'completed_at' => now(),
+                'progress_percentage' => 100,
             ]);
 
             // Best-effort e idempotente: fija el contador de empleados aun
@@ -455,6 +456,7 @@ class UserBatch extends Model
                 'batch_uuid' => $batch->uuid,
                 'batch_id' => $batch->batch_id,
                 'failed_jobs' => $failedJobs,
+                'status' => $status,
             ]);
         }
     }

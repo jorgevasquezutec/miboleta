@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserBatch;
+use App\Services\BulkUserUploadService;
 use App\Services\UserService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -74,145 +75,143 @@ class ProcessUserChunk implements ShouldQueue
         $errors = [];
         $affectedTenantIds = [];
 
-        DB::beginTransaction();
-
-        try {
-            foreach ($this->users as $userData) {
-                try {
-                    // 🔐 FIX B2-r1: rechazar la fila si alguna de sus
-                    // organizaciones referencia un tenant que el creador del
-                    // batch no administra. La resolución de ruc -> tenant_id
-                    // ya ocurrió aguas arriba (UsersImport::parseOrganizations
-                    // para el path de archivo, BulkUserUploadService::
-                    // transformOrganizationsForProcessing para el path de
-                    // datos editados/JSON), pero ninguna de esas dos vías
-                    // conoce quién subió el batch, así que la garantía dura
-                    // vive aquí, en el worker (fail-closed): sin este
-                    // chequeo, un admin/admin_tenant de la Empresa A podía
-                    // incluir en su archivo/grid una fila con el RUC de la
-                    // Empresa B (ajena) y el usuario terminaba creado y
-                    // adjunto a esa empresa ajena.
-                    $ownershipError = $this->tenantOwnershipError(
-                        $userData['organizaciones'] ?? [],
-                        $creator,
-                        $creatorIsRoot
-                    );
-                    if ($ownershipError !== null) {
-                        throw new \Exception($ownershipError);
-                    }
-
-                    // La carga masiva SOLO crea usuarios: no actualiza a los
-                    // que ya existen. Normalmente una fila así no llega hasta
-                    // aquí, porque la validación previa la marca como error y
-                    // el batch ni se crea (ver BulkUserUploadService::
-                    // validateFile/validateData y UserBatchController, que
-                    // corta con 422). Si llega, es por una carrera —alguien
-                    // creó ese usuario entre la previsualización y el
-                    // procesamiento en cola—, así que se reporta como fila
-                    // fallida en vez de omitirse en silencio.
-                    $existingUser = $this->findExistingUser($userData);
-
-                    if ($existingUser) {
-                        throw new \Exception(
-                            'El usuario ya existe en el sistema (documento o email en uso); '
-                            . 'la carga masiva solo da de alta usuarios nuevos.'
-                        );
-                    }
-
-                    // Preparar datos en el formato que espera UserService
-                    $tenantsConfig = $this->formatTenantsConfig($userData['organizaciones']);
-                    $userDataForService = [
-                        'name' => $userData['nombre'],
-                        'last_name' => $userData['apellido'],
-                        'email' => $userData['email'],
-                        'document_type' => $userData['tipo_documento'],
-                        'document_text' => $userData['numero_documento'],
-                        'phone' => $userData['telefono'] ?? null,
-                        // P1: fecha de nacimiento (campo de users). UserService::createUser
-                        // ya lee 'birth_date' desde $data.
-                        'birth_date' => $userData['birth_date'] ?? null,
-                        'status' => $userData['estado'],
-                        'tenants_config' => $tenantsConfig,
-                    ];
-
-                    // Crear usuario y despachar email con delay incremental (2s entre cada email)
-                    $emailDelay = $created * 2; // 0s, 2s, 4s, 6s...
-                    $userService->createUser($userDataForService, null, $sendWelcomeEmail, $emailDelay);
-                    $created++;
-
-                    // Registrar los tenants afectados por este usuario (para
-                    // fijar initial_employee_count de forma idempotente al
-                    // completar el batch, ver UserBatch::syncInitialEmployeeCounts)
-                    foreach ($tenantsConfig as $cfg) {
-                        if (!empty($cfg['tenant_id'])) {
-                            $affectedTenantIds[] = (int) $cfg['tenant_id'];
-                        }
-                    }
-
-                } catch (\Exception $e) {
-                    Log::error('Error processing user in chunk (create/update)', [
-                        'batch_uuid' => $this->batchUuid,
-                        'chunk' => $this->chunkNumber,
-                        'email' => $userData['email'],
-                        'error' => $e->getMessage(),
-                    ]);
-
-                    $errors[] = [
-                        'nombre' => $userData['nombre'] ?? 'N/A',
-                        'apellido' => $userData['apellido'] ?? 'N/A',
-                        'email' => $userData['email'],
-                        'documento' => $userData['numero_documento'] ?? 'N/A',
-                        'error' => $e->getMessage(),
-                    ];
+        // D5 (OBS-CLIENTE 2026-07): antes todo el chunk vivía en UNA sola
+        // transacción con DB::commit() incondicional al final del foreach, y
+        // recién DESPUÉS de ese commit se evaluaba si todas las filas habían
+        // fallado para decidir si lanzar (con el DB::rollBack() del catch
+        // exterior convertido en no-op: ya no había nada que revertir). El
+        // síntoma reportado por el cliente ("dice error pero sí crea
+        // usuarios") era exactamente eso: el job terminaba lanzando una
+        // excepción -y el frontend lo mostraba como fallo- después de haber
+        // comprometido en firme los usuarios válidos.
+        //
+        // Ahora cada fila vive en su propia transacción: una fila a medio
+        // crear se revierte sola, sin arrastrar a las demás filas del chunk
+        // (que ya están comprometidas de forma independiente). El job ya no
+        // relanza por "todas las filas fallaron": eso es semántica normal de
+        // negocio (ver UserBatch::onBatchFinished, que decide failed/partial/
+        // completed por los contadores reales), no un error de
+        // infraestructura. El job solo debe lanzar ante fallos genuinos de
+        // infraestructura (excepciones no capturadas por el try por-fila).
+        foreach ($this->users as $userData) {
+            try {
+                // 🔐 FIX B2-r1: rechazar la fila si alguna de sus
+                // organizaciones referencia un tenant que el creador del
+                // batch no administra. La resolución de ruc -> tenant_id
+                // ya ocurrió aguas arriba (UsersImport::parseOrganizations
+                // para el path de archivo, BulkUserUploadService::
+                // transformOrganizationsForProcessing para el path de
+                // datos editados/JSON), pero ninguna de esas dos vías
+                // conoce quién subió el batch, así que la garantía dura
+                // vive aquí, en el worker (fail-closed): sin este
+                // chequeo, un admin/admin_tenant de la Empresa A podía
+                // incluir en su archivo/grid una fila con el RUC de la
+                // Empresa B (ajena) y el usuario terminaba creado y
+                // adjunto a esa empresa ajena.
+                $ownershipError = $this->tenantOwnershipError(
+                    $userData['organizaciones'] ?? [],
+                    $creator,
+                    $creatorIsRoot
+                );
+                if ($ownershipError !== null) {
+                    throw new \Exception($ownershipError);
                 }
-            }
 
-            DB::commit();
+                // La carga masiva SOLO crea usuarios: no actualiza a los
+                // que ya existen. Normalmente una fila así no llega hasta
+                // aquí, porque la validación previa la marca como error y
+                // el batch ni se crea (ver BulkUserUploadService::
+                // validateFile/validateData y UserBatchController, que
+                // corta con 422). Si llega, es por una carrera —alguien
+                // creó ese usuario entre la previsualización y el
+                // procesamiento en cola—, así que se reporta como fila
+                // fallida en vez de omitirse en silencio.
+                $existingUser = $this->findExistingUser($userData);
 
-            // 📊 Actualizar contadores en user_batches
-            $this->updateBatchCounters($created, count($errors));
+                if ($existingUser) {
+                    throw new \Exception(
+                        'El usuario ya existe en el sistema (documento o email en uso); '
+                        . 'la carga masiva solo da de alta usuarios nuevos.'
+                    );
+                }
 
-            // 🏢 Registrar tenants afectados (para el contador de empleados)
-            if (!empty($affectedTenantIds)) {
-                $this->mergeAffectedTenantIds($affectedTenantIds);
-            }
+                // Preparar datos en el formato que espera UserService. Se
+                // pasa $creator para que resolveRoleIdsByNames sepa si
+                // 'admin_tenant' es un rol permitido para esta fila
+                // [OBS-CLIENTE 2026-08].
+                $tenantsConfig = $this->formatTenantsConfig($userData['organizaciones'], $creator);
+                $userDataForService = [
+                    'name' => $userData['nombre'],
+                    'last_name' => $userData['apellido'],
+                    'email' => $userData['email'],
+                    'document_type' => $userData['tipo_documento'],
+                    'document_text' => $userData['numero_documento'],
+                    'phone' => $userData['telefono'] ?? null,
+                    // P1: fecha de nacimiento (campo de users). UserService::createUser
+                    // ya lee 'birth_date' desde $data.
+                    'birth_date' => $userData['birth_date'] ?? null,
+                    'status' => $userData['estado'],
+                    'tenants_config' => $tenantsConfig,
+                ];
 
-            // 💾 Guardar errores detallados
-            if (!empty($errors)) {
-                $this->saveErrors($errors);
-            }
+                // Crear usuario (en su propia transacción) y despachar email
+                // con delay incremental (2s entre cada email). UserService::
+                // createUser ya despacha el email DESPUÉS de su propio
+                // commit interno (ver su doc), así que envolverlo aquí no
+                // adelanta el envío respecto al commit de la fila.
+                $emailDelay = $created * 2; // 0s, 2s, 4s, 6s...
+                DB::transaction(fn () => $userService->createUser($userDataForService, null, $sendWelcomeEmail, $emailDelay));
+                $created++;
 
-            // ⚠️ Si TODOS los usuarios fallaron, es un problema sistemático → fallar el job
-            $totalUsers = count($this->users);
-            if (count($errors) === $totalUsers && $totalUsers > 0) {
-                $errorMessage = "All users failed to process. First error: " . ($errors[0]['error'] ?? 'Unknown');
-                Log::error("❌ [ProcessUserChunk] All users failed", [
+                // Registrar los tenants afectados por este usuario (para
+                // fijar initial_employee_count de forma idempotente al
+                // completar el batch, ver UserBatch::syncInitialEmployeeCounts)
+                foreach ($tenantsConfig as $cfg) {
+                    if (!empty($cfg['tenant_id'])) {
+                        $affectedTenantIds[] = (int) $cfg['tenant_id'];
+                    }
+                }
+
+            } catch (\Exception $e) {
+                Log::error('Error processing user in chunk (create/update)', [
                     'batch_uuid' => $this->batchUuid,
                     'chunk' => $this->chunkNumber,
-                    'total_users' => $totalUsers,
-                    'first_error' => $errors[0]['error'] ?? 'Unknown',
+                    'email' => $userData['email'],
+                    'error' => $e->getMessage(),
                 ]);
-                throw new \Exception($errorMessage);
+
+                $errors[] = [
+                    'nombre' => $userData['nombre'] ?? 'N/A',
+                    'apellido' => $userData['apellido'] ?? 'N/A',
+                    'email' => $userData['email'],
+                    'documento' => $userData['numero_documento'] ?? 'N/A',
+                    // D5 (pulido): rol(es) por fila para que la columna Rol
+                    // de BulkUploadErrors.tsx deje de mostrar "-".
+                    'rol' => $this->extractRoleNames($userData['organizaciones'] ?? []),
+                    'error' => $e->getMessage(),
+                ];
             }
-
-            Log::info("✅ [ProcessUserChunk] Chunk completed", [
-                'batch_uuid' => $this->batchUuid,
-                'chunk' => $this->chunkNumber,
-                'created' => $created,
-                'errors' => count($errors),
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            Log::error("❌ [ProcessUserChunk] Chunk failed", [
-                'batch_uuid' => $this->batchUuid,
-                'chunk' => $this->chunkNumber,
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e; // Re-throw para reintentos automáticos
         }
+
+        // 📊 Actualizar contadores en user_batches
+        $this->updateBatchCounters($created, count($errors));
+
+        // 🏢 Registrar tenants afectados (para el contador de empleados)
+        if (!empty($affectedTenantIds)) {
+            $this->mergeAffectedTenantIds($affectedTenantIds);
+        }
+
+        // 💾 Guardar errores detallados
+        if (!empty($errors)) {
+            $this->saveErrors($errors);
+        }
+
+        Log::info("✅ [ProcessUserChunk] Chunk completed", [
+            'batch_uuid' => $this->batchUuid,
+            'chunk' => $this->chunkNumber,
+            'created' => $created,
+            'errors' => count($errors),
+        ]);
     }
 
     /**
@@ -231,10 +230,30 @@ class ProcessUserChunk implements ShouldQueue
      * Resolver IDs de roles operativos a partir de sus nombres (lookup en BD,
      * sin hardcode). Ignora nombres inexistentes o el rol 'root'.
      *
+     * Defensa en profundidad (hallazgo de Fase 5, OBS-CLIENTE 2026-07): la
+     * lista blanca de roles asignables por carga masiva es
+     * BulkUserUploadService::allowedOrgRolesFor($creator) (fuente única).
+     * Antes este método resolvía CUALQUIER rol que existiera en la tabla
+     * `roles` salvo 'root': si algo aguas arriba -payload armado a mano
+     * contra el endpoint, o cualquier futura vía que no pase por
+     * UploadUserBatchDataRequest/UsersImport- colaba 'admin_tenant' en
+     * org{n}_rol, este job se lo asignaba sin más. Este es el único pipeline
+     * que de verdad se ejecuta (ProcessBulkUserUpload se confirmó muerto y
+     * se eliminó), así que es el punto que importa blindar en firme.
+     *
+     * [OBS-CLIENTE 2026-08]: 'admin_tenant' pasó de estar excluido para TODOS
+     * a estar permitido SOLO cuando quien creó el batch ($creator) es root;
+     * de ahí que este método reciba $creator en vez de comparar contra una
+     * lista fija. Un rol no permitido se trata como error DE FILA (lanza, no
+     * ignora en silencio): formatTenantsConfig() se llama dentro del try
+     * por-fila de handle(), así que la excepción cae directo en
+     * error_summary con el campo 'rol' poblado (ver extractRoleNames),
+     * visible en BulkUploadErrors.tsx.
+     *
      * @param array<string> $roleNames
      * @return array<int>
      */
-    private function resolveRoleIdsByNames(array $roleNames): array
+    private function resolveRoleIdsByNames(array $roleNames, ?User $creator): array
     {
         $names = array_values(array_unique(array_filter(array_map(
             fn($name) => strtolower(trim((string) $name)),
@@ -245,11 +264,54 @@ class ProcessUserChunk implements ShouldQueue
             return [];
         }
 
+        $allowedOrgRoles = BulkUserUploadService::allowedOrgRolesFor($creator);
+        $disallowed = array_values(array_diff($names, $allowedOrgRoles));
+
+        if (!empty($disallowed)) {
+            throw new \Exception(
+                'Rol(es) no permitido(s) en carga masiva: ' . implode(', ', $disallowed)
+                . ' (permitidos: ' . implode(', ', $allowedOrgRoles) . ')'
+            );
+        }
+
         return Role::whereIn('name', $names)
             ->where('name', '!=', 'root')
             ->pluck('id')
             ->map(fn($id) => (int) $id)
             ->all();
+    }
+
+    /**
+     * D5 (pulido): nombres de rol legibles de TODAS las organizaciones de la
+     * fila, para la columna Rol de BulkUploadErrors.tsx (antes siempre "-"
+     * porque saveErrors() nunca guardaba este campo). A diferencia de
+     * resolveRoleIdsByNames(), no resuelve contra BD ni filtra 'root': es
+     * solo texto de diagnóstico para un error, no se usa para autorizar nada.
+     *
+     * @param array<int, array<string, mixed>> $organizaciones
+     */
+    private function extractRoleNames(array $organizaciones): string
+    {
+        $names = [];
+
+        foreach ($organizaciones as $org) {
+            $roles = is_array($org) ? ($org['roles'] ?? null) : null;
+
+            if (empty($roles)) {
+                continue;
+            }
+
+            $roles = is_array($roles) ? $roles : explode(',', (string) $roles);
+
+            foreach ($roles as $role) {
+                $role = trim((string) $role);
+                if ($role !== '') {
+                    $names[] = $role;
+                }
+            }
+        }
+
+        return implode(', ', array_values(array_unique($names)));
     }
 
     /**
@@ -261,8 +323,11 @@ class ProcessUserChunk implements ShouldQueue
      * da de alta por esta vía—, así que UsersImport/UploadUserBatchDataRequest
      * exigen al menos un rol por organización. También se propagan
      * hire_date/vacation_balance_initial cuando existen.
+     *
+     * @param ?User $creator Creador del batch (ver handle()); se reenvía a
+     *   resolveRoleIdsByNames para decidir si 'admin_tenant' es válido.
      */
-    private function formatTenantsConfig(?array $organizaciones): array
+    private function formatTenantsConfig(?array $organizaciones, ?User $creator): array
     {
         if (empty($organizaciones)) {
             return [];
@@ -291,7 +356,8 @@ class ProcessUserChunk implements ShouldQueue
 
             if (!empty($org['roles'])) {
                 $roleIds = $this->resolveRoleIdsByNames(
-                    is_array($org['roles']) ? $org['roles'] : explode(',', (string) $org['roles'])
+                    is_array($org['roles']) ? $org['roles'] : explode(',', (string) $org['roles']),
+                    $creator
                 );
                 if (!empty($roleIds)) {
                     $item['role_ids'] = $roleIds;
@@ -410,13 +476,19 @@ class ProcessUserChunk implements ShouldQueue
      *
      * 'updated_users' ya no se toca: la carga masiva no actualiza usuarios
      * existentes (la columna queda en 0 y no se muestra en ninguna pantalla).
+     *
+     * 'processed_rows' cuenta las filas PROCESADAS (creadas + fallidas), no
+     * solo las creadas: antes se incrementaba solo por $created, así que un
+     * batch con filas inválidas reportaba menos filas procesadas de las que
+     * realmente había recorrido. No afecta 'progress_percentage', que se
+     * calcula aparte desde el progreso por chunks de Bus::batch().
      */
     protected function updateBatchCounters(int $created, int $failed): void
     {
         try {
             UserBatch::where('uuid', $this->batchUuid)->increment('created_users', $created);
             UserBatch::where('uuid', $this->batchUuid)->increment('failed_rows', $failed);
-            UserBatch::where('uuid', $this->batchUuid)->increment('processed_rows', $created);
+            UserBatch::where('uuid', $this->batchUuid)->increment('processed_rows', $created + $failed);
             UserBatch::where('uuid', $this->batchUuid)->update(['current_chunk' => $this->chunkNumber]);
         } catch (\Exception $e) {
             Log::error('[ProcessUserChunk] Failed to update batch counters', [

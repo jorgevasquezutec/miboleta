@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Tenant;
 use App\Http\Requests\Concerns\ResolvesActiveRole;
+use App\Services\BulkUserUploadService;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UploadUserBatchDataRequest extends FormRequest
@@ -83,6 +84,12 @@ class UploadUserBatchDataRequest extends FormRequest
      */
     public function rules(): array
     {
+        // Roles operativos por organización permitidos según quién sube el
+        // grid [OBS-CLIENTE 2026-08]: root puede asignar 'admin_tenant';
+        // cualquier otro actor (incluido admin_tenant) no. Ver
+        // BulkUserUploadService::allowedOrgRolesFor, fuente única.
+        $allowedOrgRoles = BulkUserUploadService::allowedOrgRolesFor($this->user());
+
         return [
             'users' => 'required|array|min:1',
             'users.*.nombre' => 'required|string',
@@ -107,8 +114,13 @@ class UploadUserBatchDataRequest extends FormRequest
             // una columna 'rol' de nivel de fila), y solo un root puede dar de
             // alta a otro root, jerarquía que esta vía no puede verificar por
             // fila. Los root se crean a mano desde el alta individual.
+            // 'admin_tenant' quedó excluido para TODOS desde [OBS-CLIENTE
+            // 2026-07]; [OBS-CLIENTE 2026-08] aclaró que root sí puede
+            // asignarlo por esta vía (admin_tenant/admin siguen sin poder).
+            // Fuente única: BulkUserUploadService::allowedOrgRolesFor(), la
+            // misma que usa UsersImport para el flujo por archivo.
             'users.*.organizaciones.*.roles' => 'required|array|min:1',
-            'users.*.organizaciones.*.roles.*' => 'required|string|in:admin,client,aprobador,admin_tenant',
+            'users.*.organizaciones.*.roles.*' => 'required|string|in:' . implode(',', $allowedOrgRoles),
             'users.*.organizaciones.*.hire_date' => 'nullable|date',
             'users.*.organizaciones.*.vacation_balance_initial' => 'nullable|numeric|min:0',
             // RP-B3: departamento/cargo por organización. Sin estas reglas,
@@ -176,6 +188,10 @@ class UploadUserBatchDataRequest extends FormRequest
      */
     public function messages(): array
     {
+        // Mismo criterio que rules(): la lista mostrada en el mensaje de
+        // error debe coincidir con la que de verdad se validó para este actor.
+        $allowedOrgRoles = BulkUserUploadService::allowedOrgRolesFor($this->user());
+
         return [
             'users.required' => 'Debe enviar al menos un usuario.',
             'users.min' => 'Debe enviar al menos un usuario.',
@@ -193,7 +209,8 @@ class UploadUserBatchDataRequest extends FormRequest
             'users.*.organizaciones.min' => 'Cada usuario debe tener al menos una empresa asignada.',
             'users.*.organizaciones.*.roles.required' => 'Debes asignar al menos un rol en cada empresa.',
             'users.*.organizaciones.*.roles.min' => 'Debes asignar al menos un rol en cada empresa.',
-            'users.*.organizaciones.*.roles.*.in' => 'Uno de los roles por organización es inválido (admin, client, aprobador o admin_tenant).',
+            'users.*.organizaciones.*.roles.*.in' => 'Uno de los roles por organización es inválido (permitidos: '
+                . implode(', ', $allowedOrgRoles) . ').',
             'users.*.organizaciones.*.hire_date.date' => 'La fecha de ingreso de una organización no es válida.',
             'users.*.organizaciones.*.vacation_balance_initial.numeric' => 'El saldo de vacaciones de una organización debe ser numérico.',
             'users.*.organizaciones.*.vacation_balance_initial.min' => 'El saldo de vacaciones de una organización no puede ser negativo.',
