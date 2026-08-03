@@ -322,10 +322,15 @@ class UserBatchController extends Controller
         // 2. Guardar archivo en storage
         $path = $file->store('user-batches', 'private');
 
-        // 3. Obtener tenant_id (null para usuarios root)
+        // 3. Obtener tenant_id: la empresa ACTIVA del switcher (null para
+        // root en vista global), no "el primer tenant del usuario" -bug D3/D6:
+        // eso desalineaba la columna con la empresa realmente elegida, y para
+        // un usuario multi-empresa el batch terminaba atribuido a la empresa
+        // equivocada-. Ya no gobierna la visibilidad (ver UserBatch::booted()),
+        // solo es metadato informativo para la columna "Empresa" del historial.
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $tenantId = $user->tenants->first()?->id;
+        $tenantId = $this->activeTenantResolver->resolve($request, $user);
 
         // 4. Crear batch en BD
         $batch = UserBatch::create([
@@ -352,22 +357,34 @@ class UserBatchController extends Controller
             $jobs[] = new ProcessUserChunk($batch->uuid, $chunk, $index + 1);
         }
 
-        // 6. Despachar batch de jobs con callbacks
+        // 6. Marcar 'processing' ANTES de despachar. D4 (OBS-CLIENTE 2026-07):
+        // con una cola síncrona/muy rápida (tests, o un worker que levanta el
+        // job antes de que vuelva dispatch()) los callbacks then/catch/finally
+        // pueden correr DENTRO de la misma llamada a dispatch(). Si el status
+        // se fijaba a 'processing' DESPUÉS de dispatch(), ese update pisaba el
+        // status final (completed/partial/failed) que onBatchFinished ya
+        // había escrito -carrera real, no solo de test-. Fijarlo antes evita
+        // la carrera en cualquier driver de cola.
+        $batch->update([
+            'status' => 'processing',
+            'started_at' => now(),
+            'total_chunks' => count($userChunks),
+        ]);
+
+        // 7. Despachar batch de jobs con callbacks. Única fuente de verdad
+        // del status es onBatchFinished (decide por contadores reales); se
+        // retira then(onBatchCompleted), que fijaba 'completed'
+        // incondicionalmente e ignoraba filas fallidas.
         $laravelBatch = Bus::batch($jobs)
             ->name("Bulk User Upload: {$batch->original_filename}")
-            ->then(fn(Batch $lb) => UserBatch::onBatchCompleted($batch->id))
             ->catch(fn(Batch $lb, \Throwable $e) => UserBatch::onBatchFailed($batch->id, $e->getMessage()))
             ->finally(fn(Batch $lb) => UserBatch::onBatchFinished($batch->id, $lb->failedJobs))
             ->onQueue('bulk-uploads')
             ->dispatch();
 
-        // 7. Guardar batch_id en el registro
-        $batch->update([
-            'batch_id' => $laravelBatch->id,
-            'status' => 'processing',
-            'started_at' => now(),
-            'total_chunks' => count($userChunks),
-        ]);
+        // 8. Guardar el batch_id de Laravel Bus en el registro (no toca
+        // 'status': si el batch ya terminó de forma síncrona, no lo pisa).
+        $batch->update(['batch_id' => $laravelBatch->id]);
 
         return response()->json([
             'message' => 'Carga masiva iniciada exitosamente',
@@ -411,10 +428,11 @@ class UserBatchController extends Controller
 
         $users = $validated['users'];
 
-        // 1. Obtener tenant_id (null para usuarios root)
+        // 1. Obtener tenant_id: la empresa ACTIVA del switcher (null para
+        // root en vista global). Ver comentario equivalente en store().
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $tenantId = $user->tenants->first()?->id;
+        $tenantId = $this->activeTenantResolver->resolve($request, $user);
 
         // 2. Transformar organizaciones: ruc → tenant_id, supervisor_email → supervisor_id
         $users = $this->service->transformOrganizationsForProcessing($users);
@@ -444,22 +462,23 @@ class UserBatchController extends Controller
             $jobs[] = new ProcessUserChunk($batch->uuid, $chunk, $index + 1);
         }
 
-        // 5. Despachar batch de jobs con callbacks
+        // 5. Marcar 'processing' ANTES de despachar (ver comentario D4 en store()).
+        $batch->update([
+            'status' => 'processing',
+            'started_at' => now(),
+            'total_chunks' => count($userChunks),
+        ]);
+
+        // 6. Despachar batch de jobs con callbacks (ver comentario D4 en store())
         $laravelBatch = Bus::batch($jobs)
             ->name("Bulk User Upload (Edited): {$batch->original_filename}")
-            ->then(fn(Batch $lb) => UserBatch::onBatchCompleted($batch->id))
             ->catch(fn(Batch $lb, \Throwable $e) => UserBatch::onBatchFailed($batch->id, $e->getMessage()))
             ->finally(fn(Batch $lb) => UserBatch::onBatchFinished($batch->id, $lb->failedJobs))
             ->onQueue('bulk-uploads')
             ->dispatch();
 
-        // 6. Guardar batch_id en el registro
-        $batch->update([
-            'batch_id' => $laravelBatch->id,
-            'status' => 'processing',
-            'started_at' => now(),
-            'total_chunks' => count($userChunks),
-        ]);
+        // 7. Guardar el batch_id de Laravel Bus en el registro (no toca 'status').
+        $batch->update(['batch_id' => $laravelBatch->id]);
 
         return response()->json([
             'message' => 'Carga masiva iniciada exitosamente',

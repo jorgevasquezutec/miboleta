@@ -135,6 +135,33 @@ class Tenant extends Model
     }
 
     /**
+     * Contadores de empleados (RP1-C), fuente única para los dos lugares que
+     * antes calculaban la misma fórmula por separado (TenantService::
+     * transformTenantForList, usado en index/show, y TenantResource, usado
+     * en store/update) con el riesgo de que un cambio a la fórmula solo se
+     * aplicara en uno de los dos.
+     *
+     * "La carga inicial es la primera, luego de eso ya todo es nuevo"
+     * (confirmado por el cliente): initial_employee_count se fija una sola
+     * vez al completar la primera carga masiva (ver UserBatch::
+     * syncInitialEmployeeCounts) y todo lo posterior — alta manual o cargas
+     * siguientes — cuenta como "subsequent".
+     *
+     * @return array{current_employee_count:int, initial_employee_count:int, subsequent_employee_count:int}
+     */
+    public function employeeCounts(): array
+    {
+        $current = $this->users()->count();
+        $initial = (int) ($this->initial_employee_count ?? 0);
+
+        return [
+            'current_employee_count' => $current,
+            'initial_employee_count' => $initial,
+            'subsequent_employee_count' => max(0, $current - $initial),
+        ];
+    }
+
+    /**
      * Determina si la empresa tiene su propio servidor SMTP configurado.
      * Requiere al menos host y remitente; el resto de campos (usuario,
      * password, puerto, encriptación) son opcionales según el servidor.

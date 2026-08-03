@@ -127,7 +127,12 @@ export function PaginationControls({
                     </div>
                 )}
 
-                <Pagination className="mx-0 w-auto">
+                {/* overflow-x-auto: con muchas páginas (1 … 8 9 10 11 12 … 20) la fila
+                    puede superar el ancho disponible entre 480px y 640px, justo el
+                    rango donde los números de página empiezan a mostrarse (xs:flex
+                    más abajo). Sin esto, overflow-x:hidden del body (index.css)
+                    recorta "Siguiente" sin dejar forma de llegar a él. */}
+                <Pagination className="mx-0 w-auto overflow-x-auto">
                     <PaginationContent className="gap-1">
                         <PaginationItem>
                             <PaginationPrevious

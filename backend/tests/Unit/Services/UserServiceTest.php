@@ -232,38 +232,95 @@ class UserServiceTest extends TestCase
         $this->assertEquals(12, strlen($password));
     }
 
-    public function test_can_access_user_root_can_access_all(): void
+    // ── canManageUser (Decisión C1 — reemplaza a la vieja canAccessUser,
+    // que solo miraba solapamiento de tenant sin ninguna jerarquía de rol) ──
+
+    public function test_can_manage_user_root_can_manage_all(): void
     {
         $root = User::factory()->root()->create();
         $user = User::factory()->client()->create();
 
-        $canAccess = $this->userService->canAccessUser($root, $user);
-
-        $this->assertTrue($canAccess);
+        $this->assertTrue($this->userService->canManageUser($root, $user));
     }
 
-    public function test_can_access_user_admin_same_tenant(): void
+    public function test_can_manage_user_admin_manages_client_in_same_tenant(): void
     {
-        $user = User::factory()->client()->create();
-        $user->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)->create();
+        $client = User::factory()->withTenantRole($this->tenant, 'client', true)->create();
 
-        $canAccess = $this->userService->canAccessUser($this->admin, $user);
-
-        $this->assertTrue($canAccess);
+        $this->assertTrue($this->userService->canManageUser($admin, $client));
     }
 
-    public function test_cannot_access_user_different_tenant(): void
+    public function test_can_manage_user_admin_manages_aprobador_in_same_tenant(): void
     {
-        $otherTenant = Tenant::factory()->create();
-        $otherAdmin = User::factory()->admin()->create();
-        $otherAdmin->tenants()->attach($otherTenant->id, ['is_primary' => true]);
+        $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)->create();
+        $aprobador = User::factory()->withTenantRole($this->tenant, 'aprobador', true)->create();
 
-        $user = User::factory()->client()->create();
-        $user->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        $this->assertTrue($this->userService->canManageUser($admin, $aprobador));
+    }
 
-        $canAccess = $this->userService->canAccessUser($otherAdmin, $user);
+    public function test_admin_cannot_manage_another_admin_in_same_tenant(): void
+    {
+        // 'admin' solo administra aprobador/client (MANAGEABLE_ROLES), no a
+        // un par.
+        $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)->create();
+        $peer = User::factory()->withTenantRole($this->tenant, 'admin', true)->create();
 
-        $this->assertFalse($canAccess);
+        $this->assertFalse($this->userService->canManageUser($admin, $peer));
+    }
+
+    public function test_admin_tenant_manages_admin_in_same_tenant(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)->create();
+        $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)->create();
+
+        $this->assertTrue($this->userService->canManageUser($adminTenant, $admin));
+    }
+
+    public function test_admin_tenant_cannot_manage_another_admin_tenant_anywhere(): void
+    {
+        // Núcleo de C1: un admin_tenant es intocable para otro no-root,
+        // incluso sin empresa compartida — el chequeo del rol del target es
+        // global ("en CUALQUIER empresa"), no por tenant.
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+        $actor = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)->create();
+        $target = User::factory()->withTenantRole($otherTenant, 'admin_tenant', true)->create();
+
+        $this->assertFalse($this->userService->canManageUser($actor, $target));
+    }
+
+    public function test_admin_tenant_cannot_manage_self(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)->create();
+
+        $this->assertFalse($this->userService->canManageUser($adminTenant, $adminTenant));
+    }
+
+    public function test_nobody_non_root_can_manage_root(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)->create();
+        $root = User::factory()->root()->create();
+
+        $this->assertFalse($this->userService->canManageUser($adminTenant, $root));
+    }
+
+    public function test_aprobador_cannot_manage_anyone(): void
+    {
+        // 'aprobador' no está en MANAGEABLE_ROLES: no administra a nadie,
+        // aunque comparta tenant.
+        $aprobador = User::factory()->withTenantRole($this->tenant, 'aprobador', true)->create();
+        $client = User::factory()->withTenantRole($this->tenant, 'client', true)->create();
+
+        $this->assertFalse($this->userService->canManageUser($aprobador, $client));
+    }
+
+    public function test_cannot_manage_user_different_tenant(): void
+    {
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+        $otherAdmin = User::factory()->withTenantRole($otherTenant, 'admin', true)->create();
+        $client = User::factory()->withTenantRole($this->tenant, 'client', true)->create();
+
+        $this->assertFalse($this->userService->canManageUser($otherAdmin, $client));
     }
 
     public function test_assign_orphan_documents_returns_count(): void

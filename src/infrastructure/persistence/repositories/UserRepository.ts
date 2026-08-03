@@ -86,13 +86,18 @@ export class UserRepository implements IUserRepository {
    */
   async getUsers(params?: GetUsersParams): Promise<PaginatedResponse<User>> {
     try {
+      // Solo se envían los filtros con valor: un `search=`/`status=` vacío en
+      // la URL llega al backend como null (ConvertEmptyStringsToNull) y
+      // obliga a cada endpoint a distinguir "presente pero vacío" de "sin
+      // filtro". Omitirlos deja la query string limpia y con una sola
+      // semántica: si la clave no está, no se filtra.
       const response = await apiClient.get<PaginatedResponse<User>>('/users', {
         params: {
           page: params?.page,
           per_page: params?.per_page,
-          search: params?.search,
-          status: params?.status,
-          tenant_id: params?.tenant_id,
+          ...(params?.search ? { search: params.search } : {}),
+          ...(params?.status ? { status: params.status } : {}),
+          ...(params?.tenant_id ? { tenant_id: params.tenant_id } : {}),
         }
       });
       return response.data;

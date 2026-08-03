@@ -265,6 +265,12 @@ class TenantController extends Controller
      */
     public function users(Request $request, $id)
     {
+        // E1 [seguridad]: ruta paralela a UserController::index() con el
+        // mismo hueco — solo pasaba por canAccessTenant() (membresía), sin
+        // mirar la ability 'users.view_list'. El tenant de evaluación es el
+        // del recurso (el propio $id de la ruta), no la empresa activa.
+        $this->authorize('users.view_list', (int) $id);
+
         try {
             $users = $this->tenantService->getTenantUsers($id, $request->user());
 

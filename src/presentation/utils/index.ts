@@ -14,11 +14,15 @@ export {
   getBatchStatusLabel,
 } from "./batchStatus";
 
+// Gating de UI por usuario objetivo (espeja UserService::canManageUser)
+export { canEditTarget } from "./userPermissions";
+
 // Formatters
 export {
   formatDate,
   formatDateTime,
   formatPeriod,
   formatFileSize,
+  formatVacationDays,
   truncateText,
 } from "./formatters";

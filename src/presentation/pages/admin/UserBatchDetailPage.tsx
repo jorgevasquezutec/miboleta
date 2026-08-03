@@ -27,8 +27,8 @@ export function UserBatchDetailPage() {
                 toast.warning(`⚠️ Carga completada con ${batch.progress.failed_rows} errores`);
             }
         },
-        onError: () => {
-            toast.error('Error al cargar el batch');
+        onError: (err) => {
+            toast.error(err.message);
         },
     });
 
@@ -57,7 +57,7 @@ export function UserBatchDetailPage() {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
-                <p className="text-red-600">Error al cargar el batch</p>
+                <p className="text-red-600">{error.message}</p>
                 <Button onClick={handleBack}>Volver al Historial</Button>
             </div>
         );
@@ -120,6 +120,24 @@ export function UserBatchDetailPage() {
                     )}
                 </div>
             </div>
+
+            {/* D3 (OBS-CLIENTE 2026-07): banner de fallo. error_summary tiene
+                dos formas posibles: un objeto { message } cuando el batch
+                falló por un error de infraestructura (UserBatch::markAsFailed),
+                o un arreglo de errores por fila cuando falló porque TODAS las
+                filas eran inválidas (ver UserBatch::onBatchFinished). La tabla
+                de errores por fila (BulkUploadErrors, abajo) ya cubre el
+                segundo caso con detalle. */}
+            {batch.status === 'failed' && (
+                <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4">
+                    <p className="font-semibold">La carga falló</p>
+                    <p className="text-sm mt-1">
+                        {!Array.isArray(batch.errors) && batch.errors?.message
+                            ? batch.errors.message
+                            : `No se creó ningún usuario (${batch.progress?.failed_rows || 0} fila(s) con error). Revisa el detalle de errores más abajo.`}
+                    </p>
+                </div>
+            )}
 
             {/* Progress Card */}
             <BulkUploadProgress batch={batch} />

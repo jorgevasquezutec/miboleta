@@ -75,6 +75,8 @@ export function VacationHistoryPage() {
         historyRequests,
         historyTotal,
         historyTotalPages,
+        historyApprovedCount,
+        historyTakenCount,
         fetchHistoryRequests,
         isLoading,
         error,
@@ -204,18 +206,23 @@ export function VacationHistoryPage() {
         }
     };
 
-    // Filter by search term (client-side for name/email)
-    const filteredRequests = historyRequests.filter((request) => {
-        if (!filters.search) return true;
-        const search = filters.search.toLowerCase();
-        const userName = request.user?.fullName?.toLowerCase() || "";
-        const userEmail = request.user?.email?.toLowerCase() || "";
-        return userName.includes(search) || userEmail.includes(search);
-    });
+    // La búsqueda por empleado la resuelve el BACKEND (se manda como `search`
+    // y VacationService::buildAllRequestsQuery filtra por name/last_name/email),
+    // que es la misma query sobre la que se calculan los conteos de las
+    // tarjetas. Aquí había además un Array.filter client-side sobre
+    // `historyRequests`: era redundante (no podía descartar ninguna fila que el
+    // backend ya hubiera devuelto, porque fullName contiene name y last_name)
+    // y sugería que el filtrado vivía en el cliente — justo el malentendido que
+    // produjo el bug de los conteos truncados a la página actual.
+    const filteredRequests = historyRequests;
 
-    // Stats
-    const approvedCount = historyRequests.filter((r) => r.status === "approved").length;
-    const takenCount = historyRequests.filter((r) => r.wasTaken === true).length;
+    // Stats — vienen del backend sobre TODO el conjunto filtrado (no solo la
+    // página actual). Antes se calculaban con Array.filter sobre
+    // `historyRequests`, que solo trae la página visible: con más de
+    // `per_page` solicitudes los conteos quedaban truncados y cambiaban al
+    // paginar. Ver VacationService::getAllRequestsCounts.
+    const approvedCount = historyApprovedCount;
+    const takenCount = historyTakenCount;
 
     if (error) {
         return (
@@ -275,7 +282,7 @@ export function VacationHistoryPage() {
                             <Calendar className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Total Solicitudes</p>
+                            <p className="text-sm text-gray-600">Total de Solicitudes</p>
                             <p className="text-2xl font-bold text-blue-600">{historyTotal}</p>
                         </div>
                     </CardContent>
@@ -286,7 +293,7 @@ export function VacationHistoryPage() {
                             <Users className="w-6 h-6 text-green-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Aprobadas</p>
+                            <p className="text-sm text-gray-600">Solicitudes Aprobadas</p>
                             <p className="text-2xl font-bold text-green-600">{approvedCount}</p>
                         </div>
                     </CardContent>
@@ -297,7 +304,7 @@ export function VacationHistoryPage() {
                             <Calendar className="w-6 h-6 text-purple-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Tomadas</p>
+                            <p className="text-sm text-gray-600">Solicitudes con Vacaciones Tomadas</p>
                             <p className="text-2xl font-bold text-purple-600">{takenCount}</p>
                         </div>
                     </CardContent>

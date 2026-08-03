@@ -540,23 +540,28 @@ export function ProfilePage() {
                   <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
                     <TreePalm className="w-6 h-6 text-[#10B981]" />
                   </div>
+                  {/* Vocabulario y fórmulas del cliente (SPEC-VACACIONES v2):
+                      Saldo = Pendientes + Truncas − Gozadas. Antes esta tarjeta
+                      mostraba `available` (= Pendientes − Gozadas, sin truncas),
+                      así que el mismo empleado veía aquí un número menor que en
+                      "Mis Vacaciones". Ambas pantallas usan ahora `balance.balance`. */}
                   <div>
-                    <p className="text-sm text-[#64748B]">Días disponibles</p>
-                    <p className="text-3xl font-bold text-[#10B981]">{balance.available}</p>
+                    <p className="text-sm text-[#64748B]">Saldo de vacaciones</p>
+                    <p className="text-3xl font-bold text-[#10B981]">{balance.balance}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-xs text-[#64748B] mb-1">Saldo inicial</p>
-                    <p className="font-semibold text-[#1E293B]">{balance.initial}</p>
+                    <p className="text-xs text-[#64748B] mb-1">Vacaciones pendientes</p>
+                    <p className="font-semibold text-[#1E293B]">{balance.pending}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[#64748B] mb-1">Devengadas</p>
-                    <p className="font-semibold text-[#1E293B]">{balance.accrued}</p>
+                    <p className="text-xs text-[#64748B] mb-1">Vacaciones truncas</p>
+                    <p className="font-semibold text-[#1E293B]">{balance.truncated}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[#64748B] mb-1">Tomadas</p>
+                    <p className="text-xs text-[#64748B] mb-1">Vacaciones gozadas</p>
                     <p className="font-semibold text-[#1E293B]">{balance.taken}</p>
                   </div>
                   <div>

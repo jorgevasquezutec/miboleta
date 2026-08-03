@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { format, parse } from "date-fns";
+import { format, parse, parseISO } from "date-fns";
 import {
     ClipboardCheck,
     Loader2,
@@ -128,7 +128,11 @@ export function VacationApprovalsPage() {
     // Filter pending approvals by date range
     const filteredApprovals = pendingApprovals.filter((request) => {
         if (!filters.date_from) return true;
-        const requestDate = new Date(request.startDate);
+        // request.startDate es `YYYY-MM-DD` (solo fecha); parseISO lo
+        // interpreta en zona local igual que `parse` de más abajo, evitando
+        // el desfase de un día que introducía `new Date(string)` en zonas
+        // detrás de UTC (Perú, UTC-5) al comparar contra fromDate/toDate.
+        const requestDate = parseISO(request.startDate);
         const fromDate = parse(filters.date_from, 'yyyy-MM-dd', new Date());
         const toDate = filters.date_to ? parse(filters.date_to, 'yyyy-MM-dd', new Date()) : undefined;
 
@@ -156,7 +160,9 @@ export function VacationApprovalsPage() {
     }
 
     return (
-        <div className="space-y-4 sm:space-y-6">
+        // max-w-7xl: ver nota en TeamVacationsPage — sin tope, las filas de
+        // solicitud se estiran y abren un hueco entre datos y acciones.
+        <div className="space-y-4 sm:space-y-6 max-w-7xl">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div>
@@ -298,7 +304,9 @@ export function VacationApprovalsPage() {
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
+                        // Ver nota en TeamVacationsPage: lista con hairlines a
+                        // sangre del Card en vez de tarjetas sueltas.
+                        <div className="-mx-6 divide-y divide-border border-t border-border">
                             {filteredApprovals.map((request) => (
                                 <VacationRequestCard
                                     key={request.id}

@@ -135,7 +135,21 @@ class TenantServiceTest extends TestCase
 
     public function test_get_tenant_users(): void
     {
+        // Decisión C1: para no-root, getTenantUsers() excluye la fila propia
+        // del solicitante (además de cualquier admin_tenant). $this->admin
+        // consultando SU PROPIO tenant ya no se ve a sí mismo en el
+        // resultado; solo queda $this->client.
         $users = $this->tenantService->getTenantUsers($this->tenant->id, $this->admin);
+
+        $this->assertEquals(1, $users->count());
+        $this->assertTrue($users->contains('id', $this->client->id));
+        $this->assertFalse($users->contains('id', $this->admin->id));
+    }
+
+    public function test_get_tenant_users_includes_requester_for_root(): void
+    {
+        // Root no tiene la exclusión C1: ve el catálogo completo del tenant.
+        $users = $this->tenantService->getTenantUsers($this->tenant->id, $this->root);
 
         $this->assertGreaterThanOrEqual(2, $users->count()); // admin + client
     }

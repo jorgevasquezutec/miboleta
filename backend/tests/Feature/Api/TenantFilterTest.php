@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\UserTenantRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -35,13 +36,29 @@ class TenantFilterTest extends TestCase
         // Root user - should see ALL tenants
         $this->root = User::factory()->root()->create(['status' => 'active']);
 
+        $adminRoleId = Role::where('name', 'admin')->first()->id;
+
         // Admin assigned ONLY to tenant A
         $this->adminTenantA = User::factory()->admin()->create(['status' => 'active']);
         $this->adminTenantA->tenants()->attach($this->tenantA->id, ['is_primary' => true]);
+        // Los permisos operativos se resuelven por empresa (user_tenant_roles):
+        // sin esta fila, UserController::index() (que ahora autoriza
+        // 'users.view_list' contra la empresa activa) denegaría al admin
+        // aunque tenga el rol global de respaldo.
+        UserTenantRole::create([
+            'user_id' => $this->adminTenantA->id,
+            'tenant_id' => $this->tenantA->id,
+            'role_id' => $adminRoleId,
+        ]);
 
         // Admin assigned ONLY to tenant B
         $this->adminTenantB = User::factory()->admin()->create(['status' => 'active']);
         $this->adminTenantB->tenants()->attach($this->tenantB->id, ['is_primary' => true]);
+        UserTenantRole::create([
+            'user_id' => $this->adminTenantB->id,
+            'tenant_id' => $this->tenantB->id,
+            'role_id' => $adminRoleId,
+        ]);
 
         // Create users in each tenant
         $this->createUsersInTenant($this->tenantA, 3);

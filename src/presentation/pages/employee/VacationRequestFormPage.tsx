@@ -80,7 +80,16 @@ export function VacationRequestFormPage() {
         !!balance && !!selectedTenant && balance.tenantId === Number(selectedTenant.id);
 
     const approver = balanceMatchesTenant ? balance!.approver : null;
-    const availableDays = balanceMatchesTenant ? balance!.available : null;
+    // Tope de la validación: el Saldo (Pendientes + Truncas − Gozadas), no
+    // solo los días de años ya vencidos. Así el formulario nunca rechaza un
+    // número de días que la propia pantalla mostró como disponible.
+    //
+    // Esto permite ADELANTAR vacaciones truncas del período en curso (no
+    // vencido). Decisión provisional (SPEC-VACACIONES v2, 31/07/2026) —
+    // PENDIENTE DE CONFIRMAR con el cliente si quiere permitir ese adelanto;
+    // el backend (VacationService::validateSufficientBalance) valida contra
+    // el mismo campo para no discrepar con el frontend.
+    const availableDays = balanceMatchesTenant ? balance!.balance : null;
 
     // Mientras el saldo no ha cargado, usamos el supervisor_id del tenant
     // (dato ya disponible en el usuario) como respaldo para no bloquear el
@@ -290,6 +299,28 @@ export function VacationRequestFormPage() {
                             )}
                         </div>
                     </div>
+
+                    {/* Los 4 conceptos como contexto (SPEC-VACACIONES v2): el
+                        Saldo de arriba es Pendientes + Truncas − Gozadas; se
+                        desglosan aquí para que el empleado entienda de dónde
+                        sale el número contra el que valida este formulario. */}
+                    {balanceMatchesTenant && (
+                        <div className="grid grid-cols-3 gap-3 pt-2 border-t border-blue-200 text-center">
+                            <div>
+                                <p className="text-xs text-blue-700">Pendientes</p>
+                                <p className="text-sm font-semibold text-blue-900">{balance!.pending}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-blue-700">Truncas</p>
+                                <p className="text-sm font-semibold text-blue-900">{balance!.truncated}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-blue-700">Gozadas</p>
+                                <p className="text-sm font-semibold text-blue-900">{balance!.taken}</p>
+                            </div>
+                        </div>
+                    )}
+
                     {balanceMatchesTenant && approver && (
                         <div className="flex items-center gap-2 text-sm text-blue-800 pt-2 border-t border-blue-200">
                             <UserCheck className="w-4 h-4 text-blue-600" />

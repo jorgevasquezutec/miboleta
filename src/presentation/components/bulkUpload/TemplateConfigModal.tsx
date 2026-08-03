@@ -46,6 +46,12 @@ export function TemplateConfigModal({
         return null;
     }
 
+    // Roles operativos asignables por organización: se toman de configData
+    // (viene de BulkUserUploadService::ALLOWED_ORG_ROLES, sin hardcode) para
+    // no repetir aquí una lista que puede desincronizarse del backend
+    // ([OBS-CLIENTE 2026-07]: admin_tenant ya no se asigna por carga masiva).
+    const availableRoleNames = configData.available_roles.map((r) => r.name).join(', ');
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[500px]">
@@ -77,7 +83,7 @@ export function TemplateConfigModal({
                                 <div className="text-xs text-gray-500 ml-2 space-y-0.5">
                                     <div>• RUC empresa 1</div>
                                     <div>• Supervisor empresa 1 (correo)</div>
-                                    <div>• Rol en empresa 1 <span className="text-gray-400">(admin, client, aprobador, admin_tenant)</span></div>
+                                    <div>• Rol en empresa 1 <span className="text-gray-400">({availableRoleNames})</span></div>
                                     <div>• Fecha de ingreso empresa 1</div>
                                     <div>• Saldo de vacaciones empresa 1</div>
                                     <div>• Departamento empresa 1</div>

@@ -12,6 +12,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\PasswordService;
+use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -24,7 +25,8 @@ class PasswordController extends Controller
 {
     public function __construct(
         protected PasswordService $passwordService,
-        protected AuditService $auditService
+        protected AuditService $auditService,
+        protected UserService $userService
     ) {
     }
 
@@ -263,8 +265,29 @@ class PasswordController extends Controller
      */
     public function adminResetPassword(AdminResetPasswordRequest $request, string $userId): JsonResponse
     {
-        $validated = $request->validated();
         $user = User::findOrFail($userId);
+
+        // [SEGURIDAD — hallazgo fuera del pedido del cliente, hermano de C1]
+        // AdminResetPasswordRequest::authorize() solo chequea la ability
+        // 'users.reset_password' (root, admin_tenant); no miraba el usuario
+        // OBJETIVO en ningún punto. Sin este chequeo, cualquier admin_tenant
+        // podía resetear la contraseña de CUALQUIER usuario de la plataforma
+        // por id arbitrario — incluidos otros admin_tenant o un root — sin
+        // siquiera el chequeo débil de "comparten tenant" que tenía la vieja
+        // canAccessUser(). Es toma de control de cuenta, no solo una fuga de
+        // datos. Mismo patrón que UserController::update().
+        //
+        // Sin excepción de self-reset (a diferencia de show()): la cuenta
+        // propia se administra desde /profile -> PasswordController::
+        // changePassword (requiere la contraseña actual); este endpoint
+        // 'admin resetea la de otro' no tiene un caso de uso legítimo sobre
+        // uno mismo, y el frontend (PasswordResetModal) solo se monta desde
+        // UserDetailPage sobre OTRO usuario.
+        if (!$this->userService->canManageUser($request->user(), $user)) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
+        $validated = $request->validated();
 
         $result = $this->passwordService->adminResetPassword(
             $user,

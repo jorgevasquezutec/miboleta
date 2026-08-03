@@ -46,7 +46,13 @@ return [
     // admin_tenant es validación de payload y vive en StoreUserRequest.
     'users.create_limited_role' => ['root', 'admin_tenant'],
     'users.view_list' => ['root', 'admin', 'admin_tenant'],
-    'users.update' => ['root', 'admin_tenant'],
+    // [OBS-CLIENTE 2026-07] C3: 'admin' (Admin Empleados) ahora puede editar
+    // usuarios — antes solo root/admin_tenant. QUÉ puede editar (solo puede
+    // reasignar los roles aprobador/client) es validación de payload y vive
+    // en UserService::assignableRoleNamesFor(); QUÉ usuarios puede alcanzar
+    // (no a otro admin, no a un admin_tenant, no a sí mismo) lo resuelve
+    // UserService::canManageUser() en el controller.
+    'users.update' => ['root', 'admin', 'admin_tenant'],
     'users.deactivate' => ['root', 'admin_tenant'],
     'users.delete' => ['root'],
     'users.reset_password' => ['root', 'admin_tenant'],

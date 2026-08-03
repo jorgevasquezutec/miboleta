@@ -194,7 +194,11 @@ export function TeamVacationsPage() {
     }
 
     return (
-        <div className="space-y-6">
+        // max-w-7xl: <main> (RootLayout) no capa el ancho, así que en monitores
+        // anchos las filas de solicitud se estiraban a ~1750px y dejaban un
+        // hueco enorme entre los datos y la zona de decisión. Las pantallas con
+        // tabla sí aprovechan todo el ancho y por eso no llevan este tope.
+        <div className="space-y-6 max-w-7xl">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -329,7 +333,11 @@ export function TeamVacationsPage() {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
+                                // Lista con hairlines y a sangre del Card, no
+                                // tarjetas sueltas: N solicitudes son N líneas
+                                // de 1px en vez de N marcos con borde, sombra y
+                                // separación. Menos marcos, más densidad.
+                                <div className="-mx-6 divide-y divide-border border-t border-border">
                                     {pendingApprovals.map((request) => (
                                         <VacationRequestCard
                                             key={request.id}
@@ -372,7 +380,7 @@ export function TeamVacationsPage() {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
+                                <div className="-mx-6 divide-y divide-border border-t border-border">
                                     {pendingConfirmations.map((request) => (
                                         <VacationRequestCard
                                             key={request.id}
@@ -415,7 +423,7 @@ export function TeamVacationsPage() {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
+                                <div className="-mx-6 divide-y divide-border border-t border-border">
                                     {myDecisions.map((request) => (
                                         <VacationRequestCard
                                             key={request.id}

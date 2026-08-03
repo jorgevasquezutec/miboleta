@@ -4,7 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { User } from '@/core/domain/entities/User';
 import { userRepository } from '@/infrastructure/persistence/repositories';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
+import { useAuthStore } from '@/presentation/stores/authStore';
 import { useCan } from '@/presentation/hooks/useCan';
+import { canEditTarget } from '@/presentation/utils/userPermissions';
 import { Button } from '@/presentation/components/ui/button';
 import { Badge } from '@/presentation/components/ui/badge';
 import {
@@ -174,8 +176,26 @@ export function UserDetailPage() {
 
     // Permisos de la Matriz de Accesos, no el rol global (que dejaba fuera a
   // admin_tenant, con permiso de editar/resetear según la matriz).
-  const canEdit = useCan('users.update');
-  const canResetPassword = useCan('users.reset_password');
+  //
+  // La ability sola NO basta: dice si el actor puede editar EN GENERAL, no si
+  // puede editar a ESTE usuario. Sin el chequeo por objetivo, un admin veía el
+  // lápiz y la llave sobre otro admin o sobre un admin_tenant, y el click
+  // devolvía 403 (UserController::update / PasswordController::
+  // adminResetPassword). Mismo gating que UsersListPage: canEditTarget espeja
+  // UserService::canManageUser.
+  const { user: currentUser, currentTenant, currentRole } = useAuthStore();
+  const hasUpdateAbility = useCan('users.update');
+  const hasResetPasswordAbility = useCan('users.reset_password');
+
+  const canManageThisUser = !!user && canEditTarget(
+    user,
+    currentUser?.id,
+    currentRole,
+    currentTenant?.id
+  );
+
+  const canEdit = hasUpdateAbility && canManageThisUser;
+  const canResetPassword = hasResetPasswordAbility && canManageThisUser;
 
     if (isLoading) {
         return (

@@ -34,6 +34,8 @@ import {
 import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
+import { canEditTarget } from "@/presentation/utils/userPermissions";
+import { formatVacationDays } from "@/presentation/utils";
 
 export function UsersListPage() {
   useDocumentTitle('Usuarios');
@@ -47,7 +49,7 @@ export function UsersListPage() {
     goToPage,
     changePerPage,
   } = useUsersStore();
-  const { user: currentUser, currentTenant } = useAuthStore();
+  const { user: currentUser, currentTenant, currentRole } = useAuthStore();
   // El navbar (TenantSwitcher) es el único control de empresa para todos los
   // roles. isRootUser solo se usa para el export: ReportsController resuelve
   // la empresa de root por query param y la de no-root por header.
@@ -324,27 +326,49 @@ export function UsersListPage() {
             </div>
           ) : (
             <>
-              {/* Responsive Table */}
-              <div className="w-full overflow-x-auto">
-                <div className="rounded-md border">
+              {/* Responsive Table. Sin overflow-x-auto propio: el componente
+                  Table (ui/table.tsx) ya envuelve el <table> en uno; tener
+                  los dos anidados era redundante. */}
+              <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="whitespace-nowrap">Nombre</TableHead>
                         <TableHead className="whitespace-nowrap">Documento</TableHead>
                         <TableHead className="whitespace-nowrap">Tenants / Rol</TableHead>
+                        {/* Siempre visible (sin breakpoint): esconder estas 4 cifras detrás
+                            de un breakpoint que el cliente no ve equivale a no haberlas
+                            hecho (ya pasó con otra columna en una fase anterior). La tabla
+                            ya scrollea horizontalmente (overflow-x-auto) si no entra. */}
+                        <TableHead className="whitespace-nowrap">Vacaciones</TableHead>
                         <TableHead className="whitespace-nowrap hidden lg:table-cell">Supervisor</TableHead>
                         <TableHead className="whitespace-nowrap">Estado</TableHead>
-                        <TableHead className="text-center whitespace-nowrap">Acciones</TableHead>
+                        {/* sticky right-0: sin esto, con todas las columnas visibles
+                            (Nombre+email, Tenants/Rol con badges, Vacaciones 2x2,
+                            Supervisor, Estado) la tabla fácilmente supera los ~1100px
+                            y "Acciones" quedaba solo alcanzable scrolleando hasta el
+                            final — ahora los botones editar/ver/eliminar siempre están
+                            a la vista. */}
+                        <TableHead className="text-center whitespace-nowrap sticky right-0 z-10 bg-background border-l">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {users.map((user) => (
-                        <TableRow key={user.id}>
+                        // `group`: la celda sticky de Acciones necesita fondo propio
+                        // para tapar el contenido al scrollear, así que el
+                        // hover:bg-muted/50 de TableRow no la alcanza por sí solo;
+                        // group-hover en la celda (más abajo) lo compensa.
+                        <TableRow key={user.id} className="group">
                           <TableCell className="font-medium">
-                            <div>
-                              <div className="whitespace-nowrap">{user.full_name || `${user.name} ${user.last_name || ""}`}</div>
-                              <div className="text-xs text-muted-foreground whitespace-nowrap">{user.email}</div>
+                            {/* max-w + truncate: nombre completo + email son texto libre sin
+                                tope. Verificando el sticky de "Acciones" en Tenants encontré
+                                que una columna sin tope puede ensanchar la tabla lo suficiente
+                                para que "Acciones" (sticky) tape visualmente la columna vecina
+                                en la posición de scroll inicial. Acotamos aquí por la misma
+                                razón — ver TenantsListPage.tsx para el detalle. */}
+                            <div className="max-w-[200px]">
+                              <div className="whitespace-nowrap truncate" title={user.full_name || `${user.name} ${user.last_name || ""}`}>{user.full_name || `${user.name} ${user.last_name || ""}`}</div>
+                              <div className="text-xs text-muted-foreground whitespace-nowrap truncate" title={user.email}>{user.email}</div>
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
@@ -388,6 +412,50 @@ export function UsersListPage() {
                               )}
                             </div>
                           </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {/* B3: Pendientes/Gozadas/Truncas/Saldo (vocabulario del
+                                cliente, mensaje del 31/07/2026) para la empresa activa
+                                del switcher — mismo criterio que ya scopea el resto de
+                                este listado. `null` = root en modo "todas las empresas":
+                                el saldo depende de la empresa (hire_date propio de cada
+                                una), así que no hay una cifra única correcta y no se
+                                inventa una suma entre empresas. */}
+                            {user.vacation_balance ? (
+                              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs min-w-[130px]">
+                                <span title="Vacaciones Pendientes">
+                                  <span className="text-muted-foreground">Pend.</span>{" "}
+                                  <span className="font-medium">
+                                    {formatVacationDays(user.vacation_balance.pending)}
+                                  </span>
+                                </span>
+                                <span title="Vacaciones Gozadas">
+                                  <span className="text-muted-foreground">Goz.</span>{" "}
+                                  <span className="font-medium">
+                                    {formatVacationDays(user.vacation_balance.taken)}
+                                  </span>
+                                </span>
+                                <span title="Vacaciones Truncas">
+                                  <span className="text-muted-foreground">Trunc.</span>{" "}
+                                  <span className="font-medium">
+                                    {formatVacationDays(user.vacation_balance.truncated)}
+                                  </span>
+                                </span>
+                                <span title="Saldo Vacaciones">
+                                  <span className="text-muted-foreground">Saldo</span>{" "}
+                                  <span className="font-semibold">
+                                    {formatVacationDays(user.vacation_balance.balance)}
+                                  </span>
+                                </span>
+                              </div>
+                            ) : (
+                              <span
+                                className="text-muted-foreground text-sm"
+                                title="Selecciona una empresa en el navbar para ver el saldo de vacaciones"
+                              >
+                                —
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell className="whitespace-nowrap hidden lg:table-cell">
                             {user.tenants && user.tenants.length > 0 ? (
                               <div className="flex flex-col gap-1">
@@ -417,7 +485,7 @@ export function UsersListPage() {
                               {user.status || "active"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center sticky right-0 z-10 bg-background group-hover:bg-muted/50 border-l">
                             <div className="flex justify-center gap-2 whitespace-nowrap">
                               <Button
                                 variant="ghost"
@@ -426,27 +494,32 @@ export function UsersListPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {(canUpdateUser || canDeleteUser) && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      navigate(`/users/${user.id}/edit`)
-                                    }
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      handleDelete(user.id, user.full_name || user.name)
-                                    }
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </>
+                              {/* C2: Editar y Eliminar son botones independientes, no un
+                                  bloque OR. Antes compartían una sola condición
+                                  (canUpdateUser || canDeleteUser), así que a un
+                                  admin_tenant (que tiene users.update pero NO
+                                  users.delete) se le colaba el basurero. */}
+                              {canUpdateUser && canEditTarget(user, currentUser?.id, currentRole, currentTenant?.id) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() =>
+                                    navigate(`/users/${user.id}/edit`)
+                                  }
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {canDeleteUser && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() =>
+                                    handleDelete(user.id, user.full_name || user.name)
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
                               )}
                             </div>
                           </TableCell>
@@ -454,7 +527,6 @@ export function UsersListPage() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
               </div>
 
               {/* Pagination Controls */}

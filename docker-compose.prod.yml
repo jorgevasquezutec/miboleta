@@ -1,0 +1,163 @@
+# Production Docker Compose con imágenes pre-built
+# Las imágenes se construyen y suben a Docker Hub previamente
+# Esto hace los deploys mucho más rápidos
+
+services:
+  app:
+    image: ${DOCKER_USERNAME:-tu-usuario}/miboleta:${IMAGE_TAG:-latest}
+    container_name: miboleta_app
+    restart: always
+    working_dir: /var/www/html
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: production
+    volumes:
+      - storage_data:/var/www/html/storage
+      - cache_data:/var/www/html/bootstrap/cache
+    depends_on:
+      - db
+      - redis
+    networks:
+      - miboleta_network
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    container_name: miboleta_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - storage_data:/var/www/html/storage:ro
+      - ./docker/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - miboleta_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: mysql:8.0
+    container_name: miboleta_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      SERVICE_TAGS: production
+      SERVICE_NAME: mysql
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - mysql_backups:/backups
+    networks:
+      - miboleta_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: miboleta_redis
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - miboleta_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  horizon:
+    image: ${DOCKER_USERNAME:-tu-usuario}/miboleta:${IMAGE_TAG:-latest}
+    container_name: miboleta_horizon
+    restart: always
+    working_dir: /var/www/html
+    command: php artisan horizon
+    environment:
+      SERVICE_TAGS: production
+    volumes:
+      - storage_data:/var/www/html/storage
+      - cache_data:/var/www/html/bootstrap/cache
+    depends_on:
+      - app
+      - redis
+    networks:
+      - miboleta_network
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  reverb:
+    image: ${DOCKER_USERNAME:-tu-usuario}/miboleta:${IMAGE_TAG:-latest}
+    container_name: miboleta_reverb
+    restart: always
+    working_dir: /var/www/html
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    environment:
+      SERVICE_TAGS: production
+    depends_on:
+      - app
+      - redis
+    networks:
+      - miboleta_network
+
+  # Backup automático de MySQL
+  db_backup:
+    image: mysql:8.0
+    container_name: miboleta_backup
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: db
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      BACKUP_SCHEDULE: "0 2 * * *"
+      BACKUP_RETENTION_DAYS: 7
+    volumes:
+      - mysql_backups:/backups
+      - ./docker/scripts/backup.sh:/backup.sh:ro
+    command: sh -c "while true; do /backup.sh; sleep 86400; done"
+    depends_on:
+      - db
+    networks:
+      - miboleta_network
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  storage_data:
+    driver: local
+  cache_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  mysql_backups:
+    driver: local
+
+networks:
+  miboleta_network:
+    driver: bridge

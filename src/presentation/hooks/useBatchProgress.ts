@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import axios from 'axios';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import type { UserBatch } from '@/domain/types/bulkUserUpload.types';
 
@@ -65,7 +66,27 @@ export function useBatchProgress({
             }
 
         } catch (err) {
-            const error = err instanceof Error ? err : new Error('Error fetching batch');
+            // Distinguir la causa del error en vez del genérico "Error al
+            // cargar el batch": D3 (OBS-CLIENTE 2026-07) rastreó el reporte
+            // del cliente hasta un 404 real (batch invisible por el bug de
+            // tenant_id) que este hook mostraba con un mensaje que sonaba a
+            // fallo de procesamiento en vez de a "no encontrado/sin acceso".
+            let message = 'Error de red al cargar el batch';
+
+            if (axios.isAxiosError(err)) {
+                const status = err.response?.status;
+                if (status === 404) {
+                    message = 'La carga no existe o no tienes acceso a ella';
+                } else if (status === 403) {
+                    message = 'No tienes permisos para ver esta carga';
+                } else if (err.response) {
+                    message = 'Error al cargar el batch';
+                }
+            } else if (err instanceof Error) {
+                message = err.message;
+            }
+
+            const error = new Error(message);
             setError(error);
             setIsLoading(false);
             onErrorRef.current?.(error);
