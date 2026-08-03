@@ -224,13 +224,21 @@ export function VacationRequestsListPage() {
                   estado (balance.requests), no un filtro sobre la página actual
                   del listado (ver E2).
             */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {/* 6 columnas solo a partir de 2xl (1536px): en xl (1280px) cada
+                tarjeta se quedaba en ~150px y los títulos de dos palabras
+                partían en dos líneas. El período del año laboral se muestra
+                una sola vez BAJO el grid, no dentro de la tarjeta de Truncas:
+                al vivir dentro, estiraba esa celda y —como el grid iguala
+                alturas— dejaba las otras cinco medio vacías, además de
+                descolocar su icono (items-center lo centraba sobre un bloque
+                de texto más alto que el de las demás). */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
                 <Card>
                     <CardContent className="p-4 flex items-center gap-4">
                         <div className="p-3 rounded-full bg-orange-100">
                             <CalendarClock className="w-6 h-6 text-orange-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-sm text-gray-600">Vacaciones Pendientes</p>
                             <p className="text-2xl font-bold text-orange-600">
                                 {balanceLoading ? (
@@ -247,7 +255,7 @@ export function VacationRequestsListPage() {
                         <div className="p-3 rounded-full bg-emerald-100">
                             <CalendarCheck className="w-6 h-6 text-emerald-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-sm text-gray-600">Vacaciones Gozadas</p>
                             <p className="text-2xl font-bold text-emerald-600">
                                 {balanceLoading ? (
@@ -264,7 +272,7 @@ export function VacationRequestsListPage() {
                         <div className="p-3 rounded-full bg-purple-100">
                             <Clock className="w-6 h-6 text-purple-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-sm text-gray-600">Vacaciones Truncas</p>
                             <p className="text-2xl font-bold text-purple-600">
                                 {balanceLoading ? (
@@ -273,11 +281,6 @@ export function VacationRequestsListPage() {
                                     balance?.truncated ?? 0
                                 )}
                             </p>
-                            {!balanceLoading && balance?.currentPeriodStart && balance?.currentPeriodEnd && (
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                    Año laboral en curso: {formatDate(balance.currentPeriodStart)} – {formatDate(balance.currentPeriodEnd)}
-                                </p>
-                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -286,7 +289,7 @@ export function VacationRequestsListPage() {
                         <div className="p-3 rounded-full bg-blue-100">
                             <Wallet className="w-6 h-6 text-blue-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-sm text-gray-600">Saldo Vacaciones</p>
                             <p className="text-2xl font-bold text-blue-600">
                                 {balanceLoading ? (
@@ -303,7 +306,7 @@ export function VacationRequestsListPage() {
                         <div className="p-3 rounded-full bg-yellow-100">
                             <ClipboardList className="w-6 h-6 text-yellow-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-sm text-gray-600">Solicitudes Pendiente</p>
                             <p className="text-2xl font-bold text-yellow-600">
                                 {balanceLoading ? (
@@ -320,7 +323,7 @@ export function VacationRequestsListPage() {
                         <div className="p-3 rounded-full bg-green-100">
                             <ClipboardCheck className="w-6 h-6 text-green-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-sm text-gray-600">Aprobada</p>
                             <p className="text-2xl font-bold text-green-600">
                                 {balanceLoading ? (
@@ -333,6 +336,18 @@ export function VacationRequestsListPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* El año laboral arranca en el aniversario de ingreso de cada
+                trabajador, no en enero (D.Leg. 713), asi que conviene decir
+                cual es el periodo vigente: es el que gobierna las truncas. */}
+            {!balanceLoading && balance?.currentPeriodStart && balance?.currentPeriodEnd && (
+                <p className="text-xs text-gray-500 -mt-2">
+                    Año laboral en curso:{' '}
+                    <span className="font-medium text-gray-700">
+                        {formatDate(balance.currentPeriodStart)} – {formatDate(balance.currentPeriodEnd)}
+                    </span>
+                </p>
+            )}
 
             {/* Filters */}
             <Card>
