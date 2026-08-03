@@ -346,9 +346,13 @@ class ReportsService
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
+            // Nombre completo: ver User::scopeMatchingFullName — antes solo
+            // comparaba `name` contra el término completo, así que "Juan
+            // Pérez" nunca encontraba al autor del log (name=Juan,
+            // last_name=Pérez).
             $query->where(function ($q) use ($search) {
                 $q->where('action', 'like', "%{$search}%")
-                    ->orWhereHas('user', fn($u) => $u->where('name', 'like', "%{$search}%"));
+                    ->orWhereHas('user', fn($u) => $u->matchingFullName($search));
             });
         }
 
@@ -431,12 +435,14 @@ class ReportsService
             $query->where('created_at', '<=', $filters['date_to'] . ' 23:59:59');
         }
 
-        // Search filter (by user name)
+        // Search filter (by user full name or email). Nombre completo vía
+        // User::scopeMatchingFullName — antes 'name' y 'last_name' se
+        // comparaban por separado contra el término completo, así que
+        // "Juan Pérez" nunca encontraba a name=Juan, last_name=Pérez.
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->whereHas('user', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
+                $q->matchingFullName($search)
                     ->orWhere('email', 'like', "%{$search}%");
             });
         }
@@ -474,12 +480,21 @@ class ReportsService
             $query->whereHas('tenants', fn($q) => $q->where('tenants.id', $filters['tenant_id']));
         }
 
+        // Nombre completo vía User::scopeMatchingFullName — antes solo
+        // comparaba `name` contra el término completo (ni siquiera
+        // consideraba `last_name`), así que "Juan Pérez" nunca encontraba
+        // a name=Juan, last_name=Pérez.
+        //
+        // De paso: la columna era 'document_id', que no existe en `users`
+        // (el DNI es `document_text` — ver UserController::index, que sí lo
+        // usa bien). En MySQL eso rompe la query con "Unknown column" en
+        // cuanto se manda cualquier término de búsqueda.
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
+                $q->matchingFullName($search)
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('document_id', 'like', "%{$search}%");
+                    ->orWhere('document_text', 'like', "%{$search}%");
             });
         }
 
