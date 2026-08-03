@@ -76,3 +76,8 @@ coverage/
 /docs/pdf-generator/mermaid-diagram-*.png
 /docs/pdf-generator/cover-*.png
 CLAUDE.md
+# Config local de asistentes/MCP (por maquina, no del proyecto)
+.gemini/
+
+# Carpetas que dejan las pruebas de carga masiva ("testing <hora>/archivo.zip")
+testing */
