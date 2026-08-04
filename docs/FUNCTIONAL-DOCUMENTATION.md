@@ -5,30 +5,56 @@
 | Atributo | Valor |
 |----------|-------|
 | **Nombre del Sistema** | MiBoleta |
-| **Versión** | 1.0.0 |
-| **Fecha de Documentación** | Enero 2026 |
+| **Versión** | 1.1.0 |
+| **Fecha de Documentación** | Agosto 2026 |
 | **Tipo** | Sistema de Gestión Documental y Vacaciones |
 
 ---
 
 ## Descripción General
 
-**MiBoleta** es una plataforma empresarial diseñada para la gestión integral de documentos laborales y solicitudes de vacaciones. El sistema permite a las organizaciones:
+**MiBoleta** es una plataforma **multi-empresa** para la gestión de documentos
+laborales y de vacaciones. Una sola instalación atiende a varias empresas, con
+sus datos completamente separados entre sí.
 
-- **Cargar y distribuir documentos** (boletas de pago, contratos, liquidaciones) a sus empleados
-- **Firma digital con verificación en dos pasos** para garantizar la autenticidad
-- **Gestión de solicitudes de vacaciones** con flujo de aprobación por supervisores
-- **Auditoría completa** de todas las acciones del sistema
+Funciones principales:
+
+- **Distribución de documentos laborales** (boletas de pago, contratos,
+  liquidaciones), individual o mediante carga masiva de un archivo ZIP.
+- **Alta masiva de personal** a partir de un archivo, con validación previa y
+  procesamiento en segundo plano.
+- **Dos firmas independientes**: la del trabajador, con código de verificación
+  por correo, y la **firma digital criptográfica PAdES** de la empresa, que da
+  validez del documento frente a terceros.
+- **Gestión de vacaciones** según el régimen laboral peruano, con cálculo de los
+  cuatro conceptos (Pendientes, Gozadas, Truncas y Saldo) y flujo de aprobación
+  y confirmación.
+- **Servidor de correo propio por empresa**, con reserva al de la plataforma.
+- **Notificaciones** en tiempo real dentro de la aplicación y por correo.
+- **Auditoría** de las acciones del sistema.
 
 ---
 
 ## Roles del Sistema
 
-| Rol | Descripción | Permisos Principales |
-|-----|-------------|---------------------|
-| **Root** | Super administrador | Acceso total, gestión multi-tenant |
-| **Admin** | Administrador de organización | Gestión de usuarios, documentos, vacaciones |
-| **Client** | Empleado | Ver documentos, firmar, solicitar vacaciones |
+Cinco roles. `root` pertenece a la plataforma; los otros cuatro se asignan
+**por empresa**, de modo que una misma persona puede tener roles distintos en
+cada una y alterna entre ellos con los selectores de la barra superior.
+
+| Rol | Nombre en pantalla | Alcance |
+|-----|--------------------|---------|
+| `root` | Super Administrador | Plataforma: crea empresas, gestiona el certificado de firma y la configuración global. No opera en el día a día de ninguna empresa. |
+| `admin_tenant` | Admin Clientes | Su empresa por completo, incluidos los usuarios Admin y Aprobador, y la carga masiva de personal. |
+| `admin` | Admin Empleados | Operación diaria de su empresa: documentos, usuarios, vacaciones y reportes. |
+| `aprobador` | Aprobador | Aprueba, rechaza y confirma las vacaciones de las personas a su cargo. |
+| `client` | Empleado | Sus documentos, su firma y sus solicitudes de vacaciones. |
+
+> `root` **no es un comodín**: solo puede lo que la matriz de accesos le concede
+> explícitamente, y esta lo excluye de acciones operativas como firmar
+> documentos o solicitar vacaciones.
+>
+> La matriz completa de permisos, generada desde la configuración del sistema,
+> está en el **Manual de Usuario**, sección «Qué puede hacer cada rol».
 
 ---
 
@@ -46,17 +72,30 @@ La página de login proporciona acceso seguro al sistema mediante credenciales d
 | Elemento | Descripción |
 |----------|-------------|
 | **Logo MiBoleta** | Identidad visual del sistema |
-| **Campo Email** | Entrada para correo electrónico corporativo |
+| **Campo "DNI o correo electrónico"** | Admite **cualquiera de los dos** como identificador |
 | **Campo Contraseña** | Entrada segura con opción mostrar/ocultar |
 | **Botón "Iniciar Sesión"** | Ejecuta la autenticación |
 | **Enlace "¿Olvidaste tu contraseña?"** | Inicia flujo de recuperación |
 | **Pie de página** | Información legal y copyright |
 
 **Flujo de autenticación:**
-1. Usuario ingresa email y contraseña
-2. Sistema valida credenciales contra base de datos
-3. Si es válido: genera token JWT y redirige al dashboard correspondiente
-4. Si es inválido: muestra mensaje de error
+1. La persona ingresa su DNI **o** su correo, y la contraseña. Se admiten ambos
+   porque muchos trabajadores no tienen correo corporativo y sí recuerdan su
+   documento.
+2. El sistema valida las credenciales.
+3. Si son válidas, emite un **token de acceso de Laravel Sanctum** con una hora
+   de vigencia, más un **token de refresco** de 30 días que permite renovar la
+   sesión sin volver a pedir la contraseña.
+4. Si la cuenta está marcada para cambio obligatorio de contraseña —cuenta
+   recién creada o contraseña restablecida por un administrador—, se redirige a
+   la pantalla de cambio y no se permite continuar hasta definir una nueva.
+5. Si son inválidas, muestra un mensaje de error.
+
+**Selección de empresa y rol.** Toda la operación ocurre dentro de una empresa.
+Quien pertenece a más de una dispone de un selector de empresa en la barra
+superior y, si tiene roles distintos en ellas, de un selector de rol. La
+combinación determina qué se ve y qué se puede hacer; el aislamiento entre
+empresas es efectivo, no un simple filtro de presentación.
 
 ---
 
@@ -169,6 +208,26 @@ El segundo paso solicita al usuario ingresar el código de 6 dígitos recibido p
 
 ## 5. Gestión de Vacaciones (Empleado)
 
+### 5.0 Cómo se calculan las vacaciones
+
+El sistema aplica el régimen laboral peruano (D.Leg. 713 y régimen MYPE) y
+expone **cuatro cifras**, que son las que el cliente maneja:
+
+| Concepto | Qué es |
+|----------|--------|
+| **Vacaciones Pendientes** | Días de los años de servicio ya cumplidos. Incluye los que ya se tomaron, así que puede ser mayor que el Saldo. |
+| **Vacaciones Gozadas** | Días ya aprobados o confirmados como tomados. |
+| **Vacaciones Truncas** | Devengo proporcional del año laboral en curso, por dozavos y treintavos (D.S. 012-92-TR, art. 22). |
+| **Saldo de Vacaciones** | `Pendientes + Truncas − Gozadas`. Es el tope contra el que se valida una solicitud. |
+
+Dos reglas que condicionan todo el módulo:
+
+- **El devengo depende del régimen de cada empresa**: 30 días al año en régimen
+  general, 15 en régimen MYPE (micro y pequeña empresa).
+- **La antigüedad se cuenta por empresa**, no por persona. La fecha de ingreso
+  vive en el vínculo entre el trabajador y la empresa, de modo que quien trabaja
+  en dos empresas tiene dos antigüedades y dos saldos independientes.
+
 ### 5.1 Lista de Mis Vacaciones
 
 ![Employee Vacations](images/06_employee_vacations.png)
@@ -264,7 +323,7 @@ Vista principal del administrador con métricas globales de la organización.
 
 ### 7.1 Interfaz de Carga
 
-![Admin Upload](images/09_admin_upload.png)
+![Admin Upload](images/09_admin_upload_empty.png)
 
 **Descripción:**
 Permite al administrador cargar múltiples documentos simultáneamente mediante un archivo ZIP.
@@ -425,10 +484,24 @@ Permite al supervisor gestionar las solicitudes de vacaciones de sus subordinado
 | **Historial** | Solicitudes ya procesadas |
 | **Calendario** | Vista de calendario |
 
+**Saldo del solicitante en la propia fila:**
+
+Cada solicitud pendiente muestra el saldo de quien la pide **en la empresa de
+esa solicitud**, con el desglose de los tres conceptos que lo componen y una
+línea de conclusión:
+
+- *«Le quedarían X días»* cuando el saldo alcanza.
+- *«Excede por X días»*, resaltado, cuando lo solicitado lo supera.
+
+Existe porque el saldo puede haber bajado entre la solicitud y la aprobación,
+si entretanto se aprobaron otras vacaciones. **El aviso de exceso no bloquea la
+aprobación**: informa para decidir, la decisión sigue siendo del aprobador.
+
 **Acciones por solicitud:**
 - **Aprobar:** Concede las vacaciones
 - **Rechazar:** Deniega la solicitud (requiere motivo)
-- **Ver detalle:** Información completa
+- **Confirmar si se tomaron:** Una vez pasadas las fechas, el aprobador indica
+  si el descanso se disfrutó realmente. Solo entonces cuenta como *Gozadas*.
 
 ---
 
@@ -654,6 +727,90 @@ El sistema utiliza un flujo de invitación por email:
 
 ---
 
+## 16. Carga Masiva de Usuarios
+
+**Roles:** Super Administrador y Admin Clientes.
+
+Alta de personal a partir de un archivo, para el arranque de una empresa o
+incorporaciones grandes.
+
+**Formato.** Se parte de una plantilla descargable. La regla que más confusión
+genera: **una fila por cada combinación de persona y empresa**. Dos filas con el
+mismo DNI y distinta empresa producen **una sola cuenta** con dos vínculos
+laborales, cada uno con su fecha de ingreso, área, cargo, supervisor y saldo
+inicial. Es consecuencia directa de que las vacaciones se calculen por empresa.
+
+**Proceso:**
+
+1. Se sube el archivo y el sistema lo **valida sin guardar nada**: formato, DNIs
+   repetidos, empresas inexistentes y campos obligatorios.
+2. Se muestra una vista previa con los errores por fila.
+3. Al confirmar, la carga se procesa **en segundo plano**; la pantalla no queda
+   bloqueada.
+4. El lote registra su estado (pendiente, procesando, completado, completado con
+   errores, fallido) y el detalle de cada fila.
+5. Las filas fallidas se descargan aparte, con su motivo, para corregirlas y
+   reintentar sin afectar a las que sí entraron.
+
+Las cuentas creadas reciben contraseña temporal y deben cambiarla al entrar.
+
+---
+
+## 17. Firma Digital de Documentos
+
+El sistema maneja **dos firmas distintas**, con propósitos diferentes:
+
+| | Firma del trabajador | Firma digital de la empresa |
+|---|---|---|
+| **Qué demuestra** | Que la persona recibió el documento y lo dio por conforme | Que el documento es auténtico y no fue alterado |
+| **Quién la aplica** | El propio trabajador | La plataforma, con el certificado de la empresa |
+| **Cómo se valida** | Código enviado a su correo | Criptográficamente, en cualquier lector de PDF |
+| **Resultado visible** | Sello «RECIBÍ CONFORME» en el documento | Panel de firmas del lector de PDF |
+
+**Firma digital (PAdES).** El documento se normaliza a PDF/A-2b y se firma en
+formato PAdES con el certificado de la plataforma, añadiendo un sello de tiempo
+de una autoridad externa (RFC 3161). Se ejecuta en un servicio dedicado, aparte
+de la aplicación principal.
+
+Sin salida a internet la firma se produce igualmente, pero **sin sello de tiempo
+cualificado**.
+
+---
+
+## 18. Correo por Empresa y Ajustes de Plataforma
+
+**Servidor de correo propio (roles: Super Administrador, Admin Empleados).**
+Cada empresa puede enviar desde su propio servidor, para que a sus trabajadores
+les llegue desde una dirección conocida. Se configura en la ficha de la empresa
+—servidor, puerto, usuario, contraseña, cifrado y remitente— con una **prueba de
+conexión** antes de guardar. Si no se configura, se usa el servidor de la
+plataforma. La contraseña se guarda cifrada y nunca se muestra de vuelta.
+
+**Ajustes de plataforma (rol: Super Administrador):**
+
+| Pantalla | Función |
+|----------|---------|
+| Ajustes de plataforma | Servidor de correo por defecto y dirección pública del sistema |
+| Certificado de firma | Carga y gestión del certificado con el que se firman los documentos |
+| Ajustes de auditoría | Activa o desactiva el registro de cada tipo de acción |
+
+---
+
+## 19. Notificaciones
+
+Dos vías simultáneas:
+
+| Vía | Comportamiento |
+|-----|----------------|
+| **Campana en la barra superior** | Aviso instantáneo, sin recargar la página |
+| **Correo electrónico** | En paralelo, para quien no esté conectado |
+
+Se notifica la publicación de un documento, la solicitud de vacaciones de un
+subordinado, la aprobación o rechazo de una solicitud propia y el recordatorio
+de confirmar unas vacaciones ya pasadas.
+
+---
+
 ## Flujos de Proceso
 
 ### Flujo 1: Firma de Documento
@@ -764,5 +921,5 @@ Para soporte técnico o consultas sobre el sistema:
 
 ---
 
-*Documento generado automáticamente - MiBoleta v1.0.0*
-*Última actualización: Enero 2026*
+*Documento generado automáticamente - MiBoleta v1.1.0*
+*Última actualización: Agosto 2026*
