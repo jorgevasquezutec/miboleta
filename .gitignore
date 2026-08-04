@@ -76,6 +76,14 @@ coverage/
 /docs/pdf-generator/mermaid-diagram-*.png
 /docs/pdf-generator/cover-*.png
 CLAUDE.md
+# Paquetes de entrega armados con scripts/armar-entrega.sh: pesan gigas
+# (imágenes Docker) y se regeneran desde un tag cuando hagan falta.
+/dist/
+
+# Constancias de ejecución que genera entrega/verificar.sh. Se adjuntan al acta
+# de entrega en papel, no al repositorio.
+/entrega/evidencia/
+
 # Config local de asistentes/MCP (por maquina, no del proyecto)
 .gemini/
 

@@ -79,12 +79,43 @@ git bundle create "$DESTINO/fuentes/miboleta-historia.bundle" --all >/dev/null 2
 
 # --- 2. Imágenes -----------------------------------------------------------
 azul "2/6  Guardando imágenes Docker..."
-for img in "$IMAGEN_APP" "$IMAGEN_SIGNER" "mysql:8.0" "redis:7.4-alpine" "nginx:1.27-alpine" "adminer:4.8.1" "axllent/mailpit:latest"; do
+IMAGENES=("$IMAGEN_APP" "$IMAGEN_SIGNER" "mysql:8.0" "redis:7.4-alpine" "nginx:1.27-alpine" "adminer:4.8.1" "axllent/mailpit:latest")
+FALTANTES=()
+
+for img in "${IMAGENES[@]}"; do
   nombre="$(echo "$img" | tr '/:' '__')"
-  echo "     $img"
-  docker pull -q "$img" >/dev/null 2>&1 || true
-  docker save "$img" -o "$DESTINO/imagenes/${nombre}.tar"
+  printf '     %-55s' "$img"
+
+  # Si no está en local, se intenta bajar. Y si tampoco así, se reintenta
+  # forzando amd64: la imagen del signer se construye solo para esa
+  # arquitectura, así que en un Mac con Apple Silicon no baja por defecto.
+  if ! docker image inspect "$img" >/dev/null 2>&1; then
+    docker pull -q "$img" >/dev/null 2>&1 \
+      || docker pull -q --platform linux/amd64 "$img" >/dev/null 2>&1 \
+      || true
+  fi
+
+  if docker save "$img" -o "$DESTINO/imagenes/${nombre}.tar" 2>/dev/null; then
+    echo "ok"
+  else
+    echo "NO DISPONIBLE"
+    rm -f "$DESTINO/imagenes/${nombre}.tar"
+    FALTANTES+=("$img")
+  fi
 done
+
+# Un paquete al que le falta una imagen no arranca en casa del cliente. Se
+# avisa al final y con código de error, en vez de entregar algo roto en
+# silencio: es preferible descubrirlo aquí que delante del cliente.
+if [ ${#FALTANTES[@]} -gt 0 ]; then
+  echo
+  rojo "No se pudieron guardar estas imágenes:"
+  printf '   - %s\n' "${FALTANTES[@]}"
+  echo
+  echo "   El paquete quedaría incompleto y no arrancaría sin internet."
+  echo "   Construye o descarga esas imágenes y vuelve a ejecutar este script."
+  exit 1
+fi
 
 azul "3/6  Anotando digests..."
 {
