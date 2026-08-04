@@ -50,6 +50,49 @@ echo "✅ Database is ready!"
 echo "🔗 Creating storage link..."
 php artisan storage:link || echo "   Storage link already exists"
 
+# RUN_MIGRATIONS=false para los contenedores que NO deben migrar (horizon,
+# reverb). Los tres comparten esta imagen y este entrypoint, así que al
+# arrancar a la vez competían por las migraciones: uno ganaba y los otros dos
+# morían con "Table 'migrations' already exists". En Swarm no se notaba porque
+# la política de reinicio los volvía a levantar; en un compose plano se quedan
+# caídos y la aplicación se queda sin colas ni websockets.
+if [ "${RUN_MIGRATIONS:-true}" != "true" ]; then
+    echo "⏭️  Migraciones omitidas en este contenedor (RUN_MIGRATIONS=false)"
+    FIRST_TIME=false
+else
+
+# Esperar a que la base acepte conexiones ANTES de decidir nada.
+# Sin esto, el `migrate:status` de abajo puede fallar por unos milisegundos de
+# diferencia, el script concluye que la base está vacía e intenta crear las
+# tablas otra vez: "SQLSTATE[42S01] Table 'migrations' already exists", el
+# contenedor muere y se reinicia. El healthcheck del compose ayuda, pero no
+# cubre el momento en que MySQL aún está aplicando permisos al usuario de la
+# aplicación.
+echo "⏳ Esperando a la base de datos..."
+BD_LISTA=false
+for i in $(seq 1 60); do
+    if php -r '
+        $h = getenv("DB_HOST") ?: "db";
+        $p = getenv("DB_PORT") ?: "3306";
+        $d = getenv("DB_DATABASE");
+        $u = getenv("DB_USERNAME");
+        $w = getenv("DB_PASSWORD");
+        try { new PDO("mysql:host=$h;port=$p;dbname=$d", $u, $w); exit(0); }
+        catch (Throwable $e) { exit(1); }
+    ' 2>/dev/null; then
+        BD_LISTA=true
+        break
+    fi
+    sleep 2
+done
+
+if [ "$BD_LISTA" != true ]; then
+    echo "❌ La base de datos no respondió tras 2 minutos."
+    echo "   Revisa DB_HOST/DB_DATABASE/DB_USERNAME/DB_PASSWORD y que el servicio esté arriba."
+    exit 1
+fi
+echo "   Base de datos disponible."
+
 # Verificar si es primera vez (tabla migrations no existe)
 FIRST_TIME=false
 if ! php artisan migrate:status 2>/dev/null | grep -q "Migration name"; then
@@ -62,15 +105,22 @@ if [ "$FIRST_TIME" = true ]; then
     echo "📦 Running migrations for the first time..."
     php artisan migrate --force
 
-    # Solo hacer seed en primera instalación
+    # Solo hacer seed en primera instalación.
+    # SEEDER_CLASS es configurable para que el paquete de entrega pueda usar
+    # DemoSeeder (datos de demostración en todos los módulos) en vez del
+    # DatabaseSeeder base, que deja la plataforma sin documentos, sin
+    # vacaciones y sin fechas de ingreso — o sea, sin nada que enseñar.
     if [ "${RUN_SEEDERS:-false}" = "true" ]; then
-        echo "🌱 Running database seeders..."
-        php artisan db:seed --class=DatabaseSeeder --force
+        SEEDER_CLASS="${SEEDER_CLASS:-DatabaseSeeder}"
+        echo "🌱 Running database seeders (${SEEDER_CLASS})..."
+        php artisan db:seed --class="${SEEDER_CLASS}" --force
     fi
 else
     echo "🔄 Running migrations (if any)..."
     php artisan migrate --force
 fi
+
+fi  # fin de RUN_MIGRATIONS
 
 # Limpiar y cachear configuraciones (solo en producción)
 if [ "$APP_ENV" = "production" ]; then

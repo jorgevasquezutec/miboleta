@@ -25,8 +25,9 @@ const { marked } = require('marked');
 // Configuration
 const CONFIG = {
   docsPath: path.join(__dirname, '..'),
-  version: '1.0.0',
-  date: 'Enero 2026',
+  // Versión y fecha desde version.js: estaban repetidas en los tres
+  // generadores y la portada acababa contradiciendo a la primera página.
+  ...require('./version'),
   documents: [
     {
       input: 'USER-MANUAL.md',
@@ -43,6 +44,21 @@ const CONFIG = {
       subtitle: 'Arquitectura, configuración y despliegue del sistema',
       icon: '⚙️',
       audience: 'Desarrolladores, DevOps'
+    },
+    // La documentación funcional se retiró: 16 de sus 19 secciones, 17 de sus
+    // 20 capturas y los cuatro apéndices completos eran los mismos que los del
+    // manual. Mantener dos documentos con el mismo contenido no aportaba nada y
+    // sí garantizaba que se desincronizaran — y pasó: se quedó seis meses
+    // diciendo que el sistema usaba JWT y tenía tres roles.
+    // Lo único que solo estaba allí (el cálculo de los cuatro conceptos de
+    // vacaciones) se trasladó al manual, sección 16.0.
+    {
+      input: 'INSTALACION.md',
+      output: 'MiBoleta-Guia-de-Instalacion.pdf',
+      title: 'Guía de Instalación',
+      subtitle: 'Puesta en marcha de la plataforma en un servidor propio',
+      icon: '🛠️',
+      audience: 'Administradores de sistemas'
     }
   ]
 };

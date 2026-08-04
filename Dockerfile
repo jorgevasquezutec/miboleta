@@ -2,10 +2,15 @@
 # Stage 1: Build React frontend
 FROM node:18.20-alpine AS frontend_builder
 
-# ARG para seleccionar archivo .env de Vite
-# - Desarrollo (docker-compose): usa .env.local por defecto
-# - Swarm/Producción: pasar --build-arg VITE_ENV_FILE=config/.env.vite.swarm
-ARG VITE_ENV_FILE=.env.local
+# ARG para seleccionar el archivo .env de Vite.
+# - Por defecto .env.local.example, que SÍ está versionado: el default anterior
+#   era .env.local, que está en .gitignore, así que un `docker build` sobre un
+#   clon limpio moría en el COPY de abajo con "file not found". Las fuentes
+#   tienen que compilar en cualquier máquina, no solo donde ya existe ese
+#   archivo.
+# - Valores propios (dev): --build-arg VITE_ENV_FILE=.env.local
+# - Swarm/Producción:      --build-arg VITE_ENV_FILE=config/.env.vite.swarm
+ARG VITE_ENV_FILE=.env.local.example
 
 WORKDIR /app
 

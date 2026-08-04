@@ -1,0 +1,166 @@
+# MiBoleta — despliegue en un servidor propio
+# ---------------------------------------------------------------------------
+# Pensado para instalar la plataforma en UN servidor (VPS, máquina física o
+# nube), con Docker Compose. No requiere Docker Swarm ni orquestador.
+#
+# Toda la configuración sale de .env, que se crea copiando .env.example.
+# No edites este archivo salvo que necesites cambiar la topología.
+#
+#   ./instalar.sh          primera instalación
+#   docker compose up -d   arranques posteriores
+# ---------------------------------------------------------------------------
+
+# El nombre del proyecto va aquí y no solo en el `-p` de cada comando: sin esto,
+# un `docker compose up -d` a secas usaría el nombre del directorio
+# ("produccion") y crearía un stack PARALELO con volúmenes nuevos y vacíos,
+# chocando de puertos con el real. Los `-p miboleta` de la guía pasan a ser
+# redundantes, pero inofensivos.
+name: miboleta
+
+# Rotación de los registros de Docker. Sin esto, el journal de un contenedor
+# crece sin límite: en un servidor de 40 GB, MySQL y Horizon pueden llenarlo en
+# unos meses y tumbar el sistema entero por disco lleno. Con esto, cada servicio
+# conserva como mucho 30 MB.
+x-logging: &registro
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  app:
+    image: ${MIBOLETA_IMAGE}
+    logging: *registro
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: app
+      COPY_PUBLIC_TO_VOLUME: "true"
+      # Solo migraciones. La siembra de datos base (roles y tipos de documento)
+      # la hace instalar.sh una única vez: RUN_SEEDERS aquí volvería a
+      # ejecutarse en cada recreación del contenedor.
+      RUN_SEEDERS: "false"
+    env_file: [./.env]
+    volumes:
+      - public_files:/var/www/html/public-shared
+      - storage_data:/var/www/html/storage
+      - cache_data:/var/www/html/bootstrap/cache
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+    networks: [miboleta]
+
+  nginx:
+    image: nginx:1.27-alpine
+    logging: *registro
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - public_files:/var/www/html/public:ro
+      - storage_data:/var/www/html/storage:ro
+      # `z` ademas de `ro`: en sistemas con SELinux activo (Rocky, Alma,
+      # RHEL) un bind mount sin etiquetar produce denials y nginx entra en
+      # bucle de reinicio. Donde SELinux no esta activo, Docker lo ignora.
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro,z
+      - ./ssl:/etc/nginx/ssl:ro,z
+    depends_on: [app]
+    networks: [miboleta]
+
+  db:
+    image: mysql:8.0
+    logging: *registro
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      # Una consulta real contra LA BASE de la aplicación, no `mysqladmin ping`.
+      # El ping responde en cuanto el servidor arranca, pero en el primer
+      # arranque MySQL sigue creando la base y el usuario: la aplicación se
+      # conectaba antes de tiempo, moría con "SQLSTATE[2002] Connection
+      # refused" y se reiniciaba un par de veces.
+      # `$$` para que compose NO sustituya la variable: se resuelve DENTRO del
+      # contenedor en cada comprobación. Con `-p${DB_ROOT_PASSWORD}` la
+      # contraseña quedaba escrita en la definición del contenedor y salía en
+      # texto plano en `docker inspect`, que puede leer cualquiera del grupo
+      # docker sin ser root.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql -h localhost -u root -e \"USE $$MYSQL_DATABASE; SELECT 1;\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Copias de seguridad de la base: ver PROCEDIMIENTO en INSTALACION.md
+      - ./backups:/backups:z
+    networks: [miboleta]
+
+  redis:
+    image: redis:7.4-alpine
+    logging: *registro
+    restart: unless-stopped
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    volumes:
+      - redis_data:/data
+    networks: [miboleta]
+
+  # Procesa las tareas en segundo plano: envío de correos, carga masiva de
+  # usuarios y de documentos. Sin él, esas acciones se encolan y no ocurren.
+  horizon:
+    image: ${MIBOLETA_IMAGE}
+    logging: *registro
+    restart: unless-stopped
+    command: php artisan horizon
+    environment:
+      RUN_MIGRATIONS: "false"   # solo `app` migra; si no, compiten al arrancar
+    env_file: [./.env]
+    volumes:
+      - storage_data:/var/www/html/storage
+      - cache_data:/var/www/html/bootstrap/cache
+    depends_on: [app]
+    networks: [miboleta]
+
+  # Notificaciones en tiempo real (la campana de la barra superior).
+  reverb:
+    image: ${MIBOLETA_IMAGE}
+    logging: *registro
+    restart: unless-stopped
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    environment:
+      RUN_MIGRATIONS: "false"
+    ports:
+      - "${REVERB_PUBLIC_PORT:-8085}:8080"
+    env_file: [./.env]
+    depends_on: [app]
+    networks: [miboleta]
+
+  # Firma digital PAdES de los documentos.
+  signer:
+    image: ${MIBOLETA_SIGNER_IMAGE}
+    logging: *registro
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["uvicorn", "app:app", "--app-dir", "/opt/signer", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - storage_data:/var/www/html/storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [miboleta]
+
+volumes:
+  mysql_data:
+  redis_data:
+  public_files:
+  storage_data:
+  cache_data:
+
+networks:
+  miboleta:
+    driver: bridge

@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Explícito para que se vea de dónde salen las VITE_*. Con valores
+        # propios: VITE_ENV_FILE=.env.local docker compose build
+        VITE_ENV_FILE: ${VITE_ENV_FILE:-.env.local.example}
     container_name: miboleta_app
     tty: true
     working_dir: /var/www/html
@@ -71,6 +75,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Explícito para que se vea de dónde salen las VITE_*. Con valores
+        # propios: VITE_ENV_FILE=.env.local docker compose build
+        VITE_ENV_FILE: ${VITE_ENV_FILE:-.env.local.example}
     container_name: miboleta_horizon
     # restart: unless-stopped
     working_dir: /var/www/html
@@ -89,6 +97,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Explícito para que se vea de dónde salen las VITE_*. Con valores
+        # propios: VITE_ENV_FILE=.env.local docker compose build
+        VITE_ENV_FILE: ${VITE_ENV_FILE:-.env.local.example}
     container_name: miboleta_reverb
     # restart: unless-stopped
     working_dir: /var/www/html

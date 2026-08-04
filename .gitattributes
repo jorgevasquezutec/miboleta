@@ -1,0 +1,47 @@
+# Qué NO viaja en el código fuente que se entrega
+# ---------------------------------------------------------------------------
+# `export-ignore` excluye estos archivos de `git archive`, que es como se
+# empaquetan las fuentes para el cliente (ver scripts/empaquetar-proyecto.sh y
+# scripts/armar-entrega.sh). Siguen en el repositorio y en la historia: solo no
+# salen en el paquete.
+#
+# No es lo mismo que borrarlos. Son útiles internamente; el problema es lo que
+# significan en manos del cliente.
+
+# ── Documentos comerciales e internos ──────────────────────────────────────
+# La cotización lleva precios y tarifas propias. El documento interno y las
+# notas de QA son material de trabajo del equipo, no del entregable.
+docs/COTIZACION_MODULO_VACACIONES.md    export-ignore
+docs/DOCUMENTO_INTERNO.md               export-ignore
+docs/sprintfix/QA-SPRINT-FIX-CAMBIOS.md export-ignore
+docs/Observaciones.docx                 export-ignore
+
+# Las notas técnicas de apoyo (DEVELOPMENT, CLEAN_ARCHITECTURE, DEPLOY,
+# PASSWORD_SYSTEM, DEPARTMENTS_IMPLEMENTATION y TENANT_MULTI_SELECTOR) SÍ se
+# entregan: se comprobó que lo que documentan sigue existiendo en el código, y
+# son justo lo que necesita quien continúe el desarrollo.
+#
+# Las que describían un sistema que ya no existe se eliminaron del repositorio
+# en vez de excluirse, porque no le servían a nadie: AUTH_SYSTEM (documentaba
+# cookies HttpOnly cuando el sistema usa tokens Bearer), CONSTANTS (ninguna de
+# las utilidades actuales), BACKEND_LOGOUT_REQUIREMENTS y DOCUMENTS_MODULE
+# (requisitos de trabajo ya terminado), TESTING_AUTH (pruebas manuales previas a
+# la suite automatizada) y ARCHITECTURE_ANALYSIS (análisis puntual de diciembre).
+
+# ── Propuestas de cambio (proceso interno) ─────────────────────────────────
+# openspec/changes/ son propuestas de trabajo ya cerradas, y llevan encuadre
+# comercial: la de junio dice que sus correcciones eran "sin costo, comprometidas
+# antes de los sprints de desarrollo nuevo". Es contexto contractual entre
+# nosotros y el cliente, no documentación del producto.
+#
+# openspec/specs/ SÍ se entrega: describe el comportamiento del sistema y sirve
+# a quien continúe el desarrollo, que es uno de los objetivos del entregable.
+openspec/changes/                       export-ignore
+
+# ── Herramientas de documentación ──────────────────────────────────────────
+# El generador de PDFs es para producir los entregables, no parte del producto.
+docs/pdf-generator/                     export-ignore
+docs/screenshots/                       export-ignore
+
+# ── Este mismo archivo ─────────────────────────────────────────────────────
+.gitattributes                          export-ignore

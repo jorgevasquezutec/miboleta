@@ -58,13 +58,22 @@ class DocumentTypeSeeder extends Seeder
             ],
         ];
 
-        // Deshabilitar FK checks, truncar, y volver a habilitar
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        DocumentType::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
-
+        // updateOrCreate por `name`, NO truncate.
+        //
+        // Antes hacía SET FOREIGN_KEY_CHECKS=0 + truncate() + create(), lo que
+        // asignaba IDs nuevos a los tipos de documento. Reejecutar este seeder
+        // sobre una instalación con datos dejaba HUÉRFANO el doc_type_id de
+        // todos los documentos ya cargados: las boletas perdían su tipo. Y el
+        // instalador puede reejecutarlo, porque está pensado para relanzarse si
+        // falla a mitad.
+        //
+        // Con updateOrCreate los tipos conservan su ID, se actualizan los
+        // textos si cambiaron y se añaden los que falten.
         foreach ($types as $type) {
-            DocumentType::create($type);
+            DocumentType::updateOrCreate(
+                ['name' => $type['name']],
+                $type
+            );
         }
     }
 }
