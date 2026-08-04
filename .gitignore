@@ -92,3 +92,9 @@ testing */
 
 # Previews HTML que deja el generador de PDFs (intermedios, se regeneran)
 /docs/pdf-generator/*.html
+
+# Certificados TLS del despliegue: nunca al repositorio
+/entrega/ssl/
+/entrega/produccion/ssl/
+/entrega/produccion/.env
+/entrega/produccion/backups/

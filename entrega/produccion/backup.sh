@@ -22,11 +22,25 @@ PROYECTO="${PROYECTO:-miboleta}"
 DESTINO="${DESTINO:-$PWD/backups}"
 FECHA="$(date +%Y%m%d-%H%M%S)"
 
-mkdir -p "$DESTINO"
-
 echo "== Copia de seguridad de MiBoleta =="
 echo "   Destino: $DESTINO"
 echo
+
+# Comprobar que el stack existe ANTES de crear carpetas o archivos. Sin esto, un
+# nombre de proyecto equivocado dejaba una carpeta backups/ vacía y fallaba con
+# el mensaje críptico de Docker ("service db is not running").
+if ! docker compose -f "$COMPOSE" -p "$PROYECTO" ps --status running --quiet db 2>/dev/null | grep -q .; then
+  echo "ERROR: no encuentro la base de datos del proyecto '$PROYECTO' en marcha."
+  echo
+  echo "  Compruebe que el sistema está arrancado:"
+  echo "    docker compose -f $COMPOSE -p $PROYECTO ps"
+  echo
+  echo "  Si instaló con otro nombre de proyecto, indíquelo:"
+  echo "    PROYECTO=<nombre> ./backup.sh"
+  exit 1
+fi
+
+mkdir -p "$DESTINO"
 
 # --- Base de datos ---------------------------------------------------------
 # Las credenciales se leen DENTRO del contenedor: no pasan por la línea de
@@ -44,6 +58,24 @@ echo "     $(du -h "$DESTINO/miboleta-db-${FECHA}.sql.gz" | cut -f1)"
 # --- Documentos ------------------------------------------------------------
 echo "2/3  Documentos almacenados..."
 VOLUMEN="${PROYECTO}_storage_data"
+
+# Comprobar que el volumen EXISTE antes de respaldarlo. `docker run -v` crea el
+# volumen si no está, así que sin esta comprobación el script generaba un .tgz
+# vacío y decía "copia terminada": alguien que instalara con PROYECTO distinto y
+# ejecutara ./backup.sh a secas tendría respaldos vacíos sin enterarse, y solo
+# lo descubriría el día que necesitara restaurar.
+if ! docker volume inspect "$VOLUMEN" >/dev/null 2>&1; then
+  echo
+  echo "ERROR: no existe el volumen '$VOLUMEN'."
+  echo
+  echo "  Volúmenes de documentos disponibles en este equipo:"
+  docker volume ls --format '{{.Name}}' | grep '_storage_data$' | sed 's/^/    /' || true
+  echo
+  echo "  Si instaló con otro nombre de proyecto, indíquelo:"
+  echo "    PROYECTO=<nombre> ./backup.sh"
+  exit 1
+fi
+
 docker run --rm -v "${VOLUMEN}:/data:ro" -v "$DESTINO:/out" alpine \
   tar czf "/out/miboleta-storage-${FECHA}.tgz" -C /data app 2>/dev/null
 echo "     $(du -h "$DESTINO/miboleta-storage-${FECHA}.tgz" | cut -f1)"
