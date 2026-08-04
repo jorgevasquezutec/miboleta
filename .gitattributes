@@ -1,0 +1,47 @@
+# Qué NO viaja en el código fuente que se entrega
+# ---------------------------------------------------------------------------
+# `export-ignore` excluye estos archivos de `git archive`, que es como se
+# empaquetan las fuentes para el cliente (ver scripts/empaquetar-proyecto.sh y
+# scripts/armar-entrega.sh). Siguen en el repositorio y en la historia: solo no
+# salen en el paquete.
+#
+# No es lo mismo que borrarlos. Son útiles internamente; el problema es lo que
+# significan en manos del cliente.
+
+# ── Documentos comerciales e internos ──────────────────────────────────────
+# La cotización lleva precios y tarifas propias. El documento interno y las
+# notas de QA son material de trabajo del equipo, no del entregable.
+docs/COTIZACION_MODULO_VACACIONES.md    export-ignore
+docs/DOCUMENTO_INTERNO.md               export-ignore
+docs/sprintfix/QA-SPRINT-FIX-CAMBIOS.md export-ignore
+docs/Observaciones.docx                 export-ignore
+
+# ── Documentación técnica desactualizada ───────────────────────────────────
+# Escrita en diciembre de 2025 y sin tocar desde entonces. Ninguna menciona los
+# roles admin_tenant ni aprobador: describen el sistema de tres roles que ya no
+# existe. Entregarlas induce a error, porque el cliente asume que describen el
+# sistema que acaba de recibir.
+#
+# Si alguna se pone al día, quítala de esta lista y vuelve a entrar en el
+# entregable. La documentación vigente son USER-MANUAL, TECHNICAL-DOCUMENTATION,
+# INSTALACION y MODELADO_BASE_DATOS_SQL.
+docs/ARCHITECTURE_ANALYSIS.md           export-ignore
+docs/AUTH_SYSTEM.md                     export-ignore
+docs/BACKEND_LOGOUT_REQUIREMENTS.md     export-ignore
+docs/CLEAN_ARCHITECTURE.md              export-ignore
+docs/CONSTANTS.md                       export-ignore
+docs/DEPARTMENTS_IMPLEMENTATION.md      export-ignore
+docs/DEPLOY.md                          export-ignore
+docs/DEVELOPMENT.md                     export-ignore
+docs/DOCUMENTS_MODULE.md                export-ignore
+docs/PASSWORD_SYSTEM.md                 export-ignore
+docs/TENANT_MULTI_SELECTOR.md           export-ignore
+docs/TESTING_AUTH.md                    export-ignore
+
+# ── Herramientas de documentación ──────────────────────────────────────────
+# El generador de PDFs es para producir los entregables, no parte del producto.
+docs/pdf-generator/                     export-ignore
+docs/screenshots/                       export-ignore
+
+# ── Este mismo archivo ─────────────────────────────────────────────────────
+.gitattributes                          export-ignore
