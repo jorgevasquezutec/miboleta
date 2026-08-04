@@ -76,10 +76,18 @@ mkdir -p "$DESTINO"/{fuentes,imagenes,documentacion,evidencia}
 azul "1/6  Exportando fuentes del tag..."
 git archive --format=zip --prefix="miboleta-${TAG}/" -o "$DESTINO/fuentes/miboleta-src-${TAG}.zip" "$TAG"
 
-# El bundle permite clonar el repositorio COMPLETO con su historia desde el
-# disco, sin acceso a GitHub. Es lo que hace viable que un tercero continúe el
-# desarrollo, que es el otro objetivo declarado del entregable.
-git bundle create "$DESTINO/fuentes/miboleta-historia.bundle" --all >/dev/null 2>&1
+# NO se incluye el historial de git (antes iba un `git bundle --all` de 62 MB).
+#
+# El bundle llevaba TODAS las ramas con TODA su historia, y de ahí se recupera
+# cualquier archivo que alguna vez estuvo versionado aunque hoy no esté en el
+# árbol: bastaba `git clone` del bundle y un `git show` para leer la cotización
+# con nuestras tarifas. Excluirla con export-ignore no servía de nada, porque
+# eso solo afecta a `git archive`, no al historial.
+#
+# El .zip de arriba es `git archive` del tag: exactamente el código entregado,
+# sin historia y sin nada que no deba salir. Para el acta es incluso mejor,
+# porque su contenido corresponde al commit que figura en VERSION.txt y se
+# puede comprobar. Quien continúe el desarrollo parte de ahí.
 
 # --- 2. Imágenes -----------------------------------------------------------
 azul "2/6  Guardando imágenes Docker..."

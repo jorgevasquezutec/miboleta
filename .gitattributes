@@ -34,6 +34,7 @@ openspec/                               export-ignore
 # Instrucciones y ajustes de los asistentes de código con los que trabajamos.
 # No son parte del producto ni le sirven a quien lo instale: solo pesan y
 # despistan sobre qué hay que leer.
+.agent/                                 export-ignore
 .claude/                                export-ignore
 .gemini/                                export-ignore
 
