@@ -225,7 +225,7 @@ Las migraciones de base de datos se aplican solas al arrancar el contenedor
 | --- | --- | --- |
 | La web no carga | El puerto 80 está ocupado por otro servicio | Cambie `HTTP_PORT` en `.env` y reinicie |
 | Error 500 al entrar | Las migraciones no terminaron | `... logs app` y espere o reintente |
-| No llegan los correos | `MAIL_*` mal configurado | `... exec app php artisan miboleta:test-email` |
+| No llegan los correos | `MAIL_*` mal configurado | `... exec app php artisan email:test su-correo@empresa.com` |
 | No se procesan las cargas masivas | `horizon` caído | `... logs horizon` y `... restart horizon` |
 | La campana no avisa | El puerto de `reverb` no es accesible | Abra `REVERB_PUBLIC_PORT` en el cortafuegos |
 | Falla la firma digital | `signer` caído o sin certificado | `... logs signer` y revise Ajustes de plataforma |
