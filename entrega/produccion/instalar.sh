@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# MiBoleta — instalación en un servidor
+# ---------------------------------------------------------------------------
+# Instala la plataforma desde cero en esta máquina. Es idempotente en lo que
+# importa: si algo falla a mitad, se corrige y se vuelve a ejecutar sin dañar
+# lo ya hecho.
+#
+#   1. cp .env.example .env  &&  nano .env      (completar la configuración)
+#   2. ./instalar.sh
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+COMPOSE="docker-compose.produccion.yml"
+PROYECTO="miboleta"
+
+azul()  { printf '\033[0;34m%s\033[0m\n' "$1"; }
+verde() { printf '\033[0;32m%s\033[0m\n' "$1"; }
+rojo()  { printf '\033[0;31m%s\033[0m\n' "$1"; }
+ama()   { printf '\033[1;33m%s\033[0m\n' "$1"; }
+
+echo
+azul "======================================================="
+azul " MiBoleta — instalación en servidor"
+azul "======================================================="
+echo
+
+# --- 1. Requisitos ---------------------------------------------------------
+azul "1/7  Comprobando requisitos..."
+
+command -v docker >/dev/null 2>&1 || {
+  rojo "Falta Docker."
+  echo "   Instálalo con:  curl -fsSL https://get.docker.com | sh"
+  exit 1
+}
+
+docker compose version >/dev/null 2>&1 || {
+  rojo "Falta el plugin 'docker compose' (v2)."
+  echo "   En Debian/Ubuntu:  apt-get install docker-compose-plugin"
+  exit 1
+}
+
+docker info >/dev/null 2>&1 || {
+  rojo "Docker está instalado pero no responde."
+  echo "   Arráncalo con:  systemctl start docker"
+  echo "   Si no eres root, añade tu usuario al grupo:  usermod -aG docker \$USER"
+  exit 1
+}
+
+verde "     Docker disponible."
+
+# --- 2. Configuración ------------------------------------------------------
+azul "2/7  Comprobando la configuración..."
+
+[ -f .env ] || {
+  rojo "No existe el archivo .env"
+  echo "   Créalo y complétalo antes de instalar:"
+  echo "     cp .env.example .env"
+  echo "     nano .env"
+  exit 1
+}
+
+# Un .env con los valores de ejemplo produce una instalación que arranca pero
+# es insegura o no envía correo. Mejor parar aquí que descubrirlo en uso.
+if grep -q 'CAMBIAME' .env; then
+  rojo "El archivo .env todavía tiene valores sin completar:"
+  grep -n 'CAMBIAME' .env | sed 's/=.*/= .../' | sed 's/^/     /'
+  echo
+  echo "   Complétalos y vuelve a ejecutar este script."
+  exit 1
+fi
+
+set -a; . ./.env; set +a
+
+if [ "${APP_URL:-}" = "http://localhost" ]; then
+  ama "     Aviso: APP_URL sigue siendo http://localhost."
+  ama "     Los enlaces de los correos apuntarán ahí y no funcionarán fuera del servidor."
+fi
+
+verde "     Configuración completa."
+
+# --- 3. Clave de cifrado ---------------------------------------------------
+azul "3/7  Clave de cifrado..."
+
+if [ -z "${APP_KEY:-}" ]; then
+  NUEVA="base64:$(openssl rand -base64 32)"
+  # Se escribe en el .env para que sobreviva a las recreaciones del contenedor.
+  # Si cambiara, dejarían de descifrarse las contraseñas de correo guardadas y
+  # la del certificado de firma.
+  if grep -q '^APP_KEY=' .env; then
+    sed -i.bak "s|^APP_KEY=.*|APP_KEY=${NUEVA}|" .env && rm -f .env.bak
+  else
+    echo "APP_KEY=${NUEVA}" >> .env
+  fi
+  export APP_KEY="$NUEVA"
+  verde "     Generada y guardada en .env"
+  ama "     Haz copia de seguridad del .env: sin esta clave no se recuperan los datos cifrados."
+else
+  verde "     Ya definida."
+fi
+
+# --- 4. Imágenes -----------------------------------------------------------
+azul "4/7  Obteniendo las imágenes..."
+
+if [ -d imagenes ] && compgen -G "imagenes/*.tar" > /dev/null; then
+  for tar in imagenes/*.tar; do
+    echo "     $(basename "$tar")"
+    docker load -i "$tar" >/dev/null
+  done
+  verde "     Cargadas desde el paquete."
+else
+  docker compose -f "$COMPOSE" -p "$PROYECTO" pull
+  verde "     Descargadas del registro."
+fi
+
+# --- 5. Arranque -----------------------------------------------------------
+azul "5/7  Arrancando los servicios..."
+mkdir -p ssl backups
+docker compose -f "$COMPOSE" -p "$PROYECTO" up -d
+
+azul "     Esperando a la base de datos y las migraciones..."
+LISTA=false
+for i in $(seq 1 60); do
+  if docker compose -f "$COMPOSE" -p "$PROYECTO" exec -T app php artisan migrate:status >/dev/null 2>&1; then
+    LISTA=true; break
+  fi
+  sleep 5; printf '.'
+done
+echo
+
+[ "$LISTA" = true ] || {
+  rojo "La aplicación no arrancó."
+  echo "   Revisa:  docker compose -f $COMPOSE -p $PROYECTO logs app"
+  exit 1
+}
+verde "     Servicios en marcha."
+
+# --- 6. Datos base ---------------------------------------------------------
+azul "6/7  Datos base..."
+
+# Roles y tipos de documento: son catálogos que el sistema necesita para
+# funcionar, no datos de demostración. Se siembran solo si faltan, para que
+# reejecutar el script no los duplique.
+ROLES=$(docker compose -f "$COMPOSE" -p "$PROYECTO" exec -T app \
+  php artisan tinker --execute='echo App\Models\Role::count();' 2>/dev/null | tr -dc '0-9' || echo 0)
+
+if [ "${ROLES:-0}" -eq 0 ]; then
+  docker compose -f "$COMPOSE" -p "$PROYECTO" exec -T app php artisan db:seed --class=RoleSeeder --force
+  docker compose -f "$COMPOSE" -p "$PROYECTO" exec -T app php artisan db:seed --class=DocumentTypeSeeder --force
+  verde "     Roles y tipos de documento creados."
+else
+  verde "     Ya existían."
+fi
+
+# --- 7. Administrador ------------------------------------------------------
+azul "7/7  Usuario administrador..."
+echo
+echo "     Crea ahora el Super Administrador de la plataforma."
+echo "     Es la cuenta con la que darás de alta las empresas y sus usuarios."
+echo
+
+docker compose -f "$COMPOSE" -p "$PROYECTO" exec app php artisan miboleta:crear-root || {
+  ama "     No se creó el administrador. Puedes hacerlo después con:"
+  echo "       docker compose -f $COMPOSE -p $PROYECTO exec app php artisan miboleta:crear-root"
+}
+
+# --- Listo -----------------------------------------------------------------
+echo
+verde "======================================================="
+verde " Instalación terminada"
+verde "======================================================="
+echo
+echo "   Accede en:  ${APP_URL}"
+echo
+echo "   Comandos útiles:"
+echo "     Ver el estado ...... docker compose -f $COMPOSE -p $PROYECTO ps"
+echo "     Ver los registros .. docker compose -f $COMPOSE -p $PROYECTO logs -f app"
+echo "     Detener ............ docker compose -f $COMPOSE -p $PROYECTO down"
+echo "     Arrancar ........... docker compose -f $COMPOSE -p $PROYECTO up -d"
+echo
+ama "   Antes de usarlo en producción, lee la sección"
+ama "   'Después de instalar' de INSTALACION.md: copias de seguridad, HTTPS"
+ama "   y certificado de firma."
+echo
