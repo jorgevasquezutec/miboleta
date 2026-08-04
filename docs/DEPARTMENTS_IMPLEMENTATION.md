@@ -829,7 +829,7 @@ Una vez implementado el sistema básico, se pueden agregar:
 
 - **Modelo de datos:** `docs/MODELADO_BASE_DATOS_SQL.md`
 - **Arquitectura:** `docs/CLEAN_ARCHITECTURE.md`
-- **Sistema de autenticación:** `docs/AUTH_SYSTEM.md`
+- **Sistema de autenticación:** `docs/TECHNICAL-DOCUMENTATION.md`
 
 ---
 

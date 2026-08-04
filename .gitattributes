@@ -16,27 +16,17 @@ docs/DOCUMENTO_INTERNO.md               export-ignore
 docs/sprintfix/QA-SPRINT-FIX-CAMBIOS.md export-ignore
 docs/Observaciones.docx                 export-ignore
 
-# ── Documentación técnica desactualizada ───────────────────────────────────
-# Escrita en diciembre de 2025 y sin tocar desde entonces. Ninguna menciona los
-# roles admin_tenant ni aprobador: describen el sistema de tres roles que ya no
-# existe. Entregarlas induce a error, porque el cliente asume que describen el
-# sistema que acaba de recibir.
+# Las notas técnicas de apoyo (DEVELOPMENT, CLEAN_ARCHITECTURE, DEPLOY,
+# PASSWORD_SYSTEM, DEPARTMENTS_IMPLEMENTATION y TENANT_MULTI_SELECTOR) SÍ se
+# entregan: se comprobó que lo que documentan sigue existiendo en el código, y
+# son justo lo que necesita quien continúe el desarrollo.
 #
-# Si alguna se pone al día, quítala de esta lista y vuelve a entrar en el
-# entregable. La documentación vigente son USER-MANUAL, TECHNICAL-DOCUMENTATION,
-# INSTALACION y MODELADO_BASE_DATOS_SQL.
-docs/ARCHITECTURE_ANALYSIS.md           export-ignore
-docs/AUTH_SYSTEM.md                     export-ignore
-docs/BACKEND_LOGOUT_REQUIREMENTS.md     export-ignore
-docs/CLEAN_ARCHITECTURE.md              export-ignore
-docs/CONSTANTS.md                       export-ignore
-docs/DEPARTMENTS_IMPLEMENTATION.md      export-ignore
-docs/DEPLOY.md                          export-ignore
-docs/DEVELOPMENT.md                     export-ignore
-docs/DOCUMENTS_MODULE.md                export-ignore
-docs/PASSWORD_SYSTEM.md                 export-ignore
-docs/TENANT_MULTI_SELECTOR.md           export-ignore
-docs/TESTING_AUTH.md                    export-ignore
+# Las que describían un sistema que ya no existe se eliminaron del repositorio
+# en vez de excluirse, porque no le servían a nadie: AUTH_SYSTEM (documentaba
+# cookies HttpOnly cuando el sistema usa tokens Bearer), CONSTANTS (ninguna de
+# las utilidades actuales), BACKEND_LOGOUT_REQUIREMENTS y DOCUMENTS_MODULE
+# (requisitos de trabajo ya terminado), TESTING_AUTH (pruebas manuales previas a
+# la suite automatizada) y ARCHITECTURE_ANALYSIS (análisis puntual de diciembre).
 
 # ── Propuestas de cambio (proceso interno) ─────────────────────────────────
 # openspec/changes/ son propuestas de trabajo ya cerradas, y llevan encuadre

@@ -30,13 +30,22 @@ npm run dev                 # frontend en modo desarrollo
 
 ### Usuarios de prueba
 
+Con `npm run laravel:fresh` (seeders base). Para una demo completa —con documentos,
+vacaciones en todos los estados y saldos calculados— usa `DemoSeeder`:
+
+```bash
+docker compose exec app php artisan migrate:fresh --seed --seeder='Database\Seeders\DemoSeeder'
+```
+
 | Identificador | Rol | Password |
 |---|---|---|
-| platform@miboleta.com | Platform Admin (root) | password |
-| admin@corporacionabc.com | Admin de empresa | password |
-| jorge.perez@corporacionabc.com | Empleado | password |
+| admin@email.com | Super Administrador (root) | password |
+| admin.clientes@miboleta.demo | Admin Clientes | password |
+| admin@corporacionabc.com | Admin Empleados | password |
+| aprobador@miboleta.demo | Aprobador | password |
+| juan.perez@corporacionabc.com | Empleado | password |
 
-> El login acepta **DNI o correo**. Los roles operativos son **por empresa**; el rol root es de plataforma. Ver [docs/AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md).
+> El login acepta **DNI o correo**. Los roles operativos son **por empresa**; el rol root es de plataforma. Ver [docs/TECHNICAL-DOCUMENTATION.md](docs/TECHNICAL-DOCUMENTATION.md).
 
 ---
 
@@ -143,18 +152,21 @@ miboleta/
 
 ## 🔐 Autenticación y roles
 
-- **Método:** Laravel Sanctum con cookies HttpOnly. Access token 1h (renovación automática), refresh 30 días.
+- **Método:** Laravel Sanctum en **modo token** (`Bearer`, guardado en `localStorage`), no cookies de sesión. Access token 1 h, refresh 30 días.
 - **Login:** por **DNI o correo**.
-- **Multi-tenant:** roles operativos **por empresa** (pivote), rol **root** global de plataforma. Dos switchers (empresa + rol).
+- **Multi-tenant:** roles operativos **por empresa** (pivote `user_tenant_roles`), rol **root** global de plataforma. Dos switchers (empresa + rol).
 
-| Rol | Alcance |
-|---|---|
-| **Platform Admin (root)** | Toda la plataforma y empresas |
-| **Admin de empresa** | Usuarios y documentos de su empresa |
-| **Supervisor** | Aprobación de vacaciones de su equipo |
-| **Empleado** | Sus documentos y solicitudes de vacaciones |
+| Rol | Nombre en pantalla | Alcance |
+|---|---|---|
+| `root` | Super Administrador | Plataforma: empresas, certificado de firma, ajustes globales |
+| `admin_tenant` | Admin Clientes | Su empresa completa, incluidos usuarios Admin y Aprobador |
+| `admin` | Admin Empleados | Operación diaria de su empresa |
+| `aprobador` | Aprobador | Aprueba, rechaza y confirma vacaciones de su equipo |
+| `client` | Empleado | Sus documentos, su firma y sus vacaciones |
 
-Detalle en [docs/AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md).
+La matriz completa está en `backend/config/access_matrix.php` (fuente única, expuesta en `GET /api/access-matrix`). `root` **no es comodín**: solo puede lo que la matriz le concede.
+
+Detalle en [docs/TECHNICAL-DOCUMENTATION.md](docs/TECHNICAL-DOCUMENTATION.md).
 
 ---
 
@@ -278,13 +290,24 @@ Revisar el run: `gh run view <id> --log`. Si el build fue OK pero el deploy fall
 
 ## 📚 Documentación adicional
 
+**Documentación vigente** (se regenera en PDF desde `docs/pdf-generator`):
+
 | Documento | Descripción |
 |---|---|
-| [docs/AUTH_SYSTEM.md](docs/AUTH_SYSTEM.md) | Sistema de autenticación y roles |
+| [docs/USER-MANUAL.md](docs/USER-MANUAL.md) | Manual de usuario, por rol |
+| [docs/TECHNICAL-DOCUMENTATION.md](docs/TECHNICAL-DOCUMENTATION.md) | Arquitectura, autenticación, roles y despliegue |
+| [docs/INSTALACION.md](docs/INSTALACION.md) | Instalación en un servidor propio |
+| [docs/MODELADO_BASE_DATOS_SQL.md](docs/MODELADO_BASE_DATOS_SQL.md) | Modelo de datos |
+
+**Notas técnicas de apoyo:**
+
+| Documento | Descripción |
+|---|---|
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Entorno de desarrollo con hot reload |
 | [docs/CLEAN_ARCHITECTURE.md](docs/CLEAN_ARCHITECTURE.md) | Arquitectura del frontend |
-| [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) | Análisis de arquitectura |
-| [docs/CONSTANTS.md](docs/CONSTANTS.md) | Constantes compartidas |
-| [docs/COTIZACION_MODULO_VACACIONES.md](docs/COTIZACION_MODULO_VACACIONES.md) | Módulo de vacaciones |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Guía de despliegue |
+| [docs/DEPARTMENTS_IMPLEMENTATION.md](docs/DEPARTMENTS_IMPLEMENTATION.md) | Áreas y cargos por empresa |
+| [docs/TENANT_MULTI_SELECTOR.md](docs/TENANT_MULTI_SELECTOR.md) | Selector multi-empresa |
 | [docs/sprintfix/MAPEO-CARGA-MASIVA.md](docs/sprintfix/MAPEO-CARGA-MASIVA.md) | Formato de carga masiva |
 | [signer/README.md](signer/README.md) | Sidecar de firma digital |
 
