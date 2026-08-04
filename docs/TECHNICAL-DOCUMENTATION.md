@@ -927,5 +927,5 @@ FROM php:8.4.2-fpm-alpine
 
 ---
 
-*Documento generado - MiBoleta v1.0.0*
-*Última actualización: Enero 2026*
+*Documento generado - MiBoleta v1.1.0*
+*Última actualización: Agosto 2026*

@@ -1366,5 +1366,5 @@ Para soporte técnico o consultas sobre el sistema:
 
 - **Email:** lgranda@tisvel.com
 
-*Documento generado automáticamente - MiBoleta v1.0.0*
-*Última actualización: Enero 2026*
+*Documento generado automáticamente - MiBoleta v1.1.0*
+*Última actualización: Agosto 2026*

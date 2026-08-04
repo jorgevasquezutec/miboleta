@@ -11,8 +11,8 @@ const path = require('path');
 
 const CONFIG = {
     docsPath: path.join(__dirname, '..'),
-    version: '1.0.0',
-    date: 'Enero 2026',
+    // Ver nota en version.js: fuente única de versión y fecha.
+    ...require('./version'),
     documents: [
         {
             id: 'manual',

@@ -25,8 +25,9 @@ const { marked } = require('marked');
 // Configuration
 const CONFIG = {
   docsPath: path.join(__dirname, '..'),
-  version: '1.0.0',
-  date: 'Enero 2026',
+  // Versión y fecha desde version.js: estaban repetidas en los tres
+  // generadores y la portada acababa contradiciendo a la primera página.
+  ...require('./version'),
   documents: [
     {
       input: 'USER-MANUAL.md',
