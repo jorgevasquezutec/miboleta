@@ -67,10 +67,14 @@ chmod +x "$TRABAJO/produccion/instalar.sh"
 
 # --- Documentación ---------------------------------------------------------
 azul "3/5  Copiando la documentación..."
+# La guía de instalación va en PDF y TAMBIÉN en markdown: es la única que se
+# lee dentro del servidor, muchas veces sin entorno gráfico, donde un .md se
+# consulta con `less` y un PDF no se puede abrir.
 cp docs/INSTALACION.md "$TRABAJO/documentacion/"
 for f in docs/MiBoleta-Manual-de-Usuario.pdf \
          docs/MiBoleta-Documentacion-Tecnica.pdf \
-         docs/MiBoleta-Documentacion-Funcional.pdf; do
+         docs/MiBoleta-Documentacion-Funcional.pdf \
+         docs/MiBoleta-Guia-de-Instalacion.pdf; do
   [ -f "$f" ] && cp "$f" "$TRABAJO/documentacion/" \
     || echo "     falta $(basename "$f") — regenéralo en docs/pdf-generator"
 done
@@ -126,7 +130,9 @@ cp .env.example .env && nano .env     # 1. configurar
 3. Abra en el navegador la dirección que puso en `APP_URL`.
 
 El procedimiento completo —requisitos del servidor, HTTPS, copias de seguridad
-y resolución de problemas— está en **`documentacion/INSTALACION.md`**.
+y resolución de problemas— está en **`documentacion/MiBoleta-Guia-de-Instalacion.pdf`**,
+y el mismo texto en **`documentacion/INSTALACION.md`** para leerlo desde la
+consola del servidor, donde no hay con qué abrir un PDF.
 
 ## Contenido
 

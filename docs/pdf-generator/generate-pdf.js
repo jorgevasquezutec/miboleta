@@ -55,6 +55,14 @@ const CONFIG = {
       subtitle: 'Módulos, roles y flujos del sistema',
       icon: '📋',
       audience: 'Funcional, Producto, QA'
+    },
+    {
+      input: 'INSTALACION.md',
+      output: 'MiBoleta-Guia-de-Instalacion.pdf',
+      title: 'Guía de Instalación',
+      subtitle: 'Puesta en marcha de la plataforma en un servidor propio',
+      icon: '🛠️',
+      audience: 'Administradores de sistemas'
     }
   ]
 };
