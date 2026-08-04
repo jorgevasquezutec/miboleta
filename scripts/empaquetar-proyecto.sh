@@ -68,7 +68,9 @@ chmod +x "$TRABAJO/produccion/instalar.sh"
 # --- Documentación ---------------------------------------------------------
 azul "3/5  Copiando la documentación..."
 cp docs/INSTALACION.md "$TRABAJO/documentacion/"
-for f in docs/MiBoleta-Manual-de-Usuario.pdf docs/MiBoleta-Documentacion-Tecnica.pdf; do
+for f in docs/MiBoleta-Manual-de-Usuario.pdf \
+         docs/MiBoleta-Documentacion-Tecnica.pdf \
+         docs/MiBoleta-Documentacion-Funcional.pdf; do
   [ -f "$f" ] && cp "$f" "$TRABAJO/documentacion/" \
     || echo "     falta $(basename "$f") — regenéralo en docs/pdf-generator"
 done

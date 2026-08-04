@@ -44,6 +44,17 @@ const CONFIG = {
       subtitle: 'Arquitectura, configuración y despliegue del sistema',
       icon: '⚙️',
       audience: 'Desarrolladores, DevOps'
+    },
+    // La funcional no estaba en la tubería, así que su PDF se quedó congelado
+    // en enero mientras el .md se actualizaba: el mismo documento decía dos
+    // cosas distintas según se leyera en PDF o en texto.
+    {
+      input: 'FUNCTIONAL-DOCUMENTATION.md',
+      output: 'MiBoleta-Documentacion-Funcional.pdf',
+      title: 'Documentación Funcional',
+      subtitle: 'Módulos, roles y flujos del sistema',
+      icon: '📋',
+      audience: 'Funcional, Producto, QA'
     }
   ]
 };

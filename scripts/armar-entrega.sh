@@ -130,7 +130,9 @@ azul "3/6  Anotando digests..."
 
 # --- 3. Documentación ------------------------------------------------------
 azul "4/6  Copiando documentación..."
-for pdf in docs/MiBoleta-Manual-de-Usuario.pdf docs/MiBoleta-Documentacion-Tecnica.pdf; do
+for pdf in docs/MiBoleta-Manual-de-Usuario.pdf \
+           docs/MiBoleta-Documentacion-Tecnica.pdf \
+           docs/MiBoleta-Documentacion-Funcional.pdf; do
   [ -f "$pdf" ] && cp "$pdf" "$DESTINO/documentacion/" || echo "     falta $pdf (regenéralo con docs/pdf-generator)"
 done
 
