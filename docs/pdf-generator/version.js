@@ -10,6 +10,6 @@
  * Al publicar una versión nueva se cambia aquí y en la cabecera de los .md.
  */
 module.exports = {
-  version: '1.1.0',
+  version: '1.0',
   date: 'Agosto 2026',
 };

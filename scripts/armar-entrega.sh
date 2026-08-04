@@ -42,7 +42,11 @@ fi
 IMAGEN_APP="${IMAGEN_APP:-ghcr.io/jorgevasquezutec/miboleta:latest}"
 IMAGEN_SIGNER="${IMAGEN_SIGNER:-ghcr.io/jorgevasquezutec/miboleta-signer:latest}"
 FECHA="$(date +%Y-%m-%d)"
-DESTINO="${DESTINO:-$RAIZ/dist/MIBOLETA-ENTREGA-${TAG}-${FECHA}}"
+# Sin la fecha en el nombre: con ella, cada día que se rearmaba dejaba una
+# carpeta nueva de 2 GB junto a las anteriores y había que adivinar cuál era la
+# buena a la hora de entregar. El nombre es estable y se reemplaza en el sitio;
+# la fecha de armado queda registrada dentro, en VERSION.txt y en el acta.
+DESTINO="${DESTINO:-$RAIZ/dist/MIBOLETA-ENTREGA-${TAG}}"
 
 azul() { printf '\033[0;34m%s\033[0m\n' "$1"; }
 rojo() { printf '\033[0;31m%s\033[0m\n' "$1"; }
@@ -72,10 +76,18 @@ mkdir -p "$DESTINO"/{fuentes,imagenes,documentacion,evidencia}
 azul "1/6  Exportando fuentes del tag..."
 git archive --format=zip --prefix="miboleta-${TAG}/" -o "$DESTINO/fuentes/miboleta-src-${TAG}.zip" "$TAG"
 
-# El bundle permite clonar el repositorio COMPLETO con su historia desde el
-# disco, sin acceso a GitHub. Es lo que hace viable que un tercero continúe el
-# desarrollo, que es el otro objetivo declarado del entregable.
-git bundle create "$DESTINO/fuentes/miboleta-historia.bundle" --all >/dev/null 2>&1
+# NO se incluye el historial de git (antes iba un `git bundle --all` de 62 MB).
+#
+# El bundle llevaba TODAS las ramas con TODA su historia, y de ahí se recupera
+# cualquier archivo que alguna vez estuvo versionado aunque hoy no esté en el
+# árbol: bastaba `git clone` del bundle y un `git show` para leer la cotización
+# con nuestras tarifas. Excluirla con export-ignore no servía de nada, porque
+# eso solo afecta a `git archive`, no al historial.
+#
+# El .zip de arriba es `git archive` del tag: exactamente el código entregado,
+# sin historia y sin nada que no deba salir. Para el acta es incluso mejor,
+# porque su contenido corresponde al commit que figura en VERSION.txt y se
+# puede comprobar. Quien continúe el desarrollo parte de ahí.
 
 # --- 2. Imágenes -----------------------------------------------------------
 azul "2/6  Guardando imágenes Docker..."
@@ -130,11 +142,31 @@ azul "3/6  Anotando digests..."
 
 # --- 3. Documentación ------------------------------------------------------
 azul "4/6  Copiando documentación..."
-for pdf in docs/MiBoleta-Manual-de-Usuario.pdf \
-           docs/MiBoleta-Documentacion-Tecnica.pdf \
-           docs/MiBoleta-Guia-de-Instalacion.pdf; do
-  [ -f "$pdf" ] && cp "$pdf" "$DESTINO/documentacion/" || echo "     falta $pdf (regenéralo con docs/pdf-generator)"
+# Los PDF salen de dist/documentacion, que es donde los deja el generador.
+# Si falta alguno se ABORTA en vez de avisar y seguir: antes el aviso se perdía
+# entre el resto de la salida y el disco se entregaba sin manual, que es
+# justo uno de los documentos que el cliente pidió.
+FALTAN_PDF=""
+for pdf in MiBoleta-Manual-de-Usuario.pdf \
+           MiBoleta-Documentacion-Tecnica.pdf \
+           MiBoleta-Guia-de-Instalacion.pdf; do
+  if [ -f "dist/documentacion/$pdf" ]; then
+    cp "dist/documentacion/$pdf" "$DESTINO/documentacion/"
+  else
+    FALTAN_PDF="$FALTAN_PDF $pdf"
+  fi
 done
+
+if [ -n "$FALTAN_PDF" ]; then
+  echo
+  echo "ERROR: faltan documentos en dist/documentacion/:"
+  for p in $FALTAN_PDF; do echo "    - $p"; done
+  echo
+  echo "  Genéralos y vuelve a ejecutar:"
+  echo "    (cd docs/pdf-generator && node generate-pdf.js)"
+  rm -rf "$DESTINO"
+  exit 1
+fi
 
 # --- 4. Scripts de arranque ------------------------------------------------
 azul "5/6  Copiando scripts de arranque..."

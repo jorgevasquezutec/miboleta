@@ -15,7 +15,7 @@ import { NotificationBell } from "@/presentation/components/notifications/Notifi
 import { useNavigate } from "react-router-dom";
 import { User } from "@/core/domain/entities/User";
 import { useAuthStore } from "@/presentation/stores/authStore";
-import { USER_ROLE_DISPLAY_LABELS } from "@/shared/constants";
+import { APP_VERSION, USER_ROLE_DISPLAY_LABELS } from "@/shared/constants";
 
 interface NavbarProps {
   user: User | null;
@@ -123,6 +123,12 @@ export function Navbar({
                 <LogOut className="w-4 h-4 mr-2" />
                 Cerrar Sesión
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {/* Informativo, no es un ítem del menú: va como texto plano para
+                  que no reciba foco ni se comporte como opción pulsable. */}
+              <p className="px-2 py-1.5 text-xs text-[#64748B]">
+                Versión {APP_VERSION}
+              </p>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

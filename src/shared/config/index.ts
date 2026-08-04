@@ -1,4 +1,6 @@
 // Shared Configuration
+import { APP_VERSION } from '@/shared/constants';
+
 export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_URL || '/api',
   TIMEOUT: 30000,
@@ -20,6 +22,8 @@ export const PAGINATION = {
 
 export const APP_CONFIG = {
   NAME: 'MiBoleta',
-  VERSION: '1.0.0',
+  // Reexportada desde constants para que no haya dos versiones que mantener:
+  // estaban duplicadas y podían quedar en desacuerdo entre sí.
+  VERSION: APP_VERSION,
   LOCALE: 'es-PE',
 };

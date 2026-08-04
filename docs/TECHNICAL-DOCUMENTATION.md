@@ -4,7 +4,7 @@
 
 | Atributo            | Valor                                               |
 | ------------------- | --------------------------------------------------- |
-| **Versión**  | 1.1.0                                               |
+| **Versión**  | 1.0                                                 |
 | **Fecha**     | Agosto 2026                                         |
 | **Audiencia** | Desarrolladores, DevOps, Administradores de Sistema |
 
@@ -958,5 +958,5 @@ FROM php:8.4.2-fpm-alpine
 
 ---
 
-*Documento generado - MiBoleta v1.1.0*
+*Documento generado - MiBoleta v1.0*
 *Última actualización: Agosto 2026*

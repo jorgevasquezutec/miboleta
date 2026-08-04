@@ -3,7 +3,10 @@
  */
 
 export const APP_NAME = 'MiBoleta';
-export const APP_VERSION = '1.0.0';
+// Fuente única de la versión que se muestra en pantalla (login, pie del menú
+// lateral y menú de usuario). Debe coincidir con la de la documentación, que
+// vive en docs/pdf-generator/version.js, y con el tag git de la entrega.
+export const APP_VERSION = '1.0';
 export const APP_DESCRIPTION = 'Sistema de gestión de documentos';
 
 // Document Types

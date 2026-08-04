@@ -24,7 +24,13 @@ const { marked } = require('marked');
 
 // Configuration
 const CONFIG = {
+  // De DONDE se leen las fuentes: los .md y las capturas, que sí se versionan.
   docsPath: path.join(__dirname, '..'),
+  // A DONDE salen los PDF: dist/documentacion, junto al resto de entregables.
+  // Antes caían en docs/, mezclados con los .md de los que salen; era fácil
+  // mandar al cliente un PDF viejo creyéndolo recién generado, porque nada
+  // distinguía a simple vista el generado del original.
+  salidaPath: path.join(__dirname, '..', '..', 'dist', 'documentacion'),
   // Versión y fecha desde version.js: estaban repetidas en los tres
   // generadores y la portada acababa contradiciendo a la primera página.
   ...require('./version'),
@@ -320,8 +326,12 @@ async function generateSinglePDF(browser, doc, css) {
   `;
 
   // Save HTML for preview
+  // El HTML intermedio va a dist/.preview y no junto al generador: allí había
+  // que borrarlo a mano después de cada ejecución o quedaba suelto en el repo.
   const previewName = doc.output.replace('.pdf', '.html');
-  const htmlPath = path.join(__dirname, previewName);
+  const previewDir = path.join(CONFIG.salidaPath, '..', '.preview');
+  fs.mkdirSync(previewDir, { recursive: true });
+  const htmlPath = path.join(previewDir, previewName);
   fs.writeFileSync(htmlPath, html);
   console.log(`  📄 Preview: ${previewName}`);
 
@@ -348,7 +358,8 @@ async function generateSinglePDF(browser, doc, css) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
-  const pdfPath = path.join(CONFIG.docsPath, doc.output);
+  fs.mkdirSync(CONFIG.salidaPath, { recursive: true });
+  const pdfPath = path.join(CONFIG.salidaPath, doc.output);
   await page.pdf({
     path: pdfPath,
     format: 'A4',
@@ -405,7 +416,7 @@ async function generatePDFs() {
   console.log('═'.repeat(50));
   console.log('\nOutput files:');
   CONFIG.documents.forEach(doc => {
-    console.log(`  📁 ${path.join(CONFIG.docsPath, doc.output)}`);
+    console.log(`  📁 ${path.join(CONFIG.salidaPath, doc.output)}`);
   });
 }
 

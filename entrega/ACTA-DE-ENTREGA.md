@@ -33,8 +33,7 @@ Se entrega **un disco por cada parte**, ambos de contenido idéntico, con:
 
 | Elemento | Descripción |
 | --- | --- |
-| `fuentes/miboleta-src-<versión>.zip` | Código fuente completo de la versión entregada |
-| `fuentes/miboleta-historia.bundle` | Repositorio con todo su historial, para continuidad del desarrollo |
+| `fuentes/miboleta-src-<versión>.zip` | Código fuente completo de la versión entregada, correspondiente al commit indicado en `VERSION.txt` |
 | `imagenes/*.tar` | Imágenes de la aplicación y sus dependencias, ejecutables sin conexión |
 | `imagenes/DIGESTS.txt` | Huella criptográfica de cada imagen |
 | `documentacion/MiBoleta-Manual-de-Usuario.pdf` | Manual de usuario |

@@ -5,7 +5,7 @@ máquina física de la empresa o una instancia en la nube.
 
 | Atributo | Valor |
 | --- | --- |
-| **Versión** | 1.1.0 |
+| **Versión** | 1.0 |
 | **Fecha** | Agosto 2026 |
 | **Audiencia** | Personal técnico de sistemas |
 
@@ -72,13 +72,13 @@ docker compose version                # debe responder v2.x
 
 ```bash
 # Desde su equipo
-scp miboleta-v1.1.0.tar.gz usuario@servidor:~/
+scp miboleta-v1.0.tar.gz usuario@servidor:~/
 
 # Ya en el servidor
 ssh usuario@servidor
 sudo mkdir -p /opt/miboleta && sudo chown "$USER": /opt/miboleta
-tar -xzf ~/miboleta-v1.1.0.tar.gz -C /opt/miboleta
-cd /opt/miboleta/miboleta-v1.1.0
+tar -xzf ~/miboleta-v1.0.tar.gz -C /opt/miboleta
+cd /opt/miboleta/miboleta-v1.0
 ```
 
 > Se copia primero a su carpeta personal y luego se extrae en `/opt`: ese
@@ -157,7 +157,7 @@ Automatícelo con `cron`, por ejemplo cada noche a las 2:00:
 ```bash
 crontab -e
 # añadir:
-0 2 * * * cd /opt/miboleta/miboleta-v1.1.0/produccion && ./backup.sh >> backups/cron.log 2>&1
+0 2 * * * cd /opt/miboleta/miboleta-v1.0/produccion && ./backup.sh >> backups/cron.log 2>&1
 ```
 
 **Copie los respaldos fuera del servidor.** Una copia que vive en la misma
@@ -273,7 +273,7 @@ sudo crontab -e
 Añada esto **en una sola línea**, sin cortarla:
 
 ```
-0 3 * * 1 cd /opt/miboleta/miboleta-v1.1.0/produccion && certbot renew --quiet --pre-hook "docker compose -f docker-compose.produccion.yml -p miboleta stop nginx" --post-hook "cp /etc/letsencrypt/live/*/fullchain.pem ssl/ && cp /etc/letsencrypt/live/*/privkey.pem ssl/ && docker compose -f docker-compose.produccion.yml -p miboleta start nginx"
+0 3 * * 1 cd /opt/miboleta/miboleta-v1.0/produccion && certbot renew --quiet --pre-hook "docker compose -f docker-compose.produccion.yml -p miboleta stop nginx" --post-hook "cp /etc/letsencrypt/live/*/fullchain.pem ssl/ && cp /etc/letsencrypt/live/*/privkey.pem ssl/ && docker compose -f docker-compose.produccion.yml -p miboleta start nginx"
 ```
 
 > **Una sola línea, obligatoriamente.** `crontab` **no admite** partir una
