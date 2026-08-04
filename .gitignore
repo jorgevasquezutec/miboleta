@@ -98,3 +98,13 @@ testing */
 /entrega/produccion/ssl/
 /entrega/produccion/.env
 /entrega/produccion/backups/
+
+# Documentos internos: tarifas, notas de trabajo y seguimiento de QA. El
+# repositorio es publico, asi que no se versionan. Siguen en el disco de
+# quien los necesite, pero no viajan a GitHub ni a la entrega del cliente.
+# (Ya estaban excluidos del tar.gz por .gitattributes; esto los saca ademas
+#  del repositorio.)
+docs/COTIZACION_MODULO_VACACIONES.md
+docs/DOCUMENTO_INTERNO.md
+docs/Observaciones.docx
+docs/sprintfix/QA-SPRINT-FIX-CAMBIOS.md
