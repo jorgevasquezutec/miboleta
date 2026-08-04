@@ -38,6 +38,16 @@ docs/PASSWORD_SYSTEM.md                 export-ignore
 docs/TENANT_MULTI_SELECTOR.md           export-ignore
 docs/TESTING_AUTH.md                    export-ignore
 
+# ── Propuestas de cambio (proceso interno) ─────────────────────────────────
+# openspec/changes/ son propuestas de trabajo ya cerradas, y llevan encuadre
+# comercial: la de junio dice que sus correcciones eran "sin costo, comprometidas
+# antes de los sprints de desarrollo nuevo". Es contexto contractual entre
+# nosotros y el cliente, no documentación del producto.
+#
+# openspec/specs/ SÍ se entrega: describe el comportamiento del sistema y sirve
+# a quien continúe el desarrollo, que es uno de los objetivos del entregable.
+openspec/changes/                       export-ignore
+
 # ── Herramientas de documentación ──────────────────────────────────────────
 # El generador de PDFs es para producir los entregables, no parte del producto.
 docs/pdf-generator/                     export-ignore
