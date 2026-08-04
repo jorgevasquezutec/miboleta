@@ -38,5 +38,37 @@ openspec/                               export-ignore
 .claude/                                export-ignore
 .gemini/                                export-ignore
 
+# ── Nuestra infraestructura de despliegue ──────────────────────────────────
+# Nada de esto es el producto: es cómo lo publicamos NOSOTROS en NUESTRO
+# servidor. Lleva el nombre del host SSH, la ruta remota, el registro de
+# imágenes y el mapa completo del despliegue. El cliente instala con
+# produccion/, que no depende de ninguno de estos archivos.
+Makefile                                export-ignore
+docker-stack.yml                        export-ignore
+config/                                 export-ignore
+deploy.sh                               export-ignore
+build-and-push.sh                       export-ignore
+cleanup-swarm-local.sh                  export-ignore
+test-swarm-local.sh                     export-ignore
+.github/                                export-ignore
+
+# El README documenta justamente eso: "Deploy a producción (Swarm)", "Secrets
+# requeridos en GitHub" y "Deploy MANUAL desde tu Mac", con 17 menciones a la
+# VPN, al SSH y al registro. Mantenerlo mientras se excluye lo que describe
+# dejaría un manual de nuestra infraestructura y comandos que ya no existen en
+# el paquete. La orientación del cliente es LEEME.md y la Documentación
+# Técnica en PDF.
+README.md                               export-ignore
+
+# Scripts nuestros dentro de scripts/: los de la VPN y el servidor, y los que
+# ARMAN este propio paquete. El resto de scripts/ sí va: ayudas de desarrollo
+# y las comprobaciones del producto.
+scripts/test-vpn-connection.sh          export-ignore
+scripts/test-deploy-local.sh            export-ignore
+scripts/setup-server.sh                 export-ignore
+scripts/.env.deploy.example             export-ignore
+scripts/armar-entrega.sh                export-ignore
+scripts/empaquetar-proyecto.sh          export-ignore
+
 # ── Este mismo archivo ─────────────────────────────────────────────────────
 .gitattributes                          export-ignore
