@@ -90,24 +90,34 @@ services:
       - redis_data:/data
     networks: [miboleta]
 
+  # horizon y reverb comparten imagen y entrypoint con app. RUN_MIGRATIONS=false
+  # porque solo UN contenedor debe migrar: arrancando a la vez competían por las
+  # migraciones y los perdedores morían con "Table 'migrations' already exists",
+  # dejando la copia sin colas ni notificaciones en tiempo real.
   horizon:
     image: ${MIBOLETA_IMAGE:-ghcr.io/jorgevasquezutec/miboleta:latest}
     command: php artisan horizon
+    environment:
+      RUN_MIGRATIONS: "false"
     env_file:
       - ./.env.app
     volumes:
       - storage_data:/var/www/html/storage
       - cache_data:/var/www/html/bootstrap/cache
+    restart: unless-stopped
     depends_on: [app]
     networks: [miboleta]
 
   reverb:
     image: ${MIBOLETA_IMAGE:-ghcr.io/jorgevasquezutec/miboleta:latest}
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    environment:
+      RUN_MIGRATIONS: "false"
     ports:
       - "${MIBOLETA_REVERB_PORT:-9085}:8080"
     env_file:
       - ./.env.app
+    restart: unless-stopped
     depends_on: [app]
     networks: [miboleta]
 

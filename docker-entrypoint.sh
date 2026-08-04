@@ -50,6 +50,17 @@ echo "✅ Database is ready!"
 echo "🔗 Creating storage link..."
 php artisan storage:link || echo "   Storage link already exists"
 
+# RUN_MIGRATIONS=false para los contenedores que NO deben migrar (horizon,
+# reverb). Los tres comparten esta imagen y este entrypoint, así que al
+# arrancar a la vez competían por las migraciones: uno ganaba y los otros dos
+# morían con "Table 'migrations' already exists". En Swarm no se notaba porque
+# la política de reinicio los volvía a levantar; en un compose plano se quedan
+# caídos y la aplicación se queda sin colas ni websockets.
+if [ "${RUN_MIGRATIONS:-true}" != "true" ]; then
+    echo "⏭️  Migraciones omitidas en este contenedor (RUN_MIGRATIONS=false)"
+    FIRST_TIME=false
+else
+
 # Verificar si es primera vez (tabla migrations no existe)
 FIRST_TIME=false
 if ! php artisan migrate:status 2>/dev/null | grep -q "Migration name"; then
@@ -76,6 +87,8 @@ else
     echo "🔄 Running migrations (if any)..."
     php artisan migrate --force
 fi
+
+fi  # fin de RUN_MIGRATIONS
 
 # Limpiar y cachear configuraciones (solo en producción)
 if [ "$APP_ENV" = "production" ]; then
