@@ -14,7 +14,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 COMPOSE="docker-compose.produccion.yml"
-PROYECTO="miboleta"
+# Sobreescribible: PROYECTO=miboleta2 ./instalar.sh
+# Permite instalar dos entornos en la misma máquina (por ejemplo, pruebas junto
+# a producción) y evita colisionar con otro proyecto de Docker que ya se llame
+# igual. Los comandos posteriores necesitan el MISMO valor con -p.
+PROYECTO="${PROYECTO:-miboleta}"
 
 azul()  { printf '\033[0;34m%s\033[0m\n' "$1"; }
 verde() { printf '\033[0;32m%s\033[0m\n' "$1"; }
@@ -85,7 +89,14 @@ verde "     Configuración completa."
 azul "3/7  Clave de cifrado..."
 
 if [ -z "${APP_KEY:-}" ]; then
-  NUEVA="base64:$(openssl rand -base64 32)"
+  # openssl no está garantizado en una instalación mínima de Ubuntu, así que se
+  # recurre a /dev/urandom si falta. Sin clave, la aplicación no arranca.
+  if command -v openssl >/dev/null 2>&1; then
+    ALEATORIO="$(openssl rand -base64 32)"
+  else
+    ALEATORIO="$(head -c 32 /dev/urandom | base64 | tr -d '\n')"
+  fi
+  NUEVA="base64:${ALEATORIO}"
   # Se escribe en el .env para que sobreviva a las recreaciones del contenedor.
   # Si cambiara, dejarían de descifrarse las contraseñas de correo guardadas y
   # la del certificado de firma.
