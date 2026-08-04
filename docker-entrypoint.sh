@@ -62,10 +62,15 @@ if [ "$FIRST_TIME" = true ]; then
     echo "📦 Running migrations for the first time..."
     php artisan migrate --force
 
-    # Solo hacer seed en primera instalación
+    # Solo hacer seed en primera instalación.
+    # SEEDER_CLASS es configurable para que el paquete de entrega pueda usar
+    # DemoSeeder (datos de demostración en todos los módulos) en vez del
+    # DatabaseSeeder base, que deja la plataforma sin documentos, sin
+    # vacaciones y sin fechas de ingreso — o sea, sin nada que enseñar.
     if [ "${RUN_SEEDERS:-false}" = "true" ]; then
-        echo "🌱 Running database seeders..."
-        php artisan db:seed --class=DatabaseSeeder --force
+        SEEDER_CLASS="${SEEDER_CLASS:-DatabaseSeeder}"
+        echo "🌱 Running database seeders (${SEEDER_CLASS})..."
+        php artisan db:seed --class="${SEEDER_CLASS}" --force
     fi
 else
     echo "🔄 Running migrations (if any)..."

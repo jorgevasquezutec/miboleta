@@ -5,8 +5,8 @@
 | Atributo                          | Valor                                       |
 | --------------------------------- | ------------------------------------------- |
 | **Nombre del Sistema**      | MiBoleta                                    |
-| **Versión**                | 1.0.0                                       |
-| **Fecha de Documentación** | Enero 2026                                  |
+| **Versión**                | 1.1.0                                       |
+| **Fecha de Documentación** | Agosto 2026                                 |
 | **Tipo**                    | Sistema de Gestión Documental y Vacaciones |
 
 ---
@@ -24,53 +24,106 @@
 
 ## Roles del Sistema
 
-| Rol              | Descripción                   | Permisos Principales                         |
-| ---------------- | ------------------------------ | -------------------------------------------- |
-| **Root**   | Super administrador            | Acceso total, gestión multi-tenant          |
-| **Admin**  | Administrador de organización | Gestión de usuarios, documentos, vacaciones |
-| **Client** | Empleado                       | Ver documentos, firmar, solicitar vacaciones |
+El sistema tiene **cinco roles**. `root` es global de la plataforma; los otros
+cuatro se asignan **por empresa**, así que una misma persona puede tener roles
+distintos en cada una.
 
-### Matriz de Roles vs Actividades
+| Rol | Nombre en pantalla | Para qué sirve |
+| --- | --- | --- |
+| `root` | Super Administrador | Administra la plataforma: crea empresas, gestiona el certificado de firma y la configuración global. No participa en la operación diaria de ninguna empresa. |
+| `admin_tenant` | Admin Clientes | Administra su empresa por completo, incluidos los usuarios Admin y Aprobador, y la carga masiva de personal. |
+| `admin` | Admin Empleados | Gestiona el día a día de su empresa: documentos, usuarios, vacaciones y reportes. |
+| `aprobador` | Aprobador | Aprueba o rechaza las vacaciones de las personas que tiene a cargo, y confirma si se tomaron. |
+| `client` | Empleado | Consulta y firma sus documentos, y solicita sus vacaciones. |
 
-| Actividad / Función                        | Root | Admin | Client |
-| ------------------------------------------- | :--: | :---: | :----: |
-| **GESTIÓN DE EMPRESAS**                |      |       |        |
-| Crear nuevas organizaciones                 | ✅   | ❌    | ❌     |
-| Editar organizaciones                       | ✅   | ❌    | ❌     |
-| Desactivar organizaciones                   | ✅   | ❌    | ❌     |
-| Ver lista de todas las organizaciones       | ✅   | ❌    | ❌     |
-| **GESTIÓN DE USUARIOS**                |      |       |        |
-| Crear usuarios de cualquier rol             | ✅   | ❌    | ❌     |
-| Ver lista de usuarios de su organización   | ✅   | ✅    | ❌     |
-| Editar usuarios                             | ✅   | ❌    | ❌     |
-| Desactivar usuarios                         | ✅   | ❌    | ❌     |
-| Resetear contraseñas                       | ✅   | ❌    | ❌     |
-| Carga masiva de usuarios (Excel)            | ✅   | ❌    | ❌     |
-| **GESTIÓN DE DOCUMENTOS**              |      |       |        |
-| Ver todos los documentos (multi-empresa)    | ✅   | ❌    | ❌     |
-| Ver documentos de su organización          | ✅   | ✅    | ❌     |
-| Ver mis documentos personales               | ❌   | ✅    | ✅     |
-| Cargar documentos masivamente (ZIP)         | ❌   | ✅    | ❌     |
-| Ver lotes de carga                          | ❌   | ✅    | ❌     |
-| Exportar documentos                         | ✅   | ✅    | ❌     |
-| Descargar mis documentos                    | ❌   | ✅    | ✅     |
-| Firmar documentos (con 2FA)                 | ❌   | ✅    | ✅     |
-| **GESTIÓN DE VACACIONES**              |      |       |        |
-| Solicitar vacaciones propias                | ❌   | ✅    | ✅     |
-| Ver mis solicitudes de vacaciones           | ❌   | ✅    | ✅     |
-| Cancelar mis solicitudes pendientes         | ❌   | ✅    | ✅     |
-| Aprobar/Rechazar vacaciones del equipo      | ❌   | ✅    | ❌     |
-| Confirmar vacaciones pre-aprobadas          | ❌   | ✅    | ❌     |
-| Ver calendario de vacaciones del equipo     | ❌   | ✅    | ❌     |
-| Ver historial de vacaciones                 | ✅   | ✅    | ✅     |
-| **AUDITORÍA Y REPORTES**              |      |       |        |
-| Ver registro de auditoría                  | ✅   | ✅    | ❌     |
-| Exportar reportes                           | ✅   | ✅    | ❌     |
-| **DASHBOARD**                          |      |       |        |
-| Ver métricas globales (todas las empresas) | ✅   | ❌    | ❌     |
-| Ver métricas de su organización           | ❌   | ✅    | ❌     |
-| Ver resumen personal                        | ❌   | ✅    | ✅     |
+### Qué puede hacer cada rol
 
+<!-- MATRIZ-ACCESOS:INICIO -->
+
+> Tabla generada desde `backend/config/access_matrix.php` con
+> `php scripts/generate-access-matrix-doc.php`. No la edites a mano:
+> el config es la fuente única de verdad y cualquier cambio manual
+> se perderá en la siguiente regeneración.
+
+### Empresas
+
+| Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Crear, editar y desactivar empresas | Sí | — | — | — | — |
+| Asignar usuarios a una empresa | Sí | — | Sí | — | — |
+| Configurar una empresa (incluido su SMTP) | Sí | — | Sí | — | — |
+
+### Usuarios
+
+| Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Ver el listado de usuarios | Sí | Sí | Sí | — | — |
+| Crear usuarios con cualquier rol | Sí | — | — | — | — |
+| Crear usuarios con rol aprobador o empleado | Sí | Sí | — | — | — |
+| Editar usuarios | Sí | Sí | Sí | — | — |
+| Desactivar usuarios | Sí | Sí | — | — | — |
+| Eliminar usuarios | Sí | — | — | — | — |
+| Restablecer contraseñas | Sí | Sí | — | — | — |
+| Carga masiva de usuarios | Sí | Sí | — | — | — |
+
+### Documentos
+
+| Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Ver documentos de todas las empresas | Sí | Sí | — | — | — |
+| Ver documentos de su empresa | Sí | Sí | Sí | — | — |
+| Ver sus propios documentos | — | Sí | Sí | — | Sí |
+| Descargar sus propios documentos | — | Sí | Sí | — | Sí |
+| Carga masiva de documentos (ZIP) | — | Sí | Sí | — | — |
+| Ver lotes de carga | — | Sí | Sí | — | — |
+| Exportar documentos | Sí | Sí | Sí | — | — |
+| Firmar un documento propio (código por correo) | — | — | Sí | — | Sí |
+| Firma digital PAdES con certificado de plataforma | Sí | — | Sí | — | — |
+| Eliminar documentos | Sí | Sí | Sí | Sí | — |
+| Ver documentos huérfanos | Sí | Sí | Sí | Sí | — |
+| Asignar un documento huérfano a un empleado | Sí | — | Sí | — | — |
+
+### Vacaciones
+
+| Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Solicitar sus vacaciones | — | Sí | Sí | — | Sí |
+| Ver sus solicitudes | — | Sí | Sí | — | Sí |
+| Cancelar una solicitud propia pendiente | — | Sí | Sí | Sí | Sí |
+| Aprobar o rechazar vacaciones del equipo | — | Sí | Sí | Sí | — |
+| Confirmar si unas vacaciones se tomaron | — | Sí | Sí | Sí | — |
+| Ver el calendario del equipo | — | Sí | Sí | — | — |
+| Ver el histórico de vacaciones | Sí | Sí | Sí | — | Sí |
+
+### Auditoría
+
+| Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Ver el registro de auditoría | Sí | Sí | Sí | — | — |
+| Exportar el registro de auditoría | Sí | Sí | Sí | — | — |
+
+### Paneles
+
+| Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Métricas globales de la plataforma | Sí | Sí | — | — | — |
+| Métricas de su empresa | — | Sí | Sí | — | — |
+| Su resumen personal | — | Sí | Sí | — | Sí |
+
+### Plataforma
+
+| Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Ajustes de plataforma (certificado, SMTP, auditoría) | Sí | — | — | — | — |
+
+**Cómo se resuelven estos permisos.** `root` es global: pertenece a la
+plataforma, no a una empresa, y **no es un comodín** — solo puede lo que la
+tabla le concede explícitamente, por eso no aparece en firmar documentos ni
+en solicitar vacaciones. Los demás roles se resuelven **dentro de cada
+empresa**: una misma persona puede ser Admin Empleados en una y Empleado en
+otra, y el switcher de la barra superior decide con cuál está operando.
+
+<!-- MATRIZ-ACCESOS:FIN -->
 ---
 
 ## 1. Autenticación
@@ -87,7 +140,7 @@ La página de login proporciona acceso seguro al sistema mediante credenciales d
 | Elemento                                       | Descripción                                 |
 | ---------------------------------------------- | -------------------------------------------- |
 | **Logo MiBoleta**                        | Identidad visual del sistema                 |
-| **Campo Email**                          | Entrada para correo electrónico corporativo |
+| **Campo "DNI o correo electrónico"**   | Acepta **cualquiera de los dos**: el DNI del trabajador o su correo |
 | **Campo Contraseña**                    | Entrada segura con opción mostrar/ocultar   |
 | **Botón "Iniciar Sesión"**             | Ejecuta la autenticación                    |
 | **Enlace "¿Olvidaste tu contraseña?"** | Inicia flujo de recuperación                |
@@ -95,10 +148,25 @@ La página de login proporciona acceso seguro al sistema mediante credenciales d
 
 **Flujo de autenticación:**
 
-1. Usuario ingresa email y contraseña
-2. Sistema valida credenciales contra base de datos
-3. Si es válido: genera token JWT y redirige al dashboard correspondiente
-4. Si es inválido: muestra mensaje de error
+1. La persona ingresa su **DNI o su correo** y la contraseña. Se admiten los dos
+   porque muchos trabajadores no tienen correo corporativo y sí recuerdan su
+   documento.
+2. El sistema valida las credenciales.
+3. Si son válidas, entra al panel que corresponde a su rol.
+4. Si son inválidas, muestra un mensaje de error.
+
+**Primer ingreso y cambio obligatorio de contraseña.** Cuando se crea una
+cuenta —o cuando un administrador restablece la contraseña— la cuenta queda
+marcada para cambio obligatorio. En el siguiente ingreso, el sistema lleva
+directamente a la pantalla de cambio de contraseña y no permite continuar hasta
+que se defina una nueva.
+
+**Si pertenece a varias empresas.** Al entrar se opera siempre dentro de una
+empresa concreta. Si la persona pertenece a más de una, en la barra superior
+aparece un selector de empresa y, si además tiene roles distintos en ellas, otro
+selector de rol. Lo que se ve y lo que se puede hacer depende de esa
+combinación: la misma persona puede ser Admin Empleados en una empresa y
+Empleado en otra.
 
 ---
 
@@ -348,6 +416,50 @@ El sistema utiliza un flujo de invitación por email:
 3. Cambiar Estado a "Inactivo"
 4. Guardar cambios
 5. El usuario no podrá iniciar sesión
+
+---
+
+## 4bis. Carga Masiva de Usuarios
+
+**Quién puede hacerlo:** Super Administrador y Admin Clientes.
+
+Da de alta a muchas personas de una sola vez a partir de un archivo, en lugar
+de crearlas una por una. Está pensado para el arranque de una empresa nueva o
+para incorporaciones grandes.
+
+![Carga masiva de usuarios](images/28_root_carga_masiva_usuarios.png)
+
+### 4bis.1 Formato del archivo
+
+Se descarga una **plantilla** desde la propia pantalla; conviene partir siempre
+de ella porque las columnas deben llamarse exactamente igual.
+
+La regla que más confusión genera: **una fila por cada combinación de persona y
+empresa**. Si alguien trabaja en dos empresas, van dos filas con el mismo DNI y
+distinta empresa. El sistema las agrupa por DNI y crea **una sola cuenta** con
+dos vínculos laborales, cada uno con su propia fecha de ingreso, área, cargo,
+supervisor y saldo inicial de vacaciones.
+
+Esto importa porque las vacaciones se calculan **por empresa**: la misma persona
+puede llevar tres años en una y seis meses en otra, y su saldo es distinto en
+cada una.
+
+### 4bis.2 Cómo funciona el proceso
+
+1. Se sube el archivo y el sistema lo **valida sin guardar nada**: revisa
+   formato, DNIs repetidos, empresas inexistentes y campos obligatorios.
+2. Se muestra una vista previa con los errores detectados, fila por fila. Si hay
+   errores, se corrige el archivo y se vuelve a subir.
+3. Al confirmar, la carga se procesa **en segundo plano**. La pantalla no se
+   queda bloqueada: se puede cerrar y volver más tarde.
+4. El lote queda registrado con su estado (pendiente, procesando, completado,
+   completado con errores o fallido) y el detalle de qué filas entraron y cuáles
+   no, con el motivo.
+5. Si alguna fila falló, se descarga un archivo con **solo esas filas** y su
+   error, para corregirlo y reintentar sin tocar las que sí entraron.
+
+> Las personas creadas reciben una contraseña temporal y el sistema les exige
+> cambiarla en su primer ingreso.
 
 ---
 
@@ -720,12 +832,32 @@ Lista de solicitudes de vacaciones que están pendientes de aprobación por part
 
 | Campo                | Descripción                        |
 | -------------------- | ----------------------------------- |
-| **Empleado**   | Nombre y foto del solicitante       |
-| **Estado**     | Badge "Pendiente"                   |
+| **Empleado**   | Nombre y documento del solicitante  |
+| **Estado**     | Punto de color y etiqueta del estado |
+| **Duración**  | Días solicitados, destacados        |
 | **Fechas**     | Rango de inicio a fin               |
-| **Días**      | Cantidad de días solicitados       |
 | **Solicitado** | Fecha de creación de la solicitud |
 | **Motivo**     | Razón proporcionada por el empleado |
+| **Saldo del solicitante** | Sus cuatro cifras de vacaciones y el efecto de aprobar |
+
+#### El saldo del solicitante, en la propia fila
+
+Cada solicitud muestra a la derecha el saldo de quien la pide, **en la empresa
+de esa solicitud**, con el desglose de los tres conceptos que lo componen y una
+línea de conclusión:
+
+- **Le quedarían X días** cuando el saldo alcanza.
+- **Excede por X días**, en ámbar y con la fila entera resaltada, cuando lo
+  solicitado supera el saldo.
+
+Esto existe porque el saldo puede cambiar entre el momento en que se solicita y
+el momento en que se aprueba: si mientras tanto se aprobaron otras vacaciones,
+el saldo bajó. La cifra que se muestra es la del momento en que se abre la
+pantalla.
+
+> **Importante:** el aviso de exceso **no bloquea** la aprobación. Es
+> información para decidir, no una restricción: la decisión sigue siendo del
+> aprobador.
 
 **Acciones disponibles:**
 

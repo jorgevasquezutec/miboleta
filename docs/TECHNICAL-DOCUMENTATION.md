@@ -4,8 +4,8 @@
 
 | Atributo            | Valor                                               |
 | ------------------- | --------------------------------------------------- |
-| **Versión**  | 1.0.0                                               |
-| **Fecha**     | Enero 2026                                          |
+| **Versión**  | 1.1.0                                               |
+| **Fecha**     | Agosto 2026                                         |
 | **Audiencia** | Desarrolladores, DevOps, Administradores de Sistema |
 
 ---
@@ -29,6 +29,7 @@ flowchart TB
             App[Laravel PHP-FPM - Puerto 9000]
             Horizon[Horizon - Queue Worker]
             Reverb[Reverb - WebSockets - Puerto 8080]
+            Signer[Signer - FastAPI - Puerto 8000]
         end
       
         subgraph Data
@@ -40,16 +41,34 @@ flowchart TB
             Adminer[Adminer - Puerto 8081]
         end
     end
+
+    subgraph Externo
+        TSA[Autoridad de sellado de tiempo - RFC 3161]
+    end
   
     Browser --> Nginx
     Nginx --> App
     App --> MySQL
     App --> Redis
+    App --> Signer
+    Signer -.-> TSA
     Horizon --> Redis
     Horizon --> MySQL
+    Horizon --> Signer
     Reverb --> Redis
     Browser -.-> Reverb
 ```
+
+**Sobre el servicio `signer`.** Es un servicio aparte, en Python (FastAPI), que
+firma los PDF criptográficamente en formato PAdES. Está separado del contenedor
+de Laravel a propósito: necesita Ghostscript para normalizar el PDF a PDF/A-2b y
+pyHanko para firmar, un stack que no tiene sentido meter en la imagen de PHP.
+Laravel le habla por HTTP dentro de la red interna (`SIGNER_BASE_URL`) y ambos
+comparten el volumen `storage_data`, para que el PDF no viaje por la red.
+
+El sellado de tiempo (TSA) es la única dependencia externa en tiempo de
+ejecución: sin salida a internet, la firma se produce igualmente pero sin sello
+de tiempo cualificado.
 
 ### 1.2 Stack Tecnológico
 
@@ -71,12 +90,21 @@ flowchart TB
 | Tecnología     | Versión | Uso                |
 | --------------- | -------- | ------------------ |
 | PHP             | 8.4      | Lenguaje           |
-| Laravel         | 11.x     | Framework          |
+| Laravel         | 12.x     | Framework          |
 | Laravel Sanctum | -        | Autenticación API |
 | Laravel Horizon | -        | Queue Dashboard    |
 | Laravel Reverb  | -        | WebSockets         |
 | MySQL           | 8.0      | Base de datos      |
 | Redis           | 7.4      | Cache y Queues     |
+
+#### Servicio de firma (contenedor aparte)
+
+| Tecnología  | Uso                                                      |
+| ------------ | -------------------------------------------------------- |
+| Python + FastAPI | Servicio HTTP interno de firma                       |
+| Ghostscript  | Normalización del PDF a PDF/A-2b antes de firmar         |
+| pyHanko      | Firma PAdES sobre el PDF normalizado                     |
+| TSA (RFC 3161) | Sellado de tiempo cualificado (dependencia externa)    |
 
 #### Infraestructura
 
