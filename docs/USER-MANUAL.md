@@ -1034,6 +1034,20 @@ El visor de documentos permite al empleado revisar el contenido completo del doc
 
 ## 15. Proceso de Firma Digital
 
+El sistema maneja **dos firmas distintas**, que resuelven problemas diferentes y
+no se sustituyen entre sí:
+
+| | Firma del trabajador | Firma digital de la empresa |
+| --- | --- | --- |
+| **Qué demuestra** | Que la persona recibió el documento y lo dio por conforme | Que el documento es auténtico y no fue alterado |
+| **Quién la hace** | El propio trabajador, sobre su documento | La plataforma, con el certificado de la empresa |
+| **Cómo se valida** | Con un código enviado a su correo | Criptográficamente, en cualquier lector de PDF |
+| **Dónde se ve** | Sello "RECIBÍ CONFORME" en el documento | Panel de firmas del lector de PDF |
+| **Sección** | 15.1 a 15.3 (abajo) | 15.4 |
+
+La primera es la que usa el empleado en su día a día. La segunda la aplica un
+administrador y es la que da validez legal al documento frente a terceros.
+
 ### 15.1 Modal de Verificación en Dos Pasos (Paso 1)
 
 ![Signature Modal Step 1](images/04_signature_modal_step1.png)
