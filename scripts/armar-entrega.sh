@@ -162,13 +162,24 @@ find . -type f ! -name 'MANIFIESTO-SHA256.txt' -print0 \
 
 HASH_MANIFIESTO="$(shasum -a 256 MANIFIESTO-SHA256.txt | cut -d' ' -f1)"
 
-cat >> VERSION.txt <<EOF
-
-SHA-256 del manifiesto:
+# El hash del manifiesto va en su PROPIO archivo, no dentro de VERSION.txt.
+# Escribirlo dentro sería circular: VERSION.txt está cubierto por el manifiesto,
+# así que modificarlo después de calcularlo hace que la verificación falle
+# justo en ese archivo. Y un manifiesto que no valida no sirve como prueba.
+cat > HUELLA-DEL-MANIFIESTO.txt <<EOF
+SHA-256 de MANIFIESTO-SHA256.txt
+=================================
 ${HASH_MANIFIESTO}
 
-Este valor debe transcribirse en el acta de entrega firmada: es lo que ancla
-el contenido de este disco a un documento en papel.
+Este valor debe transcribirse en el acta de entrega firmada: es lo que ancla el
+contenido completo de este disco a un documento en papel. El manifiesto cubre
+todos los archivos; este hash cubre el manifiesto.
+
+Comprobar el contenido del disco:
+  shasum -a 256 -c MANIFIESTO-SHA256.txt
+
+Comprobar que el propio manifiesto no fue alterado:
+  shasum -a 256 MANIFIESTO-SHA256.txt
 EOF
 
 echo
