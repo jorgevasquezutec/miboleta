@@ -45,17 +45,13 @@ const CONFIG = {
       icon: '⚙️',
       audience: 'Desarrolladores, DevOps'
     },
-    // La funcional no estaba en la tubería, así que su PDF se quedó congelado
-    // en enero mientras el .md se actualizaba: el mismo documento decía dos
-    // cosas distintas según se leyera en PDF o en texto.
-    {
-      input: 'FUNCTIONAL-DOCUMENTATION.md',
-      output: 'MiBoleta-Documentacion-Funcional.pdf',
-      title: 'Documentación Funcional',
-      subtitle: 'Módulos, roles y flujos del sistema',
-      icon: '📋',
-      audience: 'Funcional, Producto, QA'
-    },
+    // La documentación funcional se retiró: 16 de sus 19 secciones, 17 de sus
+    // 20 capturas y los cuatro apéndices completos eran los mismos que los del
+    // manual. Mantener dos documentos con el mismo contenido no aportaba nada y
+    // sí garantizaba que se desincronizaran — y pasó: se quedó seis meses
+    // diciendo que el sistema usaba JWT y tenía tres roles.
+    // Lo único que solo estaba allí (el cálculo de los cuatro conceptos de
+    // vacaciones) se trasladó al manual, sección 16.0.
     {
       input: 'INSTALACION.md',
       output: 'MiBoleta-Guia-de-Instalacion.pdf',

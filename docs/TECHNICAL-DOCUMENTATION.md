@@ -334,41 +334,72 @@ REVERB_PORT=8080
 
 ## 3. Sistema de Autenticación
 
-### 3.1 Laravel Sanctum con Cookies
+### 3.1 Laravel Sanctum con tokens de API
 
-El sistema usa **Laravel Sanctum** en modo **SPA** con cookies HttpOnly:
+El sistema usa **Laravel Sanctum en modo token** (`Bearer`), no en modo SPA con
+cookies: `AuthService` emite los tokens con `createToken()->plainTextToken` y el
+frontend los guarda en `localStorage`. El identificador de acceso se envía en la
+cabecera `Authorization` de cada petición.
+
+| Token | Vigencia | Para qué |
+| --- | --- | --- |
+| Acceso | 60 minutos | Autoriza cada petición a la API |
+| Refresco | 30 días | Obtiene un token de acceso nuevo sin volver a pedir la contraseña |
 
 ```mermaid
 sequenceDiagram
-    participant Browser
+    participant Navegador
     participant Laravel
-  
-    Browser->>Laravel: GET csrf-cookie
-    Laravel-->>Browser: Set-Cookie XSRF-TOKEN
-  
-    Browser->>Laravel: POST api-login
-    Laravel-->>Browser: Set-Cookie laravel_session
-    Laravel-->>Browser: JSON user y token
-  
-    Browser->>Laravel: GET api-user con cookies
-    Laravel-->>Browser: JSON user data
+
+    Navegador->>Laravel: POST api-login (DNI o correo, contrasenia)
+    Laravel-->>Navegador: JSON usuario, token de acceso y token de refresco
+
+    Navegador->>Laravel: GET api-recurso (Authorization Bearer)
+    Laravel-->>Navegador: JSON datos
+
+    Note over Navegador,Laravel: Al expirar el token de acceso (60 min)
+    Navegador->>Laravel: POST api-refresh (token de refresco)
+    Laravel-->>Navegador: JSON token de acceso nuevo
 ```
+
+El login acepta **DNI o correo** como identificador (`AuthService::login`).
 
 ### 3.2 Multi-Tenant
 
 El sistema soporta múltiples organizaciones (tenants):
 
-- Cada usuario puede pertenecer a múltiples tenants
-- El tenant activo se almacena en el token/sesión
-- Los documentos y vacaciones están aislados por tenant
+- Cada usuario puede pertenecer a múltiples tenants.
+- El tenant activo se envía en la cabecera `X-Tenant-Ids`, que el middleware
+  `TenantFilter` valida contra los tenants del usuario.
+- Los documentos y las vacaciones se aíslan por tenant mediante el global scope
+  `TenantFilterScope`.
+- Los roles operativos se resuelven **dentro de cada empresa**
+  (`user_tenant_roles`), no con el respaldo global `user_roles`: ese respaldo es
+  la unión de los roles del usuario en todas sus empresas y autorizar con él
+  produce fugas de privilegios entre empresas.
 
 ### 3.3 Roles y Permisos
 
-| Rol              | Permisos                                     |
-| ---------------- | -------------------------------------------- |
-| **root**   | Acceso total, gestión de tenants            |
-| **admin**  | Gestión de usuarios/documentos de su tenant |
-| **client** | Ver sus documentos, solicitar vacaciones     |
+Cinco roles. `root` es global de la plataforma; los otros cuatro se asignan por
+empresa.
+
+| Rol | Nombre en pantalla | Alcance |
+| --- | --- | --- |
+| `root` | Super Administrador | Plataforma: empresas, certificado de firma, ajustes globales |
+| `admin_tenant` | Admin Clientes | Su empresa completa, incluidos usuarios Admin y Aprobador |
+| `admin` | Admin Empleados | Operación diaria de su empresa |
+| `aprobador` | Aprobador | Aprueba, rechaza y confirma vacaciones de su equipo |
+| `client` | Empleado | Sus documentos, su firma y sus vacaciones |
+
+La matriz completa vive en `backend/config/access_matrix.php`, **fuente única de
+verdad**: cada entrada se registra automáticamente como Gate y se expone al
+frontend en `GET /api/access-matrix`. `root` **no es un comodín**: solo puede lo
+que la matriz le concede explícitamente.
+
+Dos guards de CI la protegen: `scripts/check-access-matrix.php` (evita que el
+frontend referencie abilities inexistentes y que se autorice sin empresa) y
+`scripts/generate-access-matrix-doc.php --check` (evita que la tabla del manual
+se desincronice del config).
 
 ---
 

@@ -1102,6 +1102,38 @@ El segundo paso solicita al usuario ingresar el código de 6 dígitos recibido p
 
 ## 16. Gestión de Vacaciones (Empleado)
 
+### 16.0 Cómo se calculan sus vacaciones
+
+El sistema aplica el régimen laboral peruano (D.Leg. 713 y régimen MYPE) y
+muestra **cuatro cifras**. Conviene entenderlas, porque son las que aparecen
+tanto en su pantalla como en la del aprobador:
+
+| Concepto | Qué significa |
+| --- | --- |
+| **Vacaciones Pendientes** | Días de los años de servicio que ya cumplió. **Incluye los que ya se tomó**, así que puede ser mayor que el Saldo. |
+| **Vacaciones Gozadas** | Días que ya se aprobaron o se confirmaron como tomados. |
+| **Vacaciones Truncas** | La parte proporcional del año laboral en curso, contada por dozavos y treintavos (D.S. 012-92-TR, art. 22). |
+| **Saldo de Vacaciones** | **Pendientes + Truncas − Gozadas**. Es la cifra real disponible, y el tope contra el que se valida una solicitud. |
+
+Dos reglas que suelen sorprender:
+
+**El número de días al año depende de la empresa.** Son 30 días en régimen
+general y **15 en régimen MYPE** (micro y pequeña empresa). No es una diferencia
+del sistema: es la que establece la ley según el tipo de empresa.
+
+**La antigüedad se cuenta por empresa, no por persona.** La fecha de ingreso
+pertenece al vínculo con cada empresa. Quien trabaja en dos tiene **dos
+antigüedades y dos saldos independientes**, y verá cifras distintas según la
+empresa que tenga seleccionada en la barra superior.
+
+> Un ejemplo. Alguien con **tres años cumplidos** en una empresa de régimen
+> general acumula 3 × 30 = **90 días de Pendientes**. Si ya se tomó 15, esas son
+> sus **Gozadas**. Y si del año en curso lleva 4 meses, le corresponden
+> 4 × 2.5 = **10 días de Truncas**.
+>
+> Su **Saldo** es 90 + 10 − 15 = **85 días**, y eso es lo máximo que puede
+> solicitar.
+
 ### 16.1 Lista de Mis Vacaciones
 
 ![Employee Vacations](images/06_employee_vacations.png)
