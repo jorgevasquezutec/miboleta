@@ -67,10 +67,20 @@ docker compose version                # debe responder v2.x
 ### Paso 1 — Copiar el paquete al servidor
 
 ```bash
-scp miboleta-v1.1.0.tar.gz usuario@servidor:/opt/
+# Desde su equipo
+scp miboleta-v1.1.0.tar.gz usuario@servidor:~/
+
+# Ya en el servidor
 ssh usuario@servidor
-cd /opt && tar -xzf miboleta-v1.1.0.tar.gz && cd miboleta-v1.1.0
+sudo mkdir -p /opt/miboleta && sudo chown "$USER": /opt/miboleta
+tar -xzf ~/miboleta-v1.1.0.tar.gz -C /opt/miboleta
+cd /opt/miboleta/miboleta-v1.1.0
 ```
+
+> Se copia primero a su carpeta personal y luego se extrae en `/opt`: ese
+> directorio pertenece a `root`, así que un `scp` directo contra `/opt/` falla
+> con *Permission denied*. Si prefiere evitar `sudo`, instale en `~/miboleta`;
+> todo funciona igual.
 
 ### Paso 2 — Configurar
 
@@ -162,19 +172,44 @@ sistema que maneja boletas de pago, **es necesario cifrar el tráfico**.
 Con un dominio apuntando al servidor, lo más simple es Let's Encrypt:
 
 ```bash
-sudo apt-get install certbot
+sudo apt-get update && sudo apt-get install -y certbot   # Ubuntu/Debian
+# En Rocky/Alma:  sudo dnf install -y epel-release && sudo dnf install -y certbot
+
+# certbot necesita el puerto 80 para sí: hay que liberarlo
+docker compose -f docker-compose.produccion.yml -p miboleta stop nginx
+
 sudo certbot certonly --standalone -d miboleta.tuempresa.com
 
-# Copiar el certificado a donde nginx lo espera
+# Copiar el certificado a donde nginx lo espera (desde produccion/)
 sudo cp /etc/letsencrypt/live/miboleta.tuempresa.com/fullchain.pem ssl/
-sudo cp /etc/letsencrypt/live/miboleta.tuempresa.com/privkey.pem ssl/
+sudo cp /etc/letsencrypt/live/miboleta.tuempresa.com/privkey.pem  ssl/
+sudo chown "$USER": ssl/*.pem
 ```
 
-Descomente el bloque `server` de HTTPS en `nginx.conf`, ponga `APP_URL` con
-`https://` y reinicie:
+Descomente el bloque `server` de HTTPS que hay al final de `nginx.conf`, cambie
+`APP_URL` a `https://...` en el `.env`, y aplique:
 
 ```bash
-docker compose -f docker-compose.produccion.yml -p miboleta restart nginx app
+docker compose -f docker-compose.produccion.yml -p miboleta up -d
+```
+
+> **`up -d`, no `restart`.** `restart` reinicia el contenedor con las variables
+> con las que se creó: el `APP_URL` nuevo no se leería y los enlaces de los
+> correos seguirían apuntando a `http://`. `up -d` detecta el cambio y recrea
+> lo necesario.
+
+**Renovación automática.** El certificado caduca a los 90 días. Sin esto, el
+sitio deja de funcionar sin aviso:
+
+```bash
+sudo crontab -e
+# añadir (renueva de madrugada, para y levanta nginx solo si toca renovar):
+0 3 * * 1 cd /opt/miboleta/miboleta-v1.1.0/produccion && \
+  docker compose -f docker-compose.produccion.yml -p miboleta stop nginx && \
+  certbot renew --quiet && \
+  cp /etc/letsencrypt/live/*/fullchain.pem ssl/ && \
+  cp /etc/letsencrypt/live/*/privkey.pem ssl/ && \
+  docker compose -f docker-compose.produccion.yml -p miboleta start nginx
 ```
 
 ### 3.3 Certificado de firma digital
@@ -207,15 +242,50 @@ Sin certificado, todo lo demás funciona; solo queda inactiva la firma digital.
 ./backup.sh
 
 # 2. Nueva versión de las imágenes en .env
-nano .env            # MIBOLETA_IMAGE=...:v1.2.0
+nano .env            # MIBOLETA_IMAGE y MIBOLETA_SIGNER_IMAGE
 
 # 3. Aplicar
 docker compose -f docker-compose.produccion.yml -p miboleta pull
 docker compose -f docker-compose.produccion.yml -p miboleta up -d
 ```
 
+Cambie **las dos** imágenes: si solo actualiza `MIBOLETA_IMAGE`, el servicio de
+firma se queda en la versión anterior.
+
 Las migraciones de base de datos se aplican solas al arrancar el contenedor
-`app`.
+`app`. Actualice **en horario sin actividad**: las tareas en curso (cargas
+masivas, envíos) se interrumpen al recrear los contenedores, aunque se
+reintentan solas.
+
+**Si el paquete es de instalación sin conexión** (trae carpeta `imagenes/`), no
+use `pull`: cargue las imágenes del paquete nuevo y luego aplique.
+
+```bash
+for t in imagenes/*.tar; do docker load -i "$t"; done
+docker compose -f docker-compose.produccion.yml -p miboleta up -d
+```
+
+### Volver atrás si la actualización falla
+
+```bash
+# 1. Volver a la imagen anterior en .env y aplicar
+nano .env
+docker compose -f docker-compose.produccion.yml -p miboleta up -d
+
+# 2. Si además hay que restaurar la base de datos
+gunzip -c backups/miboleta-db-FECHA.sql.gz | \
+  docker compose -f docker-compose.produccion.yml -p miboleta exec -T db \
+  sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root "$MYSQL_DATABASE"'
+
+# 3. Y los documentos, si se perdieron
+docker run --rm -v miboleta_storage_data:/data \
+  -v "$PWD/backups":/in alpine \
+  tar xzf /in/miboleta-storage-FECHA.tgz -C /data
+```
+
+> Restaurar la base **sustituye** su contenido actual. Haga una copia del estado
+> presente antes, aunque esté defectuoso: puede contener datos posteriores al
+> último respaldo.
 
 ---
 
@@ -223,7 +293,9 @@ Las migraciones de base de datos se aplican solas al arrancar el contenedor
 
 | Síntoma | Causa habitual | Qué hacer |
 | --- | --- | --- |
-| La web no carga | El puerto 80 está ocupado por otro servicio | Cambie `HTTP_PORT` en `.env` y reinicie |
+| La web no carga | El puerto 80 está ocupado por otro servicio | Cambie `HTTP_PORT` en `.env` y aplique con `... up -d` (no `restart`) |
+| La web no carga y el puerto está libre | El cortafuegos bloquea el acceso | `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp` |
+| El login falla sin mensaje claro | Se accede por una dirección distinta a `APP_URL` | Use exactamente la dirección de `APP_URL`, o corríjala y `... up -d` |
 | Error 500 al entrar | Las migraciones no terminaron | `... logs app` y espere o reintente |
 | No llegan los correos | `MAIL_*` mal configurado | `... exec app php artisan email:test su-correo@empresa.com` |
 | No se procesan las cargas masivas | `horizon` caído | `... logs horizon` y `... restart horizon` |
@@ -250,3 +322,15 @@ docker compose -f docker-compose.produccion.yml -p miboleta down -v
 
 > `down -v` borra la base de datos y los documentos almacenados. Haga copia de
 > seguridad antes si hay algo que conservar.
+
+Dos matices:
+
+- **Sus copias de `./backups` no se borran.** Están en una carpeta del servidor,
+  no en un volumen de Docker.
+- **Las imágenes tampoco**, y ocupan varios GB. Para liberar ese espacio:
+
+```bash
+docker image rm ghcr.io/jorgevasquezutec/miboleta:latest \
+                ghcr.io/jorgevasquezutec/miboleta-signer:latest
+docker image prune -f
+```

@@ -10,6 +10,13 @@
 #   docker compose up -d   arranques posteriores
 # ---------------------------------------------------------------------------
 
+# El nombre del proyecto va aquí y no solo en el `-p` de cada comando: sin esto,
+# un `docker compose up -d` a secas usaría el nombre del directorio
+# ("produccion") y crearía un stack PARALELO con volúmenes nuevos y vacíos,
+# chocando de puertos con el real. Los `-p miboleta` de la guía pasan a ser
+# redundantes, pero inofensivos.
+name: miboleta
+
 services:
   app:
     image: ${MIBOLETA_IMAGE}

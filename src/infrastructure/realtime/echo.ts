@@ -25,13 +25,41 @@ window.Pusher = Pusher;
 export function createEchoInstance(): Echo<'reverb'> {
     const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8090/api';
 
+    // Dónde conectar el WebSocket. Por defecto, EL MISMO ORIGEN de la página:
+    // nginx ya proxya /app hacia Reverb, así que funciona en cualquier
+    // despliegue sin reconstruir la imagen.
+    //
+    // Antes se usaba VITE_REVERB_HOST directamente, y esas variables se
+    // hornean en el bundle al construir. La imagen publicada la construye CI
+    // con el dominio del servidor del proveedor, así que en la instalación de
+    // un cliente el navegador intentaba abrir el WebSocket contra un servidor
+    // ajeno — y al cambiar el cliente su REVERB_APP_KEY, ni siquiera coincidía
+    // la clave. Las notificaciones en tiempo real no podían funcionar.
+    //
+    // Con HTTPS esto además era obligatorio: una página https con un
+    // WebSocket ws:// la bloquea el navegador por contenido mixto.
+    const enNavegador = typeof window !== 'undefined';
+    const paginaEsSegura = enNavegador && window.location.protocol === 'https:';
+
+    // Las VITE_* siguen mandando si están definidas: hacen falta en desarrollo,
+    // donde Vite sirve en un puerto y Reverb escucha en otro.
+    const hostConfigurado = import.meta.env.VITE_REVERB_HOST;
+    const puertoConfigurado = Number(import.meta.env.VITE_REVERB_PORT);
+
+    const wsHost = hostConfigurado || (enNavegador ? window.location.hostname : 'localhost');
+    const wsPort = puertoConfigurado
+        || (enNavegador && window.location.port ? Number(window.location.port) : (paginaEsSegura ? 443 : 80));
+    const usarTLS = import.meta.env.VITE_REVERB_SCHEME
+        ? import.meta.env.VITE_REVERB_SCHEME === 'https'
+        : paginaEsSegura;
+
     const echo = new Echo({
         broadcaster: 'reverb',
         key: import.meta.env.VITE_REVERB_APP_KEY || 'miboleta-key',
-        wsHost: import.meta.env.VITE_REVERB_HOST || 'localhost',
-        wsPort: Number(import.meta.env.VITE_REVERB_PORT) || 8085,
-        wssPort: Number(import.meta.env.VITE_REVERB_PORT) || 8085,
-        forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
+        wsHost,
+        wsPort,
+        wssPort: wsPort,
+        forceTLS: usarTLS,
         enabledTransports: ['ws', 'wss'],
         authEndpoint: `${apiBaseUrl}/broadcasting/auth`,
         auth: {

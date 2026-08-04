@@ -50,7 +50,11 @@ LOG_LEVEL=warning
 REVERB_APP_ID=miboleta
 REVERB_APP_KEY=miboleta-key
 REVERB_APP_SECRET=miboleta-secret-demo
-REVERB_HOST=0.0.0.0
+# Destino al que app y horizon PUBLICAN los eventos: el nombre del servicio.
+# Con 0.0.0.0 se conectaban a si mismos y ningun evento llegaba a Reverb, asi
+# que la campana nunca avisaba. El bind del servidor no se toca: viene del
+# flag --host=0.0.0.0 del compose.
+REVERB_HOST=reverb
 REVERB_PORT=8080
 REVERB_SCHEME=http
 

@@ -208,10 +208,22 @@ azul "6/7  Datos base..."
 # Roles y tipos de documento: son catálogos que el sistema necesita para
 # funcionar, no datos de demostración. Se siembran solo si faltan, para que
 # reejecutar el script no los duplique.
+# Si el conteo NO se puede determinar (la app reiniciándose, falta de memoria),
+# se aborta en vez de asumir cero. Asumir cero sembraba de nuevo sobre una
+# instalación con datos, y este script está pensado para relanzarse si falla a
+# mitad.
 ROLES=$(docker compose -f "$COMPOSE" -p "$PROYECTO" exec -T app \
-  php artisan tinker --execute='echo App\Models\Role::count();' 2>/dev/null | tr -dc '0-9' || echo 0)
+  php artisan tinker --execute='echo App\Models\Role::count();' 2>/dev/null | tr -dc '0-9')
 
-if [ "${ROLES:-0}" -eq 0 ]; then
+if [ -z "$ROLES" ]; then
+  rojo "No se pudo consultar el estado de la base de datos."
+  echo "   No se siembra nada para no arriesgar los datos existentes."
+  echo "   Revise:  docker compose -f $COMPOSE -p $PROYECTO logs app"
+  echo "   Y relance este script cuando la aplicación responda."
+  exit 1
+fi
+
+if [ "$ROLES" -eq 0 ]; then
   docker compose -f "$COMPOSE" -p "$PROYECTO" exec -T app php artisan db:seed --class=RoleSeeder --force
   docker compose -f "$COMPOSE" -p "$PROYECTO" exec -T app php artisan db:seed --class=DocumentTypeSeeder --force
   verde "     Roles y tipos de documento creados."
