@@ -62,8 +62,9 @@ azul "2/5  Preparando los archivos de instalación..."
 cp entrega/produccion/docker-compose.produccion.yml "$TRABAJO/produccion/"
 cp entrega/produccion/.env.example "$TRABAJO/produccion/"
 cp entrega/produccion/instalar.sh "$TRABAJO/produccion/"
+cp entrega/produccion/backup.sh "$TRABAJO/produccion/"
 cp entrega/produccion/nginx.conf "$TRABAJO/produccion/"
-chmod +x "$TRABAJO/produccion/instalar.sh"
+chmod +x "$TRABAJO/produccion/instalar.sh" "$TRABAJO/produccion/backup.sh"
 
 # --- Documentación ---------------------------------------------------------
 azul "3/5  Copiando la documentación..."

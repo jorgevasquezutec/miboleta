@@ -54,10 +54,16 @@ services:
       MYSQL_USER: ${DB_USERNAME}
       MYSQL_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      # Una consulta real contra LA BASE de la aplicación, no `mysqladmin ping`.
+      # El ping responde en cuanto el servidor arranca, pero en el primer
+      # arranque MySQL sigue creando la base y el usuario: la aplicación se
+      # conectaba antes de tiempo, moría con "SQLSTATE[2002] Connection
+      # refused" y se reiniciaba un par de veces.
+      test: ["CMD", "mysql", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}", "-e", "USE ${DB_DATABASE}; SELECT 1;"]
       interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 30
+      start_period: 30s
     volumes:
       - mysql_data:/var/lib/mysql
       # Copias de seguridad de la base: ver PROCEDIMIENTO en INSTALACION.md

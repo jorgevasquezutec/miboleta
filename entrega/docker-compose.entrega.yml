@@ -76,10 +76,14 @@ services:
     # Credenciales de demostración a propósito: esta base solo contiene datos
     # ficticios y el stack no se expone a internet.
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pdemo_root"]
+      # Consulta real contra la base, no `mysqladmin ping`: el ping responde
+      # antes de que MySQL termine de crear la base en el primer arranque, y la
+      # aplicacion moria con SQLSTATE[2002] y se reiniciaba.
+      test: ["CMD", "mysql", "-h", "localhost", "-u", "root", "-pdemo_root", "-e", "USE miboleta; SELECT 1;"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
+      start_period: 20s
     volumes:
       - mysql_data:/var/lib/mysql
     networks: [miboleta]

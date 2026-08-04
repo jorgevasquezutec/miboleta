@@ -16,10 +16,29 @@ máquina física de la empresa o una instancia en la nube.
 | Recurso | Mínimo | Recomendado |
 | --- | --- | --- |
 | Sistema operativo | Linux de 64 bits (Ubuntu 22.04+, Debian 12+, Rocky 9+) | Ubuntu 24.04 LTS |
+| **Arquitectura** | **x86_64 (amd64)** — ver aviso abajo | |
 | CPU | 2 núcleos | 4 núcleos |
 | Memoria | 4 GB | 8 GB |
 | Disco | 40 GB | 100 GB o más, según el volumen de documentos |
 | Software | Docker 24+ con el plugin `docker compose` v2 | |
+
+> ### ⚠ La arquitectura importa
+>
+> Las imágenes de MiBoleta se publican **solo para x86_64 (amd64)**. En un
+> servidor ARM la instalación se detiene con un aviso.
+>
+> Compruébelo antes de empezar:
+>
+> ```bash
+> uname -m      # debe responder x86_64
+> ```
+>
+> La mayoría de los VPS son x86_64, pero **no todos**: el nivel gratuito de
+> Oracle Cloud, las instancias AWS Graviton y los servidores Ampere son ARM.
+>
+> Si su servidor es ARM y su Docker admite emulación, puede forzarla con
+> `FORZAR_AMD64=1 ./instalar.sh`, asumiendo un rendimiento sensiblemente menor.
+> Para uso real, es preferible un servidor x86_64.
 
 **Puertos que deben quedar accesibles:**
 
@@ -111,24 +130,29 @@ el sistema de verdad.
 
 Sin esto, un fallo de disco pierde todas las boletas y todo el histórico.
 
-```bash
-# Base de datos, cada noche
-docker compose -f docker-compose.produccion.yml -p miboleta exec -T db \
-  sh -c 'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction \
-         --quick --routines --no-tablespaces "$MYSQL_DATABASE" | gzip' \
-  > backups/miboleta-$(date +%F).sql.gz
+El paquete incluye un script que respalda las tres cosas que hacen falta: la
+base de datos, los documentos almacenados y el `.env`.
 
-# Documentos almacenados
-docker run --rm -v miboleta_storage_data:/data:ro -v "$PWD/backups":/out alpine \
-  tar czf /out/storage-$(date +%F).tgz -C /data app
+```bash
+./backup.sh                    # guarda en ./backups
+DESTINO=/mnt/nas ./backup.sh   # o donde prefiera
 ```
 
-Automatícelo con `cron` y **copie los respaldos fuera del servidor**: una copia
-que vive en la misma máquina no protege de la avería de esa máquina.
+Automatícelo con `cron`, por ejemplo cada noche a las 2:00:
 
-> Guarde también el archivo `.env`. Contiene `APP_KEY`, y sin ella no se pueden
-> descifrar las contraseñas de correo ni la del certificado de firma, aunque se
-> tenga la base de datos íntegra.
+```bash
+crontab -e
+# añadir:
+0 2 * * * cd /opt/miboleta-v1.1.0/produccion && ./backup.sh >> backups/cron.log 2>&1
+```
+
+**Copie los respaldos fuera del servidor.** Una copia que vive en la misma
+máquina no protege de la avería de esa máquina.
+
+> El script respalda también el `.env` porque contiene la `APP_KEY`. Sin ella no
+> se pueden descifrar las contraseñas de correo ni la del certificado de firma,
+> aunque se tenga la base de datos íntegra. Ese archivo se guarda con permisos
+> restringidos: trátelo como una credencial.
 
 ### 3.2 HTTPS
 
@@ -180,7 +204,7 @@ Sin certificado, todo lo demás funciona; solo queda inactiva la firma digital.
 
 ```bash
 # 1. Copia de seguridad ANTES de nada
-./backup.sh          # o los comandos de la sección 3.1
+./backup.sh
 
 # 2. Nueva versión de las imágenes en .env
 nano .env            # MIBOLETA_IMAGE=...:v1.2.0

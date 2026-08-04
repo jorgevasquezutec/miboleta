@@ -61,6 +61,38 @@ if [ "${RUN_MIGRATIONS:-true}" != "true" ]; then
     FIRST_TIME=false
 else
 
+# Esperar a que la base acepte conexiones ANTES de decidir nada.
+# Sin esto, el `migrate:status` de abajo puede fallar por unos milisegundos de
+# diferencia, el script concluye que la base está vacía e intenta crear las
+# tablas otra vez: "SQLSTATE[42S01] Table 'migrations' already exists", el
+# contenedor muere y se reinicia. El healthcheck del compose ayuda, pero no
+# cubre el momento en que MySQL aún está aplicando permisos al usuario de la
+# aplicación.
+echo "⏳ Esperando a la base de datos..."
+BD_LISTA=false
+for i in $(seq 1 60); do
+    if php -r '
+        $h = getenv("DB_HOST") ?: "db";
+        $p = getenv("DB_PORT") ?: "3306";
+        $d = getenv("DB_DATABASE");
+        $u = getenv("DB_USERNAME");
+        $w = getenv("DB_PASSWORD");
+        try { new PDO("mysql:host=$h;port=$p;dbname=$d", $u, $w); exit(0); }
+        catch (Throwable $e) { exit(1); }
+    ' 2>/dev/null; then
+        BD_LISTA=true
+        break
+    fi
+    sleep 2
+done
+
+if [ "$BD_LISTA" != true ]; then
+    echo "❌ La base de datos no respondió tras 2 minutos."
+    echo "   Revisa DB_HOST/DB_DATABASE/DB_USERNAME/DB_PASSWORD y que el servicio esté arriba."
+    exit 1
+fi
+echo "   Base de datos disponible."
+
 # Verificar si es primera vez (tabla migrations no existe)
 FIRST_TIME=false
 if ! php artisan migrate:status 2>/dev/null | grep -q "Migration name"; then

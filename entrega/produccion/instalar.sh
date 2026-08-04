@@ -55,6 +55,34 @@ docker info >/dev/null 2>&1 || {
 
 verde "     Docker disponible."
 
+# Las imágenes se publican solo para x86_64 (amd64). En un servidor ARM el
+# `docker compose pull` muere con "no matching manifest for linux/arm64", que
+# no le dice nada a quien instala. Mejor detenerse aquí con una explicación.
+ARQ="$(uname -m)"
+case "$ARQ" in
+  x86_64|amd64)
+    verde "     Arquitectura $ARQ compatible."
+    ;;
+  *)
+    rojo "Arquitectura no compatible: $ARQ"
+    echo
+    echo "   Las imágenes de MiBoleta se publican para x86_64 (amd64)."
+    echo "   Este servidor es $ARQ, así que la descarga fallaría."
+    echo
+    echo "   Opciones:"
+    echo "     1. Instalar en un servidor x86_64 (la mayoría de VPS lo son)."
+    echo "     2. Si su Docker admite emulación, forzarla y aceptar que irá"
+    echo "        más lento:"
+    echo "          FORZAR_AMD64=1 ./instalar.sh"
+    echo
+    if [ "${FORZAR_AMD64:-0}" != "1" ]; then
+      exit 1
+    fi
+    ama "     FORZAR_AMD64=1: se continúa con emulación (rendimiento reducido)."
+    export DOCKER_DEFAULT_PLATFORM=linux/amd64
+    ;;
+esac
+
 # --- 2. Configuración ------------------------------------------------------
 azul "2/7  Comprobando la configuración..."
 
@@ -122,8 +150,34 @@ if [ -d imagenes ] && compgen -G "imagenes/*.tar" > /dev/null; then
   done
   verde "     Cargadas desde el paquete."
 else
-  docker compose -f "$COMPOSE" -p "$PROYECTO" pull
-  verde "     Descargadas del registro."
+  # Si la descarga falla no se aborta de inmediato: puede que las imágenes ya
+  # estén en la máquina (reinstalación, o cargadas a mano). Solo se para si
+  # falta alguna de verdad, y explicando cuál.
+  if docker compose -f "$COMPOSE" -p "$PROYECTO" pull 2>/dev/null; then
+    verde "     Descargadas del registro."
+  else
+    ama "     No se pudieron descargar. Comprobando si ya están en el equipo..."
+    FALTAN=""
+    for img in "${MIBOLETA_IMAGE:-}" "${MIBOLETA_SIGNER_IMAGE:-}" mysql:8.0 redis:7.4-alpine nginx:1.27-alpine; do
+      [ -n "$img" ] || continue
+      docker image inspect "$img" >/dev/null 2>&1 || FALTAN="$FALTAN $img"
+    done
+
+    if [ -n "$FALTAN" ]; then
+      rojo "Faltan imágenes y no se pudieron descargar:"
+      for img in $FALTAN; do echo "     - $img"; done
+      echo
+      echo "   Causas habituales:"
+      echo "     · El servidor no tiene salida a internet o un cortafuegos"
+      echo "       bloquea ghcr.io."
+      echo "     · El registro está temporalmente caído."
+      echo
+      echo "   Solución: pida al proveedor el paquete CON IMÁGENES incluidas,"
+      echo "   colóquelas en ./imagenes/ y vuelva a ejecutar este script."
+      exit 1
+    fi
+    verde "     Ya estaban en el equipo."
+  fi
 fi
 
 # --- 5. Arranque -----------------------------------------------------------
