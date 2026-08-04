@@ -1229,6 +1229,8 @@ Al pulsar la campana se abre el listado, donde se pueden marcar como leídas
 
 ## 19. Perfil personal
 
+![Perfil personal](images/27_perfil.png)
+
 Accesible desde el menú del propio nombre, en la esquina superior derecha.
 
 | Qué permite | Detalle |
@@ -1277,9 +1279,13 @@ hacer nada para ello: es el comportamiento por defecto.
 | **Certificado de firma** | Carga y gestión del certificado con el que se firman digitalmente los documentos |
 | **Ajustes de auditoría** | Activar o desactivar el registro de cada tipo de acción |
 
+![Ajustes de plataforma](images/30_root_ajustes_plataforma.png)
+
 Sobre el **certificado de firma**: es único para toda la plataforma, se sube una
 sola vez y su contraseña se guarda cifrada. Es lo que permite que los documentos
 firmados se validen en cualquier lector de PDF.
+
+![Certificado de firma](images/29_root_ajustes_firma.png)
 
 Sobre la **auditoría**: permite decidir qué se registra. Conviene ser
 conservador al desactivar cosas — el registro de auditoría es la única forma de

@@ -89,3 +89,6 @@ CLAUDE.md
 
 # Carpetas que dejan las pruebas de carga masiva ("testing <hora>/archivo.zip")
 testing */
+
+# Previews HTML que deja el generador de PDFs (intermedios, se regeneran)
+/docs/pdf-generator/*.html
