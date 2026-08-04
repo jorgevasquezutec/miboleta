@@ -36,6 +36,22 @@ jobs:
       - name: Check access matrix guards
         run: php scripts/check-access-matrix.php
 
+  # El bloque HTTPS de nginx.conf va comentado y lo activa el cliente a mano.
+  # Cualquier linea que no sea configuracion y quede entre las marcas se
+  # descomenta con el resto y tumba nginx al arrancar. Ha pasado dos veces, y
+  # leyendo el archivo no se ve. Los runners traen Docker, asi que se valida
+  # con el mismo nginx que corre en produccion.
+  entrega-nginx:
+    name: Bloque HTTPS de la entrega
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verificar que el bloque HTTPS se puede activar
+        run: ./scripts/verificar-nginx-https.sh
+
   backend-tests:
     name: Backend Tests (Laravel)
     runs-on: ubuntu-latest

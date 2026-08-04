@@ -190,8 +190,39 @@ sudo cp /etc/letsencrypt/live/miboleta.tuempresa.com/privkey.pem  ssl/
 sudo chown "$USER": ssl/*.pem
 ```
 
-Descomente el bloque `server` de HTTPS que hay al final de `nginx.conf`, cambie
-`APP_URL` a `https://...` en el `.env`, y aplique:
+Ahora active el bloque HTTPS. Al final de `nginx.conf` hay un `server` completo
+comentado, entre dos marcas bien visibles:
+
+```
+# >>>>>>>>>>  DESCOMENTAR DESDE AQUI  >>>>>>>>>>
+...
+# <<<<<<<<<<  DESCOMENTAR HASTA AQUI  <<<<<<<<<<
+```
+
+Quite el `# ` del principio de cada línea que quede **entre** las dos marcas, sin
+tocar las marcas mismas. Después cambie `APP_URL` a `https://...` en el `.env`.
+
+**Compruebe la configuración antes de aplicarla.** Un `# ` de más o de menos deja
+nginx sin arrancar, y si lo descubre al aplicar, el sitio ya está caído:
+
+```bash
+docker run --rm \
+  -v "$PWD/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+  -v "$PWD/ssl:/etc/nginx/ssl:ro" \
+  nginx:1.27-alpine nginx -t
+```
+
+Debe responder `syntax is ok` y `test is successful`. Los dos fallos que aparecen
+aquí, y qué significan:
+
+| Lo que dice | Qué pasó |
+| --- | --- |
+| `unknown directive "..."` | Una línea mal descomentada. El número de línea del mensaje es esa línea. |
+| `cannot load certificate` | Los `.pem` no están en `ssl/`, o el usuario no puede leerlos. Repase el `cp` y el `chown` de arriba. |
+
+Corrija y repita hasta que pase, antes de continuar.
+
+Cuando la comprobación pase, aplique:
 
 ```bash
 docker compose -f docker-compose.produccion.yml -p miboleta up -d
@@ -201,6 +232,33 @@ docker compose -f docker-compose.produccion.yml -p miboleta up -d
 > con las que se creó: el `APP_URL` nuevo no se leería y los enlaces de los
 > correos seguirían apuntando a `http://`. `up -d` detecta el cambio y recrea
 > lo necesario.
+
+Compruebe que responde por HTTPS, incluida una dirección interna del sistema:
+
+```bash
+curl -I https://miboleta.tuempresa.com/health        # 200
+curl -I https://miboleta.tuempresa.com/vacaciones    # 200, no 404
+```
+
+**Cierre el HTTP.** Con el certificado ya en marcha, el puerto 80 sigue sirviendo
+las boletas sin cifrar a quien las pida por ahí. Para que redirija, añada esta
+línea dentro del `server { listen 80; ... }` del principio de `nginx.conf`,
+justo después del `listen 80;`:
+
+```nginx
+    return 301 https://$host$request_uri;
+```
+
+Vuelva a comprobar con `nginx -t`, aplique con `up -d`, y verifique:
+
+```bash
+curl -I http://miboleta.tuempresa.com/vacaciones     # 301 -> https://...
+```
+
+> **Solo si usa los puertos estándar.** Esa redirección manda al 443. Si cambió
+> `HTTP_PORT` o `HTTPS_PORT` en el `.env`, el destino saldría sin puerto y no
+> funcionaría: escriba entonces el puerto a mano, por ejemplo
+> `return 301 https://$host:8443$request_uri;`.
 
 **Renovación automática.** El certificado caduca a los 90 días. Sin esto, el
 sitio deja de funcionar sin aviso:

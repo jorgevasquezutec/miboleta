@@ -82,7 +82,12 @@ services:
       # arranque MySQL sigue creando la base y el usuario: la aplicación se
       # conectaba antes de tiempo, moría con "SQLSTATE[2002] Connection
       # refused" y se reiniciaba un par de veces.
-      test: ["CMD", "mysql", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}", "-e", "USE ${DB_DATABASE}; SELECT 1;"]
+      # `$$` para que compose NO sustituya la variable: se resuelve DENTRO del
+      # contenedor en cada comprobación. Con `-p${DB_ROOT_PASSWORD}` la
+      # contraseña quedaba escrita en la definición del contenedor y salía en
+      # texto plano en `docker inspect`, que puede leer cualquiera del grupo
+      # docker sin ser root.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql -h localhost -u root -e \"USE $$MYSQL_DATABASE; SELECT 1;\""]
       interval: 10s
       timeout: 5s
       retries: 30
