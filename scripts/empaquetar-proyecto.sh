@@ -66,6 +66,20 @@ cp entrega/produccion/backup.sh "$TRABAJO/produccion/"
 cp entrega/produccion/nginx.conf "$TRABAJO/produccion/"
 chmod +x "$TRABAJO/produccion/instalar.sh" "$TRABAJO/produccion/backup.sh"
 
+# ssl/ va en el paquete aunque vaya vacío: el compose lo monta, y si no existe
+# lo crea Docker como root, obligando a sudo para copiar los certificados. Con
+# la carpeta ya creada, pertenece al usuario que descomprime.
+mkdir -p "$TRABAJO/produccion/ssl"
+cat > "$TRABAJO/produccion/ssl/LEEME.txt" <<'SSLEOF'
+Coloque aquí los certificados TLS, con estos nombres exactos:
+
+  fullchain.pem
+  privkey.pem
+
+El procedimiento completo está en la Guía de Instalación, sección "3.2 HTTPS".
+Mientras esta carpeta esté vacía, el sistema funciona por HTTP simple.
+SSLEOF
+
 # --- Documentación ---------------------------------------------------------
 azul "3/5  Copiando la documentación..."
 # La guía de instalación va en PDF y TAMBIÉN en markdown: es la única que se
