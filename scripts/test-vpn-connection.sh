@@ -15,9 +15,14 @@ echo "Este script te ayuda a obtener el certificado de la VPN"
 echo "que necesitas configurar en GitHub Secrets como VPN_CERT"
 echo ""
 
-# Configuración (cambiar estos valores)
-VPN_HOST="190.223.20.42"
-VPN_PORT="43443"
+# Configuración. Los valores reales viven en scripts/.env.deploy (ignorado por
+# git); aquí NO se hardcodean porque este script sí está versionado y el
+# repositorio es público: publicarlos expone la topología de red y usuarios
+# válidos. Sobreescribibles por entorno: VPN_HOST=1.2.3.4 ./test-vpn-connection.sh
+[ -f "$(dirname "$0")/.env.deploy" ] && . "$(dirname "$0")/.env.deploy"
+
+VPN_HOST="${VPN_HOST:?Falta VPN_HOST. Copia scripts/.env.deploy.example a scripts/.env.deploy y complétalo}"
+VPN_PORT="${VPN_PORT:?Falta VPN_PORT}"
 
 echo -e "${GREEN}Paso 1: Obtener el certificado VPN${NC}"
 echo "Ejecutando: openssl s_client -connect ${VPN_HOST}:${VPN_PORT}"
@@ -53,9 +58,9 @@ echo "¿Estás conectado a la VPN con FortiClient? (y/n)"
 read -r CONNECTED
 
 if [ "$CONNECTED" = "y" ]; then
-    SSH_HOST="10.18.10.200"
-    SSH_PORT="5022"
-    SSH_USER="usuario_externo"
+    SSH_HOST="${SSH_HOST:?Falta SSH_HOST. Ver scripts/.env.deploy}"
+    SSH_PORT="${SSH_PORT:?Falta SSH_PORT}"
+    SSH_USER="${SSH_USER:?Falta SSH_USER}"
     
     echo "Probando SSH a ${SSH_HOST}:${SSH_PORT}..."
     echo "Ejecutando: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST}"
