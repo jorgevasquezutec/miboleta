@@ -140,6 +140,15 @@ cp entrega/*.sh entrega/*.yml entrega/nginx.conf entrega/.env.app "$DESTINO/" 2>
 cp entrega/LEEME.md "$DESTINO/"
 [ -f entrega/levantar.bat ] && cp entrega/*.bat "$DESTINO/" 2>/dev/null || true
 
+# El acta se copia con version, fecha y commit ya rellenados. El hash del
+# manifiesto NO se sustituye aquí: se calcula después y se transcribe a mano al
+# firmar, que es justamente el gesto que ancla lo digital al papel.
+sed -e "s/__VERSION__/${TAG}/g" \
+    -e "s/__FECHA__/${FECHA}/g" \
+    -e "s/__COMMIT__/${COMMIT}/g" \
+    -e "s/__HASH_MANIFIESTO__/(ver HUELLA-DEL-MANIFIESTO.txt y transcribir aquí al firmar)/g" \
+    entrega/ACTA-DE-ENTREGA.md > "$DESTINO/ACTA-DE-ENTREGA.md"
+
 cat > "$DESTINO/VERSION.txt" <<EOF
 MiBoleta — versión entregada
 =============================
