@@ -86,12 +86,31 @@ azul "3/5  Copiando la documentación..."
 # lee dentro del servidor, muchas veces sin entorno gráfico, donde un .md se
 # consulta con `less` y un PDF no se puede abrir.
 cp docs/INSTALACION.md "$TRABAJO/documentacion/"
-for f in docs/MiBoleta-Manual-de-Usuario.pdf \
-         docs/MiBoleta-Documentacion-Tecnica.pdf \
-         docs/MiBoleta-Guia-de-Instalacion.pdf; do
-  [ -f "$f" ] && cp "$f" "$TRABAJO/documentacion/" \
-    || echo "     falta $(basename "$f") — regenéralo en docs/pdf-generator"
+
+# Los PDF salen de dist/documentacion, que es donde los deja el generador.
+# Si falta alguno se ABORTA en vez de avisar y seguir: el aviso se perdía entre
+# el resto de la salida y el paquete acababa entregándose sin manual.
+FALTAN_PDF=""
+for pdf in MiBoleta-Manual-de-Usuario.pdf \
+           MiBoleta-Documentacion-Tecnica.pdf \
+           MiBoleta-Guia-de-Instalacion.pdf; do
+  if [ -f "$RAIZ/dist/documentacion/$pdf" ]; then
+    cp "$RAIZ/dist/documentacion/$pdf" "$TRABAJO/documentacion/"
+  else
+    FALTAN_PDF="$FALTAN_PDF $pdf"
+  fi
 done
+
+if [ -n "$FALTAN_PDF" ]; then
+  echo
+  echo "ERROR: faltan documentos en dist/documentacion/:"
+  for p in $FALTAN_PDF; do echo "    - $p"; done
+  echo
+  echo "  Genéralos y vuelve a ejecutar:"
+  echo "    (cd docs/pdf-generator && node generate-pdf.js)"
+  rm -rf "$TRABAJO"
+  exit 1
+fi
 
 # --- Imágenes (opcional) ---------------------------------------------------
 if [ "${CON_IMAGENES:-0}" = "1" ]; then

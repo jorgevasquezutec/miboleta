@@ -58,7 +58,12 @@ STORAGE_VOL  ?= miboleta_swarm_storage_data
 MYSQL = docker compose -f $(COMPOSE) exec -T -e MYSQL_PWD=$(LOCAL_DB_PWD) db mysql -uroot
 
 .DEFAULT_GOAL := help
-.PHONY: help publish signer-build stack deploy nginx db-pull storage-pull prod-pull db-sanitize db-archives db-restore db-passwords
+.PHONY: help publish signer-build stack deploy nginx db-pull storage-pull prod-pull db-sanitize db-archives db-restore db-passwords docs paquete disco entregables entregables-limpiar
+
+# Todo lo que se genera para el cliente vive aquí y solo aquí. Nada de
+# entregables sueltos por el repositorio: `dist/` está en .gitignore, así que
+# lo generado no se versiona ni se confunde con las fuentes de las que sale.
+DIST = dist
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -137,6 +142,44 @@ deploy: ## Server: pull imágenes + stack deploy + migrate + caches + estado
 # `encrypted` (cifrados con el APP_KEY de producción), que si no revientan con
 # DecryptException al leerlos en local.
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Entregables para el cliente
+# ---------------------------------------------------------------------------
+# Todo sale a dist/ y todo se REEMPLAZA en el sitio al regenerarse, así que
+# dist/ siempre refleja la última versión y no hay que ir recogiendo archivos
+# por el repositorio antes de entregar.
+#
+#   make entregables            genera los tres y deja dist/ listo
+#   make entregables TAG=v1.2.0 para otra versión
+#
+# TAG por defecto: la última etiqueta del repositorio.
+TAG ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
+
+docs: ## Genera los 3 PDF en dist/documentacion (manual, técnica, instalación)
+	@echo "==> generando PDF en $(DIST)/documentacion"
+	cd docs/pdf-generator && node generate-pdf.js
+	@ls -1 $(DIST)/documentacion/*.pdf | sed 's|.*/|    |'
+
+paquete: docs ## Arma dist/miboleta-<TAG>.tar.gz (código + instalación + docs)
+	@test -n "$(TAG)" || { echo "❌ No hay TAG. Usa: make paquete TAG=v1.1.0"; exit 1; }
+	./scripts/empaquetar-proyecto.sh $(TAG)
+
+disco: docs ## Arma la carpeta para el disco externo (con imágenes, ~2 GB)
+	@test -n "$(TAG)" || { echo "❌ No hay TAG. Usa: make disco TAG=v1.1.0"; exit 1; }
+	./scripts/armar-entrega.sh $(TAG)
+
+entregables: paquete disco ## Genera TODO lo que va al cliente, en dist/
+	@echo
+	@echo "== Listo para entregar =="
+	@du -sh $(DIST)/* 2>/dev/null | sed 's/^/  /'
+	@echo
+	@echo "  Huella del .tar.gz (comunícasela al cliente):"
+	@shasum -a 256 $(DIST)/miboleta-$(TAG).tar.gz 2>/dev/null | cut -d' ' -f1 | sed 's/^/    /'
+
+entregables-limpiar: ## Borra dist/ entero (se regenera con `make entregables`)
+	@echo "==> borrando $(DIST)/"
+	rm -rf $(DIST)
 
 db-pull: ## Archiva tu BD local (renombrándola) e importa la de producción
 	@echo "⚠  Tu BD local '$(LOCAL_DB)' se ARCHIVA con otro nombre (no se borra) y en su"
