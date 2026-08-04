@@ -20,7 +20,7 @@ import {
   Settings,
   ShieldCheck,
 } from "lucide-react";
-import { NAV_LABELS, ROUTES } from "@/shared/constants";
+import { APP_VERSION, NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
 
 interface SidebarProps {
@@ -186,6 +186,24 @@ function CollapsibleSection({
   );
 }
 
+/**
+ * Versión anclada al pie del menú, visible en todas las pantallas del sistema.
+ * Con el menú plegado (16 unidades de ancho) no cabe la palabra "Versión", así
+ * que se abrevia a "v1.0" y el texto completo queda en el `title`.
+ */
+function SidebarVersion({ isExpanded }: { isExpanded: boolean }) {
+  return (
+    <div
+      className="border-t border-[rgba(0,0,0,0.1)] px-4 py-3 text-center"
+      title={`Versión ${APP_VERSION}`}
+    >
+      <p className="text-xs text-[#64748B]">
+        {isExpanded ? `Versión ${APP_VERSION}` : `v${APP_VERSION}`}
+      </p>
+    </div>
+  );
+}
+
 function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -300,7 +318,7 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
         {/* Mobile Sidebar */}
         <aside
           className={cn(
-            "fixed top-0 left-0 bg-white h-full w-72 z-50 transform transition-transform duration-300 ease-in-out shadow-xl",
+            "fixed top-0 left-0 bg-white h-full w-72 z-50 flex flex-col transform transition-transform duration-300 ease-in-out shadow-xl",
             isExpanded ? "translate-x-0" : "-translate-x-full"
           )}
         >
@@ -324,8 +342,12 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
             </button>
           </div>
 
-          {/* Navigation */}
-          <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-80px)]">
+          {/* Navigation
+              flex-1 en vez de la altura calculada a mano que había antes: el
+              alto de la cabecera dejó de ser el único descuento cuando se
+              añadió el pie de versión, y una resta fija habría vuelto a
+              descuadrarse al tocar cualquiera de los dos. */}
+          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
             {navItems.map((item) => (
               <CollapsibleSection
                 key={item.path + item.label}
@@ -341,6 +363,8 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
               />
             ))}
           </nav>
+
+          <SidebarVersion isExpanded={true} />
         </aside>
       </>
     );
@@ -349,10 +373,12 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
   // Desktop sidebar
   return (
     <aside className={cn(
-      "fixed top-[73px] left-0 bg-white border-r border-[rgba(0,0,0,0.1)] h-[calc(100vh-73px)] overflow-y-auto z-40 transition-all duration-300",
+      // El scroll pasa al <nav>: si se queda en el <aside>, el pie de versión
+      // scrollea con el menú en vez de quedarse anclado abajo.
+      "fixed top-[73px] left-0 bg-white border-r border-[rgba(0,0,0,0.1)] h-[calc(100vh-73px)] flex flex-col z-40 transition-all duration-300",
       isExpanded ? "w-64" : "w-16"
     )}>
-      <nav className={cn("pt-4 space-y-1", isExpanded ? "p-4" : "p-2")}>
+      <nav className={cn("flex-1 overflow-y-auto pt-4 space-y-1", isExpanded ? "p-4" : "p-2")}>
         {navItems.map((item) => (
           <CollapsibleSection
             key={item.path + item.label}
@@ -367,6 +393,8 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
           />
         ))}
       </nav>
+
+      <SidebarVersion isExpanded={isExpanded} />
     </aside>
   );
 }

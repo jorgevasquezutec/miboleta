@@ -8,6 +8,7 @@ import { Label } from "@/presentation/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { useAuth } from "@/presentation/hooks/useAuth";
 import { useAuthStore } from "@/presentation/stores/authStore";
+import { APP_VERSION } from "@/shared/constants";
 import { toast } from "sonner";
 
 export default function LoginView() {
@@ -215,6 +216,11 @@ export default function LoginView() {
         {/* Footer */}
         <p className="text-center text-white opacity-75 mt-8">
           © 2025 {tenantName}. Todos los derechos reservados.
+        </p>
+        {/* La versión también aquí, antes de iniciar sesión: soporte necesita
+            saber qué versión corre un usuario que justamente no puede entrar. */}
+        <p className="text-center text-white opacity-60 text-xs mt-1">
+          Versión {APP_VERSION}
         </p>
       </div>
     </div>

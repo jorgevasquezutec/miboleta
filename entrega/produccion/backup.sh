@@ -8,7 +8,7 @@
 #   DESTINO=/mnt/nas ./backup.sh
 #
 # Automatícelo con cron, por ejemplo cada noche a las 2:00:
-#   0 2 * * * cd /opt/miboleta/miboleta-v1.1.0/produccion && ./backup.sh >> backups/cron.log 2>&1
+#   0 2 * * * cd /opt/miboleta/miboleta-v1.0/produccion && ./backup.sh >> backups/cron.log 2>&1
 #
 # IMPORTANTE: copie los respaldos FUERA del servidor. Una copia que vive en la
 # misma máquina no protege de la avería de esa máquina.

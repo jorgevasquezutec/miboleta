@@ -5,7 +5,7 @@
 | Atributo                          | Valor                                       |
 | --------------------------------- | ------------------------------------------- |
 | **Nombre del Sistema**      | MiBoleta                                    |
-| **Versión**                | 1.1.0                                       |
+| **Versión**                | 1.0                                         |
 | **Fecha de Documentación** | Agosto 2026                                 |
 | **Tipo**                    | Sistema de Gestión Documental y Vacaciones |
 
@@ -1404,5 +1404,5 @@ Para soporte técnico o consultas sobre el sistema:
 
 - **Email:** lgranda@tisvel.com
 
-*Documento generado automáticamente - MiBoleta v1.1.0*
+*Documento generado automáticamente - MiBoleta v1.0*
 *Última actualización: Agosto 2026*
