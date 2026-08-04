@@ -1152,6 +1152,109 @@ Formulario para crear una nueva solicitud de vacaciones.
 
 ---
 
+# PARTE IV: FUNCIONES COMUNES A TODOS LOS ROLES
+
+---
+
+## 17. Trabajar en varias empresas
+
+Todo en MiBoleta ocurre **dentro de una empresa**. Quien pertenece a más de una
+verá en la barra superior un **selector de empresa**, y si además tiene roles
+distintos en ellas, un **selector de rol**.
+
+La combinación de ambos determina lo que se ve y lo que se puede hacer. Un
+ejemplo real: alguien puede ser *Admin Empleados* en una empresa y *Empleado* en
+otra. Con la primera seleccionada ve el listado completo de personal; con la
+segunda, solo sus propias boletas.
+
+Esto no es un filtro cosmético: **los datos se aíslan de verdad**. Estando en
+una empresa no se puede ver ni buscar información de otra, aunque se conozca su
+identificador.
+
+> Las vacaciones dependen de esta elección. La antigüedad y el saldo se calculan
+> **por empresa**, así que la misma persona puede tener tres años acumulados en
+> una y seis meses en otra.
+
+---
+
+## 18. Notificaciones
+
+El sistema avisa por dos vías, que funcionan a la vez:
+
+| Vía | Cuándo aparece |
+| --- | --- |
+| **Campana en la barra superior** | Al instante, sin recargar la página |
+| **Correo electrónico** | En paralelo, para quien no esté conectado |
+
+Se notifica, entre otros: la publicación de un documento nuevo, la solicitud de
+vacaciones de un subordinado, la aprobación o rechazo de una solicitud propia, y
+el recordatorio de confirmar unas vacaciones ya pasadas.
+
+Al pulsar la campana se abre el listado, donde se pueden marcar como leídas
+—individualmente o todas— y saltar directamente al elemento que las originó.
+
+---
+
+## 19. Perfil personal
+
+Accesible desde el menú del propio nombre, en la esquina superior derecha.
+
+| Qué permite | Detalle |
+| --- | --- |
+| **Foto de perfil** | Subir o cambiar la imagen |
+| **Cambiar contraseña** | Exige la contraseña actual |
+| **Solicitar corrección de datos** | Envía una petición al administrador |
+
+Los datos laborales —documento, área, cargo, fecha de ingreso— **no se editan
+desde aquí**: son los que sostienen el cálculo de vacaciones y la
+identificación en los documentos, así que solo los modifica un administrador.
+Para corregir alguno se usa la opción de solicitud, que deja constancia de quién
+pidió qué.
+
+---
+
+## 20. Configuración del correo por empresa
+
+**Quién puede hacerlo:** Super Administrador y Admin Empleados, desde la ficha
+de la empresa.
+
+Cada empresa puede enviar sus correos **desde su propio servidor**, para que a
+sus trabajadores les lleguen desde una dirección conocida y no desde una
+genérica de la plataforma.
+
+En la ficha de la empresa se configuran servidor, puerto, usuario, contraseña,
+cifrado y remitente. Hay un botón para **probar la conexión** antes de guardar:
+conviene usarlo siempre, porque una configuración errónea no da error hasta que
+falla el primer envío real.
+
+**Si no se configura**, la empresa usa el servidor de la plataforma. No hay que
+hacer nada para ello: es el comportamiento por defecto.
+
+> La contraseña se guarda cifrada y **nunca se muestra** de vuelta en pantalla ni
+> se incluye en ninguna exportación.
+
+---
+
+## 21. Ajustes de plataforma
+
+**Quién puede hacerlo:** solo el Super Administrador.
+
+| Pantalla | Para qué sirve |
+| --- | --- |
+| **Ajustes de plataforma** | Servidor de correo por defecto y dirección pública del sistema |
+| **Certificado de firma** | Carga y gestión del certificado con el que se firman digitalmente los documentos |
+| **Ajustes de auditoría** | Activar o desactivar el registro de cada tipo de acción |
+
+Sobre el **certificado de firma**: es único para toda la plataforma, se sube una
+sola vez y su contraseña se guarda cifrada. Es lo que permite que los documentos
+firmados se validen en cualquier lector de PDF.
+
+Sobre la **auditoría**: permite decidir qué se registra. Conviene ser
+conservador al desactivar cosas — el registro de auditoría es la única forma de
+reconstruir qué pasó y quién lo hizo.
+
+---
+
 # APÉNDICES
 
 ---

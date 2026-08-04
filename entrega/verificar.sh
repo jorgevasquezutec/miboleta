@@ -83,6 +83,29 @@ comprobar "La base tiene datos de demostración" \
       -d '{\"login\":\"aprobador@miboleta.demo\",\"password\":\"password\"}' \
     | grep -q 'Corporaci'"
 
+# El servicio de firma PAdES corre en su propio contenedor. Se comprueba desde
+# dentro de la red interna porque no publica puerto al exterior.
+comprobar "El servicio de firma digital responde" \
+  docker compose -f docker-compose.entrega.yml -p miboleta_entrega \
+    exec -T signer python -c \
+    "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
+
+# Reverb sirve las notificaciones en tiempo real. Si su puerto no está
+# escuchando, la campana queda muda y eso NO se nota mirando la pantalla.
+#
+# Se comprueba que el puerto habla HTTP (responde 404 a la raíz, que es lo
+# normal en Reverb) y no que complete el handshake de WebSocket: ese handshake
+# devuelve 101 y deja la conexión abierta, así que curl se queda esperando
+# datos para siempre y el script no termina nunca.
+comprobar "El servidor de notificaciones está escuchando" \
+  bash -c "test \"\$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+      'http://localhost:${MIBOLETA_REVERB_PORT:-9085}')\" != '000'"
+
+# El buzón local: sin él no se puede completar una firma en esta copia, porque
+# el código de verificación llega por correo.
+comprobar "El buzón de correo local responde" \
+  curl -fsS -o /dev/null "http://localhost:${MIBOLETA_MAILPIT_PORT:-9025}"
+
 registrar ""
 registrar "-----------------------------------------------------------"
 registrar " Resultado: ${OK}/${TOTAL} comprobaciones correctas"

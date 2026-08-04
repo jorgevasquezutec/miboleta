@@ -53,3 +53,7 @@ REVERB_APP_SECRET=miboleta-secret-demo
 REVERB_HOST=0.0.0.0
 REVERB_PORT=8080
 REVERB_SCHEME=http
+
+# Servicio de firma PAdES (contenedor `signer` de este mismo stack).
+SIGNER_BASE_URL=http://signer:8000
+SIGNER_TIMEOUT=120

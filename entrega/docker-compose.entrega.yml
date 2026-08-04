@@ -121,6 +121,28 @@ services:
     depends_on: [app]
     networks: [miboleta]
 
+  # Servicio de firma digital PAdES (Python + Ghostscript + pyHanko). Va en un
+  # contenedor aparte porque su stack no tiene nada que ver con el de PHP.
+  # Comparte el volumen storage_data con app y horizon: el PDF se firma en
+  # disco, no viaja por la red.
+  #
+  # El sellado de tiempo (TSA) es su única dependencia externa: sin salida a
+  # internet la firma se produce igual, pero sin sello cualificado.
+  signer:
+    image: ${MIBOLETA_SIGNER_IMAGE:-ghcr.io/jorgevasquezutec/miboleta-signer:latest}
+    working_dir: /var/www/html
+    command: ["uvicorn", "app:app", "--app-dir", "/opt/signer", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - storage_data:/var/www/html/storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks: [miboleta]
+
   # Buzón de correo local: sin él no se puede demostrar la firma de documentos,
   # que envía un código de verificación por correo. Bandeja en el navegador.
   mailpit:
