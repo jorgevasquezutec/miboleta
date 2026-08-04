@@ -46,7 +46,11 @@ máquina física de la empresa o una instancia en la nube.
 | --- | --- | --- |
 | 80 | Acceso web (y renovación de certificados) | Sí |
 | 443 | Acceso web cifrado | Sí, si se usa HTTPS |
-| 8085 | Notificaciones en tiempo real | Sí, si se quieren avisos instantáneos |
+| 8085 | Notificaciones en tiempo real | **No hace falta abrirlo** |
+
+> Las notificaciones viajan por el mismo puerto que la web (80 o 443), a través
+> de la ruta `/app`. El 8085 solo se publica por comodidad de diagnóstico; puede
+> dejarlo cerrado al exterior.
 
 El resto de servicios —base de datos, Redis, firma— **no se publican**: solo
 son accesibles entre contenedores.
@@ -153,7 +157,7 @@ Automatícelo con `cron`, por ejemplo cada noche a las 2:00:
 ```bash
 crontab -e
 # añadir:
-0 2 * * * cd /opt/miboleta-v1.1.0/produccion && ./backup.sh >> backups/cron.log 2>&1
+0 2 * * * cd /opt/miboleta/miboleta-v1.1.0/produccion && ./backup.sh >> backups/cron.log 2>&1
 ```
 
 **Copie los respaldos fuera del servidor.** Una copia que vive en la misma
@@ -201,15 +205,29 @@ docker compose -f docker-compose.produccion.yml -p miboleta up -d
 **Renovación automática.** El certificado caduca a los 90 días. Sin esto, el
 sitio deja de funcionar sin aviso:
 
+Se automatiza con los *hooks* de certbot, que solo se ejecutan **si de verdad
+toca renovar**: así nginx no se para todas las semanas para nada.
+
 ```bash
 sudo crontab -e
-# añadir (renueva de madrugada, para y levanta nginx solo si toca renovar):
-0 3 * * 1 cd /opt/miboleta/miboleta-v1.1.0/produccion && \
-  docker compose -f docker-compose.produccion.yml -p miboleta stop nginx && \
-  certbot renew --quiet && \
-  cp /etc/letsencrypt/live/*/fullchain.pem ssl/ && \
-  cp /etc/letsencrypt/live/*/privkey.pem ssl/ && \
-  docker compose -f docker-compose.produccion.yml -p miboleta start nginx
+```
+
+Añada esto **en una sola línea**, sin cortarla:
+
+```
+0 3 * * 1 cd /opt/miboleta/miboleta-v1.1.0/produccion && certbot renew --quiet --pre-hook "docker compose -f docker-compose.produccion.yml -p miboleta stop nginx" --post-hook "cp /etc/letsencrypt/live/*/fullchain.pem ssl/ && cp /etc/letsencrypt/live/*/privkey.pem ssl/ && docker compose -f docker-compose.produccion.yml -p miboleta start nginx"
+```
+
+> **Una sola línea, obligatoriamente.** `crontab` **no admite** partir una
+> entrada en varias líneas con `\`: si lo hace, cada trozo se toma como una
+> entrada distinta, todas inválidas, y `crontab -e` rechaza el archivo entero
+> al guardar.
+
+Compruebe que quedó bien y que la renovación funcionaría:
+
+```bash
+sudo crontab -l                  # debe mostrar la línea completa
+sudo certbot renew --dry-run     # ensayo sin renovar de verdad
 ```
 
 ### 3.3 Certificado de firma digital
@@ -299,7 +317,8 @@ docker run --rm -v miboleta_storage_data:/data \
 | Error 500 al entrar | Las migraciones no terminaron | `... logs app` y espere o reintente |
 | No llegan los correos | `MAIL_*` mal configurado | `... exec app php artisan email:test su-correo@empresa.com` |
 | No se procesan las cargas masivas | `horizon` caído | `... logs horizon` y `... restart horizon` |
-| La campana no avisa | El puerto de `reverb` no es accesible | Abra `REVERB_PUBLIC_PORT` en el cortafuegos |
+| La campana no avisa | `reverb` caído, o `REVERB_HOST` mal puesto | `... logs reverb` y compruebe que en `.env` dice `REVERB_HOST=reverb` (no una IP ni `0.0.0.0`) |
+| nginx se reinicia en bucle nada más instalar | SELinux bloquea los archivos montados (Rocky, Alma, RHEL) | Los montajes ya llevan la opción `z`; si persiste: `sudo chcon -Rt container_file_t nginx.conf ssl/` |
 | Falla la firma digital | `signer` caído o sin certificado | `... logs signer` y revise Ajustes de plataforma |
 
 Para ver todo junto:
