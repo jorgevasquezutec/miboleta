@@ -84,13 +84,50 @@ const CAPTURAS = [
    */
   {
     archivo: '03_document_viewer.png', rol: 'empleado', ruta: '/dashboard',
-    accion: (page) => pulsarTexto(page, 'Ver'),
+    // Texto EXACTO, no pulsarTexto: el banner "Ver Documentos Pendientes"
+    // contiene "Ver" como substring y esta antes en el DOM, asi que el match
+    // por substring pulsaba el banner y nunca abria el visor.
+    accion: (page) => pulsarTextoExacto(page, 'Ver'),
   },
   { archivo: '08_admin_dashboard.png', rol: 'admin', ruta: '/dashboard' },
   { archivo: '10_admin_users.png', rol: 'admin', ruta: '/users' },
   { archivo: '11_admin_documents.png', rol: 'admin', ruta: '/documents' },
   { archivo: '12_admin_audit.png', rol: 'admin', ruta: '/audit-logs' },
   { archivo: '09_admin_upload_empty.png', rol: 'admin', ruta: '/upload' },
+  /*
+   * Con archivo procesado: la unica captura del manual que hasta ahora se
+   * hacia a mano (y por eso llevaba el branding viejo). No se pulsa "Subir N
+   * documentos" en ningun momento: eso mutaria la BD de la demo.
+   */
+  {
+    archivo: '09_admin_upload_filled.png', rol: 'admin', ruta: '/upload',
+    accion: async (page) => {
+      const input = await page.waitForSelector('input[type="file"]');
+      await input.uploadFile(path.resolve(__dirname, '../example/archivo.zip'));
+
+      // El analisis del ZIP es async: se espera a que pinten los badges
+      // "Valido" antes de tocar nada mas.
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Válido'),
+        { timeout: 15000 },
+      );
+
+      // Los selects de "Configuracion de Carga" estan deshabilitados hasta que
+      // hay un preview valido, por eso van despues del upload y no antes.
+      //
+      // Tipo de Documento es un Select de Radix: sus opciones se montan en un
+      // portal como [role="option"], asi que primero se abre el trigger (un
+      // <button> normal, lo encuentra el selector por defecto) y luego se
+      // pulsa la opcion con el selector explicito, que si no NO la encuentra.
+      await pulsarTexto(page, 'Seleccionar tipo...');
+      await pulsarTexto(page, 'Boleta de Remuneraciones', '[role="option"]');
+
+      // Periodo: MonthYearPicker, un Popover con botones de mes (no un
+      // <select>). Los botones muestran solo las 3 primeras letras del mes.
+      await pulsarTexto(page, 'Seleccionar período...');
+      await pulsarTexto(page, 'Jul');
+    },
+  },
   { archivo: '21_admin_batch_list.png', rol: 'admin', ruta: '/batches' },
   {
     archivo: '22_admin_batch_detail_top.png', rol: 'admin', ruta: '/batches',
@@ -176,6 +213,23 @@ const CAPTURAS = [
   },
   // Pantallas de plataforma que el manual no documenta todavía.
   { archivo: '28_root_carga_masiva_usuarios.png', rol: 'root', ruta: '/users/batch-upload' },
+  /*
+   * Vista previa YA VALIDADA (el editor en cuadricula), sin confirmar la
+   * carga: confirmar crearia usuarios de verdad y ensuciaria los listados que
+   * se capturan despues. La validacion en si no persiste nada.
+   */
+  {
+    archivo: '28b_root_carga_masiva_validada.png', rol: 'root', ruta: '/users/batch-upload',
+    accion: async (page) => {
+      const input = await page.waitForSelector('#file-input');
+      await input.uploadFile(path.resolve(__dirname, '../example/usuarios.xlsx'));
+      await pulsarTexto(page, 'Validar y Editar');
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Editor de Usuarios'),
+        { timeout: 15000 },
+      );
+    },
+  },
   { archivo: '29_root_ajustes_firma.png', rol: 'root', ruta: '/signature-settings' },
   { archivo: '30_root_ajustes_plataforma.png', rol: 'root', ruta: '/platform-settings' },
 ];
@@ -201,6 +255,32 @@ async function pulsarTexto(page, texto, selector = 'button, a, [role="button"]')
   await page.evaluate((t, sel) => {
     Array.from(document.querySelectorAll(sel))
       .find((e) => e.innerText && e.innerText.trim().includes(t))
+      .click();
+  }, texto, selector);
+
+  await new Promise((r) => setTimeout(r, 1200));
+}
+
+/*
+ * Como pulsarTexto, pero exige que el texto del elemento sea EXACTAMENTE
+ * `texto` (tras trim), no que lo contenga. Necesario cuando existe un botón
+ * con texto más largo que incluye al que se busca como substring: en el
+ * dashboard del empleado, el banner "Ver Documentos Pendientes" aparece antes
+ * en el DOM que el "Ver" de cada fila, así que pulsarTexto(page, 'Ver')
+ * siempre acababa pulsando el banner en vez de abrir el visor.
+ */
+async function pulsarTextoExacto(page, texto, selector = 'button, a, [role="button"]') {
+  await page.waitForFunction(
+    (t, sel) => Array.from(document.querySelectorAll(sel))
+      .some((e) => e.innerText && e.innerText.trim() === t),
+    { timeout: 10000 },
+    texto,
+    selector,
+  ).catch(() => { throw new Error(`No hay nada que pulsar con el texto exacto "${texto}"`); });
+
+  await page.evaluate((t, sel) => {
+    Array.from(document.querySelectorAll(sel))
+      .find((e) => e.innerText && e.innerText.trim() === t)
       .click();
   }, texto, selector);
 
@@ -362,6 +442,13 @@ async function cerrarSesion(page) {
         }
         await page.screenshot({ path: destino, fullPage: false });
       } else {
+        // Volver ARRIBA antes de la captura a pagina completa. La barra
+        // superior y el menu lateral son `position: fixed`, asi que se pintan
+        // donde este el scroll: si la `accion` desplazo la pagina (abrir el
+        // selector de periodo, por ejemplo), salen flotando a media captura en
+        // vez de en su sitio. Le paso justo con 09_admin_upload_filled.
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await new Promise((r) => setTimeout(r, 400));
         await page.screenshot({ path: destino, fullPage: true });
       }
 
