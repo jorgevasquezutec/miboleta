@@ -42,6 +42,7 @@ const ROLES = [
 /** Nombre legible de cada ability, para que la tabla se lea sin saber el slug. */
 const ETIQUETAS = [
     'tenants.manage' => 'Crear, editar y desactivar empresas',
+    'tenants.view' => 'Consultar las empresas que administra (solo lectura)',
     'tenants.assign_users' => 'Asignar usuarios a una empresa',
     'tenants.update_settings' => 'Configurar una empresa (incluido su SMTP)',
     'users.create_any_role' => 'Crear usuarios con cualquier rol',
@@ -52,6 +53,8 @@ const ETIQUETAS = [
     'users.delete' => 'Eliminar usuarios',
     'users.reset_password' => 'Restablecer contraseñas',
     'users.bulk_upload' => 'Carga masiva de usuarios',
+    'users.export' => 'Exportar el listado de empleados',
+    'reports.app_accounts_export' => 'Exportar el listado de cuentas de aplicación',
     'documents.view_all_multi_tenant' => 'Ver documentos de todas las empresas',
     'documents.view_org' => 'Ver documentos de su empresa',
     'documents.view_own' => 'Ver sus propios documentos',
@@ -81,11 +84,16 @@ const ETIQUETAS = [
 
 /** Agrupación por módulo, en el orden en que se presentan al usuario. */
 const SECCIONES = [
-    'Empresas' => ['tenants.manage', 'tenants.assign_users', 'tenants.update_settings'],
+    'Empresas' => [
+        'tenants.manage', 'tenants.view', 'tenants.assign_users', 'tenants.update_settings',
+    ],
+    // Los dos exports van aquí y no en una sección propia porque lo que
+    // descargan es el listado de usuarios: separarlos obligaría al lector a
+    // buscar en dos sitios quién puede sacar datos de personas.
     'Usuarios' => [
         'users.view_list', 'users.create_any_role', 'users.create_limited_role',
         'users.update', 'users.deactivate', 'users.delete', 'users.reset_password',
-        'users.bulk_upload',
+        'users.bulk_upload', 'users.export', 'reports.app_accounts_export',
     ],
     'Documentos' => [
         'documents.view_all_multi_tenant', 'documents.view_org', 'documents.view_own',
