@@ -142,28 +142,33 @@ azul "3/6  Anotando digests..."
 
 # --- 3. Documentación ------------------------------------------------------
 azul "4/6  Copiando documentación..."
-# Los PDF salen de dist/documentacion, que es donde los deja el generador.
+# Los documentos salen de dist/documentacion, que es donde los dejan los
+# generadores. Cada uno va en PDF y en Word: el PDF es lo que se imprime y se
+# firma, y el .docx lo pide el cliente para poder editarlo por su cuenta.
 # Si falta alguno se ABORTA en vez de avisar y seguir: antes el aviso se perdía
 # entre el resto de la salida y el disco se entregaba sin manual, que es
 # justo uno de los documentos que el cliente pidió.
-FALTAN_PDF=""
-for pdf in MiBoleta-Manual-de-Usuario.pdf \
+FALTAN_DOC=""
+for doc in MiBoleta-Manual-de-Usuario.pdf \
            MiBoleta-Documentacion-Tecnica.pdf \
-           MiBoleta-Guia-de-Instalacion.pdf; do
-  if [ -f "dist/documentacion/$pdf" ]; then
-    cp "dist/documentacion/$pdf" "$DESTINO/documentacion/"
+           MiBoleta-Guia-de-Instalacion.pdf \
+           MiBoleta-Manual-de-Usuario.docx \
+           MiBoleta-Documentacion-Tecnica.docx \
+           MiBoleta-Guia-de-Instalacion.docx; do
+  if [ -f "dist/documentacion/$doc" ]; then
+    cp "dist/documentacion/$doc" "$DESTINO/documentacion/"
   else
-    FALTAN_PDF="$FALTAN_PDF $pdf"
+    FALTAN_DOC="$FALTAN_DOC $doc"
   fi
 done
 
-if [ -n "$FALTAN_PDF" ]; then
+if [ -n "$FALTAN_DOC" ]; then
   echo
   echo "ERROR: faltan documentos en dist/documentacion/:"
-  for p in $FALTAN_PDF; do echo "    - $p"; done
+  for p in $FALTAN_DOC; do echo "    - $p"; done
   echo
   echo "  Genéralos y vuelve a ejecutar:"
-  echo "    (cd docs/pdf-generator && node generate-pdf.js)"
+  echo "    (cd docs/pdf-generator && npm run generate:all)"
   rm -rf "$DESTINO"
   exit 1
 fi

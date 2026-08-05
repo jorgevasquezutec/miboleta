@@ -456,13 +456,58 @@ cada una.
 3. Al confirmar, la carga se procesa **en segundo plano**. La pantalla no se
    queda bloqueada: se puede cerrar y volver más tarde.
 4. El lote queda registrado con su estado (pendiente, procesando, completado,
-   completado con errores, parcial o fallido) y el detalle de qué filas entraron
-   y cuáles no, con el motivo.
+   parcial o fallido) y el detalle de qué filas entraron y cuáles no, con el
+   motivo. **Parcial** significa que unas filas entraron y otras no.
 5. Si alguna fila falló, se descarga un archivo con **solo esas filas** y su
    error, para corregirlo y reintentar sin tocar las que sí entraron.
 
 > Las personas creadas reciben una contraseña temporal y el sistema les exige
 > cambiarla en su primer ingreso.
+
+---
+
+# PARTE I bis: ROL ADMIN_TENANT (Admin Clientes)
+
+---
+
+## 4ter. Qué ve un Admin Clientes
+
+Admin Clientes administra **sus** empresas, no la plataforma. Trabaja sobre los
+mismos módulos que el Super Administrador, pero acotado a las organizaciones que
+tiene asignadas y sin poder alterar la configuración de la plataforma.
+
+### 4ter.1 Empresas en modo consulta
+
+![Empresas vistas por Admin Clientes](images/31_admin_clientes_empresas.png)
+
+Ve el listado de las empresas que administra. **No puede crear, editar ni
+desactivar empresas**: eso es exclusivo del Super Administrador. El listado no
+ofrece el botón de nueva empresa.
+
+### 4ter.2 Detalle de empresa, solo lectura
+
+![Detalle de empresa en solo lectura](images/32_admin_clientes_empresa_detalle.png)
+
+Al abrir una empresa, el formulario aparece completo pero **deshabilitado**, y
+el título dice "Detalle de Empresa" en lugar de "Editar Empresa". Sirve para
+consultar los datos —RUC, régimen laboral, configuración de correo— sin riesgo
+de modificarlos.
+
+### 4ter.3 Usuarios de sus empresas
+
+![Usuarios vistos por Admin Clientes](images/33_admin_clientes_usuarios.png)
+
+Gestiona a las personas de sus empresas: crea, edita y da de baja usuarios
+Aprobador y Empleado, y lanza la carga masiva.
+
+> **Importante.** Puede **asignar** el rol Admin a alguien al crear o editar sus
+> roles, pero no puede **administrar** una cuenta Admin que ya exista: ni
+> editarla, ni restablecer su contraseña, ni eliminarla. Esa separación entre
+> "asignar" y "administrar" se introdujo a petición del cliente y protege las
+> cuentas de administración frente a cambios accidentales.
+>
+> Tampoco ve las **Cuentas de Aplicación** en el listado ni puede exportarlas:
+> esa columna y su descarga son exclusivas del Super Administrador.
 
 ---
 
@@ -613,8 +658,22 @@ Vista que muestra el historial de todas las cargas masivas realizadas, permitien
 | **Total Documentos**    | Cantidad de PDFs en el lote        |
 | **Asignados**           | Documentos vinculados a empleados  |
 | **Huérfanos**          | Documentos sin coincidencia de DNI |
-| **Estado**              | Badge (Procesado, Error, Pendiente)|
+| **Estado**              | Badge según el estado del lote     |
 | **Acciones**            | Ver detalle, Descargar reporte     |
+
+**Estados posibles de un lote de documentos:**
+
+| Estado | Significado |
+| --- | --- |
+| **Pendiente** | En cola, todavía sin empezar |
+| **Procesando** | Ejecutándose en segundo plano |
+| **Completado** | Todos los archivos entraron correctamente |
+| **Completado con errores** | Unos archivos entraron y otros no; el detalle indica cuáles y por qué |
+| **Fallido** | El lote no llegó a procesarse |
+
+> No confundir con los estados de la **carga masiva de usuarios** (sección
+> 4bis), que son distintos: allí el equivalente a "completado con errores" se
+> llama **Parcial**.
 
 ### 7.2 Detalle de Lote (Parte Superior)
 

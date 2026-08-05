@@ -25,6 +25,15 @@ const CONFIG = {
             title: 'Documentación Técnica',
             subtitle: 'Arquitectura, configuración y despliegue del sistema',
             audience: 'Desarrolladores, DevOps'
+        },
+        // La guía de instalación no tenía portada porque solo salía en PDF, y
+        // el PDF se dibuja la suya en HTML. Al entregarse también en Word hace
+        // falta el PNG: el .docx incrusta la portada como imagen.
+        {
+            id: 'instalacion',
+            title: 'Guía de Instalación',
+            subtitle: 'Puesta en marcha de la plataforma en un servidor propio',
+            audience: 'Administradores de sistemas'
         }
     ]
 };

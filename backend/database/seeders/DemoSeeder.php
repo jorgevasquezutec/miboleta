@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\DocumentBatch;
 use App\Models\DocumentType;
 use App\Models\Document;
 use App\Models\Role;
@@ -58,6 +59,9 @@ class DemoSeeder extends Seeder
         $this->crearUsuariosDeRolesFaltantes();
         $this->configurarVinculosLaborales();
         $this->crearDocumentos();
+        // Después de crearDocumentos: los lotes enlazan los documentos ya
+        // creados en vez de duplicarlos, que es como llegan en la carga real.
+        $this->crearLotesDeCarga();
         $this->crearSolicitudesDeVacaciones();
 
         $this->resumen();
@@ -232,6 +236,76 @@ class DemoSeeder extends Seeder
     }
 
     /**
+     * Lotes de carga, uno por periodo, con sus documentos enlazados.
+     *
+     * Sin esto la demo dejaba `document_batches` vacía, y las cuatro secciones
+     * del manual que documentan el Historial de Lotes (7.1 a 7.4) no tenían
+     * nada que enseñar: la lista salía vacía y al detalle no se podía ni
+     * entrar. Se descubrió al automatizar las capturas, que fallaban con "la
+     * tabla no tiene filas".
+     *
+     * Uno de los lotes queda en 'completed_with_errors', el único estado que
+     * enseña el resumen de filas fallidas. OJO: no es 'partial'. Los dos
+     * enums no coinciden y no son intercambiables:
+     *
+     *   document_batches: pending, processing, completed,
+     *                     completed_with_errors, failed
+     *   user_batches:     pending, processing, completed, failed, partial
+     *
+     * 'partial' es de la carga masiva de USUARIOS. Usarlo aquí revienta con
+     * "Data truncated for column 'status'".
+     */
+    private function crearLotesDeCarga(): void
+    {
+        $tenant = Tenant::orderBy('id')->first();
+        $boleta = DocumentType::where('name', 'boleta_remuneraciones')->first()
+            ?? DocumentType::orderBy('id')->first();
+        $subidoPor = User::where('email', 'admin@corporacionabc.com')->first();
+
+        foreach (['2026-05', '2026-06', '2026-07'] as $i => $periodo) {
+            $documentos = Document::where('tenant_id', $tenant->id)
+                ->where('period', $periodo)
+                ->get();
+
+            if ($documentos->isEmpty()) {
+                continue;
+            }
+
+            // El último periodo se deja incompleto a propósito, con un error
+            // por fila como los que devuelve el import real.
+            $conErrores = $i === 2;
+            $conError = $conErrores ? 1 : 0;
+
+            $lote = DocumentBatch::create([
+                'tenant_id' => $tenant->id,
+                'uploaded_by' => $subidoPor?->id,
+                'type_id' => $boleta?->id,
+                'period' => $periodo,
+                'original_filename' => "boletas-{$periodo}.zip",
+                'total_files' => $documentos->count() + $conError,
+                'processed_files' => $documentos->count() + $conError,
+                'success_count' => $documentos->count(),
+                'replaced_count' => 0,
+                'orphan_count' => 0,
+                'error_count' => $conError,
+                'errors' => $conError ? [[
+                    'row_number' => $documentos->count() + 1,
+                    'file' => 'boleta-99999999.pdf',
+                    'error' => 'No existe ningún empleado con el DNI 99999999',
+                ]] : null,
+                'notify_employees' => true,
+                'notifications_sent' => true,
+                'requires_signature' => true,
+                'status' => $conErrores ? 'completed_with_errors' : 'completed',
+                'started_at' => now()->subDays(30 - ($i * 10)),
+                'completed_at' => now()->subDays(30 - ($i * 10))->addMinutes(3),
+            ]);
+
+            Document::whereIn('id', $documentos->pluck('id'))->update(['batch_id' => $lote->id]);
+        }
+    }
+
+    /**
      * Solicitudes en los cuatro estados, para que las tres pestañas de
      * "Vacaciones del Equipo" (Pendientes, Por Confirmar, Historial) tengan
      * contenido y el aprobador pueda decidir sobre algo real.
@@ -361,6 +435,7 @@ class DemoSeeder extends Seeder
         $this->command->line('    Empresas: ' . Tenant::count() . ' (una en régimen MYPE)');
         $this->command->line('    Usuarios: ' . User::count() . ' — contraseña: password');
         $this->command->line('    Documentos: ' . Document::count());
+        $this->command->line('    Lotes de carga: ' . DocumentBatch::count() . ' (uno parcial)');
         $this->command->line('    Solicitudes de vacaciones: ' . VacationRequest::count());
         $this->command->newLine();
         $this->command->line('    root .............. admin@email.com');

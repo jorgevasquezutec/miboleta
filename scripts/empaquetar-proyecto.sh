@@ -87,27 +87,32 @@ azul "3/5  Copiando la documentación..."
 # consulta con `less` y un PDF no se puede abrir.
 cp docs/INSTALACION.md "$TRABAJO/documentacion/"
 
-# Los PDF salen de dist/documentacion, que es donde los deja el generador.
+# Los documentos salen de dist/documentacion, que es donde los dejan los
+# generadores. Cada uno va en PDF y en Word: el PDF es lo que se imprime y se
+# firma, y el .docx lo pide el cliente para poder editarlo por su cuenta.
 # Si falta alguno se ABORTA en vez de avisar y seguir: el aviso se perdía entre
 # el resto de la salida y el paquete acababa entregándose sin manual.
-FALTAN_PDF=""
-for pdf in MiBoleta-Manual-de-Usuario.pdf \
+FALTAN_DOC=""
+for doc in MiBoleta-Manual-de-Usuario.pdf \
            MiBoleta-Documentacion-Tecnica.pdf \
-           MiBoleta-Guia-de-Instalacion.pdf; do
-  if [ -f "$RAIZ/dist/documentacion/$pdf" ]; then
-    cp "$RAIZ/dist/documentacion/$pdf" "$TRABAJO/documentacion/"
+           MiBoleta-Guia-de-Instalacion.pdf \
+           MiBoleta-Manual-de-Usuario.docx \
+           MiBoleta-Documentacion-Tecnica.docx \
+           MiBoleta-Guia-de-Instalacion.docx; do
+  if [ -f "$RAIZ/dist/documentacion/$doc" ]; then
+    cp "$RAIZ/dist/documentacion/$doc" "$TRABAJO/documentacion/"
   else
-    FALTAN_PDF="$FALTAN_PDF $pdf"
+    FALTAN_DOC="$FALTAN_DOC $doc"
   fi
 done
 
-if [ -n "$FALTAN_PDF" ]; then
+if [ -n "$FALTAN_DOC" ]; then
   echo
   echo "ERROR: faltan documentos en dist/documentacion/:"
-  for p in $FALTAN_PDF; do echo "    - $p"; done
+  for p in $FALTAN_DOC; do echo "    - $p"; done
   echo
   echo "  Genéralos y vuelve a ejecutar:"
-  echo "    (cd docs/pdf-generator && node generate-pdf.js)"
+  echo "    (cd docs/pdf-generator && npm run generate:all)"
   rm -rf "$TRABAJO"
   exit 1
 fi

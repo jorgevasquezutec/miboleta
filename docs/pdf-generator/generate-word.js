@@ -41,13 +41,24 @@ const {
 
 // Configuration
 const CONFIG = {
+  // De DONDE se leen las fuentes: los .md y las capturas.
   docsPath: path.join(__dirname, '..'),
+  // A DONDE salen los .docx: la misma carpeta que los PDF. Antes caían en
+  // docs/, junto a los .md de los que salen, así que los tres documentos de la
+  // entrega vivían en dos sitios distintos según su formato y los scripts de
+  // empaquetado solo sabían del de los PDF.
+  salidaPath: path.join(__dirname, '..', '..', 'dist', 'documentacion'),
   // Ver nota en version.js: fuente única de versión y fecha.
   ...require('./version'),
+  // Los mismos tres documentos que genera generate-pdf.js: lo que se entrega
+  // va en ambos formatos, sin excepciones. `cover` nombra el PNG de portada
+  // (generate-covers.js); antes se deducía del nombre del archivo con un
+  // includes('Manual'), que daba 'tecnico' a cualquier documento nuevo.
   documents: [
     {
       input: 'USER-MANUAL.md',
       output: 'MiBoleta-Manual-de-Usuario.docx',
+      cover: 'manual',
       title: 'Manual de Usuario',
       subtitle: 'Guía de uso del sistema para usuarios finales y administradores',
       audience: 'Usuarios, Administradores'
@@ -55,9 +66,18 @@ const CONFIG = {
     {
       input: 'TECHNICAL-DOCUMENTATION.md',
       output: 'MiBoleta-Documentacion-Tecnica.docx',
+      cover: 'tecnico',
       title: 'Documentación Técnica',
       subtitle: 'Arquitectura, configuración y despliegue del sistema',
       audience: 'Desarrolladores, DevOps'
+    },
+    {
+      input: 'INSTALACION.md',
+      output: 'MiBoleta-Guia-de-Instalacion.docx',
+      cover: 'instalacion',
+      title: 'Guía de Instalación',
+      subtitle: 'Puesta en marcha de la plataforma en un servidor propio',
+      audience: 'Administradores de sistemas'
     }
   ]
 };
@@ -596,8 +616,7 @@ class MarkdownToDocx {
 
 function createCoverPage(doc) {
   // Use the generated cover image (same as PDF)
-  const coverId = doc.output.includes('Manual') ? 'manual' : 'tecnico';
-  const coverPath = path.join(__dirname, `cover-${coverId}.png`);
+  const coverPath = path.join(__dirname, `cover-${doc.cover}.png`);
 
   if (fs.existsSync(coverPath)) {
     const coverData = fs.readFileSync(coverPath);
@@ -799,7 +818,8 @@ async function generateSingleWord(docConfig) {
 
   // Generate document
   const buffer = await Packer.toBuffer(doc);
-  const outputPath = path.join(CONFIG.docsPath, docConfig.output);
+  fs.mkdirSync(CONFIG.salidaPath, { recursive: true });
+  const outputPath = path.join(CONFIG.salidaPath, docConfig.output);
   fs.writeFileSync(outputPath, buffer);
 
   const size = (fs.statSync(outputPath).size / 1024 / 1024).toFixed(2);
@@ -822,7 +842,7 @@ async function generateWords() {
   console.log('═'.repeat(50));
   console.log('\nOutput files:');
   CONFIG.documents.forEach(doc => {
-    console.log(`  📁 ${path.join(CONFIG.docsPath, doc.output)}`);
+    console.log(`  📁 ${path.join(CONFIG.salidaPath, doc.output)}`);
   });
   console.log('\n⚠️  Note: Update TOC in Word by right-clicking the table of contents and selecting "Update Field"');
 }
