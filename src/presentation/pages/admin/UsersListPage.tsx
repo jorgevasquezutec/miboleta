@@ -383,18 +383,18 @@ export function UsersListPage() {
                             ya scrollea horizontalmente (overflow-x-auto) si no entra. */}
                         <TableHead className="whitespace-nowrap">
                           Vacaciones
-                          {/* Modo "Todas las empresas" (root): el saldo es POR
-                              EMPRESA (hire_date/régimen propios de cada una), así
-                              que sin empresa activa no hay cifra que mostrar. El
-                              "—" de las celdas parecía un bug (observación del
-                              04/08/2026), por eso la aclaración visible aquí y no
-                              solo en un title al hover. */}
+                          {/* Modo "Todas las empresas" (root): se muestra el
+                              saldo de la empresa PRIMARIA (★) de cada usuario —
+                              el saldo es POR EMPRESA (hire_date/régimen propios
+                              de cada una), y cada celda etiqueta de qué empresa
+                              es su cifra para que las filas no se comparen entre
+                              sí por error. */}
                           {!currentTenant && (
                             <span
                               className="block text-[10px] font-normal text-muted-foreground normal-case leading-tight"
-                              title="Los saldos de vacaciones se calculan por empresa. Selecciona una empresa en el selector superior para verlos."
+                              title="En modo Todas las empresas se muestra el saldo de la empresa principal (★) de cada usuario. Selecciona una empresa en el selector superior para ver los saldos de esa empresa."
                             >
-                              por empresa — selecciona una
+                              saldo de la empresa principal ★
                             </span>
                           )}
                         </TableHead>
@@ -478,7 +478,22 @@ export function UsersListPage() {
                                 una), así que no hay una cifra única correcta y no se
                                 inventa una suma entre empresas. */}
                             {user.vacation_balance ? (
-                              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs min-w-[130px]">
+                              <div>
+                                {/* Etiqueta de QUÉ empresa es el saldo: en modo
+                                    global cada fila puede traer una empresa
+                                    distinta (la primaria de cada usuario), y en
+                                    multi-empresa evita leer la cifra como "el
+                                    saldo del usuario" a secas. */}
+                                {(!currentTenant || (user.tenants?.length ?? 0) > 1) && user.vacation_balance.tenant_name && (
+                                  <div
+                                    className="text-[10px] text-muted-foreground max-w-[130px] truncate leading-tight"
+                                    title={`Saldo en ${user.vacation_balance.tenant_name}${user.vacation_balance.is_primary ? " (empresa principal)" : ""}`}
+                                  >
+                                    {user.vacation_balance.is_primary ? "★ " : ""}
+                                    {user.vacation_balance.tenant_name}
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs min-w-[130px]">
                                 <span title="Vacaciones Pendientes">
                                   <span className="text-muted-foreground">Pend.</span>{" "}
                                   <span className="font-medium">
@@ -503,11 +518,12 @@ export function UsersListPage() {
                                     {formatVacationDays(user.vacation_balance.balance)}
                                   </span>
                                 </span>
+                                </div>
                               </div>
                             ) : (
                               <span
                                 className="text-muted-foreground text-sm"
-                                title="Selecciona una empresa en el navbar para ver el saldo de vacaciones"
+                                title="Este usuario no pertenece a ninguna empresa visible, no tiene saldo de vacaciones"
                               >
                                 —
                               </span>
