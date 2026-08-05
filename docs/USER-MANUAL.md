@@ -461,6 +461,12 @@ cada una.
 5. Si alguna fila falló, se descarga un archivo con **solo esas filas** y su
    error, para corregirlo y reintentar sin tocar las que sí entraron.
 
+![Editor de Usuarios tras validar](images/28b_root_carga_masiva_validada.png)
+
+Así luce la pantalla tras el paso 2: cada fila del archivo aparece en una
+cuadrícula editable, con el DNI, la empresa y los demás datos ya detectados.
+Permite corregir errores puntuales sin volver a exportar el archivo.
+
 > Las personas creadas reciben una contraseña temporal y el sistema les exige
 > cambiarla en su primer ingreso.
 

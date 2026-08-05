@@ -145,6 +145,9 @@ class DemoSeeder extends Seeder
             'elena.quispe@miboleta.demo'           => ['anios' => 0, 'meses' => 7, 'inicial' => 0,  'area' => 'Ventas', 'cargo' => 'Ejecutiva Comercial'],
             'diego.ramos@miboleta.demo'            => ['anios' => 1, 'meses' => 3, 'inicial' => 12, 'area' => 'Sistemas', 'cargo' => 'Soporte Técnico'],
             'admin@corporacionabc.com'             => ['anios' => 6, 'meses' => 0, 'inicial' => 0,  'area' => 'Gerencia', 'cargo' => 'Gerente de RR.HH.'],
+            // Multi-tenant (pertenece a ABC y a XYZ): sin perfil salía con
+            // celdas vacías en los listados de usuarios.
+            'ana.torres@email.com'                 => ['anios' => 2, 'meses' => 0, 'inicial' => 0,  'area' => 'Finanzas', 'cargo' => 'Tesorera'],
         ];
 
         foreach ($perfiles as $email => $p) {
@@ -169,8 +172,14 @@ class DemoSeeder extends Seeder
         }
 
         // La segunda empresa también necesita fechas para no salir en cero.
+        // Ana Torres también entra aquí: es multi-tenant y pertenece a ABC
+        // (arriba) y a XYZ (aquí).
         $segundoTenant = Tenant::orderBy('id')->skip(1)->first();
-        foreach (['pedro.lopez@empresaxyz.com' => 2, 'admin@empresaxyz.com' => 4] as $email => $anios) {
+        foreach ([
+            'pedro.lopez@empresaxyz.com' => 2,
+            'admin@empresaxyz.com' => 4,
+            'ana.torres@email.com' => 2,
+        ] as $email => $anios) {
             $user = User::where('email', $email)->first();
             if ($user && $segundoTenant) {
                 $user->tenants()->updateExistingPivot($segundoTenant->id, [
@@ -206,9 +215,17 @@ class DemoSeeder extends Seeder
         foreach ($empleados as $empleado) {
             foreach ($periodos as $i => $periodo) {
                 $ruta = "documents/demo/{$empleado->document_text}-{$periodo}.pdf";
-                Storage::disk('local')->put($ruta, $this->pdfMinimo(
-                    "Boleta de pago {$periodo} - {$empleado->full_name}"
-                ));
+                $pdf = $this->pdfMinimo(
+                    $empleado->full_name,
+                    $empleado->document_text,
+                    $periodo,
+                    'Sueldo Basico: S/ 2,500.00 - Neto a pagar: S/ 2,150.00'
+                );
+                // El disco de lectura es 'documents' (ver DocumentService y
+                // Document::fileExists()), no 'local': escribir en el disco
+                // equivocado deja el archivo invisible para el backend y el
+                // preview responde 404 ("Error al cargar el documento").
+                Storage::disk('documents')->put($ruta, $pdf);
 
                 // El periodo más antiguo va firmado, el resto pendiente: así
                 // se ve el estado "Firmado" y el flujo pendiente a la vez.
@@ -221,7 +238,7 @@ class DemoSeeder extends Seeder
                     'employee_document_number' => $empleado->document_text,
                     'period' => $periodo,
                     'file_path' => $ruta,
-                    'file_size' => strlen($this->pdfMinimo('x')),
+                    'file_size' => strlen($pdf),
                     'original_name' => "boleta-{$periodo}.pdf",
                     'status' => $firmado ? 'signed' : 'pending',
                     'uploaded_by' => $subidoPor?->id,
@@ -408,24 +425,66 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * PDF válido mínimo (un objeto por sección, sin fuentes embebidas). No
-     * pretende ser una boleta real: solo un archivo que abra sin error para
-     * que descarga y vista previa funcionen en la demo.
+     * PDF válido mínimo (un objeto por sección, sin fuentes embebidas), con
+     * tabla xref y startxref reales. Sin xref, PDF.js lo recupera igual pero
+     * avisa "Indexing all PDF objects" en consola, y el archivo también se
+     * descarga y se abre en visores más estrictos que sí lo exigen.
+     *
+     * No pretende ser una boleta real, pero sí parecerlo: varias líneas con
+     * trabajador, DNI, período y un concepto, en vez de un único texto suelto.
+     *
+     * Los nombres traen tildes (Pérez, Torres Martínez...) y un PDF simple
+     * como este, sin /Encoding, se interpreta con StandardEncoding: los
+     * bytes UTF-8 de esas letras salen como mojibake ("P´rez"). Se
+     * recodifica a WinAnsi (Latin-1) y se declara /Encoding/WinAnsiEncoding
+     * en la fuente para que el visor los pinte bien.
      */
-    private function pdfMinimo(string $titulo): string
+    private function pdfMinimo(string $empleado, string $dni, string $periodo, string $concepto): string
     {
-        $texto = str_replace(['(', ')', '\\'], '', $titulo);
-        $contenido = "BT /F1 12 Tf 60 760 Td ({$texto}) Tj ET";
+        $limpiar = function (string $s): string {
+            $s = str_replace(['(', ')', '\\'], '', $s);
+
+            return mb_convert_encoding($s, 'Windows-1252', 'UTF-8');
+        };
+
+        $lineas = [
+            "Trabajador: {$limpiar($empleado)}",
+            "DNI: {$dni}",
+            "Periodo: {$periodo}",
+            $limpiar($concepto),
+        ];
+
+        $contenido = "BT /F1 14 Tf 60 780 Td (BOLETA DE REMUNERACIONES) Tj /F1 11 Tf 0 -28 Td";
+        foreach ($lineas as $linea) {
+            $contenido .= " ({$linea}) Tj 0 -18 Td";
+        }
+        $contenido .= " ET";
         $len = strlen($contenido);
 
-        return "%PDF-1.4\n"
-            . "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-            . "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
-            . "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]"
-            . "/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj\n"
-            . "4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
-            . "5 0 obj<</Length {$len}>>stream\n{$contenido}\nendstream endobj\n"
-            . "trailer<</Root 1 0 R/Size 6>>\n%%EOF\n";
+        $objetos = [
+            "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n",
+            "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n",
+            "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]"
+                . "/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj\n",
+            "4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>endobj\n",
+            "5 0 obj<</Length {$len}>>stream\n{$contenido}\nendstream endobj\n",
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+        foreach ($objetos as $obj) {
+            $offsets[] = strlen($pdf);
+            $pdf .= $obj;
+        }
+
+        $xref = strlen($pdf);
+        $pdf .= "xref\n0 6\n0000000000 65535 f \n";
+        foreach ($offsets as $o) {
+            $pdf .= sprintf("%010d 00000 n \n", $o);
+        }
+        $pdf .= "trailer<</Root 1 0 R/Size 6>>\nstartxref\n{$xref}\n%%EOF\n";
+
+        return $pdf;
     }
 
     private function resumen(): void
