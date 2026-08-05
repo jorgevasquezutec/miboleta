@@ -521,9 +521,25 @@ class VacationRequestControllerTest extends TestCase
 
     public function test_history_counts_respect_search_filter(): void
     {
-        $ana = User::factory()->client()->create(['status' => 'active', 'name' => 'Ana', 'last_name' => 'Torres']);
+        // Emails FIJOS, no de factory: la búsqueda matchea nombre O email
+        // (VacationService, whereHas user -> matchingFullName orWhere email),
+        // y un email aleatorio que contenga "ana" (santana@, adriana@...)
+        // hacía matchear también la solicitud de Luis — flake real visto en
+        // CI (total 2 en vez de 1). RefreshDatabase aísla cada test, así que
+        // el email repetido entre tests no colisiona.
+        $ana = User::factory()->client()->create([
+            'status' => 'active',
+            'name' => 'Ana',
+            'last_name' => 'Torres',
+            'email' => 'ana.torres@test.com',
+        ]);
         $ana->tenants()->attach($this->tenant->id, ['is_primary' => true]);
-        $luis = User::factory()->client()->create(['status' => 'active', 'name' => 'Luis', 'last_name' => 'Ramos']);
+        $luis = User::factory()->client()->create([
+            'status' => 'active',
+            'name' => 'Luis',
+            'last_name' => 'Ramos',
+            'email' => 'luis.ramos@test.com',
+        ]);
         $luis->tenants()->attach($this->tenant->id, ['is_primary' => true]);
 
         VacationRequest::factory()->approved()->create([
@@ -555,9 +571,25 @@ class VacationRequestControllerTest extends TestCase
      */
     public function test_history_counts_respect_full_name_search_filter(): void
     {
-        $ana = User::factory()->client()->create(['status' => 'active', 'name' => 'Ana', 'last_name' => 'Torres']);
+        // Emails FIJOS, no de factory: la búsqueda matchea nombre O email
+        // (VacationService, whereHas user -> matchingFullName orWhere email),
+        // y un email aleatorio que contenga "ana" (santana@, adriana@...)
+        // hacía matchear también la solicitud de Luis — flake real visto en
+        // CI (total 2 en vez de 1). RefreshDatabase aísla cada test, así que
+        // el email repetido entre tests no colisiona.
+        $ana = User::factory()->client()->create([
+            'status' => 'active',
+            'name' => 'Ana',
+            'last_name' => 'Torres',
+            'email' => 'ana.torres@test.com',
+        ]);
         $ana->tenants()->attach($this->tenant->id, ['is_primary' => true]);
-        $luis = User::factory()->client()->create(['status' => 'active', 'name' => 'Luis', 'last_name' => 'Ramos']);
+        $luis = User::factory()->client()->create([
+            'status' => 'active',
+            'name' => 'Luis',
+            'last_name' => 'Ramos',
+            'email' => 'luis.ramos@test.com',
+        ]);
         $luis->tenants()->attach($this->tenant->id, ['is_primary' => true]);
 
         VacationRequest::factory()->approved()->create([
