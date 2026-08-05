@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useDocumentTitle } from '@/presentation/hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenantsStore } from '@/presentation/stores/tenantsStore';
+import { useCan } from '@/presentation/hooks/useCan';
 import { Button } from '@/presentation/components/ui/button';
 import { Input } from '@/presentation/components/ui/input';
 import { Label } from '@/presentation/components/ui/label';
@@ -30,7 +31,13 @@ export function TenantFormPage() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const isEditing = Boolean(id);
-    useDocumentTitle(isEditing ? 'Editar Empresa' : 'Nueva Empresa');
+    // Obs-3: admin_tenant ve el detalle de las empresas que administra pero no
+    // puede editarlas (solo root tiene 'tenants.manage'). No aplica al modo
+    // creación (/tenants/new), que ya está gateado aparte por 'tenants.manage'
+    // en la ruta: nadie sin ese permiso llega hasta aquí con isEditing=false.
+    const canManageTenants = useCan('tenants.manage');
+    const readOnly = isEditing && !canManageTenants;
+    useDocumentTitle(isEditing ? (readOnly ? 'Detalle de Empresa' : 'Editar Empresa') : 'Nueva Empresa');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { fetchTenantById, currentTenant, createTenant, updateTenant, isLoading } = useTenantsStore();
@@ -137,6 +144,10 @@ export function TenantFormPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Defensa en profundidad: los campos ya están disabled vía <fieldset>,
+        // pero esto cubre un submit disparado sin pasar por los inputs.
+        if (readOnly) return;
+
         if (!validateForm()) {
             toast.error('Por favor corrige los errores del formulario');
             return;
@@ -230,6 +241,11 @@ export function TenantFormPage() {
     };
 
     const handleFileSelect = async (file: File) => {
+        // El <input type="file"> hereda `disabled` del <fieldset>, pero el
+        // drag-and-drop (handleDrop) actúa sobre el <div> del dropzone, que no
+        // es un control de formulario y no hereda ese disabled.
+        if (readOnly) return;
+
         const validationError = validateImageFile(file);
         if (validationError) {
             toast.error(validationError);
@@ -307,12 +323,16 @@ export function TenantFormPage() {
                     </div>
                     <div>
                         <h1 className="text-xl sm:text-2xl font-bold">
-                            {isEditing ? 'Editar Organización' : 'Nueva Organización'}
+                            {readOnly
+                                ? 'Detalle de Organización'
+                                : isEditing ? 'Editar Organización' : 'Nueva Organización'}
                         </h1>
                         <p className="text-gray-500 mt-1 text-sm sm:text-base">
-                            {isEditing
-                                ? 'Actualiza la información de la organización'
-                                : 'Completa los datos para crear una nueva organización'}
+                            {readOnly
+                                ? 'Información de la organización'
+                                : isEditing
+                                    ? 'Actualiza la información de la organización'
+                                    : 'Completa los datos para crear una nueva organización'}
                         </p>
                     </div>
                 </div>
@@ -320,6 +340,16 @@ export function TenantFormPage() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6 mt-8">
+                {/* Obs-3: modo solo lectura para quien ve el detalle de una empresa
+                    sin 'tenants.manage' (admin_tenant). `disabled` en un <fieldset>
+                    se hereda por todos los controles de formulario nativos
+                    (input, select, button...) de sus descendientes, incluidos los
+                    de Radix (SelectTrigger renderiza un <button>); `contents` evita
+                    que el fieldset como elemento de layout rompa el space-y-6 del
+                    <form>. El dropzone de logo (un <div>, no un control de
+                    formulario) no hereda este disabled — se guarda aparte en
+                    handleFileSelect/handleDrop. */}
+                <fieldset disabled={readOnly} className="contents">
                 {/* Logo Upload Section */}
                 <Card>
                     <CardHeader>
@@ -365,7 +395,11 @@ export function TenantFormPage() {
                                 </div>
                             )}
 
-                            {/* Upload Area */}
+                            {/* Upload Area. Oculta en modo lectura: es un <div>, no un
+                                control de formulario, así que no hereda el disabled
+                                del <fieldset> — sin esto seguiría abriendo el selector
+                                de archivos y aceptando drag-and-drop. */}
+                            {!readOnly && (
                             <div
                                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isDragging
                                     ? 'border-blue-500 bg-blue-50'
@@ -413,6 +447,7 @@ export function TenantFormPage() {
                                     </div>
                                 )}
                             </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -621,30 +656,35 @@ export function TenantFormPage() {
                                             Correo de la plataforma
                                         </Badge>
                                     )}
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleTestSmtp}
-                                        disabled={isTestingSmtp || !currentTenant.has_custom_mailer}
-                                        title={
-                                            !currentTenant.has_custom_mailer
-                                                ? 'Guarda un host y correo remitente para poder probar la conexión'
-                                                : undefined
-                                        }
-                                    >
-                                        {isTestingSmtp ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Probando...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <PlugZap className="mr-2 h-4 w-4" />
-                                                Probar conexión
-                                            </>
-                                        )}
-                                    </Button>
+                                    {/* Obs-3: acción de escritura (abre una conexión saliente
+                                        con las credenciales SMTP guardadas) — oculta en modo
+                                        lectura, no solo deshabilitada. */}
+                                    {!readOnly && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleTestSmtp}
+                                            disabled={isTestingSmtp || !currentTenant.has_custom_mailer}
+                                            title={
+                                                !currentTenant.has_custom_mailer
+                                                    ? 'Guarda un host y correo remitente para poder probar la conexión'
+                                                    : undefined
+                                            }
+                                        >
+                                            {isTestingSmtp ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Probando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <PlugZap className="mr-2 h-4 w-4" />
+                                                    Probar conexión
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -765,6 +805,7 @@ export function TenantFormPage() {
                         </div>
                     </CardContent>
                 </Card>
+                </fieldset>
 
                 {/* Actions */}
                 <div className="flex justify-start gap-4 sticky bottom-0 bg-white py-4 pl-8 border-t">
@@ -774,21 +815,23 @@ export function TenantFormPage() {
                         onClick={() => navigate('/tenants')}
                         disabled={isLoading || isUploading}
                     >
-                        Cancelar
+                        {readOnly ? 'Volver' : 'Cancelar'}
                     </Button>
-                    <Button type="submit" disabled={isLoading || isUploading}>
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                {isEditing ? 'Actualizando...' : 'Creando...'}
-                            </>
-                        ) : (
-                            <>
-                                <Save className="mr-2 h-4 w-4" />
-                                {isEditing ? 'Actualizar' : 'Crear'} Organización
-                            </>
-                        )}
-                    </Button>
+                    {!readOnly && (
+                        <Button type="submit" disabled={isLoading || isUploading}>
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    {isEditing ? 'Actualizando...' : 'Creando...'}
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {isEditing ? 'Actualizar' : 'Crear'} Organización
+                                </>
+                            )}
+                        </Button>
+                    )}
                 </div>
             </form>
         </div>

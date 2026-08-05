@@ -29,6 +29,32 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ALLOWED_ORG_ROLES: readonly string[] = BULK_UPLOAD_ORG_ROLES;
 
+// Longitud fija por tipo de documento, para reponer ceros a la izquierda
+// (Obs 4). Espeja backend: App\Support\DocumentNumber::PAD_LENGTHS. passport
+// no tiene longitud fija y no se rellena.
+const DOCUMENT_PAD_LENGTHS: Record<string, number> = {
+    dni: 8,
+    ruc: 11,
+    ce: 12,
+};
+
+// Repone el padding de ceros a la izquierda que Excel se come cuando la
+// columna "Número de documento" queda en formato General (mismo bug que
+// App\Support\DocumentNumber::normalize resuelve en el backend). Solo actúa
+// sobre valores puramente numéricos más cortos que la longitud objetivo:
+// nunca trunca ni toca un pasaporte alfanumérico.
+function padDocumentNumber(tipoDocumento: string | undefined, valor: string): string {
+    const trimmed = (valor || '').trim();
+    if (!trimmed) return trimmed;
+
+    const padLength = tipoDocumento ? DOCUMENT_PAD_LENGTHS[tipoDocumento.toLowerCase()] : undefined;
+    if (padLength && /^\d+$/.test(trimmed) && trimmed.length < padLength) {
+        return trimmed.padStart(padLength, '0');
+    }
+
+    return trimmed;
+}
+
 // Función helper para convertir data a EditableUser
 function convertToEditableUsers(
     data: any[],
@@ -37,31 +63,33 @@ function convertToEditableUsers(
 ): EditableUser[] {
     return data.map((user, index) => {
         const userId = uuidv4();
-        
+
         // Buscar errores y warnings para esta fila
         const rowErrors: Record<string, string> = {};
         const rowWarnings: Record<string, string> = {};
-        
+
         errors
             .filter(err => err.row === user.row_number)
             .forEach(err => {
                 rowErrors[err.field] = err.message;
             });
-        
+
         warnings
             .filter(warn => warn.row === user.row_number)
             .forEach(warn => {
                 rowWarnings[warn.field] = warn.message;
             });
-        
+
+        const tipoDocumento = user.tipo_documento || 'dni';
+
         return {
             id: userId,
             row_number: user.row_number || index + 2, // +2 por header Excel
             nombre: user.nombre || '',
             apellido: user.apellido || '',
             email: user.email || '',
-            tipo_documento: user.tipo_documento || 'dni',
-            numero_documento: user.numero_documento || '',
+            tipo_documento: tipoDocumento,
+            numero_documento: padDocumentNumber(tipoDocumento, user.numero_documento || ''),
             estado: user.estado || 'active',
             telefono: user.telefono || '',
             birth_date: user.birth_date || '',
@@ -185,8 +213,10 @@ export function useEditableUsers(): UseEditableUsersReturn {
                     }
                     break;
                 case 'CE':
-                    if (doc.length < 9 || doc.length > 12 || !/^[A-Za-z0-9]+$/.test(doc)) {
-                        errors['numero_documento'] = 'CE debe tener entre 9 y 12 caracteres alfanuméricos';
+                    // Alineado con el backend (BulkUserUploadService::validateUserRow):
+                    // exactamente 12 dígitos, no un rango ni alfanumérico.
+                    if (!/^\d{12}$/.test(doc)) {
+                        errors['numero_documento'] = 'CE debe tener exactamente 12 dígitos numéricos';
                     }
                     break;
                 case 'PASAPORTE':

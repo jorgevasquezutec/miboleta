@@ -132,8 +132,24 @@ class UserBatchController extends Controller
         $perPage = $request->get('per_page', 15);
 
         $batches = UserBatch::with(['tenant', 'createdBy'])
+            // Observación 5 (historial de cargas masivas): el filtro por chip
+            // usaba igualdad exacta contra 'status', así que los chips
+            // "Completados"/"En Proceso"/"Fallidos" dejaban invisibles los
+            // batches en 'partial' y 'pending' -solo aparecían en "Todos"-.
+            // Se mapea cada chip a los estados que agrupa conceptualmente
+            // (mismo criterio que UserBatch::isCompleted()/scopeCompleted()):
+            // 'completed' agrupa completed+partial, 'processing' agrupa
+            // pending+processing (una carga recién creada, antes de que el
+            // primer chunk corra, todavía no es 'processing'). Un valor de
+            // status fuera de estos tres (o el propio 'partial'/'pending')
+            // conserva la igualdad exacta de siempre.
             ->when($request->has('status'), function ($q) use ($request) {
-                $q->where('status', $request->status);
+                match ($request->status) {
+                    'completed' => $q->completed(),
+                    'processing' => $q->whereIn('status', ['pending', 'processing']),
+                    'failed' => $q->failed(),
+                    default => $q->where('status', $request->status),
+                };
             })
             // FIX B2-r2: root ve todo (TenantFilterScope ya no le aplica
             // restricción); un admin/admin_tenant solo ve los batches que

@@ -382,7 +382,7 @@ class UserBatch extends Model
                 continue; // tenant inexistente o ya fijado: no tocar (idempotente)
             }
 
-            $currentCount = $tenant->users()->count();
+            $currentCount = $tenant->employeesQuery()->count('users.id');
             $tenant->update(['initial_employee_count' => $currentCount]);
 
             Log::info('📊 [BulkUserUpload] initial_employee_count fijado', [

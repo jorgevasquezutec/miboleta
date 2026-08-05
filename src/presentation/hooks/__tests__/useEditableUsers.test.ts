@@ -567,6 +567,157 @@ describe('useEditableUsers', () => {
     });
   });
 
+  // Obs 4: el backend puede devolver un número de documento sin los ceros a
+  // la izquierda que el usuario tipeó originalmente (Excel numeriza la
+  // celda "Número de documento" cuando queda en formato General). loadUsers
+  // repone ese padding al convertir la fila cruda a EditableUser, espejando
+  // App\Support\DocumentNumber::normalize del backend.
+  describe('document number padding (Obs 4)', () => {
+    it('should pad a short numeric DNI to 8 digits on load', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const data = [
+        {
+          row_number: 2,
+          nombre: 'Juan',
+          apellido: 'Perez',
+          email: 'juan@test.com',
+          tipo_documento: 'dni',
+          numero_documento: '1234567', // 7 dígitos: perdió el 0 inicial
+          estado: 'active',
+        },
+      ];
+
+      act(() => {
+        result.current.loadUsers(data, [], []);
+      });
+
+      expect(result.current.users[0].numero_documento).toBe('01234567');
+    });
+
+    it('should pad a short numeric RUC to 11 digits on load', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const data = [
+        {
+          row_number: 2,
+          nombre: 'Empresa',
+          apellido: 'SAC',
+          email: 'empresa@test.com',
+          tipo_documento: 'ruc',
+          numero_documento: '123456789', // 9 dígitos, falta padding a 11
+          estado: 'active',
+        },
+      ];
+
+      act(() => {
+        result.current.loadUsers(data, [], []);
+      });
+
+      expect(result.current.users[0].numero_documento).toBe('00123456789');
+    });
+
+    it('should not pad or truncate a DNI already 8 digits long', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const data = [
+        {
+          row_number: 2,
+          nombre: 'Juan',
+          apellido: 'Perez',
+          email: 'juan@test.com',
+          tipo_documento: 'dni',
+          numero_documento: '00000000',
+          estado: 'active',
+        },
+      ];
+
+      act(() => {
+        result.current.loadUsers(data, [], []);
+      });
+
+      expect(result.current.users[0].numero_documento).toBe('00000000');
+    });
+
+    it('should not pad a non-numeric passport', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const data = [
+        {
+          row_number: 2,
+          nombre: 'Juan',
+          apellido: 'Perez',
+          email: 'juan@test.com',
+          tipo_documento: 'passport',
+          numero_documento: 'AB123',
+          estado: 'active',
+        },
+      ];
+
+      act(() => {
+        result.current.loadUsers(data, [], []);
+      });
+
+      expect(result.current.users[0].numero_documento).toBe('AB123');
+    });
+  });
+
+  // Obs 4: CE alineado con el backend (BulkUserUploadService::validateUserRow):
+  // exactamente 12 dígitos, no el rango 9-12 alfanumérico que aceptaba antes.
+  describe('CE format validation (Obs 4)', () => {
+    it('should reject a CE shorter than 12 digits', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const user = {
+        id: '1',
+        row_number: 2,
+        nombre: 'Juan',
+        apellido: 'Perez',
+        email: 'juan@test.com',
+        tipo_documento: 'CE',
+        numero_documento: '123456789', // 9 dígitos
+        estado: 'active',
+        telefono: '',
+        organizaciones: [],
+        _errors: {},
+        _warnings: {},
+        _isValid: false,
+        _isNew: false,
+        _isModified: false,
+      };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.numero_documento).toContain('12 dígitos');
+    });
+
+    it('should accept a CE with exactly 12 digits', () => {
+      const { result } = renderHook(() => useEditableUsers());
+
+      const user = {
+        id: '1',
+        row_number: 2,
+        nombre: 'Juan',
+        apellido: 'Perez',
+        email: 'juan@test.com',
+        tipo_documento: 'CE',
+        numero_documento: '123456789012', // 12 dígitos
+        estado: 'active',
+        telefono: '',
+        organizaciones: [{ ruc: '20123456789', supervisor_email: '', roles: ['client'] }],
+        _errors: {},
+        _warnings: {},
+        _isValid: false,
+        _isNew: false,
+        _isModified: false,
+      };
+
+      const validation = result.current.validateUser(user as any);
+
+      expect(validation.errors.numero_documento).toBeUndefined();
+    });
+  });
+
   describe('stats calculation', () => {
     it('should calculate error count correctly', () => {
       const { result } = renderHook(() => useEditableUsers());

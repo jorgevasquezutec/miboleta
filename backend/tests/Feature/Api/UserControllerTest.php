@@ -322,6 +322,29 @@ class UserControllerTest extends TestCase
         $response->assertStatus(201);
     }
 
+    public function test_admin_tenant_can_create_user_with_admin_role(): void
+    {
+        // Observación 1: "asignar" (StoreUserRequest/assignableRoleNamesFor,
+        // ASSIGNABLE_ROLES) y "administrar" (canManageUser, MANAGEABLE_ROLES)
+        // son jerarquías distintas. Un admin_tenant sigue pudiendo dar de
+        // alta un usuario con rol admin; lo que ya no puede es administrar
+        // esa cuenta una vez creada (ver test_admin_tenant_cannot_update_admin_user).
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $adminRole = Role::where('name', 'admin')->first();
+
+        $response = $this->actingAs($adminTenant)->postJson('/api/users', [
+            'name' => 'Nuevo',
+            'last_name' => 'Admin',
+            'email' => 'nuevo-admin@example.com',
+            'role_id' => $adminRole->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('users', ['email' => 'nuevo-admin@example.com']);
+    }
+
     public function test_create_user_requires_email(): void
     {
         $response = $this->actingAs($this->root)->postJson('/api/users', [
@@ -476,6 +499,27 @@ class UserControllerTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_admin_tenant_cannot_update_admin_user(): void
+    {
+        // OBS-CLIENTE 2026-08 (Observación 1): antes de esto un admin_tenant
+        // SÍ podía editar una cuenta admin en la empresa compartida (misma
+        // jerarquía que la de asignar el rol). Ahora solo root administra
+        // admins; admin_tenant conserva la potestad de ASIGNAR el rol admin
+        // al crear/editar (ver test_admin_tenant_can_create_user_with_admin_role),
+        // pero no la de administrar la cuenta ya creada.
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->putJson("/api/users/{$admin->id}", [
+            'name' => 'Actualizado',
+        ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('users', ['id' => $admin->id, 'name' => 'Actualizado']);
+    }
+
     public function test_admin_tenant_cannot_update_another_admin_tenant(): void
     {
         // C1: solo root administra cuentas admin_tenant.
@@ -486,6 +530,26 @@ class UserControllerTest extends TestCase
 
         $response = $this->actingAs($adminTenant)->putJson("/api/users/{$peerAdminTenant->id}", [
             'name' => 'Actualizado',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_cannot_reset_password_of_admin_user(): void
+    {
+        // Observación 1: adminResetPassword (PasswordController, ver
+        // cobertura hermana en PasswordControllerTest) usa el mismo
+        // UserService::canManageUser() que update()/destroy(); esta prueba
+        // confirma aquí, junto al resto de casos de admin_tenant vs. admin,
+        // que ahora también bloquea target admin (antes solo bloqueaba
+        // target admin_tenant/root).
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson("/api/users/{$admin->id}/reset-password", [
+            'action' => 'force_change_only',
         ]);
 
         $response->assertStatus(403);

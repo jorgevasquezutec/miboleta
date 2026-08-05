@@ -65,10 +65,24 @@ class UploadUserBatchDataRequest extends FormRequest
                     $users[$i]['organizaciones'][$j]['vacation_balance_initial'] = null;
                 }
 
-                if (isset($org['roles']) && !is_array($org['roles'])) {
+                if (isset($org['roles'])) {
+                    $rawRoles = is_array($org['roles'])
+                        ? $org['roles']
+                        : explode(',', (string) $org['roles']);
+
+                    // Resuelve cada token (slug O display name, ej. 'client'
+                    // o 'Empleado') a su slug canónico ANTES de la regla
+                    // 'in:' de rules() (Obs 2): aguas abajo (BD, jobs, otros
+                    // requests) siempre viajan slugs. Un token que no
+                    // resuelve a ningún rol conocido se deja tal cual
+                    // (trimmed) para que 'in:' lo rechace con el mensaje de
+                    // rol inválido, en vez de perderlo en silencio aquí.
                     $users[$i]['organizaciones'][$j]['roles'] = array_values(array_filter(array_map(
-                        'trim',
-                        explode(',', (string) $org['roles'])
+                        function ($role) {
+                            $slug = BulkUserUploadService::orgRoleSlug((string) $role);
+                            return $slug ?? trim((string) $role);
+                        },
+                        $rawRoles
                     )));
                 }
             }

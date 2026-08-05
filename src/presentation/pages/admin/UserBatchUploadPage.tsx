@@ -110,7 +110,13 @@ export function UserBatchUploadPage() {
             setShowEditor(true);
 
             if (result.summary.errors > 0) {
-                toast.warning(`Se encontraron ${result.summary.errors} errores - puedes corregirlos en el editor`);
+                // Observación 5: esta carga TODAVÍA no existe como registro en
+                // el historial (user_batches solo guarda cargas confirmadas,
+                // ver UserBatchesListPage) - se aclara para que el usuario no
+                // vaya a buscarla ahí mientras corrige errores en el editor.
+                toast.warning(`Se encontraron ${result.summary.errors} errores - puedes corregirlos en el editor`, {
+                    description: 'Esta carga aún no queda registrada en el historial hasta que la confirmes.',
+                });
             } else if (result.summary.warnings > 0) {
                 toast.info(`Archivo validado con ${result.summary.warnings} advertencias`);
             } else {

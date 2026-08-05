@@ -36,6 +36,9 @@ export interface Tenant {
   initial_employee_count?: number;
   current_employee_count?: number;
   subsequent_employee_count?: number;
+  /** Cuentas de aplicación (admin_tenant) de la empresa — no cuentan como
+   *  empleados (regla "admin_tenant domina"); la UI lo muestra solo a root. */
+  app_accounts_count?: number;
 
   // --- Servidor de correo (SMTP) por empresa ---
   // Campos de LECTURA que expone TenantResource. Si la empresa no configura

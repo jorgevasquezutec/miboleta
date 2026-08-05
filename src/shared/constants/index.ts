@@ -33,6 +33,10 @@ export const USER_ROLES = {
   ADMIN_TENANT: 'admin_tenant',
 } as const;
 
+// Roles de EMPRESA que cuentan como "empleado" (vs. cuentas de aplicación:
+// root y admin_tenant). Espejo de backend User::ORG_EMPLOYEE_ROLES.
+export const ORG_EMPLOYEE_ROLES = [USER_ROLES.ADMIN, USER_ROLES.CLIENT, USER_ROLES.APROBADOR] as const;
+
 export const USER_ROLE_LABELS = {
   root: 'Root',
   admin: 'Admin Empleados',
@@ -52,20 +56,39 @@ export const USER_ROLE_DISPLAY_LABELS = {
   admin_tenant: 'Admin Clientes',
 } as const;
 
-// Jerarquía RBAC de "quién puede asignar/administrar a quién" DENTRO de una
-// misma empresa. Espeja backend: UserService::MANAGEABLE_ROLES (fuente única
-// de verdad; ver también UserService::canManageUser — Decisión C1 del plan de
-// observaciones del cliente, 2026-07). root y admin_tenant NO aparecen como
-// target de nadie no-root; se resuelve aparte:
-//   - root: acceso total, no consulta este mapa.
-//   - admin_tenant como TARGET: intocable para cualquier no-root (rule 3 de
-//     canManageUser), sin importar el rol del actor.
+// Jerarquía RBAC de "quién puede ASIGNAR qué rol a quién" al crear/editar un
+// usuario DENTRO de una misma empresa. Espeja backend:
+// UserService::ASSIGNABLE_ROLES (fuente única de verdad). root NO aparece
+// como clave: acceso total, no consulta este mapa.
 // Usado por:
 //   - TenantAssignmentCard.tsx (qué roles puede asignar el actor al crear/
 //     editar un usuario en una empresa).
-//   - UsersListPage.tsx (gating del botón Editar por fila: canEditTarget()).
+// NOTA (Observación 1, 2026-08): esta jerarquía de ASIGNACIÓN ya no es la
+// misma que la de ADMINISTRACIÓN — ver MANAGEABLE_ROLES_BY_ACTOR abajo, que
+// usa canEditTarget()/UsersListPage.tsx. Un admin_tenant sigue pudiendo
+// asignar el rol admin aquí, pero ya no puede administrar (editar, resetear
+// contraseña) una cuenta admin existente.
 export const ASSIGNABLE_ROLES_BY_ACTOR: Record<string, string[]> = {
   admin_tenant: [USER_ROLES.ADMIN, USER_ROLES.APROBADOR, USER_ROLES.CLIENT],
+  admin: [USER_ROLES.APROBADOR, USER_ROLES.CLIENT],
+};
+
+// Jerarquía RBAC de "quién puede ADMINISTRAR (editar, resetear contraseña) a
+// quién" DENTRO de una misma empresa. Espeja backend:
+// UserService::MANAGEABLE_ROLES (fuente única de verdad; ver también
+// UserService::canManageUser — Decisión C1 del plan de observaciones del
+// cliente 2026-07, endurecida por Observación 1 2026-08). root, admin_tenant
+// y admin NO aparecen como target de nadie no-root; se resuelven aparte:
+//   - root: acceso total, no consulta este mapa.
+//   - admin_tenant y admin como TARGET: intocables para cualquier no-root
+//     (regla 3 de canManageUser, extendida por Observación 1 a también
+//     bloquear target admin en cualquier empresa), sin importar el rol del
+//     actor.
+// Usado por:
+//   - userPermissions.ts (canEditTarget(), consumido por UsersListPage.tsx
+//     y UserDetailPage.tsx para gatear edición/reset de contraseña).
+export const MANAGEABLE_ROLES_BY_ACTOR: Record<string, string[]> = {
+  admin_tenant: [USER_ROLES.APROBADOR, USER_ROLES.CLIENT],
   admin: [USER_ROLES.APROBADOR, USER_ROLES.CLIENT],
 };
 

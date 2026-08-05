@@ -45,6 +45,16 @@ final class BulkUserColumns
     private const DATE_COLUMNS = ['fecha_ingreso', 'fecha_nacimiento'];
 
     /**
+     * Columnas que deben forzarse a TEXTO en el xlsx (nunca numerizadas): el
+     * número de documento pierde los ceros a la izquierda si Excel lo
+     * interpreta como número (ver App\Support\DocumentNumber, que repone el
+     * padding aguas abajo como red de seguridad), y el teléfono puede
+     * empezar con '+' o '0'. Se listan por sufijo (ver widthKey), igual que
+     * DATE_COLUMNS.
+     */
+    private const TEXT_COLUMNS = ['numero_documento', 'telefono'];
+
+    /**
      * Columnas de datos del usuario, en orden. clave canónica => encabezado.
      */
     private const BASE = [
@@ -211,6 +221,27 @@ final class BulkUserColumns
         return array_values(array_filter(
             self::keys($maxOrganizations),
             static fn(string $key) => self::isDateKey($key)
+        ));
+    }
+
+    /**
+     * ¿Esta columna debe forzarse a texto en el xlsx? (ver TEXT_COLUMNS)
+     */
+    public static function isTextKey(string $key): bool
+    {
+        return in_array(self::widthKey($key), self::TEXT_COLUMNS, true);
+    }
+
+    /**
+     * Claves canónicas de las columnas de texto forzado de la hoja, en orden.
+     *
+     * @return list<string>
+     */
+    public static function textKeys(int $maxOrganizations): array
+    {
+        return array_values(array_filter(
+            self::keys($maxOrganizations),
+            static fn(string $key) => self::isTextKey($key)
         ));
     }
 

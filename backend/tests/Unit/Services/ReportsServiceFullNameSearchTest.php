@@ -3,8 +3,10 @@
 namespace Tests\Unit\Services;
 
 use App\Models\AuditLog;
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\UserTenantRole;
 use App\Models\VacationRequest;
 use App\Services\ReportsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,8 +42,11 @@ class ReportsServiceFullNameSearchTest extends TestCase
     {
         parent::setUp();
 
+        $this->seed(\Database\Seeders\RoleSeeder::class);
+
         $this->service = app(ReportsService::class);
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
+        $clientRole = Role::where('name', 'client')->firstOrFail();
 
         $this->ana = User::factory()->create([
             'status' => 'active',
@@ -50,6 +55,14 @@ class ReportsServiceFullNameSearchTest extends TestCase
             'document_text' => '10000001',
         ]);
         $this->ana->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // Empleado (rol 'client') EN esta empresa: getUsersReportData()
+        // filtra por User::ORG_EMPLOYEE_ROLES, un usuario sin tenantRoles no
+        // saldría en el export.
+        UserTenantRole::create([
+            'user_id' => $this->ana->id,
+            'tenant_id' => $this->tenant->id,
+            'role_id' => $clientRole->id,
+        ]);
 
         $this->luis = User::factory()->create([
             'status' => 'active',
@@ -58,6 +71,11 @@ class ReportsServiceFullNameSearchTest extends TestCase
             'document_text' => '10000002',
         ]);
         $this->luis->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        UserTenantRole::create([
+            'user_id' => $this->luis->id,
+            'tenant_id' => $this->tenant->id,
+            'role_id' => $clientRole->id,
+        ]);
     }
 
     // ===================== getVacationReportData =====================

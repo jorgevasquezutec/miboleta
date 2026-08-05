@@ -397,6 +397,9 @@ class TenantService
             'initial_employee_count' => $employeeCounts['initial_employee_count'],
             'current_employee_count' => $employeeCounts['current_employee_count'],
             'subsequent_employee_count' => $employeeCounts['subsequent_employee_count'],
+            // Cuentas de aplicación de la empresa (admin_tenant); la UI solo
+            // la muestra a root, pero el dato no es sensible (es un conteo).
+            'app_accounts_count' => $employeeCounts['app_accounts_count'],
             // Régimen laboral para el cómputo de vacaciones (RP2-A)
             'labor_regime' => $tenant->labor_regime,
             // Configuración SMTP propia de la empresa (RP2-B). mail_password

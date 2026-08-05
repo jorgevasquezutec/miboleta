@@ -89,6 +89,38 @@ class Tenant extends Model
     }
 
     /**
+     * Empleados de este tenant: miembros (user_tenants) que además tienen,
+     * EN ESTE TENANT, una fila en user_tenant_roles con uno de los roles de
+     * User::ORG_EMPLOYEE_ROLES — y que NO son admin_tenant en este tenant.
+     * Fuente única del conteo "empleado" (vs. cuentas de aplicación): 'root'
+     * queda fuera solo (nunca tiene filas en user_tenant_roles, es global);
+     * 'admin_tenant' EN ESTE TENANT domina y excluye, aunque la persona tenga
+     * también un rol de empleado aquí (para el cliente es una cuenta de
+     * aplicación de esta empresa). Si esa misma persona es solo empleado en
+     * OTRA empresa, allá sí cuenta. Patrón de referencia:
+     * ProfileService::getDataUpdateRecipients() (ProfileService.php:220-223).
+     *
+     * Contar siempre con ->count('users.id') (no ->count()), por el
+     * ->distinct('users.id'): un usuario con roles admin+client en la MISMA
+     * empresa debe contar una sola vez.
+     */
+    public function employeesQuery(): BelongsToMany
+    {
+        $tenantId = $this->id;
+
+        return $this->users()
+            ->whereHas('tenantRoles', function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)
+                  ->whereHas('role', fn ($r) => $r->whereIn('name', User::ORG_EMPLOYEE_ROLES));
+            })
+            ->whereDoesntHave('tenantRoles', function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)
+                  ->whereHas('role', fn ($r) => $r->where('name', 'admin_tenant'));
+            })
+            ->distinct('users.id');
+    }
+
+    /**
      * Documentos del tenant
      */
     public function documents(): HasMany
@@ -151,14 +183,34 @@ class Tenant extends Model
      */
     public function employeeCounts(): array
     {
-        $current = $this->users()->count();
+        $current = $this->employeesQuery()->count('users.id');
         $initial = (int) ($this->initial_employee_count ?? 0);
 
         return [
             'current_employee_count' => $current,
             'initial_employee_count' => $initial,
             'subsequent_employee_count' => max(0, $current - $initial),
+            'app_accounts_count' => $this->appAccountsQuery()->count('users.id'),
         ];
+    }
+
+    /**
+     * Cuentas de aplicación DE esta empresa: miembros con el rol admin_tenant
+     * aquí (las cuentas root son de plataforma, no de una empresa, y no
+     * entran). Complemento de employeesQuery() bajo la regla "admin_tenant
+     * domina": empleados + cuentas de aplicación no se solapan.
+     * Contar con ->count('users.id').
+     */
+    public function appAccountsQuery(): BelongsToMany
+    {
+        $tenantId = $this->id;
+
+        return $this->users()
+            ->whereHas('tenantRoles', function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)
+                  ->whereHas('role', fn ($r) => $r->where('name', 'admin_tenant'));
+            })
+            ->distinct('users.id');
     }
 
     /**

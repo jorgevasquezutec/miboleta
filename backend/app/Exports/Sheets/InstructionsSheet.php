@@ -32,6 +32,21 @@ class InstructionsSheet implements FromArray, WithTitle, WithStyles, WithColumnW
         return 'Instrucciones';
     }
 
+    /**
+     * Roles operativos permitidos, en formato "Empleado (client)" (Obs 2):
+     * el display name es lo que el cliente reconoce, el slug entre
+     * paréntesis es lo que en la práctica se guarda/valida.
+     *
+     * @return list<string>
+     */
+    private function allowedOrgRoleDescriptions(): array
+    {
+        return array_map(
+            fn(string $role) => BulkUserUploadService::orgRoleLabel($role) . " ({$role})",
+            $this->allowedOrgRoles
+        );
+    }
+
     public function array(): array
     {
         return [
@@ -45,7 +60,7 @@ class InstructionsSheet implements FromArray, WithTitle, WithStyles, WithColumnW
             ['• Apellidos: Apellidos completos (ej: Pérez García)'],
             ['• Correo electrónico: ÚNICO por usuario (ej: juan.perez@empresa.com)'],
             ['• Tipo de documento: Selecciona de la lista desplegable (dni, ce, passport, ruc)'],
-            ['• Número de documento: Número según el tipo (ej: 12345678)'],
+            ['• Número de documento: Número según el tipo (ej: 12345678). Esta columna es TEXTO: si tu documento empieza con 0 (ej: 01234567), escríbelo completo y no perderá el cero.'],
             ['• Estado: Selecciona (active o inactive)'],
             [''],
             ['CAMPOS OPCIONALES:'],
@@ -63,7 +78,7 @@ class InstructionsSheet implements FromArray, WithTitle, WithStyles, WithColumnW
             ['Para cada empresa {N}:'],
             ['1. RUC empresa {N}: (Obligatorio) Selecciona el RUC de la lista desplegable'],
             ['2. Rol en empresa {N}: (Obligatorio) Rol del usuario EN ESA empresa.'],
-            ['   Permitidos: ' . implode(', ', $this->allowedOrgRoles) . '.'],
+            ['   Permitidos: ' . implode(', ', $this->allowedOrgRoleDescriptions()) . '.'],
             ['   Para asignar varios roles en la misma empresa, sepáralos con coma'],
             ['   (ej: admin,aprobador).'],
             ['3. Supervisor empresa {N} (correo): (Opcional) Email del supervisor en esa empresa'],

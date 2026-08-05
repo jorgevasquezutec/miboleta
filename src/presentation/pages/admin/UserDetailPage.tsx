@@ -23,6 +23,7 @@ import {
     PasswordResetModal,
 } from '@/presentation/components/features/users';
 import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
+import { USER_ROLE_DISPLAY_LABELS } from '@/shared/constants';
 import {
     ArrowLeft,
     Pencil,
@@ -159,17 +160,14 @@ export function UserDetailPage() {
         const variants: Record<string, string> = {
             root: 'bg-purple-100 text-purple-800',
             admin: 'bg-blue-100 text-blue-800',
+            admin_tenant: 'bg-indigo-100 text-indigo-800',
             client: 'bg-gray-100 text-gray-800',
-        };
-        const labels: Record<string, string> = {
-            root: 'Root',
-            admin: 'Admin Empleados',
-            client: 'Empleado',
+            aprobador: 'bg-amber-100 text-amber-800',
         };
         return (
             <Badge className={variants[role] || variants.client}>
                 <Shield className="h-3 w-3 mr-1" />
-                {labels[role] || role}
+                {USER_ROLE_DISPLAY_LABELS[role as keyof typeof USER_ROLE_DISPLAY_LABELS] ?? role}
             </Badge>
         );
     };

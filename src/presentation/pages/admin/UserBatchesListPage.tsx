@@ -66,6 +66,34 @@ export function UserBatchesListPage() {
         setCurrentPage(1); // Reset to first page when changing per page
     };
 
+    // Observación 5: el mensaje de "sin resultados" antes era genérico y no
+    // explicaba el filtro activo. Cada chip agrupa más de un status del
+    // backend (ver UserBatchController::index()): 'completed' incluye
+    // 'partial', 'processing' incluye 'pending'. El caso 'failed' además
+    // aclara que "fallido" es un error DURANTE el procesamiento en el
+    // servidor, no errores de validación del archivo -esos se corrigen en el
+    // editor antes de confirmar y, si nunca se confirma, ni siquiera generan
+    // un registro aquí (ver el subtítulo del header)-.
+    const emptyStateContent: Record<string, { title: string; description: string }> = {
+        '': {
+            title: 'No se encontraron cargas masivas',
+            description: 'Todavía no hay ninguna carga masiva de usuarios confirmada.',
+        },
+        processing: {
+            title: 'No hay cargas en proceso',
+            description: 'Aquí aparecerían las cargas recién confirmadas, mientras sus chunks todavía se están procesando en segundo plano.',
+        },
+        completed: {
+            title: 'No hay cargas completadas',
+            description: 'Incluye tanto cargas totalmente exitosas como parciales (con algunas filas fallidas). Ninguna carga terminó así todavía.',
+        },
+        failed: {
+            title: 'No hay cargas fallidas',
+            description: '"Fallido" es un error durante el procesamiento en el servidor, no errores de validación del archivo (esos se corrigen en el editor antes de confirmar la carga).',
+        },
+    };
+    const currentEmptyState = emptyStateContent[statusFilter] ?? emptyStateContent[''];
+
     return (
         <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {/* Header */}
@@ -74,6 +102,12 @@ export function UserBatchesListPage() {
                     <h1 className="text-xl sm:text-2xl font-bold">Historial de Cargas Masivas</h1>
                     <p className="text-gray-600 mt-1 text-sm sm:text-base">
                         Revisa el historial de todas las cargas masivas de usuarios
+                    </p>
+                    <p className="text-gray-500 mt-1 text-xs sm:text-sm">
+                        Solo se listan aquí las cargas que llegaste a confirmar. Un archivo
+                        validado con errores que corregiste en el editor pero nunca confirmaste
+                        no genera registro. "Completados" incluye cargas parciales (con algunas
+                        filas fallidas).
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -121,7 +155,7 @@ export function UserBatchesListPage() {
                             size="sm"
                             className="flex-shrink-0"
                         >
-                            Fallidos
+                            Fallidos Procesados
                         </Button>
                     </div>
                 </CardContent>
@@ -137,11 +171,20 @@ export function UserBatchesListPage() {
             ) : batches.length === 0 ? (
                 <Card>
                     <CardContent className="p-12 text-center">
-                        <p className="text-gray-500">No se encontraron cargas masivas</p>
-                        <Button onClick={handleNewUpload} className="mt-4">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Crear Primera Carga
-                        </Button>
+                        <p className="text-gray-700 font-medium">{currentEmptyState.title}</p>
+                        <p className="text-gray-500 text-sm mt-1 max-w-md mx-auto">
+                            {currentEmptyState.description}
+                        </p>
+                        {statusFilter === '' ? (
+                            <Button onClick={handleNewUpload} className="mt-4">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Crear Primera Carga
+                            </Button>
+                        ) : (
+                            <Button variant="outline" onClick={() => setStatusFilter('')} className="mt-4">
+                                Ver todas las cargas
+                            </Button>
+                        )}
                     </CardContent>
                 </Card>
             ) : (

@@ -10,6 +10,7 @@ import {
 } from '@/presentation/components/ui/popover';
 import { Badge } from '@/presentation/components/ui/badge';
 import { Search, UserCircle, Check, X, Loader2, ChevronDown } from 'lucide-react';
+import { USER_ROLE_DISPLAY_LABELS } from '@/shared/constants';
 
 interface SupervisorSelectorProps {
     value: string | null;
@@ -132,14 +133,9 @@ export function SupervisorSelector({
             admin_tenant: 'bg-purple-100 text-purple-800',
             aprobador: 'bg-amber-100 text-amber-800',
         };
-        const labels: Record<string, string> = {
-            admin: 'Admin Empleados',
-            admin_tenant: 'Admin Clientes',
-            aprobador: 'Aprobador Empleado',
-        };
         return (
             <Badge variant="outline" className={variants[role] || ''}>
-                {labels[role] || role}
+                {USER_ROLE_DISPLAY_LABELS[role as keyof typeof USER_ROLE_DISPLAY_LABELS] ?? role}
             </Badge>
         );
     };

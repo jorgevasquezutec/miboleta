@@ -38,6 +38,12 @@ return [
     // ── GESTIÓN DE EMPRESAS ── [MATRIZ]
     // Crear / editar / desactivar / ver lista de organizaciones.
     'tenants.manage' => ['root'],
+    // [OBS-CLIENTE 2026-08] Obs 3: acceso de SOLO LECTURA al módulo Empresas
+    // para 'admin_tenant' (Admin Clientes) — solo las organizaciones que
+    // administra (el scoping de datos ya vive en TenantService::getTenants
+    // y ::canAccessTenant, no aquí). Sin crear/editar/eliminar: eso sigue
+    // siendo 'tenants.manage' (solo root).
+    'tenants.view' => ['root', 'admin_tenant'],
 
     // ── GESTIÓN DE USUARIOS ── [MATRIZ]
     'users.create_any_role' => ['root'],
@@ -57,6 +63,11 @@ return [
     'users.delete' => ['root'],
     'users.reset_password' => ['root', 'admin_tenant'],
     'users.bulk_upload' => ['root', 'admin_tenant'],
+    // [OBS-CLIENTE 2026-08] Export de empleados (ReportsController::exportUsers).
+    // Mismo conjunto efectivo que el gate anterior (authorizeReports =
+    // dashboard.global_metrics ∪ org_metrics: root, admin, admin_tenant) — cero
+    // cambio de acceso, solo un nombre propio para useCan en el frontend.
+    'users.export' => ['root', 'admin', 'admin_tenant'],
 
     // ── GESTIÓN DE DOCUMENTOS ── [MATRIZ]
     'documents.view_all_multi_tenant' => ['root', 'admin_tenant'],
@@ -80,6 +91,12 @@ return [
     // ── AUDITORÍA Y REPORTES ── [MATRIZ]
     'audit.view' => ['root', 'admin', 'admin_tenant'],
     'audit.export' => ['root', 'admin', 'admin_tenant'],
+    // [OBS-CLIENTE 2026-08] Export de cuentas de aplicación (root + admin_tenant).
+    // Solo root por decisión del cliente (2026-08): admin_tenant no ve estas
+    // cuentas en la tabla de usuarios, así que tampoco las descarga. Si algún
+    // día se le da visibilidad en UI, reabrir aquí y en exportAppAccounts
+    // (el service ya soporta scoping por empresa e includeRoots).
+    'reports.app_accounts_export' => ['root'],
 
     // ── DASHBOARD ── [MATRIZ]
     'dashboard.global_metrics' => ['root', 'admin_tenant'],

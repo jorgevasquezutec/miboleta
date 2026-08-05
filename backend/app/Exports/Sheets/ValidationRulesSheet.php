@@ -100,11 +100,15 @@ class ValidationRulesSheet implements FromArray, WithTitle, WithEvents
         }
 
         // Sección 5: roles operativos asignables por organización (org{n}_rol)
+        // Se listan por display name (Obs 2: "Empleado" en vez de "client"),
+        // que es lo que puebla el dropdown de la columna. El import acepta
+        // ambos (ver BulkUserUploadService::orgRoleSlug), así que un archivo
+        // con el slug crudo (formato anterior) sigue siendo válido.
         $data[] = [''];
         $data[] = [''];
         $data[] = [self::SECTION_ORG_ROLES];
         foreach ($this->allowedOrgRoles as $role) {
-            $data[] = [$role];
+            $data[] = [BulkUserUploadService::orgRoleLabel($role)];
         }
 
         return $data;

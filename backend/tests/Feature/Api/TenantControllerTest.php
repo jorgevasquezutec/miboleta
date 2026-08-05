@@ -42,6 +42,15 @@ class TenantControllerTest extends TestCase
 
         $this->client = User::factory()->client()->create(['status' => 'active']);
         $this->client->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        // [Área 1] igual que con $this->admin arriba: sin esta fila en
+        // user_tenant_roles, Tenant::employeesQuery() (fuente única del
+        // conteo de empleados) no contaría a $this->client como empleado de
+        // este tenant, aunque sea miembro (user_tenants).
+        UserTenantRole::create([
+            'user_id' => $this->client->id,
+            'tenant_id' => $this->tenant->id,
+            'role_id' => Role::where('name', 'client')->first()->id,
+        ]);
     }
 
     public function test_root_can_list_all_tenants(): void
@@ -81,11 +90,17 @@ class TenantControllerTest extends TestCase
             ->assertJsonFragment(['id' => $tenant->id]);
     }
 
-    public function test_admin_can_view_own_tenant(): void
+    public function test_admin_cannot_view_tenant_detail(): void
     {
+        // Obs-3: show() ahora exige 'tenants.view' (root, admin_tenant), no
+        // solo la membresía (canAccessTenant). 'admin' (Admin Empleados) solo
+        // necesita LISTAR tenants para asignarlos a un usuario — cubierto por
+        // 'tenants.assign_users' en index() — nunca vio el detalle/perfil de
+        // una organización a través de la matriz; antes pasaba igual con
+        // cualquier tenant del que fuera miembro, sin mirar el rol.
         $response = $this->actingAs($this->admin)->getJson("/api/tenants/{$this->tenant->id}");
 
-        $response->assertStatus(200);
+        $response->assertStatus(403);
     }
 
     public function test_admin_cannot_view_other_tenant(): void
@@ -281,5 +296,109 @@ class TenantControllerTest extends TestCase
         $response = $this->getJson('/api/tenants');
 
         $response->assertStatus(401);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Obs-3: acceso de SOLO LECTURA de admin_tenant al módulo Empresas
+    |--------------------------------------------------------------------------
+    | 'tenants.view' => ['root', 'admin_tenant']. El scoping de QUÉ empresas ve
+    | (solo las que administra) ya vive en TenantService::getTenants()/
+    | canAccessTenant() y no cambia aquí; lo que se prueba es la autorización.
+    */
+
+    public function test_admin_tenant_can_list_only_administered_tenants(): void
+    {
+        Tenant::factory()->count(2)->create();
+
+        $adminTenant = User::factory()
+            ->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->getJson('/api/tenants');
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('meta.total'));
+        $this->assertEquals($this->tenant->id, $response->json('data.0.id'));
+    }
+
+    public function test_client_cannot_list_tenants(): void
+    {
+        $response = $this->actingAs($this->client)->getJson('/api/tenants');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_aprobador_cannot_list_tenants(): void
+    {
+        $aprobador = User::factory()
+            ->withTenantRole($this->tenant, 'aprobador', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($aprobador)->getJson('/api/tenants');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_can_view_own_tenant(): void
+    {
+        $adminTenant = User::factory()
+            ->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->getJson("/api/tenants/{$this->tenant->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['id' => $this->tenant->id]);
+    }
+
+    public function test_admin_tenant_cannot_view_other_tenant(): void
+    {
+        $otherTenant = Tenant::factory()->create();
+        $adminTenant = User::factory()
+            ->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->getJson("/api/tenants/{$otherTenant->id}");
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_cannot_create_tenant(): void
+    {
+        $adminTenant = User::factory()
+            ->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->postJson('/api/tenants', [
+            'name' => 'Nueva Empresa',
+            'ruc' => '12345678901',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_cannot_update_own_tenant(): void
+    {
+        $adminTenant = User::factory()
+            ->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->putJson("/api/tenants/{$this->tenant->id}", [
+            'name' => 'Empresa Actualizada',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_tenant_cannot_delete_own_tenant(): void
+    {
+        $adminTenant = User::factory()
+            ->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->deleteJson("/api/tenants/{$this->tenant->id}");
+
+        $response->assertStatus(403);
     }
 }

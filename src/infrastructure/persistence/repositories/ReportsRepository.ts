@@ -163,7 +163,47 @@ export class ReportsRepository implements IReportsRepository {
                 responseType: 'blob',
             });
             return response.data;
-        } catch (error) {
+        } catch (error: any) {
+            // If response is a blob, try to parse it as JSON to get error message
+            if (error?.response?.data instanceof Blob) {
+                try {
+                    const text = await error.response.data.text();
+                    const json = JSON.parse(text);
+                    throw new Error(json.message || json.error || 'Error al exportar');
+                } catch (parseError) {
+                    if (parseError instanceof Error && parseError.message !== 'Error al exportar') {
+                        throw parseError;
+                    }
+                }
+            }
+            throw new Error(getErrorMessage(error));
+        }
+    }
+
+    /**
+     * Export app accounts (cuentas de aplicación) to Excel. Sin filtros:
+     * ReportsController::exportAppAccounts scopea a la empresa activa del
+     * backend (root/admin_tenant vía header), no recibe params.
+     */
+    async exportAppAccounts(): Promise<Blob> {
+        try {
+            const response = await apiClient.get('/reports/app-accounts/export', {
+                responseType: 'blob',
+            });
+            return response.data;
+        } catch (error: any) {
+            // If response is a blob, try to parse it as JSON to get error message
+            if (error?.response?.data instanceof Blob) {
+                try {
+                    const text = await error.response.data.text();
+                    const json = JSON.parse(text);
+                    throw new Error(json.message || json.error || 'Error al exportar');
+                } catch (parseError) {
+                    if (parseError instanceof Error && parseError.message !== 'Error al exportar') {
+                        throw parseError;
+                    }
+                }
+            }
             throw new Error(getErrorMessage(error));
         }
     }

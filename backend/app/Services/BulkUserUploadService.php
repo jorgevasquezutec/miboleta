@@ -6,10 +6,12 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserBatch;
+use App\Support\DocumentNumber;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Auth;
 
@@ -30,8 +32,15 @@ class BulkUserUploadService
      * UploadUserBatchDataRequest y ProcessUserChunk llaman a
      * allowedOrgRolesFor() en vez de mantener su propia copia de la lista.
      * Pública a propósito para que esas clases (otro namespace) puedan leerla.
+     *
+     * ALLOWED_ORG_ROLES = "roles asignables en carga masiva por actores
+     * no-root" (allowedOrgRolesFor añade 'admin_tenant' para root); hoy
+     * coincide con User::ORG_EMPLOYEE_ROLES ("roles que cuentan como
+     * empleado") y esta referencia mantiene la sincronía. Si algún día
+     * divergen semánticamente (p.ej. se permite asignar por carga masiva un
+     * rol que no cuenta como empleado, o viceversa), se separan aquí.
      */
-    public const ALLOWED_ORG_ROLES = ['admin', 'client', 'aprobador'];
+    public const ALLOWED_ORG_ROLES = User::ORG_EMPLOYEE_ROLES;
 
     /**
      * Rol operativo por organización que solo un actor root puede asignar
@@ -58,6 +67,71 @@ class BulkUserUploadService
         }
 
         return self::ALLOWED_ORG_ROLES;
+    }
+
+    /**
+     * Display names de los roles operativos por organización, para mostrar
+     * en plantilla/reportes en vez del slug crudo (Obs 2: el cliente veía
+     * "client" en vez de "Empleado"). Debe coincidir con roles.display_name
+     * en BD y con USER_ROLE_DISPLAY_LABELS del frontend
+     * (src/shared/constants/index.ts) — se duplica aquí porque este export
+     * corre en PHP sin acceso a ese archivo TS, y para no depender de una
+     * consulta a BD por cada fila del Excel/reporte.
+     */
+    private const ORG_ROLE_LABELS = [
+        'client' => 'Empleado',
+        'admin' => 'Admin Empleados',
+        'aprobador' => 'Aprobador Empleado',
+        'admin_tenant' => 'Admin Clientes',
+    ];
+
+    /**
+     * Display name de un rol operativo por su slug ('client' -> 'Empleado').
+     * Si el slug no está en el mapa (ej. 'root', o un valor ya inválido), se
+     * devuelve tal cual: mejor mostrar el slug crudo que romper el export.
+     */
+    public static function orgRoleLabel(string $slug): string
+    {
+        return self::ORG_ROLE_LABELS[strtolower(trim($slug))] ?? $slug;
+    }
+
+    /**
+     * Resolver un valor de rol (slug O display name, en cualquier variación
+     * de mayúsculas/espacios/tildes) a su slug canónico. Acepta 'client',
+     * 'Empleado', 'EMPLEADO ' o 'Admin Empleados'. Devuelve null si no
+     * matchea ningún rol conocido (ni como slug ni como display name);
+     * quien llame decide si eso es un error de fila.
+     */
+    public static function orgRoleSlug(string $value): ?string
+    {
+        $normalized = self::normalizeRoleText($value);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        foreach (array_keys(self::ORG_ROLE_LABELS) as $slug) {
+            if (self::normalizeRoleText($slug) === $normalized) {
+                return $slug;
+            }
+        }
+
+        foreach (self::ORG_ROLE_LABELS as $slug => $label) {
+            if (self::normalizeRoleText($label) === $normalized) {
+                return $slug;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Normalizar texto de rol para comparar sin depender de mayúsculas,
+     * espacios sobrantes o tildes ('Empleado ' / 'EMPLEADO' / 'client').
+     */
+    private static function normalizeRoleText(string $value): string
+    {
+        return mb_strtolower(Str::ascii(trim($value)));
     }
 
     // ────────────────────────────────────────────────────────────
@@ -127,6 +201,14 @@ class BulkUserUploadService
     public function transformOrganizationsForProcessing(array $users): array
     {
         return array_map(function ($user) {
+            // Garantía dura de la ruta de persistencia (Obs 4): repone los
+            // ceros a la izquierda del documento antes de encolar el batch,
+            // sin importar si la fila viene del grid editado o del archivo.
+            $user['numero_documento'] = DocumentNumber::normalize(
+                $user['tipo_documento'] ?? null,
+                $user['numero_documento'] ?? null
+            );
+
             // Si no hay organizaciones, retornar usuario sin cambios
             if (empty($user['organizaciones'])) {
                 $user['organizaciones'] = [];
@@ -464,10 +546,17 @@ class BulkUserUploadService
             ];
         }
 
-        // Validar numero_documento según tipo
+        // Validar numero_documento según tipo. Se normaliza (repone ceros a
+        // la izquierda perdidos por Excel, ver DocumentNumber) antes de medir
+        // la longitud: sin esto, un DNI tipeado como "1234567" (7 dígitos,
+        // el 0 inicial se perdió en el grid) se rechazaba aquí en vez de
+        // corregirse.
         $tipoDoc = $user['tipo_documento'] ?? '';
-        $numDoc = trim($user['numero_documento'] ?? '');
-        
+        $numDoc = DocumentNumber::normalize(
+            $tipoDoc !== '' ? $tipoDoc : null,
+            $user['numero_documento'] ?? null
+        ) ?? '';
+
         if (!empty($numDoc) && !empty($tipoDoc)) {
             switch ($tipoDoc) {
                 case 'dni':
@@ -727,7 +816,9 @@ class BulkUserUploadService
 
         foreach ($users as $index => $user) {
             $tipoDoc = trim($user['tipo_documento'] ?? '');
-            $numDoc = trim($user['numero_documento'] ?? '');
+            // Normalizado (con padding) para que "1234567" y "01234567" del
+            // mismo tipo de documento se detecten como el mismo documento.
+            $numDoc = DocumentNumber::normalize($tipoDoc !== '' ? $tipoDoc : null, $user['numero_documento'] ?? null) ?? '';
             $rowNumber = $user['row_number'] ?? $index + 2;
 
             if (empty($numDoc)) {
@@ -885,32 +976,56 @@ class BulkUserUploadService
     private function checkDuplicateDocuments(array $users): array
     {
         $duplicates = [];
-        
-        // Extraer todos los números de documento
-        $documents = array_filter(array_map(function($user) {
-            return $user['numero_documento'] ?? null;
-        }, $users));
+
+        // Documento normalizado (con padding) por usuario, en el mismo
+        // índice que $users, para no desalinear las filas al comparar.
+        $normalizedDocs = array_map(function ($user) {
+            return DocumentNumber::normalize($user['tipo_documento'] ?? null, $user['numero_documento'] ?? null);
+        }, $users);
+
+        $documents = array_filter($normalizedDocs);
 
         if (empty($documents)) {
             return [];
         }
 
-        // Buscar documentos existentes en BD
-        $existingUsers = \App\Models\User::whereIn('document_text', $documents)
+        // Buscar también la variante SIN padding: hay documentos ya
+        // guardados en BD de antes de este fix, sin ceros a la izquierda.
+        // Sin esto, un DNI que hoy normalizamos a "01234567" no matchearía
+        // contra un registro existente guardado como "1234567".
+        $lookupValues = [];
+        foreach ($documents as $doc) {
+            $lookupValues[] = $doc;
+            $stripped = ltrim($doc, '0');
+            if ($stripped !== '' && $stripped !== $doc) {
+                $lookupValues[] = $stripped;
+            }
+        }
+        $lookupValues = array_values(array_unique($lookupValues));
+
+        $existingUsers = \App\Models\User::whereIn('document_text', $lookupValues)
             ->select('id', 'name', 'last_name', 'email', 'document_text')
-            ->get()
-            ->keyBy('document_text');
+            ->get();
+
+        // Indexar por ambas variantes (con y sin padding) para que el match
+        // funcione sin importar cómo esté guardado el documento en BD.
+        $existingByDoc = [];
+        foreach ($existingUsers as $existingUser) {
+            $existingByDoc[$existingUser->document_text] = $existingUser;
+            $existingByDoc[ltrim($existingUser->document_text, '0')] = $existingUser;
+        }
 
         // Verificar cada usuario del Excel
         foreach ($users as $index => $user) {
-            $document = $user['numero_documento'] ?? null;
-            
+            $document = $normalizedDocs[$index] ?? null;
+
             if (!$document) {
                 continue;
             }
 
-            if ($existingUsers->has($document)) {
-                $existingUser = $existingUsers->get($document);
+            $existingUser = $existingByDoc[$document] ?? $existingByDoc[ltrim($document, '0')] ?? null;
+
+            if ($existingUser) {
                 $duplicates[] = [
                     'row' => $index + 2, // +2 porque Excel empieza en 1 y tiene header
                     'document' => $document,

@@ -25,6 +25,7 @@ export interface IReportsRepository {
   exportDocuments(filters?: ReportFilters): Promise<Blob>;
   exportVacations(filters?: ReportFilters): Promise<Blob>;
   exportUsers(filters?: ReportFilters): Promise<Blob>;
+  exportAppAccounts(): Promise<Blob>;
   exportAudit(filters?: ReportFilters): Promise<Blob>;
   exportBatches(filters?: ReportFilters): Promise<Blob>;
   exportTenants(filters?: ReportFilters): Promise<Blob>;

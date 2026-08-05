@@ -206,4 +206,109 @@ class ReportsControllerTest extends TestCase
 
         $response->assertStatus(200);
     }
+
+    // ==========================================
+    // [OBS-CLIENTE 2026-08] Export de empleados (ability 'users.export')
+    // ==========================================
+
+    public static function usersExportAllowedRolesProvider(): array
+    {
+        return [
+            'admin' => ['admin'],
+            'admin_tenant' => ['admin_tenant'],
+        ];
+    }
+
+    #[DataProvider('usersExportAllowedRolesProvider')]
+    public function test_export_users_returns_200_for_admin_and_admin_tenant(string $roleName): void
+    {
+        $user = User::factory()->withTenantRole($this->tenantA, $roleName, true)->create(['status' => 'active']);
+        // Un empleado distinto del actor, para que el export no quede vacío
+        // (exportToExcel responde 404 si no hay filas).
+        User::factory()->withTenantRole($this->tenantA, 'client', true)->create(['status' => 'active']);
+
+        $response = $this->actingAs($user)->getJson('/api/reports/users/export');
+
+        $response->assertStatus(200);
+    }
+
+    public function test_export_users_returns_200_for_root(): void
+    {
+        $root = User::factory()->root()->create(['status' => 'active']);
+        User::factory()->withTenantRole($this->tenantA, 'client', true)->create(['status' => 'active']);
+
+        $response = $this->actingAs($root)->getJson('/api/reports/users/export');
+
+        $response->assertStatus(200);
+    }
+
+    public static function usersExportForbiddenRolesProvider(): array
+    {
+        return [
+            'aprobador' => ['aprobador'],
+            'client' => ['client'],
+        ];
+    }
+
+    #[DataProvider('usersExportForbiddenRolesProvider')]
+    public function test_export_users_returns_403_for_aprobador_and_client(string $roleName): void
+    {
+        $user = User::factory()->withTenantRole($this->tenantA, $roleName, true)->create(['status' => 'active']);
+
+        $response = $this->actingAs($user)->getJson('/api/reports/users/export');
+
+        $response->assertStatus(403);
+    }
+
+    // ==========================================
+    // [OBS-CLIENTE 2026-08] Export de cuentas de aplicación
+    // (ability 'reports.app_accounts_export')
+    // ==========================================
+
+    public function test_export_app_accounts_returns_200_for_root_seeing_everything(): void
+    {
+        $root = User::factory()->root()->create(['status' => 'active']);
+        User::factory()->withTenantRole($this->tenantA, 'admin_tenant', true)->create(['status' => 'active']);
+
+        $response = $this->actingAs($root)->getJson('/api/reports/app-accounts/export');
+
+        $response->assertStatus(200);
+    }
+
+    public function test_export_app_accounts_returns_403_for_admin_tenant(): void
+    {
+        // Decisión del cliente (2026-08): el reporte es solo-root por ahora;
+        // admin_tenant no ve estas cuentas en la tabla, así que tampoco exporta.
+        $adminTenant = User::factory()->withTenantRole($this->tenantA, 'admin_tenant', true)->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->getJson('/api/reports/app-accounts/export');
+
+        $response->assertStatus(403);
+    }
+
+    public static function appAccountsForbiddenRolesProvider(): array
+    {
+        return [
+            'admin' => ['admin'],
+            'aprobador' => ['aprobador'],
+            'client' => ['client'],
+        ];
+    }
+
+    #[DataProvider('appAccountsForbiddenRolesProvider')]
+    public function test_export_app_accounts_returns_403_for_admin_aprobador_and_client(string $roleName): void
+    {
+        $user = User::factory()->withTenantRole($this->tenantA, $roleName, true)->create(['status' => 'active']);
+
+        $response = $this->actingAs($user)->getJson('/api/reports/app-accounts/export');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_export_app_accounts_requires_authentication(): void
+    {
+        $response = $this->getJson('/api/reports/app-accounts/export');
+
+        $response->assertStatus(401);
+    }
 }

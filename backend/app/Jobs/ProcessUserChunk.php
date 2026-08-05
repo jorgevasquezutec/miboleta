@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\UserBatch;
 use App\Services\BulkUserUploadService;
 use App\Services\UserService;
+use App\Support\DocumentNumber;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,6 +23,17 @@ class ProcessUserChunk implements ShouldQueue
 
     public $timeout = 300; // 5 minutos por chunk
     public $tries = 1; // Sin reintentos - falla inmediatamente si hay error
+
+    /**
+     * Observación 5 (historial de cargas masivas): tamaño de chunk usado por
+     * UserBatchController::store()/uploadData() ($chunkSize = 50 en ambos,
+     * ver :352 y :457) para trocear $validation['data']/$users antes de
+     * despachar los jobs. Se necesita aquí -y no como parámetro del
+     * constructor, para no tocar su firma ni los tests que ya lo instancian
+     * con 3 argumentos- para reconstruir la fila GLOBAL (Excel) de cada error
+     * a partir de $this->chunkNumber y la posición local dentro del chunk.
+     */
+    private const ROWS_PER_CHUNK = 50;
 
     /**
      * Create a new job instance.
@@ -93,7 +105,7 @@ class ProcessUserChunk implements ShouldQueue
         // completed por los contadores reales), no un error de
         // infraestructura. El job solo debe lanzar ante fallos genuinos de
         // infraestructura (excepciones no capturadas por el try por-fila).
-        foreach ($this->users as $userData) {
+        foreach ($this->users as $localIndex => $userData) {
             try {
                 // 🔐 FIX B2-r1: rechazar la fila si alguna de sus
                 // organizaciones referencia un tenant que el creador del
@@ -145,7 +157,10 @@ class ProcessUserChunk implements ShouldQueue
                     'last_name' => $userData['apellido'],
                     'email' => $userData['email'],
                     'document_type' => $userData['tipo_documento'],
-                    'document_text' => $userData['numero_documento'],
+                    // Garantía dura (Obs 4): repone el padding del documento
+                    // aquí también, en el worker en cola, sin importar cómo
+                    // llegó normalizado (o no) aguas arriba.
+                    'document_text' => DocumentNumber::normalize($userData['tipo_documento'] ?? null, $userData['numero_documento'] ?? null),
                     'phone' => $userData['telefono'] ?? null,
                     // P1: fecha de nacimiento (campo de users). UserService::createUser
                     // ya lee 'birth_date' desde $data.
@@ -189,6 +204,16 @@ class ProcessUserChunk implements ShouldQueue
                     // de BulkUploadErrors.tsx deje de mostrar "-".
                     'rol' => $this->extractRoleNames($userData['organizaciones'] ?? []),
                     'error' => $e->getMessage(),
+                    // Observación 5: fila del Excel (1-based, +2 por
+                    // encabezado, mismo criterio que UsersImport::parseRow y
+                    // BulkUserUploadService::validateData) para trazar el
+                    // error hasta la fila original. Se calcula por posición
+                    // (chunk + índice local), no desde $userData['row_number']:
+                    // ese campo lo pierde UploadUserBatchDataRequest::
+                    // validated() en el camino de datos editados (no declara
+                    // regla para 'users.*.row_number'), así que confiar en él
+                    // dejaría este dato ausente justo en ese camino.
+                    'row_number' => $this->globalRowNumber((int) $localIndex),
                 ];
             }
         }
@@ -279,6 +304,19 @@ class ProcessUserChunk implements ShouldQueue
             ->pluck('id')
             ->map(fn($id) => (int) $id)
             ->all();
+    }
+
+    /**
+     * Observación 5: fila GLOBAL (Excel, 1-based, +2 por encabezado) de una
+     * fila procesada por este chunk, a partir de su posición LOCAL dentro del
+     * array $this->users. $this->chunkNumber es 1-based (ver
+     * UserBatchController::store()/uploadData(), que despachan
+     * `new ProcessUserChunk($batch->uuid, $chunk, $index + 1)`), así que el
+     * offset del chunk es `(chunkNumber - 1) * ROWS_PER_CHUNK`.
+     */
+    private function globalRowNumber(int $localIndex): int
+    {
+        return ($this->chunkNumber - 1) * self::ROWS_PER_CHUNK + $localIndex + 2;
     }
 
     /**
@@ -401,9 +439,18 @@ class ProcessUserChunk implements ShouldQueue
      */
     private function findExistingUser(array $userData): ?User
     {
-        $documentText = $userData['numero_documento'] ?? null;
+        // Normalizado (con padding, Obs 4) para que "1234567" y "01234567"
+        // matcheen al mismo documento. También se busca la variante SIN
+        // padding: hay documentos ya guardados en BD de antes de este fix.
+        $documentText = DocumentNumber::normalize($userData['tipo_documento'] ?? null, $userData['numero_documento'] ?? null);
         if (!empty($documentText)) {
-            $user = User::where('document_text', $documentText)->first();
+            $candidates = [$documentText];
+            $stripped = ltrim($documentText, '0');
+            if ($stripped !== '' && $stripped !== $documentText) {
+                $candidates[] = $stripped;
+            }
+
+            $user = User::whereIn('document_text', $candidates)->first();
             if ($user) {
                 return $user;
             }
