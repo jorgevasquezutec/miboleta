@@ -194,15 +194,81 @@ class UserControllerTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_index_vacation_balance_is_null_when_root_has_no_active_tenant(): void
+    public function test_index_global_mode_returns_primary_tenant_balance(): void
     {
-        // Root sin header ni ?tenant_id: modo "todas las empresas". El saldo
-        // por usuario es ambiguo (podría pertenecer a varias empresas), así
-        // que no se calcula (null), nunca una suma inventada entre empresas.
+        // Root sin header ni ?tenant_id: modo "todas las empresas". Se
+        // devuelve el saldo de la empresa PRIMARIA del usuario, etiquetado
+        // (tenant_id/tenant_name/is_primary) para que la UI muestre de qué
+        // empresa es la cifra — nunca una suma inventada entre empresas.
+        $now = Carbon::parse('2026-07-31')->startOfDay();
+        Carbon::setTestNow($now);
+
+        $this->client->tenants()->updateExistingPivot($this->tenant->id, [
+            'hire_date' => $now->copy()->subYears(2)->format('Y-m-d'),
+            'vacation_balance_initial' => 10,
+        ]);
+
         $response = $this->actingAs($this->root)->getJson('/api/users');
 
         $response->assertStatus(200);
         $row = collect($response->json('data'))->firstWhere('id', $this->client->id);
+
+        $this->assertNotNull($row);
+        $this->assertNotNull($row['vacation_balance']);
+        $this->assertSame($this->tenant->id, $row['vacation_balance']['tenant_id']);
+        $this->assertSame($this->tenant->name, $row['vacation_balance']['tenant_name']);
+        $this->assertTrue($row['vacation_balance']['is_primary']);
+        $this->assertEquals(70.0, $row['vacation_balance']['pending']); // 10 + 2*30
+
+        Carbon::setTestNow();
+    }
+
+    public function test_index_global_mode_groups_balances_by_each_users_primary_tenant(): void
+    {
+        // Dos usuarios con primarias DISTINTAS en la misma página: cada uno
+        // debe recibir el saldo de SU empresa. Protege contra los "ceros
+        // silenciosos" de getBalancesForUsers (un usuario consultado contra
+        // un tenant ajeno devuelve todo 0 sin error): si el agrupamiento
+        // fallara, uno de los dos vería 0 en vez de su cifra real.
+        $now = Carbon::parse('2026-07-31')->startOfDay();
+        Carbon::setTestNow($now);
+
+        $otherTenant = Tenant::factory()->create(['name' => 'Otra Empresa', 'status' => 'active']);
+        $otherClient = User::factory()->withTenantRole($otherTenant, 'client', true)->create(['status' => 'active']);
+
+        $this->client->tenants()->updateExistingPivot($this->tenant->id, [
+            'hire_date' => $now->copy()->subYears(2)->format('Y-m-d'),
+            'vacation_balance_initial' => 0,
+        ]);
+        $otherClient->tenants()->updateExistingPivot($otherTenant->id, [
+            'hire_date' => $now->copy()->subYears(1)->format('Y-m-d'),
+            'vacation_balance_initial' => 5,
+        ]);
+
+        $response = $this->actingAs($this->root)->getJson('/api/users?per_page=50');
+
+        $response->assertStatus(200);
+        $rows = collect($response->json('data'));
+
+        $rowClient = $rows->firstWhere('id', $this->client->id);
+        $this->assertSame($this->tenant->id, $rowClient['vacation_balance']['tenant_id']);
+        $this->assertEquals(60.0, $rowClient['vacation_balance']['pending']); // 0 + 2*30
+
+        $rowOther = $rows->firstWhere('id', $otherClient->id);
+        $this->assertSame($otherTenant->id, $rowOther['vacation_balance']['tenant_id']);
+        $this->assertSame('Otra Empresa', $rowOther['vacation_balance']['tenant_name']);
+        $this->assertEquals(35.0, $rowOther['vacation_balance']['pending']); // 5 + 1*30
+
+        Carbon::setTestNow();
+    }
+
+    public function test_index_global_mode_balance_is_null_for_user_without_tenants(): void
+    {
+        // Una cuenta root no pertenece a ninguna empresa: sin saldo.
+        $response = $this->actingAs($this->root)->getJson('/api/users?per_page=50');
+
+        $response->assertStatus(200);
+        $row = collect($response->json('data'))->firstWhere('id', $this->root->id);
 
         $this->assertNotNull($row);
         $this->assertNull($row['vacation_balance']);

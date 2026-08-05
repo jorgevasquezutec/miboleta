@@ -38,10 +38,14 @@ export interface User {
    * X-Tenant-Ids, o `?tenant_id` explícito para root). Backend:
    * UserController::index().
    *
-   * `null` cuando no hay una empresa activa inequívoca (root en modo "todas
-   * las empresas"): el saldo de un usuario depende de su hire_date /
-   * vacation_balance_initial POR empresa, así que no existe una única cifra
-   * correcta en ese modo — no se inventa una suma entre empresas.
+   * En modo "todas las empresas" (root sin empresa activa) el backend envía
+   * el saldo de la empresa PRIMARIA visible del usuario, con
+   * `is_primary: true` y `tenant_name` para que la UI etiquete de qué
+   * empresa es la cifra (el saldo es POR empresa: hire_date /
+   * vacation_balance_initial propios de cada una).
+   *
+   * `null` solo cuando el usuario no tiene ninguna empresa visible
+   * (p. ej. cuentas root).
    */
   vacation_balance?: VacationBalanceSummary | null;
 
@@ -112,6 +116,10 @@ export interface TenantAssociation {
  */
 export interface VacationBalanceSummary {
   tenant_id: string | number;
+  /** Nombre de la empresa a la que corresponde el saldo (para etiquetar en UI). */
+  tenant_name?: string | null;
+  /** true cuando el saldo es de la empresa primaria (modo "todas las empresas"). */
+  is_primary?: boolean;
   pending: number;
   taken: number;
   truncated: number;

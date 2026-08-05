@@ -165,28 +165,54 @@ class UserController extends Controller
         $perPage = $request->filled('per_page') ? (int) $request->per_page : 10;
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
-        // B3: saldo de vacaciones de la página actual, en 2 queries totales
-        // (ver VacationBalanceService::getBalancesForUsers) — sin importar
-        // per_page. Solo cuando hay una empresa activa inequívoca; en modo
-        // "todas las empresas" (root) no se calcula: cada usuario listado
-        // podría pertenecer a empresas distintas con hire_date/saldo propios,
-        // y sumarlos no tendría significado legal (ver SPEC-VACACIONES v2).
-        $vacationBalances = $activeTenantId
-            ? $this->vacationBalanceService->getBalancesForUsers($users->getCollection(), $activeTenantId)
-            : [];
+        // 🔒 SECURITY: los tenants visibles de cada fila se limitan a los del
+        // actor (no-root). Se calcula aquí —y no dentro del map— porque el
+        // saldo de vacaciones en modo global también debe elegir la empresa
+        // primaria SOLO entre las visibles: si no, el saldo delataría una
+        // empresa que este admin no puede ver.
+        $actorTenantIds = $user->isRoot() ? null : $user->tenants->pluck('id')->all();
+        $visibleTenantsFor = function ($u) use ($actorTenantIds) {
+            return $actorTenantIds === null
+                ? $u->tenants
+                : $u->tenants->filter(fn ($t) => in_array($t->id, $actorTenantIds));
+        };
+
+        // B3: saldo de vacaciones de la página actual, en lote (ver
+        // VacationBalanceService::getBalancesForUsers) — sin importar
+        // per_page. Con empresa activa: el saldo de ESA empresa. En modo
+        // "todas las empresas" (root sin empresa activa): el saldo de la
+        // empresa PRIMARIA visible de cada usuario (fallback: su primera
+        // empresa visible — is_primary puede no estar seteado), agrupando y
+        // llamando al servicio una vez por empresa distinta de la página
+        // (mismo patrón que VacationRequestController::attachVacationBalances).
+        // El agrupamiento por-usuario es obligatorio: getBalancesForUsers
+        // emite ceros silenciosos para usuarios que no pertenecen al tenant
+        // pedido, así que mezclar grupos mostraría 0 en vez de la cifra real.
+        if ($activeTenantId) {
+            $vacationBalances = $this->vacationBalanceService->getBalancesForUsers($users->getCollection(), $activeTenantId);
+            $balanceFromPrimary = false;
+        } else {
+            $vacationBalances = [];
+            $users->getCollection()
+                ->groupBy(function ($u) use ($visibleTenantsFor) {
+                    $tenants = $visibleTenantsFor($u);
+                    $ref = $tenants->firstWhere('pivot.is_primary', true) ?? $tenants->first();
+
+                    return $ref?->id ?? 0; // 0 = sin empresa visible → sin saldo
+                })
+                ->each(function ($group, $tenantId) use (&$vacationBalances) {
+                    if (!$tenantId) {
+                        return;
+                    }
+                    $vacationBalances += $this->vacationBalanceService
+                        ->getBalancesForUsers($group->values(), (int) $tenantId);
+                });
+            $balanceFromPrimary = true;
+        }
 
         return response()->json([
-            'data' => $users->map(function ($u) use ($user, $vacationBalances) {
-                // 🔒 SECURITY: Filter tenants to only show those the current admin has access to
-                $visibleTenants = $u->tenants;
-
-                if (!$user->isRoot()) {
-                    // Non-root users can only see tenants they have access to
-                    $allowedTenantIds = $user->tenants->pluck('id')->toArray();
-                    $visibleTenants = $u->tenants->filter(function ($t) use ($allowedTenantIds) {
-                        return in_array($t->id, $allowedTenantIds);
-                    });
-                }
+            'data' => $users->map(function ($u) use ($user, $vacationBalances, $visibleTenantsFor, $balanceFromPrimary) {
+                $visibleTenants = $visibleTenantsFor($u);
 
                 // Roles por empresa (user_tenant_roles), agrupados una sola vez
                 // por usuario para evitar N+1 al mapear cada tenant de más abajo.
@@ -242,10 +268,15 @@ class UserController extends Controller
                         ];
                     })->values(),  // ✅ Reset array keys after filter
                     // B3: los 4 conceptos del cliente (Pendientes/Gozadas/
-                    // Truncas/Saldo) para la empresa activa de este listado.
-                    // null cuando no hay una única empresa activa (ver arriba).
+                    // Truncas/Saldo). Con empresa activa, de esa empresa; en
+                    // modo global, de la primaria visible del usuario
+                    // (is_primary=true + tenant_name para que la UI etiquete
+                    // de qué empresa es la cifra). null solo si el usuario no
+                    // tiene ninguna empresa visible (p. ej. cuentas root).
                     'vacation_balance' => isset($vacationBalances[$u->id]) ? [
                         'tenant_id' => $vacationBalances[$u->id]['tenant_id'],
+                        'tenant_name' => $u->tenants->firstWhere('id', $vacationBalances[$u->id]['tenant_id'])?->name,
+                        'is_primary' => $balanceFromPrimary,
                         'pending' => $vacationBalances[$u->id]['pending'],
                         'taken' => $vacationBalances[$u->id]['taken'],
                         'truncated' => $vacationBalances[$u->id]['truncated'],
