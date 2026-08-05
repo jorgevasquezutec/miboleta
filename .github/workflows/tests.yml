@@ -36,6 +36,14 @@ jobs:
       - name: Check access matrix guards
         run: php scripts/check-access-matrix.php
 
+      # La tabla "Qué puede hacer cada rol" del manual se genera desde el mismo
+      # config. El generador ya traía --check para esto, pero nadie lo enganchó:
+      # las observaciones del cliente del 04-08 añadieron tres abilities y el
+      # manual siguió publicandose sin ellas, sin que nada avisara. Un manual
+      # que se entrega firmado no puede quedar por detrás del código en silencio.
+      - name: Check manual access matrix is up to date
+        run: php scripts/generate-access-matrix-doc.php --check
+
   # El bloque HTTPS de nginx.conf va comentado y lo activa el cliente a mano.
   # Cualquier linea que no sea configuracion y quede entre las marcas se
   # descomenta con el resto y tumba nginx al arrancar. Ha pasado dos veces, y

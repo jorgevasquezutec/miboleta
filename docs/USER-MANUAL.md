@@ -31,7 +31,7 @@ distintos en cada una.
 | Rol | Nombre en pantalla | Para qué sirve |
 | --- | --- | --- |
 | `root` | Super Administrador | Administra la plataforma: crea empresas, gestiona el certificado de firma y la configuración global. No participa en la operación diaria de ninguna empresa. |
-| `admin_tenant` | Admin Clientes | Administra su empresa por completo, incluidos los usuarios Admin y Aprobador, y la carga masiva de personal. |
+| `admin_tenant` | Admin Clientes | Administra su empresa: usuarios Aprobador y Empleado, y la carga masiva de personal. Puede **asignar** el rol Admin a alguien, pero no editar ni restablecer la contraseña de una cuenta Admin ya existente: eso queda reservado al Super Administrador. |
 | `admin` | Admin Empleados | Gestiona el día a día de su empresa: documentos, usuarios, vacaciones y reportes. |
 | `aprobador` | Aprobador | Aprueba o rechaza las vacaciones de las personas que tiene a cargo, y confirma si se tomaron. |
 | `client` | Empleado | Consulta y firma sus documentos, y solicita sus vacaciones. |
@@ -50,6 +50,7 @@ distintos en cada una.
 | Acción | Super Administrador | Admin Clientes | Admin Empleados | Aprobador | Empleado |
 | --- | :---: | :---: | :---: | :---: | :---: |
 | Crear, editar y desactivar empresas | Sí | — | — | — | — |
+| Consultar las empresas que administra (solo lectura) | Sí | Sí | — | — | — |
 | Asignar usuarios a una empresa | Sí | — | Sí | — | — |
 | Configurar una empresa (incluido su SMTP) | Sí | — | Sí | — | — |
 
@@ -65,6 +66,8 @@ distintos en cada una.
 | Eliminar usuarios | Sí | — | — | — | — |
 | Restablecer contraseñas | Sí | Sí | — | — | — |
 | Carga masiva de usuarios | Sí | Sí | — | — | — |
+| Exportar el listado de empleados | Sí | Sí | Sí | — | — |
+| Exportar el listado de cuentas de aplicación | Sí | — | — | — | — |
 
 ### Documentos
 
@@ -453,8 +456,8 @@ cada una.
 3. Al confirmar, la carga se procesa **en segundo plano**. La pantalla no se
    queda bloqueada: se puede cerrar y volver más tarde.
 4. El lote queda registrado con su estado (pendiente, procesando, completado,
-   completado con errores o fallido) y el detalle de qué filas entraron y cuáles
-   no, con el motivo.
+   completado con errores, parcial o fallido) y el detalle de qué filas entraron
+   y cuáles no, con el motivo.
 5. Si alguna fila falló, se descarga un archivo con **solo esas filas** y su
    error, para corregirlo y reintentar sin tocar las que sí entraron.
 

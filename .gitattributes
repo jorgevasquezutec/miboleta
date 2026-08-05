@@ -70,5 +70,16 @@ scripts/.env.deploy.example             export-ignore
 scripts/armar-entrega.sh                export-ignore
 scripts/empaquetar-proyecto.sh          export-ignore
 
+# ── Los materiales de la propia entrega ────────────────────────────────────
+# entrega/ son las PLANTILLAS con las que armamos el disco y el instalable:
+# scripts de arranque, compose, nginx y el acta. Los scripts las copian desde
+# el árbol de trabajo, no desde el archive, así que excluirlas no rompe nada.
+#
+# Sin esto, la carpeta viajaba DUPLICADA dentro del propio paquete: una vez
+# desplegada donde el cliente la usa (produccion/ en la raíz) y otra vez entera
+# dentro de codigo/, con el acta-plantilla llena de placeholders sin rellenar
+# conviviendo con el acta ya firmada de la raíz del disco.
+entrega/                                export-ignore
+
 # ── Este mismo archivo ─────────────────────────────────────────────────────
 .gitattributes                          export-ignore
