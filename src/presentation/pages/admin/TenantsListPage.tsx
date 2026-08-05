@@ -31,7 +31,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/presentation/components/ui/select';
-import { Building2, Search, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Building2, Search, Pencil, Trash2, Loader2, Eye } from 'lucide-react';
 import { PaginationControls } from '@/presentation/components/shared/PaginationControls';
 import { StatsCard } from '@/presentation/components/common';
 import { reportsRepository } from '@/infrastructure/persistence/repositories';
@@ -185,19 +185,25 @@ export function TenantsListPage() {
                     </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                    <Button
-                        variant="outline"
-                        className="h-9 sm:h-10 px-3 sm:px-4"
-                        onClick={handleExport}
-                        disabled={isExporting}
-                    >
-                        {isExporting ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Download className="mr-2 h-4 w-4" />
-                        )}
-                        Exportar
-                    </Button>
+                    {/* Obs-3: el backend responde 403 a export para no-root (misma
+                        ability 'tenants.manage' que crear/editar/eliminar), así que
+                        el botón se gatea igual para no mostrar una acción que el
+                        backend va a rechazar. */}
+                    {canManageTenants && (
+                        <Button
+                            variant="outline"
+                            className="h-9 sm:h-10 px-3 sm:px-4"
+                            onClick={handleExport}
+                            disabled={isExporting}
+                        >
+                            {isExporting ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Download className="mr-2 h-4 w-4" />
+                            )}
+                            Exportar
+                        </Button>
+                    )}
                     {canManageTenants && (
                         <Button
                             className="h-9 sm:h-10 px-3 sm:px-4"
@@ -301,6 +307,11 @@ export function TenantsListPage() {
                                 <TableHead rowSpan={2} className="hidden xl:table-cell min-w-[150px] align-bottom">Razón Social</TableHead>
                                 <TableHead rowSpan={2} className="hidden xl:table-cell min-w-[100px] align-bottom">Teléfono</TableHead>
                                 <TableHead colSpan={3} className="hidden lg:table-cell text-center">Empleados</TableHead>
+                                {/* Solo root: los admin_tenant de cada empresa no son empleados
+                                    (regla "admin_tenant domina"), van en su propia columna. */}
+                                {canManageTenants && (
+                                    <TableHead rowSpan={2} className="hidden lg:table-cell min-w-[90px] text-center align-bottom">Cuentas de Aplicación</TableHead>
+                                )}
                                 <TableHead rowSpan={2} className="min-w-[80px] align-bottom">Estado</TableHead>
                                 <TableHead rowSpan={2} className="text-center min-w-[100px] align-bottom sticky right-0 z-10 bg-background border-l">Acciones</TableHead>
                             </TableRow>
@@ -313,14 +324,14 @@ export function TenantsListPage() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={10} className="text-center py-8">
+                                    <TableCell colSpan={canManageTenants ? 11 : 10} className="text-center py-8">
                                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
                                         <p className="text-sm text-gray-500 mt-2">Cargando organizaciones...</p>
                                     </TableCell>
                                 </TableRow>
                             ) : tenants.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={10} className="text-center py-8">
+                                    <TableCell colSpan={canManageTenants ? 11 : 10} className="text-center py-8">
                                         <Building2 className="h-12 w-12 mx-auto text-gray-300 mb-2" />
                                         <p className="text-gray-500">No se encontraron organizaciones</p>
                                         {canManageTenants && (
@@ -390,16 +401,27 @@ export function TenantsListPage() {
                                                 {tenant.current_employee_count ?? 0}
                                             </Badge>
                                         </TableCell>
+                                        {canManageTenants && (
+                                            <TableCell className="hidden lg:table-cell text-center">
+                                                <Badge className="bg-blue-100 text-blue-800 font-medium">
+                                                    {tenant.app_accounts_count ?? 0}
+                                                </Badge>
+                                            </TableCell>
+                                        )}
                                         <TableCell>{getStatusBadge(tenant.status)}</TableCell>
                                         <TableCell className="text-center sticky right-0 z-10 bg-background group-hover:bg-muted/50 border-l">
                                             <div className="flex justify-center gap-2">
-                                                {/* <Button
+                                                {/* Obs-3: visible para todos los que ven la lista (incluye
+                                                    admin_tenant, de solo lectura). TenantFormPage decide
+                                                    internamente si el detalle se abre en modo lectura o
+                                                    edición según 'tenants.manage'. */}
+                                                <Button
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => navigate(`/tenants/${tenant.id}`)}
                                                 >
                                                     <Eye className="h-4 w-4" />
-                                                </Button> */}
+                                                </Button>
                                                 {canManageTenants && (
                                                     <Button
                                                         variant="ghost"

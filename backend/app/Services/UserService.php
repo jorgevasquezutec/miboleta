@@ -29,21 +29,45 @@ class UserService
     protected const ROOT_ROLE_ID = 1;
 
     /**
-     * Jerarquía RBAC de "quién puede asignar/administrar a quién" DENTRO de
-     * una misma empresa: rol del actor => roles operativos que puede asignar
-     * o administrar. Root no aparece como clave: se resuelve aparte (puede
-     * asignar/administrar cualquier rol operativo) porque no tiene rol por
-     * empresa. 'client' y 'aprobador' tampoco aparecen: no administran a
+     * Roles operativos que $actor puede ASIGNAR a otro usuario al crear/
+     * editar sus roles, dentro de una misma empresa: rol del actor => roles
+     * que puede asignar. Root no aparece como clave: se resuelve aparte
+     * (puede asignar cualquier rol operativo) porque no tiene rol por
+     * empresa. 'client' y 'aprobador' tampoco aparecen: no asignan roles a
      * nadie.
      *
-     * Fuente única de verdad para:
-     *  - canManageUser() (ver abajo — Decisión C1 del plan de observaciones
-     *    del cliente 2026-07).
-     *  - assignableRoleNamesFor() (usado por StoreUserRequest y
-     *    UpdateUserRequest; antes duplicado literal en ambos).
+     * Fuente única de verdad para assignableRoleNamesFor() (usado por
+     * StoreUserRequest y UpdateUserRequest; antes duplicado literal en
+     * ambos).
+     *
+     * OBS-CLIENTE 2026-08 (Observación 1): "asignar" (esta constante) y
+     * "administrar" (MANAGEABLE_ROLES, abajo) ya NO son la misma jerarquía.
+     * Un admin_tenant sigue pudiendo asignar el rol admin al crear/editar
+     * roles de un usuario, pero ya no puede ADMINISTRAR (editar, resetear
+     * contraseña, eliminar) una cuenta admin existente — ver
+     * MANAGEABLE_ROLES y canManageUser().
+     */
+    public const ASSIGNABLE_ROLES = [
+        'admin_tenant' => ['admin', 'aprobador', 'client'],
+        'admin' => ['aprobador', 'client'],
+    ];
+
+    /**
+     * Jerarquía RBAC de "quién puede ADMINISTRAR a quién" (editar, resetear
+     * contraseña, eliminar) DENTRO de una misma empresa: rol del actor =>
+     * roles operativos que puede administrar. Root no aparece como clave: se
+     * resuelve aparte (puede administrar cualquier rol operativo) porque no
+     * tiene rol por empresa. 'client' y 'aprobador' tampoco aparecen: no
+     * administran a nadie.
+     *
+     * Fuente única de verdad para canManageUser() (ver abajo — Decisión C1
+     * del plan de observaciones del cliente 2026-07, endurecida por
+     * Observación 1 2026-08: solo root administra cuentas admin; admin_tenant
+     * conserva la potestad de ASIGNAR el rol admin, ver ASSIGNABLE_ROLES
+     * arriba, pero no la de administrar la cuenta ya creada).
      */
     public const MANAGEABLE_ROLES = [
-        'admin_tenant' => ['admin', 'aprobador', 'client'],
+        'admin_tenant' => ['aprobador', 'client'],
         'admin' => ['aprobador', 'client'],
     ];
 
@@ -66,7 +90,7 @@ class UserService
             return ['admin_tenant', 'admin', 'aprobador', 'client'];
         }
 
-        foreach (self::MANAGEABLE_ROLES as $actorRole => $allowedRoles) {
+        foreach (self::ASSIGNABLE_ROLES as $actorRole => $allowedRoles) {
             if ($actor->hasRoleInTenant($actorRole, $tenantId)) {
                 return $allowedRoles;
             }
@@ -739,9 +763,15 @@ class UserService
      * 2. nadie se administra a sí mismo desde esta pantalla (el perfil
      *    propio va por /profile). Ver excepción de solo-lectura que aplican
      *    los callers de show()/subordinates() (canManageUser() || self).
-     * 3. nadie no-root puede administrar a otro root ni a un usuario con rol
-     *    admin_tenant en CUALQUIER empresa: editar users.* (email,
-     *    password, estado) tiene efecto global, no acotado a una empresa.
+     * 3. nadie no-root puede administrar a otro root, a un usuario con rol
+     *    admin_tenant en CUALQUIER empresa, ni a un usuario con rol admin en
+     *    CUALQUIER empresa: editar users.* (email, password, estado) tiene
+     *    efecto global, no acotado a una empresa (Observación 1 2026-08:
+     *    antes de esto un admin_tenant seguía pudiendo administrar cuentas
+     *    admin en la empresa compartida — ese loophole cross-tenant es lo
+     *    que cierra esta regla; sigue pudiendo ASIGNAR el rol admin al
+     *    crear/editar, ver ASSIGNABLE_ROLES, solo ya no administrar la
+     *    cuenta).
      * 4. si no, hace falta una empresa compartida T donde el rol de $actor
      *    en T sea una clave de MANAGEABLE_ROLES y el rol de $target en T
      *    esté en el conjunto que ese rol puede administrar.
@@ -760,7 +790,11 @@ class UserService
             return false;
         }
 
-        if ($target->isRoot() || $this->hasRoleInAnyTenant($target, 'admin_tenant')) {
+        if (
+            $target->isRoot()
+            || $this->hasRoleInAnyTenant($target, 'admin_tenant')
+            || $this->hasRoleInAnyTenant($target, 'admin')
+        ) {
             return false;
         }
 
@@ -782,10 +816,10 @@ class UserService
 
     /**
      * ¿$user tiene el rol $roleName en AL MENOS UNA empresa? Usado por
-     * canManageUser() para blindar a los admin_tenant (regla 3): un
-     * admin_tenant de la empresa A sigue siendo intocable para un actor
-     * no-root aunque lo comparta con él en una empresa B con un rol
-     * distinto.
+     * canManageUser() para blindar a los admin_tenant y a los admin (regla
+     * 3): un admin_tenant o un admin de la empresa A sigue siendo intocable
+     * para un actor no-root aunque lo comparta con él en una empresa B con
+     * un rol distinto.
      */
     private function hasRoleInAnyTenant(User $user, string $roleName): bool
     {

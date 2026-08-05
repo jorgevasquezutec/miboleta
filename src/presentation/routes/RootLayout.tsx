@@ -234,7 +234,7 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
   // `requires` de la ruta correspondiente en routes/index.tsx.
   const ALL_NAV_ITEMS: NavItem[] = [
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard, abilities: ["dashboard.global_metrics", "dashboard.org_metrics"] },
-    { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2, abilities: ["tenants.manage"] },
+    { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2, abilities: ["tenants.view"] },
     { label: "Mis Documentos", path: "/dashboard", icon: FileText, abilities: ["documents.view_own"] },
     { label: "Cargar Documentos", path: "/upload", icon: FileText, abilities: ["documents.bulk_upload_zip"] },
     { label: "Usuarios", path: "/users", icon: Users, abilities: ["users.view_list"] },

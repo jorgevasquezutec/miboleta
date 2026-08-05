@@ -9,6 +9,7 @@ use App\Http\Requests\StoreTenantRequest;
 use App\Http\Requests\UpdateTenantRequest;
 use App\Http\Resources\TenantResource;
 use App\Models\Tenant;
+use App\Services\ActiveTenantResolver;
 use App\Services\TenantService;
 use Illuminate\Http\Request;
 
@@ -21,7 +22,8 @@ use Illuminate\Http\Request;
 class TenantController extends Controller
 {
     public function __construct(
-        protected TenantService $tenantService
+        protected TenantService $tenantService,
+        protected ActiveTenantResolver $activeTenantResolver
     ) {
     }
 
@@ -66,6 +68,23 @@ class TenantController extends Controller
      */
     public function index(Request $request)
     {
+        $user = $request->user();
+
+        // Obs-3 [seguridad]: index() no llamaba a authorize() en ningún
+        // punto — cualquier autenticado podía listar tenants vía API.
+        // 'tenants.view' cubre el acceso de solo lectura de admin_tenant al
+        // módulo Empresas; 'tenants.assign_users' porque 'admin' usa este
+        // mismo endpoint para elegir a qué empresa asignar un usuario (no
+        // para el módulo Empresas). Basta con UNA de las dos. Endpoint de
+        // listado sin recurso puntual: se autoriza contra la empresa ACTIVA
+        // (ActiveTenantResolver), igual que UserController::index(). El
+        // scoping de QUÉ tenants ve cada quien ya vive en
+        // TenantService::getTenants() (no se toca aquí).
+        $tenantId = $this->activeTenantResolver->resolve($request, $user);
+        if (!$user->hasAbility('tenants.view', $tenantId) && !$user->hasAbility('tenants.assign_users', $tenantId)) {
+            abort(403, 'No autorizado');
+        }
+
         $filters = [
             'search' => $request->search,
             'status' => $request->status,
@@ -155,6 +174,14 @@ class TenantController extends Controller
      */
     public function show(Request $request, $id)
     {
+        // Obs-3: acceso de solo lectura de admin_tenant al módulo Empresas.
+        // El Gate evalúa 'tenants.view' sobre el tenant DEL RECURSO ($id),
+        // no la empresa activa de la sesión. canAccessTenant() (membresía)
+        // se mantiene debajo tal cual estaba: root siempre pasa, y un
+        // admin_tenant que administra varias empresas solo entra a las
+        // suyas aunque la ability ya esté scopeada al mismo $id.
+        $this->authorize('tenants.view', (int) $id);
+
         try {
             $tenant = $this->tenantService->getTenant($id, $request->user());
 

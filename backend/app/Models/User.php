@@ -35,6 +35,23 @@ class User extends Authenticatable
     ];
 
     /**
+     * Roles de EMPRESA que cuentan como "empleado" para efectos de conteo
+     * (vs. cuentas de aplicación: 'root', global de la plataforma, y
+     * 'admin_tenant', administrador de la empresa). La regla es POR ROL EN
+     * CADA EMPRESA, con 'admin_tenant' DOMINANTE dentro de su empresa: quien
+     * es admin_tenant de una empresa es cuenta de aplicación ahí aunque tenga
+     * además un rol de esta lista (no cuenta como empleado ahí); si esa misma
+     * persona es solo empleado en OTRA empresa, allá sí cuenta.
+     *
+     * Fuente única; ver Tenant::employeesQuery() (que la consume vía
+     * whereIn contra user_tenant_roles) y su espejo en el frontend,
+     * src/shared/constants/index.ts (ORG_EMPLOYEE_ROLES).
+     *
+     * @var list<string>
+     */
+    public const ORG_EMPLOYEE_ROLES = ['admin', 'client', 'aprobador'];
+
+    /**
      * Dado un conjunto de nombres de rol, retorna el de mayor prioridad según
      * ROLE_PRIORITY. Un rol que no esté en la lista de prioridad se considera
      * de menor prioridad que cualquiera que sí esté, pero igual se devuelve si

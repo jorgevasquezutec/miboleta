@@ -2,8 +2,10 @@
 
 namespace Tests\Unit\Services;
 
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\UserTenantRole;
 use App\Models\VacationRequest;
 use App\Services\ReportsService;
 use Carbon\Carbon;
@@ -30,6 +32,8 @@ class ReportsServiceUsersExportTest extends TestCase
     {
         parent::setUp();
 
+        $this->seed(\Database\Seeders\RoleSeeder::class);
+
         $this->service = app(ReportsService::class);
         $this->tenant = Tenant::factory()->create(['status' => 'active', 'labor_regime' => 'general']);
     }
@@ -50,7 +54,23 @@ class ReportsServiceUsersExportTest extends TestCase
             'vacation_balance_initial' => $initial,
         ]);
 
+        // Empleado (rol 'client') EN esta empresa: getUsersReportData()
+        // filtra por User::ORG_EMPLOYEE_ROLES, un usuario sin tenantRoles no
+        // saldría en el export.
+        $this->attachEmployeeRole($user, $tenant);
+
         return $user;
+    }
+
+    private function attachEmployeeRole(User $user, Tenant $tenant, string $roleName = 'client'): void
+    {
+        $role = Role::where('name', $roleName)->firstOrFail();
+
+        UserTenantRole::firstOrCreate([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'role_id' => $role->id,
+        ]);
     }
 
     public function test_export_includes_the_four_columns_with_client_headers(): void
@@ -132,6 +152,8 @@ class ReportsServiceUsersExportTest extends TestCase
             'hire_date' => $now->copy()->subYears(1)->format('Y-m-d'),
             'vacation_balance_initial' => 0,
         ]);
+        $this->attachEmployeeRole($user, $this->tenant);
+        $this->attachEmployeeRole($user, $tenantB);
 
         $rowInA = $this->service->getUsersReportData(['tenant_id' => $this->tenant->id])->firstWhere('ID', $user->id);
         $rowInB = $this->service->getUsersReportData(['tenant_id' => $tenantB->id])->firstWhere('ID', $user->id);

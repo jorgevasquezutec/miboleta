@@ -59,8 +59,9 @@ class UsersImportTest extends TestCase
         $this->assertNotNull($roleError, 'Debe reportarse un error de fila en el campo org1_rol');
         $this->assertStringContainsString('admin_tenant', $roleError['message']);
         $this->assertStringContainsString('inválido', $roleError['message']);
-        // Mensaje accionable: debe listar los roles sí permitidos.
-        $this->assertStringContainsString('admin, client, aprobador', $roleError['message']);
+        // Mensaje accionable: debe listar los roles sí permitidos, como
+        // display names (Obs 2), no como slugs crudos.
+        $this->assertStringContainsString('Admin Empleados, Empleado, Aprobador Empleado', $roleError['message']);
 
         // La fila no queda parseada como válida.
         $this->assertEmpty($import->getParsedData());
@@ -126,5 +127,170 @@ class UsersImportTest extends TestCase
         $this->assertEmpty($import->getErrors());
         $this->assertCount(1, $import->getParsedData());
         $this->assertSame(['admin_tenant'], $import->getParsedData()[0]['organizaciones'][0]['roles']);
+    }
+
+    /**
+     * Obs 4: la columna "Número de documento" queda en formato General y
+     * Excel numeriza un DNI tipeado como "01234567" a int 1234567 (el cero
+     * inicial se pierde antes de que el import lo vea). normalizeRow()
+     * repone el padding vía App\Support\DocumentNumber ANTES de la
+     * validación de "requerido".
+     */
+    public function test_dni_arriving_as_int_is_padded_and_accepted(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+
+        $import = new UsersImport();
+
+        $rows = new Collection([
+            new Collection([
+                'nombre' => 'Ana',
+                'apellido' => 'Torres',
+                'email' => 'ana.torres@example.com',
+                'tipo_documento' => 'dni',
+                'numero_documento' => 1234567, // int, sin el cero inicial
+                'estado' => 'active',
+                'org1_ruc' => $tenant->ruc,
+                'org1_rol' => 'client',
+            ]),
+        ]);
+
+        $import->collection($rows);
+
+        $this->assertEmpty($import->getErrors());
+        $this->assertCount(1, $import->getParsedData());
+        $this->assertSame('01234567', $import->getParsedData()[0]['numero_documento']);
+    }
+
+    /**
+     * Obs 4: un DNI de puros ceros ("00000000") llega desde Excel como el
+     * entero 0 (misma numerización de la celda que en el test anterior), que
+     * antes de este fix hacía que empty($row['numero_documento']) fuera true
+     * y la fila se rechazara como "requerido" en vez de aceptarse con su
+     * valor real, ya con el padding repuesto.
+     */
+    public function test_dni_of_all_zeros_is_not_treated_as_missing(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+
+        $import = new UsersImport();
+
+        $rows = new Collection([
+            new Collection([
+                'nombre' => 'Ana',
+                'apellido' => 'Torres',
+                'email' => 'ana.torres@example.com',
+                'tipo_documento' => 'dni',
+                'numero_documento' => 0, // int: misma numerización que produce Excel
+                'estado' => 'active',
+                'org1_ruc' => $tenant->ruc,
+                'org1_rol' => 'client',
+            ]),
+        ]);
+
+        $import->collection($rows);
+
+        $missingDocError = collect($import->getErrors())
+            ->first(fn($error) => $error['field'] === 'numero_documento');
+
+        $this->assertNull($missingDocError, 'El DNI "00000000" no debe reportarse como requerido/faltante');
+        $this->assertCount(1, $import->getParsedData());
+        $this->assertSame('00000000', $import->getParsedData()[0]['numero_documento']);
+    }
+
+    /**
+     * Obs 2: la plantilla ahora muestra el display name ("Empleado") en el
+     * dropdown de org{n}_rol; el import debe seguir aceptando el slug crudo
+     * ("client") de archivos con el formato anterior.
+     */
+    public function test_org_role_slug_is_still_accepted(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+
+        $import = new UsersImport();
+
+        $rows = new Collection([
+            new Collection([
+                'nombre' => 'Ana',
+                'apellido' => 'Torres',
+                'email' => 'ana.torres@example.com',
+                'tipo_documento' => 'dni',
+                'numero_documento' => '12345678',
+                'estado' => 'active',
+                'org1_ruc' => $tenant->ruc,
+                'org1_rol' => 'client',
+            ]),
+        ]);
+
+        $import->collection($rows);
+
+        $this->assertEmpty($import->getErrors());
+        $this->assertCount(1, $import->getParsedData());
+        $this->assertSame(['client'], $import->getParsedData()[0]['organizaciones'][0]['roles']);
+    }
+
+    /**
+     * Obs 2: el display name ("Empleado") debe resolverse al mismo slug
+     * ('client') que persiste en user_tenant_roles.
+     */
+    public function test_org_role_display_name_resolves_to_its_slug(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+
+        $import = new UsersImport();
+
+        $rows = new Collection([
+            new Collection([
+                'nombre' => 'Ana',
+                'apellido' => 'Torres',
+                'email' => 'ana.torres@example.com',
+                'tipo_documento' => 'dni',
+                'numero_documento' => '12345678',
+                'estado' => 'active',
+                'org1_ruc' => $tenant->ruc,
+                'org1_rol' => 'Empleado',
+            ]),
+        ]);
+
+        $import->collection($rows);
+
+        $this->assertEmpty($import->getErrors());
+        $this->assertCount(1, $import->getParsedData());
+        $this->assertSame(['client'], $import->getParsedData()[0]['organizaciones'][0]['roles']);
+    }
+
+    /**
+     * Obs 2: un rol inválido debe seguir rechazándose de fila, y el mensaje
+     * debe listar los roles permitidos como display names (lo que el usuario
+     * ve en el dropdown), no como slugs crudos.
+     */
+    public function test_invalid_org_role_message_lists_display_names(): void
+    {
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+
+        $import = new UsersImport();
+
+        $rows = new Collection([
+            new Collection([
+                'nombre' => 'Ana',
+                'apellido' => 'Torres',
+                'email' => 'ana.torres@example.com',
+                'tipo_documento' => 'dni',
+                'numero_documento' => '12345678',
+                'estado' => 'active',
+                'org1_ruc' => $tenant->ruc,
+                'org1_rol' => 'gerente',
+            ]),
+        ]);
+
+        $import->collection($rows);
+
+        $roleError = collect($import->getErrors())->first(fn($error) => $error['field'] === 'org1_rol');
+
+        $this->assertNotNull($roleError);
+        $this->assertStringContainsString("'gerente'", $roleError['message']);
+        $this->assertStringContainsString('Empleado', $roleError['message']);
+        $this->assertStringNotContainsString('client', $roleError['message']);
+        $this->assertEmpty($import->getParsedData());
     }
 }

@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { canEditTarget } from "@/presentation/utils/userPermissions";
 import { formatVacationDays } from "@/presentation/utils";
+import { USER_ROLE_DISPLAY_LABELS } from "@/shared/constants";
 
 export function UsersListPage() {
   useDocumentTitle('Usuarios');
@@ -63,6 +64,8 @@ export function UsersListPage() {
   const canUpdateUser = useCan("users.update");
   const canDeleteUser = useCan("users.delete");
   const canBulkUpload = useCan("users.bulk_upload");
+  const canExportUsers = useCan("users.export");
+  const canExportAppAccounts = useCan("reports.app_accounts_export");
 
   // URL-synced filters
   const { filters, setFilter, setFilters } = useUrlFilters({
@@ -78,6 +81,7 @@ export function UsersListPage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingAppAccounts, setIsExportingAppAccounts] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Debounce search input -> update URL
@@ -197,6 +201,22 @@ export function UsersListPage() {
     }
   };
 
+  const handleExportAppAccounts = async () => {
+    setIsExportingAppAccounts(true);
+    try {
+      // Sin filtros: ReportsController::exportAppAccounts scopea a la empresa
+      // activa en el backend, igual que el resto de exports no-root.
+      const blob = await reportsRepository.exportAppAccounts();
+      const filename = `cuentas_aplicacion_${new Date().toISOString().split('T')[0]}.xlsx`;
+      reportsRepository.downloadBlob(blob, filename);
+      toast.success('Exportación completada');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al exportar cuentas de aplicación');
+    } finally {
+      setIsExportingAppAccounts(false);
+    }
+  };
+
 
   const getRoleBadgeStyle = (role: string) => {
     switch (role) {
@@ -204,8 +224,12 @@ export function UsersListPage() {
         return { backgroundColor: "#a855f7", color: "white", borderColor: "transparent" };
       case "admin":
         return { backgroundColor: "#3b82f6", color: "white", borderColor: "transparent" };
+      case "admin_tenant":
+        return { backgroundColor: "#8b5cf6", color: "white", borderColor: "transparent" };
       case "client":
         return { backgroundColor: "#22c55e", color: "white", borderColor: "transparent" };
+      case "aprobador":
+        return { backgroundColor: "#f59e0b", color: "white", borderColor: "transparent" };
       default:
         return { backgroundColor: "#6b7280", color: "white", borderColor: "transparent" };
     }
@@ -236,19 +260,36 @@ export function UsersListPage() {
               </CardDescription>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                className="h-9 sm:h-10 px-3 sm:px-4"
-                onClick={handleExport}
-                disabled={isExporting}
-              >
-                {isExporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                <span className="ml-2 hidden xs:inline">Exportar</span>
-              </Button>
+              {canExportUsers && (
+                <Button
+                  variant="outline"
+                  className="h-9 sm:h-10 px-3 sm:px-4"
+                  onClick={handleExport}
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  <span className="ml-2 hidden xs:inline">Exportar</span>
+                </Button>
+              )}
+              {canExportAppAccounts && (
+                <Button
+                  variant="outline"
+                  className="h-9 sm:h-10 px-3 sm:px-4"
+                  onClick={handleExportAppAccounts}
+                  disabled={isExportingAppAccounts}
+                >
+                  {isExportingAppAccounts ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  <span className="ml-2 hidden xs:inline">Cuentas de Aplicación</span>
+                </Button>
+              )}
               {canBulkUpload && (
                 <Button
                   variant="outline"
@@ -340,7 +381,23 @@ export function UsersListPage() {
                             de un breakpoint que el cliente no ve equivale a no haberlas
                             hecho (ya pasó con otra columna en una fase anterior). La tabla
                             ya scrollea horizontalmente (overflow-x-auto) si no entra. */}
-                        <TableHead className="whitespace-nowrap">Vacaciones</TableHead>
+                        <TableHead className="whitespace-nowrap">
+                          Vacaciones
+                          {/* Modo "Todas las empresas" (root): el saldo es POR
+                              EMPRESA (hire_date/régimen propios de cada una), así
+                              que sin empresa activa no hay cifra que mostrar. El
+                              "—" de las celdas parecía un bug (observación del
+                              04/08/2026), por eso la aclaración visible aquí y no
+                              solo en un title al hover. */}
+                          {!currentTenant && (
+                            <span
+                              className="block text-[10px] font-normal text-muted-foreground normal-case leading-tight"
+                              title="Los saldos de vacaciones se calculan por empresa. Selecciona una empresa en el selector superior para verlos."
+                            >
+                              por empresa — selecciona una
+                            </span>
+                          )}
+                        </TableHead>
                         <TableHead className="whitespace-nowrap hidden lg:table-cell">Supervisor</TableHead>
                         <TableHead className="whitespace-nowrap">Estado</TableHead>
                         {/* sticky right-0: sin esto, con todas las columnas visibles
@@ -401,7 +458,7 @@ export function UsersListPage() {
                                     {tenant.name}
                                     {tenant.is_primary ? " ★" : null}
                                     {tenant.role && (
-                                      <span className="opacity-80"> · {tenant.role}</span>
+                                      <span className="opacity-80"> · {USER_ROLE_DISPLAY_LABELS[tenant.role as keyof typeof USER_ROLE_DISPLAY_LABELS] ?? tenant.role}</span>
                                     )}
                                   </Badge>
                                 ))

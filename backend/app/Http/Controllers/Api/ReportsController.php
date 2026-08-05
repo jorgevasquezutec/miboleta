@@ -261,25 +261,61 @@ class ReportsController extends Controller
 
     /**
      * Export users to Excel.
-     * 
+     *
      * GET /api/reports/users/export
+     *
+     * [OBS-CLIENTE 2026-08] Ability propia 'users.export' en vez de
+     * authorizeReports(): mismo conjunto efectivo de roles (root, admin,
+     * admin_tenant), pero con nombre propio expuesto a /api/access-matrix
+     * para que el frontend pueda gatear el botón de export con useCan().
      */
     public function exportUsers(Request $request): BinaryFileResponse|Response|JsonResponse
     {
         $user = $request->user();
         $tenantId = $this->getTenantId($request, $user);
-        $this->authorizeReports($user, $tenantId);
+        abort_unless($user->hasAbility('users.export', $tenantId), 403);
 
         $filters = [
             'tenant_id' => $tenantId,
             'search' => $request->query('search'),
             'status' => $request->query('status'),
             'is_active' => $request->query('is_active'),
+            // Actor que exporta: ReportsService replica la exclusión de
+            // UserController::index (no verse a sí mismo, ni a admin_tenant)
+            // para todo actor no-root.
+            'acting_user' => $user,
         ];
 
         $data = $this->reportsService->getUsersReportData($filters);
 
         return $this->exportToExcel($data->toArray(), 'usuarios');
+    }
+
+    /**
+     * Export de cuentas de aplicación (root + admin_tenant) a Excel.
+     *
+     * GET /api/reports/app-accounts/export
+     *
+     * A diferencia de exportUsers() (empleados: admin/client/aprobador por
+     * empresa), este export cubre las cuentas de PLATAFORMA: root (global) y
+     * admin_tenant (administradores de empresa). Scope: root ve todas las
+     * cuentas; un admin_tenant ve los roots de la plataforma + los
+     * admin_tenant de las empresas que ÉL administra (no todas sus
+     * membresías — ver getAppAccountsReportData).
+     */
+    public function exportAppAccounts(Request $request): BinaryFileResponse|Response|JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = $this->getTenantId($request, $user);
+        abort_unless($user->hasAbility('reports.app_accounts_export', $tenantId), 403);
+
+        // La ability es solo-root por ahora: exporta todas las cuentas de
+        // aplicación (roots + admin_tenant de todas las empresas). El service
+        // soporta scoping por empresa e includeRoots por si se reabre a
+        // admin_tenant con visibilidad en UI.
+        $data = $this->reportsService->getAppAccountsReportData();
+
+        return $this->exportToExcel($data->toArray(), 'cuentas_aplicacion');
     }
 
     /**

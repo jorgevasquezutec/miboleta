@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\BulkUserUploadService;
 use App\Support\BulkUserColumns;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -320,6 +321,18 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             $row['tipo_documento'] = $this->normalizeDocumentType($row['tipo_documento']);
         }
 
+        // 3b) numero_documento: repone los ceros a la izquierda que Excel se
+        // come cuando la columna queda en formato General (ver
+        // App\Support\DocumentNumber). Corre ANTES de la validación de
+        // "requerido" (evita que "00000000" -> int 0 -> se lea como vacío) y
+        // del resto del parseo, así que toda fila lo ve ya normalizado.
+        if (isset($row['numero_documento'])) {
+            $row['numero_documento'] = DocumentNumber::normalize(
+                $row['tipo_documento'] ?? null,
+                $row['numero_documento']
+            );
+        }
+
         // 4) estado: ACTIVO/ACTIVA -> active, INACTIVO/INACTIVA -> inactive
         if (!empty($row['estado'])) {
             $row['estado'] = $this->normalizeEstadoValue($row['estado']);
@@ -550,27 +563,45 @@ class UsersImport implements ToCollection, WithHeadingRow, WithChunkReading
             $roles = [];
             $rolLabel = BulkUserColumns::labelFor($rolesKey);
             $allowedRoles = BulkUserUploadService::allowedOrgRolesFor($importer);
+            // Los mensajes de error listan display names ("Empleado"), no
+            // slugs ("client"): son lo que el usuario ve en el dropdown de
+            // la plantilla (ver ValidationRulesSheet), no lo que viaja aguas
+            // abajo (ver BulkUserUploadService::orgRoleLabel/orgRoleSlug).
+            $allowedRoleLabels = array_map(
+                fn($r) => BulkUserUploadService::orgRoleLabel($r),
+                $allowedRoles
+            );
 
             if (empty($rolesRaw)) {
                 $errors[] = [
                     'field' => $rolesKey,
                     'message' => "Rol es requerido en \"{$rolLabel}\" (permitidos: "
-                        . implode(', ', $allowedRoles) . ')',
+                        . implode(', ', $allowedRoleLabels) . ')',
                 ];
             } else {
-                $roles = array_values(array_filter(array_map(
-                    fn($r) => strtolower(trim((string) $r)),
+                $rawTokens = array_values(array_filter(array_map(
+                    fn($r) => trim((string) $r),
                     explode(',', (string) $rolesRaw)
                 )));
 
-                foreach ($roles as $roleName) {
-                    if (!in_array($roleName, $allowedRoles, true)) {
+                foreach ($rawTokens as $token) {
+                    // Acepta tanto el slug ('client') como el display name
+                    // ('Empleado'), sin importar mayúsculas/tildes: la
+                    // plantilla ahora muestra el display name en el dropdown
+                    // de org{n}_rol (Obs 2), pero un archivo con el slug
+                    // crudo (formato anterior) sigue siendo válido.
+                    $resolvedSlug = BulkUserUploadService::orgRoleSlug($token);
+
+                    if ($resolvedSlug === null || !in_array($resolvedSlug, $allowedRoles, true)) {
                         $errors[] = [
                             'field' => $rolesKey,
-                            'message' => "Rol '{$roleName}' inválido en \"{$rolLabel}\" (permitidos: "
-                                . implode(', ', $allowedRoles) . ')',
+                            'message' => "Rol '{$token}' inválido en \"{$rolLabel}\" (permitidos: "
+                                . implode(', ', $allowedRoleLabels) . ')',
                         ];
+                        continue;
                     }
+
+                    $roles[] = $resolvedSlug;
                 }
             }
 

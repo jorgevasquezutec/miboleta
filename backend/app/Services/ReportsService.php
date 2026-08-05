@@ -227,39 +227,70 @@ class ReportsService
                 return $this->getEmptyUserStats();
             }
 
-            // Un builder NUEVO por métrica: al reutilizar uno solo, los where se
-            // acumulaban sobre la misma instancia y producían
-            // `status = 'active' AND status IN ('inactive','terminated','pending')`,
-            // que es insatisfacible — 'inactive' devolvía siempre 0.
-            $total = $tenant->users()->count();
-            $active = $tenant->users()->where('status', 'active')->count();
-            $inactive = $tenant->users()
-                ->whereIn('status', ['inactive', 'terminated', 'pending'])
-                ->count();
+            // Empleados = User::ORG_EMPLOYEE_ROLES (admin/client/aprobador) EN
+            // esta empresa (ver Tenant::employeesQuery()) — quedan fuera las
+            // cuentas de aplicación: root (global, nunca tiene fila aquí) y
+            // admin_tenant. Un builder NUEVO por métrica: al reutilizar uno
+            // solo, los where se acumulaban sobre la misma instancia y
+            // producían `status = 'active' AND status IN (...)`, insatisfacible
+            // — 'inactive' devolvía siempre 0. ->where('users.status', ...)
+            // calificado y ->count('users.id') porque employeesQuery() ya
+            // trae joins + distinct('users.id').
+            $total = $tenant->employeesQuery()->count('users.id');
+            $active = $tenant->employeesQuery()->where('users.status', 'active')->count('users.id');
+            $inactive = $tenant->employeesQuery()
+                ->whereIn('users.status', ['inactive', 'terminated', 'pending'])
+                ->count('users.id');
 
-            // Roles DENTRO de esta empresa: user_tenant_roles. Antes se unía
-            // contra user_roles (el respaldo global, que es la UNIÓN de los roles
-            // del usuario en TODAS sus empresas), así que a un usuario
-            // multi-empresa se le contaba aquí el rol que tiene en otra.
+            // Roles DENTRO de esta empresa: user_tenant_roles, acotado a
+            // ORG_EMPLOYEE_ROLES (admin_tenant no es un "rol de empleado" — ver
+            // arriba). Antes se unía contra user_roles (el respaldo global, que
+            // es la UNIÓN de los roles del usuario en TODAS sus empresas), así
+            // que a un usuario multi-empresa se le contaba aquí el rol que
+            // tiene en otra. COUNT(DISTINCT ...) por si el usuario tuviera más
+            // de una fila para el mismo rol en esta empresa. Se excluye a
+            // quien sea admin_tenant EN esta empresa (regla "admin_tenant
+            // domina", ver Tenant::employeesQuery()).
             $byRole = DB::table('user_tenant_roles')
                 ->join('users', 'user_tenant_roles.user_id', '=', 'users.id')
                 ->join('roles', 'user_tenant_roles.role_id', '=', 'roles.id')
                 ->where('user_tenant_roles.tenant_id', $tenantId)
+                ->whereIn('roles.name', User::ORG_EMPLOYEE_ROLES)
                 ->whereNull('users.deleted_at')
-                ->select('roles.name', DB::raw('count(*) as count'))
+                ->whereNotExists($this->adminTenantInSameTenantSubquery())
+                ->select('roles.name', DB::raw('count(distinct user_tenant_roles.user_id) as count'))
                 ->groupBy('roles.name')
                 ->get()
                 ->mapWithKeys(fn($item) => [$item->name => $item->count])
                 ->toArray();
         } else {
-            // Global stats
-            $total = User::count();
-            $active = User::where('status', 'active')->count();
-            $inactive = User::whereIn('status', ['inactive', 'terminated', 'pending'])->count();
+            // Global stats: empleados = tiene AL MENOS UN rol de
+            // User::ORG_EMPLOYEE_ROLES en una empresa donde NO es admin_tenant
+            // (regla "admin_tenant domina" por empresa) — root y admin_tenant
+            // quedan fuera. Antes se contaba User::count() a secas (incluía
+            // cuentas de aplicación) y by_role se unía contra el respaldo
+            // global user_roles (donde solo vive 'root'), así que ningún rol
+            // operativo por empresa aparecía nunca aquí.
+            $employees = fn() => User::whereHas('tenantRoles', function ($q) {
+                $q->whereHas('role', fn($r) => $r->whereIn('name', User::ORG_EMPLOYEE_ROLES))
+                  ->whereNotExists($this->adminTenantInSameTenantSubquery());
+            });
 
-            $byRole = User::join('user_roles', 'users.id', '=', 'user_roles.user_id')
-                ->join('roles', 'user_roles.role_id', '=', 'roles.id')
-                ->select('roles.name', DB::raw('count(*) as count'))
+            $total = $employees()->count();
+            $active = $employees()->where('status', 'active')->count();
+            $inactive = $employees()->whereIn('status', ['inactive', 'terminated', 'pending'])->count();
+
+            // by_role directo sobre user_tenant_roles: COUNT(DISTINCT user_id)
+            // por rol para que un usuario con el mismo rol en varias empresas
+            // (p. ej. 'client' en A y B) cuente 1 sola vez bajo ese rol. Las
+            // filas de empresas donde el usuario es admin_tenant no cuentan.
+            $byRole = DB::table('user_tenant_roles')
+                ->join('users', 'user_tenant_roles.user_id', '=', 'users.id')
+                ->join('roles', 'user_tenant_roles.role_id', '=', 'roles.id')
+                ->whereIn('roles.name', User::ORG_EMPLOYEE_ROLES)
+                ->whereNull('users.deleted_at')
+                ->whereNotExists($this->adminTenantInSameTenantSubquery())
+                ->select('roles.name', DB::raw('count(distinct user_tenant_roles.user_id) as count'))
                 ->groupBy('roles.name')
                 ->get()
                 ->mapWithKeys(fn($item) => [$item->name => $item->count])
@@ -470,14 +501,61 @@ class ReportsService
 
     /**
      * Get users report data for export.
+     *
+     * Empleados = roles de empresa User::ORG_EMPLOYEE_ROLES (admin/client/
+     * aprobador) POR ROL EN CADA EMPRESA — nunca cuentas de aplicación (root,
+     * global; admin_tenant, administrador de empresa). Ver
+     * Tenant::employeesQuery() y User::ORG_EMPLOYEE_ROLES.
      */
     public function getUsersReportData(array $filters = []): \Illuminate\Support\Collection
     {
-        $query = User::with(['tenants:id,name'])
+        $query = User::with(['tenants:id,name', 'tenantRoles.role'])
             ->orderBy('name');
 
-        if (!empty($filters['tenant_id'])) {
-            $query->whereHas('tenants', fn($q) => $q->where('tenants.id', $filters['tenant_id']));
+        $tenantId = $filters['tenant_id'] ?? null;
+        $hasSpecificTenant = is_numeric($tenantId) && (int) $tenantId > 0;
+
+        if ($hasSpecificTenant) {
+            $tenantId = (int) $tenantId;
+
+            // Empresa concreta: miembro de la empresa Y con un rol de empleado
+            // EN ella, Y sin rol admin_tenant EN ella (regla "admin_tenant
+            // domina": quien es admin_tenant de esta empresa es cuenta de
+            // aplicación aquí, aunque además tenga un rol de empleado — ver
+            // Tenant::employeesQuery()).
+            $query->whereHas('tenants', fn($q) => $q->where('tenants.id', $tenantId));
+            $query->whereHas('tenantRoles', function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)
+                    ->whereHas('role', fn($r) => $r->whereIn('name', User::ORG_EMPLOYEE_ROLES));
+            });
+            $query->whereDoesntHave('tenantRoles', function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)
+                    ->whereHas('role', fn($r) => $r->where('name', 'admin_tenant'));
+            });
+        } else {
+            // Root global ("todas las empresas"): whitelist positiva — tiene
+            // un rol de empleado en ALGUNA empresa donde NO es admin_tenant
+            // (regla "admin_tenant domina" por empresa: el dual admin_tenant
+            // en A / client en B sigue apareciendo por B; el dual
+            // client+admin_tenant SOLO en A no es empleado en ninguna parte)
+            // — + cinturón de seguridad (no es root).
+            $query->whereHas('tenantRoles', function ($q) {
+                $q->whereHas('role', fn($r) => $r->whereIn('name', User::ORG_EMPLOYEE_ROLES))
+                    ->whereNotExists($this->adminTenantInSameTenantSubquery());
+            });
+            $query->whereDoesntHave('roles', fn($q) => $q->where('name', 'root'));
+        }
+
+        // Actor que exporta (ReportsController::exportUsers): replica la
+        // exclusión de UserController::index — un no-root nunca se ve a sí
+        // mismo ni a ningún admin_tenant (solo root administra esas cuentas).
+        // Root no tiene esta exclusión.
+        $actor = $filters['acting_user'] ?? null;
+        if ($actor instanceof User && !$actor->isRoot()) {
+            $query->where('users.id', '!=', $actor->id)
+                ->whereDoesntHave('tenantRoles', function ($q) {
+                    $q->whereHas('role', fn($r) => $r->where('name', 'admin_tenant'));
+                });
         }
 
         // Nombre completo vía User::scopeMatchingFullName — antes solo
@@ -520,8 +598,26 @@ class ReportsService
             ? $this->vacationBalanceService->getBalancesForUsers($users, $tenantIdForBalance)
             : [];
 
-        return $users->map(function ($user) use ($vacationBalances) {
-            $role = $user->getCurrentRole();
+        return $users->map(function ($user) use ($vacationBalances, $hasSpecificTenant, $tenantId) {
+            // Rol de EMPLEADO de mayor prioridad: en la empresa exportada
+            // (tenant_id concreto), o entre todas sus empresas (export
+            // global) — nunca vía getCurrentRole() sin tenant, que podía
+            // devolver el rol de OTRA empresa distinta a la exportada.
+            // Los roles de empresas donde el usuario es admin_tenant no
+            // cuentan (regla "admin_tenant domina": ahí es cuenta de
+            // aplicación, no empleado).
+            $adminTenantTenantIds = $user->tenantRoles
+                ->filter(fn($tr) => $tr->role?->name === 'admin_tenant')
+                ->pluck('tenant_id')
+                ->all();
+            $employeeTenantRoles = $user->tenantRoles
+                ->reject(fn($tr) => in_array($tr->tenant_id, $adminTenantTenantIds, true));
+            $tenantRoleNames = $hasSpecificTenant
+                ? $employeeTenantRoles->where('tenant_id', $tenantId)->pluck('role.name')
+                : $employeeTenantRoles->pluck('role.name');
+            $role = User::highestPriorityRole(
+                $tenantRoleNames->filter()->intersect(User::ORG_EMPLOYEE_ROLES)
+            );
             $tenantNames = $user->tenants->pluck('name')->join(', ');
             $balance = $vacationBalances[$user->id] ?? null;
 
@@ -535,7 +631,10 @@ class ReportsService
                 'ID' => $user->id,
                 'Nombre' => $user->name,
                 'Email' => $user->email,
-                'Rol' => $role ?? 'N/A',
+                // Display name (Obs 2), no el slug crudo: root no está en el
+                // mapa de BulkUserUploadService::orgRoleLabel (no es un rol
+                // por organización) y se devuelve tal cual, sin romper el export.
+                'Rol' => $role ? BulkUserUploadService::orgRoleLabel($role) : 'N/A',
                 'Activo' => $user->status === 'active' ? 'Sí' : 'No',
                 'Estado' => $user->status ?? 'N/A',
                 'Organizaciones' => $tenantNames ?: 'N/A',
@@ -547,6 +646,107 @@ class ReportsService
                 'Saldo Vacaciones' => $balance['balance'] ?? 'N/A',
             ];
         });
+    }
+
+    /**
+     * Get app accounts (cuentas de aplicación) report data for export.
+     *
+     * A diferencia de getUsersReportData() (empleados: admin/client/aprobador
+     * por empresa), este export cubre las cuentas de PLATAFORMA: root
+     * (global, siempre incluido) y admin_tenant (administrador de empresa).
+     *
+     * @param  ?array<int>  $tenantIds  null = sin restricción (root ve todo).
+     *   Para un viewer no-root, la empresa ACTIVA en la que está operando
+     *   (ver ReportsController::exportAppAccounts) — acota tanto QUÉ
+     *   admin_tenant se listan como QUÉ empresas se muestran en su columna.
+     * @param  bool  $includeRoots  false para viewers no-root: las cuentas
+     *   root son de la plataforma, no de la empresa activa.
+     */
+    public function getAppAccountsReportData(?array $tenantIds = null, bool $includeRoots = true): \Illuminate\Support\Collection
+    {
+        $eagerLoads = ['tenants:id,name', 'tenantRoles.role', 'tenantRoles.tenant:id,name'];
+
+        // (a) Roots de plataforma: solo para viewers root ($includeRoots).
+        $roots = $includeRoots
+            ? User::whereHas('roles', fn($q) => $q->where('name', 'root'))
+                ->with($eagerLoads)
+                ->get()
+            : collect();
+        $rootIds = $roots->pluck('id')->flip();
+
+        // (b) admin_tenant, opcionalmente acotado a $tenantIds (empresas que
+        // administra el viewer no-root).
+        $adminTenants = User::whereHas('tenantRoles', function ($q) use ($tenantIds) {
+            $q->whereHas('role', fn($r) => $r->where('name', 'admin_tenant'));
+            if ($tenantIds !== null) {
+                $q->whereIn('tenant_id', $tenantIds);
+            }
+        })->with($eagerLoads)->get();
+
+        // (c) merge: si un usuario es root Y admin_tenant, gana root — unique()
+        // conserva la PRIMERA ocurrencia de cada id, y $roots va primero.
+        $users = $roots->concat($adminTenants)->unique('id')->sortBy('name')->values();
+
+        return $users->map(function ($user) use ($rootIds, $tenantIds) {
+            $isRoot = $rootIds->has($user->id);
+
+            if ($isRoot) {
+                $tipo = 'Administrador Plataforma';
+                $empresas = 'Todas (plataforma)';
+            } else {
+                $tipo = BulkUserUploadService::orgRoleLabel('admin_tenant');
+
+                // Empresas donde administra como admin_tenant, restringidas a
+                // $tenantIds cuando el viewer NO es root: nunca se filtran
+                // nombres de empresas ajenas al viewer.
+                $adminTenantRoles = $user->tenantRoles->filter(
+                    fn($tr) => $tr->role?->name === 'admin_tenant'
+                );
+                if ($tenantIds !== null) {
+                    $adminTenantRoles = $adminTenantRoles->filter(
+                        fn($tr) => in_array($tr->tenant_id, $tenantIds, true)
+                    );
+                }
+
+                $empresas = $adminTenantRoles->pluck('tenant.name')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->join(', ');
+                $empresas = $empresas !== '' ? $empresas : 'N/A';
+            }
+
+            return [
+                'ID' => $user->id,
+                'Nombre' => $user->name,
+                'Email' => $user->email,
+                'Tipo de cuenta' => $tipo,
+                'Empresas que administra' => $empresas,
+                'Estado' => $user->status === 'active' ? 'Activo' : 'Inactivo',
+                'Fecha de registro' => $user->created_at?->format('Y-m-d'),
+                'Último acceso' => $user->last_login_at?->format('Y-m-d H:i') ?? 'N/A',
+            ];
+        });
+    }
+
+    /**
+     * Subconsulta correlacionada para whereNotExists en queries cuya tabla
+     * activa es user_tenant_roles (whereHas('tenantRoles') o DB::table):
+     * excluye las filas de empresas donde ESE usuario tiene además el rol
+     * admin_tenant. Regla "admin_tenant domina" por empresa — quien es
+     * admin_tenant de una empresa es cuenta de aplicación ahí, aunque tenga
+     * también un rol de empleado (ver Tenant::employeesQuery()).
+     */
+    private function adminTenantInSameTenantSubquery(): \Closure
+    {
+        return function ($sub) {
+            $sub->select(DB::raw(1))
+                ->from('user_tenant_roles as utr_admin')
+                ->join('roles as r_admin', 'r_admin.id', '=', 'utr_admin.role_id')
+                ->whereColumn('utr_admin.user_id', 'user_tenant_roles.user_id')
+                ->whereColumn('utr_admin.tenant_id', 'user_tenant_roles.tenant_id')
+                ->where('r_admin.name', 'admin_tenant');
+        };
     }
 
     private function translateStatus(string $status): string
@@ -639,7 +839,12 @@ class ReportsService
      */
     public function getTenantReportData(array $filters = []): \Illuminate\Support\Collection
     {
-        $query = Tenant::withCount(['users', 'documents'])
+        // 'users' fuera del withCount: contaba TODOS los miembros del tenant
+        // (incluye admin_tenant, que no es un "usuario/empleado" de la
+        // empresa). La columna 'usuarios' se recalcula por fila con
+        // Tenant::employeesQuery() (whitelist de User::ORG_EMPLOYEE_ROLES);
+        // N+1 aceptable en un export.
+        $query = Tenant::withCount(['documents'])
             ->orderBy('name');
 
         if (!empty($filters['search'])) {
@@ -663,7 +868,11 @@ class ReportsService
                 'email' => $tenant->email ?? 'N/A',
                 'telefono' => $tenant->phone ?? 'N/A',
                 'direccion' => $tenant->address ?? 'N/A',
-                'usuarios' => $tenant->users_count,
+                'empleados' => $tenant->employeesQuery()->count('users.id'),
+                // Export solo-root (ReportsController::exportTenants):
+                // admin_tenant de la empresa, complemento de 'empleados'
+                // bajo la regla "admin_tenant domina" (no se solapan).
+                'cuentas_aplicacion' => $tenant->appAccountsQuery()->count('users.id'),
                 'documentos' => $tenant->documents_count,
                 'estado' => $tenant->status === 'active' ? 'Activo' : 'Inactivo',
                 'fecha_creacion' => $tenant->created_at?->format('Y-m-d'),

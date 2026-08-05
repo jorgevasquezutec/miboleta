@@ -215,6 +215,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/documents/export', [ReportsController::class, 'exportDocuments']);
         Route::get('/vacations/export', [ReportsController::class, 'exportVacations']);
         Route::get('/users/export', [ReportsController::class, 'exportUsers']);
+        Route::get('/app-accounts/export', [ReportsController::class, 'exportAppAccounts']);
         Route::get('/batches/export', [ReportsController::class, 'exportBatches']);
         Route::get('/tenants/export', [ReportsController::class, 'exportTenants']);
     });

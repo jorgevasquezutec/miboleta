@@ -253,7 +253,7 @@ export const router = createBrowserRouter([
       {
         path: "tenants",
         element: (
-          <ProtectedRoute requires="tenants.manage">
+          <ProtectedRoute requires="tenants.view">
             <LazyPage><TenantsListPage /></LazyPage>
           </ProtectedRoute>
         ),
@@ -269,7 +269,7 @@ export const router = createBrowserRouter([
       {
         path: "tenants/:id",
         element: (
-          <ProtectedRoute requires="tenants.manage">
+          <ProtectedRoute requires="tenants.view">
             <LazyPage><TenantFormPage /></LazyPage>
           </ProtectedRoute>
         ),

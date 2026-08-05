@@ -50,7 +50,11 @@ export function TemplateConfigModal({
     // (viene de BulkUserUploadService::ALLOWED_ORG_ROLES, sin hardcode) para
     // no repetir aquí una lista que puede desincronizarse del backend
     // ([OBS-CLIENTE 2026-07]: admin_tenant ya no se asigna por carga masiva).
-    const availableRoleNames = configData.available_roles.map((r) => r.name).join(', ');
+    // Display name (Obs 2: "Empleado", no el slug crudo "client"); fallback
+    // al name si por lo que sea display_name viniera vacío.
+    const availableRoleNames = configData.available_roles
+        .map((r) => r.display_name || r.name)
+        .join(', ');
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>

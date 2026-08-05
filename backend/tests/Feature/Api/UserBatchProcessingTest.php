@@ -250,4 +250,61 @@ class UserBatchProcessingTest extends TestCase
             'El usuario debió quedar con el rol admin_tenant en la empresa'
         );
     }
+
+    /**
+     * [Área 1] UserBatch::syncInitialEmployeeCounts ahora delega en
+     * Tenant::employeesQuery() (rol de empleado por tenant), no en
+     * $tenant->users()->count(): $this->adminTenant del setUp es miembro de
+     * la empresa (user_tenants) con rol 'admin_tenant', que NO cuenta como
+     * empleado. El conteo inicial fijado tras este batch debe reflejar solo
+     * los 2 empleados (client + aprobador) recién creados, no 3.
+     */
+    public function test_sync_initial_employee_counts_only_counts_org_employee_roles(): void
+    {
+        $this->assertSame(0, $this->tenant->fresh()->initial_employee_count);
+
+        $payload = [
+            'send_welcome_emails' => false,
+            'users' => [
+                $this->userRow('Empleado1', '11112222', 'empleado1@example.com', ['client']),
+                $this->userRow('Empleado2', '33334444', 'empleado2@example.com', ['aprobador']),
+            ],
+        ];
+
+        $response = $this->actingAs($this->adminTenant)
+            ->withHeaders(['X-Tenant-Ids' => (string) $this->tenant->id])
+            ->postJson('/api/user-batches/upload-data', $payload);
+
+        $response->assertStatus(201);
+
+        $this->assertSame(2, $this->tenant->fresh()->initial_employee_count);
+    }
+
+    /**
+     * [Área 1] syncInitialEmployeeCounts sigue siendo idempotente con la
+     * fórmula filtrada: si el tenant ya tiene un initial_employee_count
+     * fijado (no vacío), un batch posterior no debe pisarlo aunque el nuevo
+     * conteo filtrado sea distinto.
+     */
+    public function test_sync_initial_employee_counts_is_idempotent(): void
+    {
+        $this->tenant->update(['initial_employee_count' => 5]);
+
+        $payload = [
+            'send_welcome_emails' => false,
+            'users' => [
+                $this->userRow('Empleado3', '55556666', 'empleado3@example.com', ['client']),
+            ],
+        ];
+
+        $response = $this->actingAs($this->adminTenant)
+            ->withHeaders(['X-Tenant-Ids' => (string) $this->tenant->id])
+            ->postJson('/api/user-batches/upload-data', $payload);
+
+        $response->assertStatus(201);
+
+        // Ya estaba fijado en 5: no se toca aunque el conteo filtrado real
+        // (1 empleado) sea distinto.
+        $this->assertSame(5, $this->tenant->fresh()->initial_employee_count);
+    }
 }

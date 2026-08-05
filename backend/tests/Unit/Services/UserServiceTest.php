@@ -269,12 +269,58 @@ class UserServiceTest extends TestCase
         $this->assertFalse($this->userService->canManageUser($admin, $peer));
     }
 
-    public function test_admin_tenant_manages_admin_in_same_tenant(): void
+    public function test_admin_tenant_cannot_manage_admin_in_same_tenant(): void
     {
+        // Observación 1 (2026-08): antes de esto un admin_tenant SÍ podía
+        // administrar una cuenta admin en la empresa compartida (asumía la
+        // misma jerarquía que la de ASIGNAR el rol). Ahora solo root
+        // administra admins; admin_tenant conserva la potestad de asignar
+        // el rol admin al crear/editar (assignableRoleNamesFor), pero no la
+        // de administrar la cuenta ya creada.
         $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)->create();
         $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)->create();
 
-        $this->assertTrue($this->userService->canManageUser($adminTenant, $admin));
+        $this->assertFalse($this->userService->canManageUser($adminTenant, $admin));
+    }
+
+    public function test_root_manages_admin(): void
+    {
+        $root = User::factory()->root()->create();
+        $admin = User::factory()->withTenantRole($this->tenant, 'admin', true)->create();
+
+        $this->assertTrue($this->userService->canManageUser($root, $admin));
+    }
+
+    public function test_admin_tenant_cannot_manage_admin_in_another_tenant(): void
+    {
+        // Observación 1: el blindaje de target admin es CROSS-TENANT, igual
+        // que ya lo era para admin_tenant. Un admin_tenant no administra a
+        // un usuario que es client en la empresa compartida pero admin en
+        // otra empresa distinta.
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)->create();
+        $target = User::factory()->withTenantRole($this->tenant, 'client', true)->create();
+        $target->tenants()->attach($otherTenant->id, ['is_primary' => false]);
+        \App\Models\UserTenantRole::create([
+            'user_id' => $target->id,
+            'tenant_id' => $otherTenant->id,
+            'role_id' => Role::where('name', 'admin')->first()->id,
+        ]);
+
+        $this->assertFalse($this->userService->canManageUser($adminTenant, $target));
+    }
+
+    public function test_assignable_role_names_for_admin_tenant_still_includes_admin(): void
+    {
+        // ASSIGNABLE_ROLES (asignar rol al crear/editar) es una jerarquía
+        // distinta de MANAGEABLE_ROLES (administrar la cuenta): admin_tenant
+        // sigue pudiendo asignar el rol admin aunque ya no pueda administrar
+        // esa cuenta después de creada.
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)->create();
+
+        $roles = UserService::assignableRoleNamesFor($adminTenant, $this->tenant->id);
+
+        $this->assertContains('admin', $roles);
     }
 
     public function test_admin_tenant_cannot_manage_another_admin_tenant_anywhere(): void
