@@ -1,6 +1,6 @@
 import { Tenant, CreateTenantData, UpdateTenantData, TenantSmtpTestResult } from '@/core/domain/entities';
 import { ITenantRepository, GetTenantsParams } from '@/core/domain/repositories/ITenantRepository';
-import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 import { PaginatedResponse } from './types';
 
 /**
@@ -16,7 +16,7 @@ export class TenantRepository implements ITenantRepository {
       const response = await apiClient.get<PaginatedResponse<Tenant>>('/tenants', { params });
       return response.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -28,7 +28,7 @@ export class TenantRepository implements ITenantRepository {
       const response = await apiClient.get<{ data: Tenant }>(`/tenants/${id}`);
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -40,7 +40,7 @@ export class TenantRepository implements ITenantRepository {
       const response = await apiClient.post<{ data: Tenant; message: string }>('/tenants', data);
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -52,7 +52,7 @@ export class TenantRepository implements ITenantRepository {
       const response = await apiClient.put<{ data: Tenant; message: string }>(`/tenants/${id}`, data);
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -63,7 +63,7 @@ export class TenantRepository implements ITenantRepository {
     try {
       await apiClient.delete(`/tenants/${id}`);
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -75,7 +75,7 @@ export class TenantRepository implements ITenantRepository {
       const response = await apiClient.get<{ data: any[] }>(`/tenants/${tenantId}/users`);
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -89,7 +89,7 @@ export class TenantRepository implements ITenantRepository {
         is_primary: isPrimary,
       });
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -100,7 +100,7 @@ export class TenantRepository implements ITenantRepository {
     try {
       await apiClient.delete(`/tenants/${tenantId}/users/${userId}`);
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -113,7 +113,7 @@ export class TenantRepository implements ITenantRepository {
       const response = await apiClient.post<TenantSmtpTestResult>(`/tenants/${tenantId}/smtp/test`);
       return response.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 }

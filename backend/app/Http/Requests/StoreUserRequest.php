@@ -5,12 +5,14 @@ namespace App\Http\Requests;
 use App\Models\Role;
 use App\Models\User;
 use App\Http\Requests\Concerns\ResolvesActiveRole;
+use App\Http\Requests\Concerns\ValidatesUserIdentityUniqueness;
 use App\Services\UserService;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreUserRequest extends FormRequest
 {
     use ResolvesActiveRole;
+    use ValidatesUserIdentityUniqueness;
 
     /**
      * Roles de supervisión válidos: quien figure como "jefe inmediato" de un
@@ -141,9 +143,13 @@ class StoreUserRequest extends FormRequest
         return [
             'name' => 'required|string|max:255',
             'last_name' => 'nullable|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            // La unicidad se comprueba con reglas propias (no `unique:`) para
+            // poder distinguir el choque contra un usuario ELIMINADO, que sigue
+            // ocupando el correo y el documento pero no se ve en ningún
+            // listado. Ver ValidatesUserIdentityUniqueness.
+            'email' => ['required', 'email', $this->uniqueEmailRule()],
             'document_type' => 'nullable|string|in:dni,ruc,ce,passport',
-            'document_text' => 'nullable|string|unique:users,document_text',
+            'document_text' => ['nullable', 'string', $this->uniqueDocumentRule()],
             'phone' => 'nullable|string|max:20',
             'birth_date' => 'nullable|date',
             'status' => 'nullable|string|in:active,inactive,pending',
@@ -301,9 +307,10 @@ class StoreUserRequest extends FormRequest
             'name.max' => 'El nombre no puede exceder 255 caracteres',
             'email.required' => 'El email es requerido',
             'email.email' => 'El email debe ser una dirección válida',
-            'email.unique' => 'Este email ya está registrado',
+            // Los mensajes de duplicado (correo y documento) los emite la regla
+            // propia de ValidatesUserIdentityUniqueness, que distingue si el
+            // choque es contra un usuario activo o contra uno eliminado.
             'document_type.in' => 'El tipo de documento debe ser: dni, ruc, ce o passport',
-            'document_text.unique' => 'Este número de documento ya está registrado',
             'phone.max' => 'El teléfono no puede exceder 20 caracteres',
             'birth_date.date' => 'La fecha de nacimiento no es válida',
             'role_id.exists' => 'El rol seleccionado no existe',

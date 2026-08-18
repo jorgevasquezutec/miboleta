@@ -8,6 +8,9 @@ import { Label } from '@/presentation/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/presentation/components/ui/card';
 import { useAuthStore } from '@/presentation/stores/authStore';
 import apiClient from '@/infrastructure/http/apiClient';
+import { useFormErrors } from '@/presentation/hooks/useFormErrors';
+import { showApiError } from '@/presentation/utils/showApiError';
+import { FieldError, FormErrorSummary } from '@/presentation/components/shared/FieldError';
 import { toast } from 'sonner';
 
 export default function ForceChangePasswordPage() {
@@ -17,7 +20,9 @@ export default function ForceChangePasswordPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [password, setPassword] = useState('');
     const [passwordConfirmation, setPasswordConfirmation] = useState('');
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    const { errors, formErrors, setErrors, applyApiError } = useFormErrors({
+        knownFields: ['password', 'password_confirmation'],
+    });
 
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
@@ -53,9 +58,9 @@ export default function ForceChangePasswordPage() {
 
             toast.success('¡Contraseña actualizada correctamente!');
             navigate('/');
-        } catch (error: any) {
-            const message = error.response?.data?.message || 'Error al cambiar contraseña';
-            toast.error(message);
+        } catch (error) {
+            const apiError = applyApiError(error);
+            showApiError(apiError);
         } finally {
             setIsLoading(false);
         }
@@ -101,6 +106,8 @@ export default function ForceChangePasswordPage() {
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            <FormErrorSummary messages={formErrors} />
+
                             {/* Password */}
                             <div className="space-y-2">
                                 <Label htmlFor="password">Nueva Contraseña</Label>
@@ -113,15 +120,13 @@ export default function ForceChangePasswordPage() {
                                         value={password}
                                         onChange={(e) => {
                                             setPassword(e.target.value);
-                                            if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
+                                            if (errors.password) setErrors({ ...errors, password: '' });
                                         }}
                                         className={`pl-10 h-11 ${errors.password ? 'border-red-500' : ''}`}
                                         disabled={isLoading}
                                     />
                                 </div>
-                                {errors.password && (
-                                    <p className="text-sm text-red-500">{errors.password}</p>
-                                )}
+                                <FieldError message={errors.password} />
                             </div>
 
                             {/* Confirm Password */}
@@ -136,15 +141,13 @@ export default function ForceChangePasswordPage() {
                                         value={passwordConfirmation}
                                         onChange={(e) => {
                                             setPasswordConfirmation(e.target.value);
-                                            if (errors.password_confirmation) setErrors(prev => ({ ...prev, password_confirmation: '' }));
+                                            if (errors.password_confirmation) setErrors({ ...errors, password_confirmation: '' });
                                         }}
                                         className={`pl-10 h-11 ${errors.password_confirmation ? 'border-red-500' : ''}`}
                                         disabled={isLoading}
                                     />
                                 </div>
-                                {errors.password_confirmation && (
-                                    <p className="text-sm text-red-500">{errors.password_confirmation}</p>
-                                )}
+                                <FieldError message={errors.password_confirmation} />
                             </div>
 
                             {/* Password Requirements */}

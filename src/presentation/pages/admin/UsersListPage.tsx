@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUsersStore } from "@/presentation/stores/usersStore";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
@@ -33,6 +33,7 @@ import {
 } from "@/presentation/components/ui/select";
 import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { canEditTarget } from "@/presentation/utils/userPermissions";
 import { formatVacationDays } from "@/presentation/utils";
@@ -129,6 +130,18 @@ export function UsersListPage() {
   // TenantSwitcher sincroniza junto con currentTenant para ambos roles. Root
   // en modo "Todas las empresas" no manda header y el backend no filtra:
   // mismo resultado que antes.
+  // Recarga la lista con los filtros y la página que el usuario tiene puestos.
+  // Se usa también tras eliminar: llamar a fetchUsers() sin argumentos volvía a
+  // la página 1 sin búsqueda ni filtro de estado, y parecía que la lista "no se
+  // actualizaba" cuando en realidad cambiaba de sitio.
+  const refreshUsers = useCallback(() => {
+    return fetchUsers({
+      search: filters.search,
+      status: filters.status === 'all' ? '' : filters.status,
+      page: filters.page,
+    });
+  }, [fetchUsers, filters.search, filters.status, filters.page]);
+
   useTenantAwareEffect(() => {
     const tenantChanged = prevTenantIdRef.current !== currentTenant?.id;
     prevTenantIdRef.current = currentTenant?.id;
@@ -138,13 +151,8 @@ export function UsersListPage() {
       return;
     }
 
-    const statusValue = filters.status === 'all' ? '' : filters.status;
-    fetchUsers({
-      search: filters.search,
-      status: statusValue,
-      page: filters.page,
-    });
-  }, [filters.search, filters.status, filters.page, currentTenant?.id, fetchUsers]);
+    refreshUsers();
+  }, [filters.search, filters.status, filters.page, currentTenant?.id, refreshUsers]);
 
   const handleDelete = (id: string, userName: string) => {
     setUserToDelete({ id, name: userName });
@@ -156,9 +164,9 @@ export function UsersListPage() {
     try {
       await deleteUser(userToDelete.id);
       toast.success("Usuario eliminado exitosamente");
-      await fetchUsers();
+      await refreshUsers();
     } catch (error) {
-      toast.error("Error al eliminar usuario");
+      showApiError(error, "Error al eliminar usuario");
     }
   };
 
@@ -195,7 +203,7 @@ export function UsersListPage() {
       reportsRepository.downloadBlob(blob, filename);
       toast.success('Exportación completada');
     } catch (error) {
-      toast.error('Error al exportar usuarios');
+      showApiError(error, 'Error al exportar usuarios');
     } finally {
       setIsExporting(false);
     }
@@ -211,7 +219,7 @@ export function UsersListPage() {
       reportsRepository.downloadBlob(blob, filename);
       toast.success('Exportación completada');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al exportar cuentas de aplicación');
+      showApiError(error, 'Error al exportar cuentas de aplicación');
     } finally {
       setIsExportingAppAccounts(false);
     }

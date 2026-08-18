@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/pre
 import { Avatar, AvatarFallback, AvatarImage } from "@/presentation/components/ui/avatar";
 import { Badge } from "@/presentation/components/ui/badge";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 import { useAuthStore } from "@/presentation/stores";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { LaborRegime } from "@/core/domain/entities";
@@ -43,7 +44,7 @@ export function ProfilePage() {
       try {
         await me(); // Llama a /api/me
       } catch (error) {
-        toast.error("Error al cargar datos del perfil");
+        showApiError(error, "Error al cargar datos del perfil");
       }
     };
 
@@ -96,7 +97,7 @@ export function ProfilePage() {
       await uploadAvatar(file);
       toast.success("Foto de perfil actualizada correctamente");
     } catch (error) {
-      toast.error("Error al subir la foto");
+      showApiError(error, "Error al subir la foto");
       console.error(error);
     } finally {
       setUploading(false);
@@ -112,7 +113,7 @@ export function ProfilePage() {
       await deleteAvatar();
       toast.success("Foto de perfil eliminada");
     } catch (error) {
-      toast.error("Error al eliminar la foto");
+      showApiError(error, "Error al eliminar la foto");
       console.error(error);
     } finally {
       setUploading(false);
@@ -135,7 +136,7 @@ export function ProfilePage() {
 
       toast.success("Perfil actualizado exitosamente");
     } catch (error) {
-      toast.error("Error al actualizar el perfil");
+      showApiError(error, "Error al actualizar el perfil");
       console.error("Update profile error:", error);
     } finally {
       setIsSaving(false);

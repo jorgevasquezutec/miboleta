@@ -20,6 +20,7 @@ import {
 } from '@/presentation/components/ui/select';
 import { Building2, Star, Plus, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { showApiError } from '@/presentation/utils/showApiError';
 
 interface UserTenantsManagerProps {
     userTenants: TenantAssociation[];
@@ -58,7 +59,7 @@ export function UserTenantsManager({
             await onSetPrimary(tenantId);
             toast.success('Tenant primario actualizado');
         } catch (error) {
-            toast.error('Error al actualizar tenant primario');
+            showApiError(error, 'Error al actualizar tenant primario');
         } finally {
             setActionLoading(null);
         }
@@ -73,7 +74,7 @@ export function UserTenantsManager({
             setSelectedTenantToAdd('');
             toast.success('Tenant agregado exitosamente');
         } catch (error) {
-            toast.error('Error al agregar tenant');
+            showApiError(error, 'Error al agregar tenant');
         } finally {
             setActionLoading(null);
         }
@@ -96,7 +97,7 @@ export function UserTenantsManager({
             await onRemoveTenant(tenantToRemove.id);
             toast.success('Tenant removido exitosamente');
         } catch (error) {
-            toast.error('Error al remover tenant');
+            showApiError(error, 'Error al remover tenant');
         } finally {
             setActionLoading(null);
         }

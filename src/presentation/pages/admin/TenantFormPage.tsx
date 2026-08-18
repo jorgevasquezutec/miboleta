@@ -25,6 +25,9 @@ import { ArrowLeft, Save, Loader2, Building2, X, ImageIcon, Mail, Users, PlugZap
 import { toast } from 'sonner';
 import { uploadTenantLogo, validateImageFile } from '@/infrastructure/http/fileUpload';
 import { tenantRepository } from '@/infrastructure/persistence/repositories/TenantRepository';
+import { useFormErrors } from '@/presentation/hooks/useFormErrors';
+import { showApiError } from '@/presentation/utils/showApiError';
+import { FieldError, FormErrorSummary } from '@/presentation/components/shared/FieldError';
 import type { CreateTenantData, UpdateTenantData, MailEncryption } from '@/core/domain/entities/Tenant';
 
 export function TenantFormPage() {
@@ -66,7 +69,23 @@ export function TenantFormPage() {
     // devuelve) y solo se envía cuando el usuario escribe una nueva.
     const [mailPassword, setMailPassword] = useState('');
 
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    // Backend (StoreTenantRequest/UpdateTenantRequest): todos estos campos
+    // tienen control visible en este formulario, así que cualquier error de
+    // validación por campo se pinta con FieldError; lo que no encaje (no
+    // debería pasar) cae en FormErrorSummary.
+    const {
+        errors,
+        formErrors,
+        setErrors,
+        clearError,
+        applyApiError,
+    } = useFormErrors({
+        knownFields: [
+            'name', 'ruc', 'business_name', 'address', 'phone', 'status', 'labor_regime',
+            'mail_host', 'mail_port', 'mail_username', 'mail_password', 'mail_encryption',
+            'mail_from_address', 'mail_from_name',
+        ],
+    });
     const [isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
@@ -169,7 +188,11 @@ export function TenantFormPage() {
                 }
             }
         } catch (error) {
-            // Error already handled by store
+            // El store (tenantsStore) ya no tuesta ni resume el error: solo
+            // relanza para que aquí se reparta por campo (useFormErrors) y se
+            // tueste completo, con todos los mensajes (showApiError).
+            const apiError = applyApiError(error);
+            showApiError(apiError);
         }
     };
 
@@ -226,8 +249,8 @@ export function TenantFormPage() {
             } else {
                 toast.error(result.message);
             }
-        } catch (error: any) {
-            toast.error(error.message || 'Error al probar la conexión SMTP');
+        } catch (error) {
+            showApiError(error, 'Error al probar la conexión SMTP');
         } finally {
             setIsTestingSmtp(false);
         }
@@ -235,9 +258,7 @@ export function TenantFormPage() {
 
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
-        if (errors[field]) {
-            setErrors(prev => ({ ...prev, [field]: '' }));
-        }
+        clearError(field);
     };
 
     const handleFileSelect = async (file: File) => {
@@ -261,10 +282,10 @@ export function TenantFormPage() {
             const path = await uploadTenantLogo(file);
             setFormData(prev => ({ ...prev, logo_path: path }));
             toast.success('Logo subido exitosamente');
-        } catch (error: any) {
+        } catch (error) {
             // If upload fails, clear the preview
             setLogoPreviewUrl(null);
-            toast.error(error.message || 'Error al subir el logo');
+            showApiError(error, 'Error al subir el logo');
         } finally {
             setIsUploading(false);
         }
@@ -340,6 +361,8 @@ export function TenantFormPage() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6 mt-8">
+                <FormErrorSummary messages={formErrors} />
+
                 {/* Obs-3: modo solo lectura para quien ve el detalle de una empresa
                     sin 'tenants.manage' (admin_tenant). `disabled` en un <fieldset>
                     se hereda por todos los controles de formulario nativos
@@ -512,9 +535,7 @@ export function TenantFormPage() {
                                     placeholder="Ej: Corporación ABC"
                                     className={errors.name ? 'border-red-500' : ''}
                                 />
-                                {errors.name && (
-                                    <p className="text-sm text-red-500">{errors.name}</p>
-                                )}
+                                <FieldError message={errors.name} />
                             </div>
 
                             {/* RUC */}
@@ -537,9 +558,7 @@ export function TenantFormPage() {
                                     className={errors.ruc ? 'border-red-500' : ''}
                                 />
                                 <p className="text-xs text-gray-500">RUC: 11 dígitos numéricos</p>
-                                {errors.ruc && (
-                                    <p className="text-sm text-red-500">{errors.ruc}</p>
-                                )}
+                                <FieldError message={errors.ruc} />
                             </div>
                         </div>
 
@@ -551,7 +570,9 @@ export function TenantFormPage() {
                                 value={formData.business_name}
                                 onChange={(e) => handleChange('business_name', e.target.value)}
                                 placeholder="Ej: ABC S.A.C."
+                                className={errors.business_name ? 'border-red-500' : ''}
                             />
+                            <FieldError message={errors.business_name} />
                         </div>
 
                         {/* Status */}
@@ -563,7 +584,7 @@ export function TenantFormPage() {
                                     handleChange('status', value)
                                 }
                             >
-                                <SelectTrigger>
+                                <SelectTrigger className={errors.status ? 'border-red-500' : ''}>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -571,6 +592,7 @@ export function TenantFormPage() {
                                     <SelectItem value="inactive">Inactivo</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <FieldError message={errors.status} />
                         </div>
 
                         {/* Labor Regime */}
@@ -582,7 +604,7 @@ export function TenantFormPage() {
                                     handleChange('labor_regime', value)
                                 }
                             >
-                                <SelectTrigger id="labor_regime">
+                                <SelectTrigger id="labor_regime" className={errors.labor_regime ? 'border-red-500' : ''}>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -594,6 +616,7 @@ export function TenantFormPage() {
                             <p className="text-xs text-gray-500">
                                 Determina los días de vacaciones que corresponden a los empleados por año.
                             </p>
+                            <FieldError message={errors.labor_regime} />
                         </div>
                     </CardContent>
                 </Card>
@@ -615,7 +638,9 @@ export function TenantFormPage() {
                                 value={formData.address}
                                 onChange={(e) => handleChange('address', e.target.value)}
                                 placeholder="Ej: Av. Principal 123, Lima"
+                                className={errors.address ? 'border-red-500' : ''}
                             />
+                            <FieldError message={errors.address} />
                         </div>
 
                         {/* Phone */}
@@ -626,7 +651,9 @@ export function TenantFormPage() {
                                 value={formData.phone}
                                 onChange={(e) => handleChange('phone', e.target.value)}
                                 placeholder="Ej: +51 999 999 999"
+                                className={errors.phone ? 'border-red-500' : ''}
                             />
+                            <FieldError message={errors.phone} />
                         </div>
                     </CardContent>
                 </Card>
@@ -699,7 +726,9 @@ export function TenantFormPage() {
                                     value={formData.mail_host}
                                     onChange={(e) => handleChange('mail_host', e.target.value)}
                                     placeholder="Ej: smtp.gmail.com"
+                                    className={errors.mail_host ? 'border-red-500' : ''}
                                 />
+                                <FieldError message={errors.mail_host} />
                             </div>
 
                             {/* Port */}
@@ -713,7 +742,9 @@ export function TenantFormPage() {
                                     value={formData.mail_port}
                                     onChange={(e) => handleChange('mail_port', e.target.value)}
                                     placeholder="Ej: 587"
+                                    className={errors.mail_port ? 'border-red-500' : ''}
                                 />
+                                <FieldError message={errors.mail_port} />
                             </div>
                         </div>
 
@@ -727,7 +758,9 @@ export function TenantFormPage() {
                                     onChange={(e) => handleChange('mail_username', e.target.value)}
                                     placeholder="Ej: no-reply@empresa.com"
                                     autoComplete="off"
+                                    className={errors.mail_username ? 'border-red-500' : ''}
                                 />
+                                <FieldError message={errors.mail_username} />
                             </div>
 
                             {/* Password */}
@@ -748,12 +781,14 @@ export function TenantFormPage() {
                                             : 'Contraseña del servidor SMTP'
                                     }
                                     autoComplete="new-password"
+                                    className={errors.mail_password ? 'border-red-500' : ''}
                                 />
                                 {isEditing && currentTenant?.has_mail_password && (
                                     <p className="text-xs text-gray-500">
                                         Déjalo vacío para mantener la contraseña actual.
                                     </p>
                                 )}
+                                <FieldError message={errors.mail_password} />
                             </div>
                         </div>
 
@@ -767,7 +802,7 @@ export function TenantFormPage() {
                                         handleChange('mail_encryption', value)
                                     }
                                 >
-                                    <SelectTrigger id="mail_encryption">
+                                    <SelectTrigger id="mail_encryption" className={errors.mail_encryption ? 'border-red-500' : ''}>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -776,6 +811,7 @@ export function TenantFormPage() {
                                         <SelectItem value="ssl">SSL</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <FieldError message={errors.mail_encryption} />
                             </div>
                         </div>
 
@@ -789,7 +825,9 @@ export function TenantFormPage() {
                                     value={formData.mail_from_address}
                                     onChange={(e) => handleChange('mail_from_address', e.target.value)}
                                     placeholder="Ej: no-reply@empresa.com"
+                                    className={errors.mail_from_address ? 'border-red-500' : ''}
                                 />
+                                <FieldError message={errors.mail_from_address} />
                             </div>
 
                             {/* From Name */}
@@ -800,7 +838,9 @@ export function TenantFormPage() {
                                     value={formData.mail_from_name}
                                     onChange={(e) => handleChange('mail_from_name', e.target.value)}
                                     placeholder="Ej: Recursos Humanos ABC"
+                                    className={errors.mail_from_name ? 'border-red-500' : ''}
                                 />
+                                <FieldError message={errors.mail_from_name} />
                             </div>
                         </div>
                     </CardContent>

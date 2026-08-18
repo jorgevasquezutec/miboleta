@@ -16,6 +16,7 @@ import { Badge } from "@/presentation/components/ui/badge";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { VacationRequestCard } from "@/presentation/components/features/vacations";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 
 export function VacationConfirmationPage() {
@@ -79,8 +80,8 @@ export function VacationConfirmationPage() {
                 await markAsNotTaken(confirmDialog.requestId);
                 toast.success("Vacaciones marcadas como no tomadas");
             }
-        } catch {
-            toast.error("No se pudo actualizar el estado de las vacaciones");
+        } catch (error) {
+            showApiError(error, "No se pudo actualizar el estado de las vacaciones");
         } finally {
             setProcessingId(null);
             setConfirmDialog((prev) => ({ ...prev, open: false }));

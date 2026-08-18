@@ -14,6 +14,9 @@ import {
 import { EMPTY_TENANT_EXTRA, TenantExtra } from '@/presentation/components/features/users/TenantAssignmentCard';
 import { ArrowLeft, Save, Loader2, UserPlus, UserCircle, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFormErrors } from '@/presentation/hooks/useFormErrors';
+import { FormErrorSummary } from '@/presentation/components/shared/FieldError';
+import { showApiError } from '@/presentation/utils/showApiError';
 import { TenantAssociation, User } from '@/core/domain/entities/User';
 import { Role } from '@/core/domain/entities';
 
@@ -62,7 +65,7 @@ export function UserFormPage() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    const { errors, formErrors, nestedErrors, setErrors, clearError, applyApiError } = useFormErrors();
     const [formData, setFormData] = useState<FormData>(initialFormData);
     // Usuario OBJETIVO tal como vino del backend, conservado (además de
     // volcarlo a formData) para poder evaluar canEditTarget() abajo.
@@ -85,7 +88,7 @@ export function UserFormPage() {
             .then(setAvailableRoles)
             .catch((error) => {
                 console.error('Error loading roles catalog:', error);
-                toast.error('No se pudo cargar el catálogo de roles');
+                showApiError(error, 'No se pudo cargar el catálogo de roles');
             });
     }, []);
 
@@ -148,7 +151,7 @@ export function UserFormPage() {
             }
         } catch (error) {
             console.error(error);
-            toast.error('Error al cargar usuario');
+            showApiError(error, 'Error al cargar usuario');
             navigate('/users');
         } finally {
             setIsLoading(false);
@@ -209,9 +212,7 @@ export function UserFormPage() {
 
     const handleChange = (field: string, value: string | null) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
-        if (errors[field]) {
-            setErrors((prev) => ({ ...prev, [field]: '' }));
-        }
+        clearError(field);
     };
 
     const handleRoleChange = (role: string) => {
@@ -221,9 +222,8 @@ export function UserFormPage() {
             setSelectedTenants([]);
             setSupervisorsByTenant({});
             setExtrasByTenant({});
-            if (errors.tenants || errors.tenantRoles) {
-                setErrors(prev => ({ ...prev, tenants: '', tenantRoles: '' }));
-            }
+            clearError('tenants');
+            clearError('tenantRoles');
         }
     };
 
@@ -236,14 +236,12 @@ export function UserFormPage() {
             ...prev,
             [tenantId]: { ...(prev[tenantId] ?? EMPTY_TENANT_EXTRA), ...extra },
         }));
-        setErrors(prev => (prev.tenantRoles ? { ...prev, tenantRoles: '' } : prev));
-    }, []);
+        clearError('tenantRoles');
+    }, [clearError]);
 
     const handleTenantSelectionChange = useCallback((ids: string[]) => {
         setSelectedTenantIds(ids);
-        if (errors.tenants) {
-            setErrors(prev => ({ ...prev, tenants: '' }));
-        }
+        clearError('tenants');
 
         setSupervisorsByTenant(prev => {
             const next = { ...prev };
@@ -268,7 +266,7 @@ export function UserFormPage() {
             });
             return changed ? next : prev;
         });
-    }, [errors.tenants]);
+    }, [clearError]);
 
     const handleTenantsChange = useCallback((tenants: TenantAssociation[]) => {
         setSelectedTenants(tenants);
@@ -299,6 +297,10 @@ export function UserFormPage() {
                 const rootRoleId = availableRoles.find(r => r.name === 'root')?.id ?? ROOT_ROLE_ID_FALLBACK;
                 dataToSend.role_id = rootRoleId;
             } else {
+                // El índice de este array es la clave que usa applyApiError (más abajo,
+                // en el catch) para reagrupar `tenants_config.{i}.*` por empresa vía
+                // `indexToKey: i => selectedTenantIds[i]`. Si se reordena o filtra este
+                // array, hay que revisar también ese indexToKey.
                 const tenantsConfig = selectedTenantIds.map(tenantId => {
                     const extra = extrasByTenant[tenantId] ?? EMPTY_TENANT_EXTRA;
                     return {
@@ -329,8 +331,17 @@ export function UserFormPage() {
             navigate('/users');
         } catch (error: unknown) {
             console.error(error);
-            const message = error instanceof Error ? error.message : 'Error al guardar usuario';
-            toast.error(message);
+
+            // Errores de validación del backend (422): se reparten en errors (campos
+            // planos), nestedErrors (por empresa, vía tenants_config.{i}.*) y
+            // formErrors (sin control visible), y se tostean con showApiError para
+            // que ningún mensaje se pierda. Es lo que hace legible el caso del
+            // documento duplicado + fecha de inicio laboral futura.
+            const apiError = applyApiError(error, {
+                prefix: 'tenants_config',
+                indexToKey: i => selectedTenantIds[i],
+            });
+            showApiError(apiError);
         } finally {
             setIsSaving(false);
         }
@@ -415,6 +426,8 @@ export function UserFormPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
+                <FormErrorSummary messages={formErrors} />
+
                 <PersonalInfoCard
                     formData={formData}
                     errors={errors}
@@ -439,6 +452,7 @@ export function UserFormPage() {
                         extrasByTenant={extrasByTenant}
                         excludeUserId={id}
                         error={errors.tenants || errors.tenantRoles}
+                        fieldErrorsByTenant={nestedErrors}
                         onTenantSelectionChange={handleTenantSelectionChange}
                         onTenantsChange={handleTenantsChange}
                         onPrimaryChange={setPrimaryTenantId}

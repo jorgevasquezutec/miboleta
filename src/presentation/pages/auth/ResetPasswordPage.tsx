@@ -7,6 +7,9 @@ import { Input } from '@/presentation/components/ui/input';
 import { Label } from '@/presentation/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/presentation/components/ui/card';
 import apiClient from '@/infrastructure/http/apiClient';
+import { useFormErrors } from '@/presentation/hooks/useFormErrors';
+import { showApiError } from '@/presentation/utils/showApiError';
+import { FieldError, FormErrorSummary } from '@/presentation/components/shared/FieldError';
 import { toast } from 'sonner';
 
 export default function ResetPasswordPage() {
@@ -21,7 +24,14 @@ export default function ResetPasswordPage() {
     const [isSuccess, setIsSuccess] = useState(false);
     const [password, setPassword] = useState('');
     const [passwordConfirmation, setPasswordConfirmation] = useState('');
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    // errors/formErrors: validación del backend (422) por campo, vía
+    // useFormErrors. globalError sigue aparte: cubre tanto el enlace
+    // inválido/incompleto (chequeo de cliente, sin API de por medio) como el
+    // primer mensaje real de un error de API (token expirado, etc.), para el
+    // recuadro persistente que ya existía debajo del header del formulario.
+    const { errors, formErrors, setErrors, applyApiError, clearAll } = useFormErrors({
+        knownFields: ['password', 'password_confirmation'],
+    });
     const [globalError, setGlobalError] = useState('');
 
     // Verificar que tenemos token y email
@@ -51,6 +61,7 @@ export default function ResetPasswordPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setGlobalError('');
+        clearAll();
 
         if (!validateForm()) return;
 
@@ -65,10 +76,14 @@ export default function ResetPasswordPage() {
 
             setIsSuccess(true);
             toast.success('¡Contraseña actualizada correctamente!');
-        } catch (error: any) {
-            const message = error.response?.data?.message || 'Error al restablecer la contraseña';
-            setGlobalError(message);
-            toast.error(message);
+        } catch (error) {
+            // applyApiError reparte errores por campo (password/password_confirmation)
+            // si el backend los manda; el recuadro persistente usa el primer
+            // mensaje real y showApiError tuesta todos, sin el resumen roto de
+            // Laravel ni perder mensajes cuando hay más de uno.
+            const apiError = applyApiError(error);
+            setGlobalError(apiError.message);
+            showApiError(apiError);
         } finally {
             setIsLoading(false);
         }
@@ -176,6 +191,7 @@ export default function ResetPasswordPage() {
                                 )}
 
                                 <form onSubmit={handleSubmit} className="space-y-6">
+                                    <FormErrorSummary messages={formErrors} />
                                     {/* Password */}
                                     <div className="space-y-2">
                                         <Label htmlFor="password">Nueva Contraseña</Label>
@@ -188,15 +204,13 @@ export default function ResetPasswordPage() {
                                                 value={password}
                                                 onChange={(e) => {
                                                     setPassword(e.target.value);
-                                                    if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
+                                                    if (errors.password) setErrors({ ...errors, password: '' });
                                                 }}
                                                 className={`pl-10 h-11 ${errors.password ? 'border-red-500' : ''}`}
                                                 disabled={isLoading}
                                             />
                                         </div>
-                                        {errors.password && (
-                                            <p className="text-sm text-red-500">{errors.password}</p>
-                                        )}
+                                        <FieldError message={errors.password} />
                                     </div>
 
                                     {/* Confirm Password */}
@@ -211,15 +225,13 @@ export default function ResetPasswordPage() {
                                                 value={passwordConfirmation}
                                                 onChange={(e) => {
                                                     setPasswordConfirmation(e.target.value);
-                                                    if (errors.password_confirmation) setErrors(prev => ({ ...prev, password_confirmation: '' }));
+                                                    if (errors.password_confirmation) setErrors({ ...errors, password_confirmation: '' });
                                                 }}
                                                 className={`pl-10 h-11 ${errors.password_confirmation ? 'border-red-500' : ''}`}
                                                 disabled={isLoading}
                                             />
                                         </div>
-                                        {errors.password_confirmation && (
-                                            <p className="text-sm text-red-500">{errors.password_confirmation}</p>
-                                        )}
+                                        <FieldError message={errors.password_confirmation} />
                                     </div>
 
                                     {/* Password Validation Feedback */}

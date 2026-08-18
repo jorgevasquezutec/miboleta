@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\TenantAccessCache;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -22,12 +23,35 @@ use Illuminate\Support\Facades\Auth;
 class TenantFilter
 {
     /**
+     * Rutas de cuenta propia: no devuelven datos de ninguna empresa, así que el
+     * filtro no pinta nada en ellas.
+     *
+     * Van exentas porque este middleware está aplicado a TODA la API
+     * (bootstrap/app.php) y un filtro heredado de otra sesión llegaba a
+     * bloquear el cambio de contraseña obligatorio: el usuario nuevo recibía
+     * 403 y se quedaba sin forma de entrar. En las rutas de datos el 403 se
+     * mantiene, que ahí sí es una comprobación de acceso legítima.
+     */
+    protected const ACCOUNT_ROUTES = [
+        'api/password/force-change',
+        'api/password/change',
+        'api/me',
+        'api/logout',
+        'api/refresh',
+    ];
+
+    /**
      * Handle an incoming request.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Rutas de cuenta propia: nunca se filtran por empresa
+        if ($request->is(...self::ACCOUNT_ROUTES)) {
+            return $next($request);
+        }
+
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
@@ -166,10 +190,11 @@ class TenantFilter
      */
     protected function getUserTenantIds($user): array
     {
-        // Cache de 1 hora para evitar queries repetitivas
+        // Cache de 1 hora para evitar queries repetitivas. Se invalida desde
+        // TenantAccessCache::forget() en cada cambio de empresas del usuario.
         return cache()->remember(
-            "user:{$user->id}:active_tenant_ids",
-            3600,
+            TenantAccessCache::activeTenantIdsKey($user->id),
+            TenantAccessCache::TTL,
             function () use ($user) {
                 // ✅ Solo retornar tenants activos
                 return $user->tenants()

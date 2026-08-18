@@ -39,6 +39,7 @@ import {
     Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { showApiError } from '@/presentation/utils/showApiError';
 import apiClient from '@/infrastructure/http/apiClient';
 
 export function UserDetailPage() {
@@ -66,7 +67,7 @@ export function UserDetailPage() {
                 navigate('/users');
             }
         } catch (error) {
-            toast.error('Error al cargar usuario');
+            showApiError(error, 'Error al cargar usuario');
             navigate('/users');
         } finally {
             setIsLoading(false);
@@ -107,7 +108,7 @@ export function UserDetailPage() {
                 setUser(updatedUser);
                 toast.success(`Usuario ${action === 'activar' ? 'activado' : 'desactivado'} exitosamente`);
             } catch (error) {
-                toast.error(`Error al ${action} usuario`);
+                showApiError(error, `Error al ${action} usuario`);
             } finally {
                 setIsUpdating(false);
             }

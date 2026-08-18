@@ -27,6 +27,7 @@ import { useDocumentsStore, useAuthStore } from "@/presentation/stores";
 import { formatFileSize } from "@/presentation/utils";
 import { PageSize, pageSizeLabels } from "@/core/domain/entities";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 
 const PAGE_SIZE_OPTIONS: PageSize[] = ["a10", "a4", "a5", "letter"];
 
@@ -136,7 +137,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     try {
       await previewZip(file);
     } catch (err) {
-      toast.error("Error al analizar el archivo ZIP");
+      showApiError(err, "Error al analizar el archivo ZIP");
     }
   };
 
@@ -157,7 +158,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     try {
       await previewZip(file);
     } catch (err) {
-      toast.error("Error al analizar el archivo ZIP");
+      showApiError(err, "Error al analizar el archivo ZIP");
     }
   };
 

@@ -125,13 +125,15 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
 
             return tenant;
         } catch (error) {
+            // La página (TenantFormPage) pinta los errores por campo con
+            // useFormErrors + showApiError; el store ya no tuesta aquí, solo
+            // relanza para que el catch de la página lo reciba (tarea 6.4).
             const errorMessage = error instanceof Error ? error.message : 'Error al crear organización';
             set({
                 error: errorMessage,
                 isLoading: false,
             });
-            toast.error(errorMessage);
-            return null;
+            throw error;
         }
     },
 
@@ -150,13 +152,14 @@ export const useTenantsStore = create<TenantsState>((set, get) => ({
 
             return tenant;
         } catch (error) {
+            // Igual que createTenant: el store relanza en vez de tostear,
+            // para que TenantFormPage pinte los errores por campo.
             const errorMessage = error instanceof Error ? error.message : 'Error al actualizar organización';
             set({
                 error: errorMessage,
                 isLoading: false,
             });
-            toast.error(errorMessage);
-            return null;
+            throw error;
         }
     },
 

@@ -206,6 +206,94 @@ describe('tenantFilterStore', () => {
     });
   });
 
+  describe('sello por dueño (filtro heredado entre sesiones)', () => {
+    /**
+     * El filtro persiste en localStorage y sobrevive a la sesión. Si la anterior
+     * murió sin logout, sus empresas viajaban en X-Tenant-Ids del siguiente
+     * usuario y el backend respondía 403 a todo, incluido el cambio de
+     * contraseña obligatorio.
+     */
+    const authStorageFor = (id: number, tenants: any[]) =>
+      JSON.stringify({ state: { user: { id, role: 'admin', tenants } } });
+
+    const persistedFilter = (ownerUserId: string | null) =>
+      JSON.stringify({
+        state: {
+          filter: {
+            mode: 'single',
+            tenantIds: ['6'],
+            tenants: [{ id: 6, name: 'IPDA PERU', slug: 'ipda' }],
+          },
+          ownerUserId,
+        },
+        version: 0,
+      });
+
+    it('descarta el filtro persistido de otro usuario al rehidratar', async () => {
+      localStorage.setItem('auth-storage', authStorageFor(35, [{ id: 5, name: 'OVERHEAD', slug: 'overhead' }]));
+      localStorage.setItem('tenant-filter-storage', persistedFilter('17'));
+
+      vi.resetModules();
+      const { useTenantFilterStore: store } = await import('../tenantFilterStore');
+      await store.persist.rehydrate();
+
+      const state = store.getState();
+      expect(state.filter.mode).toBe('all');
+      expect(state.filter.tenantIds).toEqual([]);
+      expect(state.ownerUserId).toBe('35');
+    });
+
+    it('conserva el filtro persistido del mismo usuario', async () => {
+      localStorage.setItem('auth-storage', authStorageFor(17, [{ id: 6, name: 'IPDA PERU', slug: 'ipda' }]));
+      localStorage.setItem('tenant-filter-storage', persistedFilter('17'));
+
+      vi.resetModules();
+      const { useTenantFilterStore: store } = await import('../tenantFilterStore');
+      await store.persist.rehydrate();
+
+      const state = store.getState();
+      expect(state.filter.mode).toBe('single');
+      expect(state.filter.tenantIds).toEqual(['6']);
+      expect(state.ownerUserId).toBe('17');
+    });
+
+    it('descarta un filtro sin sello (persistido por la versión anterior)', async () => {
+      localStorage.setItem('auth-storage', authStorageFor(35, [{ id: 5, name: 'OVERHEAD', slug: 'overhead' }]));
+      localStorage.setItem('tenant-filter-storage', persistedFilter(null));
+
+      vi.resetModules();
+      const { useTenantFilterStore: store } = await import('../tenantFilterStore');
+      await store.persist.rehydrate();
+
+      expect(store.getState().filter.tenantIds).toEqual([]);
+    });
+
+    it('setFilter sella el filtro con el usuario en sesión', () => {
+      localStorage.setItem('auth-storage', authStorageFor(35, [{ id: 5, name: 'OVERHEAD', slug: 'overhead' }]));
+
+      act(() => {
+        useTenantFilterStore.getState().setFilter(['5'], [{ id: '5', name: 'OVERHEAD', ruc: '20100000001', is_primary: true }]);
+      });
+
+      expect(useTenantFilterStore.getState().ownerUserId).toBe('35');
+    });
+
+    it('resetForUser deja el filtro vacío a nombre del usuario que entra', () => {
+      act(() => {
+        useTenantFilterStore.getState().setFilter(['6'], [{ id: '6', name: 'IPDA PERU', ruc: '20100000002', is_primary: true }]);
+      });
+
+      act(() => {
+        useTenantFilterStore.getState().resetForUser(35);
+      });
+
+      const state = useTenantFilterStore.getState();
+      expect(state.filter.mode).toBe('all');
+      expect(state.filter.tenantIds).toEqual([]);
+      expect(state.ownerUserId).toBe('35');
+    });
+  });
+
   describe('toggleTenant', () => {
     it('should add tenant when not selected', () => {
       const tenants = [

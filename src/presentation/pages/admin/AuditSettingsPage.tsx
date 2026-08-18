@@ -13,6 +13,7 @@ import {
 } from "@/presentation/components/ui/card";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 import { useAuditSettingsStore } from "@/presentation/stores";
 import type { AuditActionSetting } from "@/core/domain/entities/AuditSettings";
 
@@ -87,8 +88,12 @@ export function AuditSettingsPage() {
     try {
       await updateSettings(disabledActions);
       toast.success("Configuración de auditoría actualizada exitosamente");
-    } catch {
-      // El store guarda el error y el useEffect lo muestra en un toast
+    } catch (error) {
+      // A diferencia de fetchCatalog (que sigue pasando por `error` +
+      // el useEffect de abajo), este catch tuesta directo con
+      // showApiError para no perder mensajes si el backend algún día
+      // devuelve más de uno.
+      showApiError(error, "No se pudo guardar la configuración de auditoría");
     }
   };
 

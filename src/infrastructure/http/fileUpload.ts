@@ -1,4 +1,4 @@
-import apiClient from '../http/apiClient';
+import apiClient, { toApiError } from '../http/apiClient';
 import { getCsrfToken } from '@/shared/utils';
 
 export interface UploadResponse {
@@ -37,9 +37,11 @@ export async function uploadTenantLogo(file: File): Promise<string> {
         } else {
             throw new Error(response.data.message || 'Upload failed');
         }
-    } catch (error: any) {
-        const errorMessage = error.response?.data?.message || error.message || 'Error uploading file';
-        throw new Error(errorMessage);
+    } catch (error) {
+        // El error ya viene normalizado por el interceptor; `message` trae el
+        // mensaje del backend (o el de red si no hubo respuesta).
+        const apiError = toApiError(error);
+        throw new Error(apiError.message || 'Error uploading file');
     }
 }
 

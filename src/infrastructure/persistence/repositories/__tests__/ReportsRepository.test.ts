@@ -1,15 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // vi.mock is hoisted, so the factory can't reference outer variables.
-vi.mock('@/infrastructure/http/apiClient', () => ({
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-  getErrorMessage: vi.fn((error: any) => error?.message || 'Error desconocido'),
-}));
+// Solo se sustituye la instancia de axios: `toApiError`/`getErrorMessage` son
+// los reales, para que el test ejercite la normalización de verdad.
+vi.mock('@/infrastructure/http/apiClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/infrastructure/http/apiClient')>();
+  return {
+    ...actual,
+    default: {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    },
+  };
+});
 
 import apiClient from '@/infrastructure/http/apiClient';
 import { ReportsRepository } from '../ReportsRepository';
@@ -26,8 +31,12 @@ function makeBlobErrorResponse(payload: Record<string, unknown>) {
     text: () => Promise.resolve(JSON.stringify(payload)),
   } as unknown as Blob;
   Object.setPrototypeOf(blob, Blob.prototype);
+  // Forma de AxiosError: es lo que recibe el repositorio y lo que `toApiError`
+  // sabe normalizar (deja el blob en `ApiError.data`).
   return {
-    response: { data: blob },
+    isAxiosError: true,
+    message: 'Request failed with status code 404',
+    response: { data: blob, status: 404 },
   };
 }
 

@@ -3,7 +3,7 @@ import {
   UploadCertificateRequest,
 } from '@/core/domain/repositories/ISignatureSettingsRepository';
 import { SignatureSettings } from '@/core/domain/entities/SignatureSettings';
-import apiClient from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 
 interface SignatureSettingsResponseData {
   signature_enabled: boolean;
@@ -19,8 +19,12 @@ interface SignatureSettingsResponseData {
  */
 export class SignatureSettingsRepository implements ISignatureSettingsRepository {
   async getSettings(): Promise<SignatureSettings> {
-    const response = await apiClient.get<{ data: SignatureSettingsResponseData }>('/signature/settings');
-    return this.mapSettings(response.data.data);
+    try {
+      const response = await apiClient.get<{ data: SignatureSettingsResponseData }>('/signature/settings');
+      return this.mapSettings(response.data.data);
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 
   async uploadCertificate(data: UploadCertificateRequest): Promise<SignatureSettings> {
@@ -31,29 +35,41 @@ export class SignatureSettingsRepository implements ISignatureSettingsRepository
       formData.append('tsa_url', data.tsaUrl);
     }
 
-    const response = await apiClient.post<{ data: SignatureSettingsResponseData }>(
-      '/signature/certificate',
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
-    );
+    try {
+      const response = await apiClient.post<{ data: SignatureSettingsResponseData }>(
+        '/signature/certificate',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
 
-    return this.mapSettings(response.data.data);
+      return this.mapSettings(response.data.data);
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 
   async updateEnabled(enabled: boolean): Promise<SignatureSettings> {
-    const response = await apiClient.put<{ data: SignatureSettingsResponseData }>('/signature/settings', {
-      signature_enabled: enabled,
-    });
-    return this.mapSettings(response.data.data);
+    try {
+      const response = await apiClient.put<{ data: SignatureSettingsResponseData }>('/signature/settings', {
+        signature_enabled: enabled,
+      });
+      return this.mapSettings(response.data.data);
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 
   async deleteCertificate(): Promise<SignatureSettings> {
-    const response = await apiClient.delete<{ data: SignatureSettingsResponseData }>('/signature/certificate');
-    return this.mapSettings(response.data.data);
+    try {
+      const response = await apiClient.delete<{ data: SignatureSettingsResponseData }>('/signature/certificate');
+      return this.mapSettings(response.data.data);
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 
   private mapSettings(data: SignatureSettingsResponseData): SignatureSettings {

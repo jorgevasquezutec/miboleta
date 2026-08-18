@@ -3,9 +3,10 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ResolvesActiveRole;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateTenantRequest extends CustomFormRequest
+class UpdateTenantRequest extends FormRequest
 {
     use ResolvesActiveRole;
 

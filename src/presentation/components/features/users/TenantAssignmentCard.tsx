@@ -12,6 +12,7 @@ import {
 } from '@/presentation/components/ui/card';
 import { SupervisorSelector } from '@/presentation/components/features/users';
 import { TenantMultiSelector } from '@/presentation/components/shared/TenantMultiSelector';
+import { FieldError } from '@/presentation/components/shared/FieldError';
 import { Building2 } from 'lucide-react';
 import { TenantAssociation } from '@/core/domain/entities/User';
 import { Role } from '@/core/domain/entities';
@@ -78,7 +79,15 @@ interface TenantAssignmentCardProps {
     availableRoles: Role[];
     extrasByTenant: Record<string, TenantExtra>;
     excludeUserId?: string;
+    /** Error de validación de CLIENTE (p.ej. "sin organizaciones seleccionadas"), no del backend. */
     error?: string;
+    /**
+     * Errores de validación del BACKEND por empresa: tenantId -> campo del
+     * backend (`hire_date`, `role_ids`, `vacation_balance_initial`,
+     * `supervisor_id`, `department`, `position`) -> mensaje. Viene de
+     * `useFormErrors.nestedErrors`, ya reagrupado desde `tenants_config.{i}.*`.
+     */
+    fieldErrorsByTenant?: Record<string, Record<string, string>>;
     onTenantSelectionChange: (ids: string[]) => void;
     onTenantsChange: (tenants: TenantAssociation[]) => void;
     onPrimaryChange: (id: string | null) => void;
@@ -95,6 +104,7 @@ export function TenantAssignmentCard({
     extrasByTenant,
     excludeUserId,
     error,
+    fieldErrorsByTenant,
     onTenantSelectionChange,
     onTenantsChange,
     onPrimaryChange,
@@ -154,6 +164,7 @@ export function TenantAssignmentCard({
                                         supervisorId={supervisorsByTenant[String(tenant.id)]}
                                         availableRoles={availableRoles}
                                         extra={extrasByTenant[String(tenant.id)] ?? EMPTY_TENANT_EXTRA}
+                                        fieldErrors={fieldErrorsByTenant?.[String(tenant.id)]}
                                         excludeUserId={excludeUserId}
                                         canSetPrimary={selectedTenantIds.length >= 1}
                                         onSetPrimary={() => onPrimaryChange(String(tenant.id))}
@@ -184,6 +195,8 @@ interface TenantItemProps {
     supervisorId: string | null | undefined;
     availableRoles: Role[];
     extra: TenantExtra;
+    /** Errores del backend para ESTA empresa, con las claves tal cual las manda (ver `fieldErrorsByTenant`). */
+    fieldErrors?: Record<string, string>;
     excludeUserId?: string;
     canSetPrimary: boolean;
     onSetPrimary: () => void;
@@ -198,6 +211,7 @@ function TenantItem({
     supervisorId,
     availableRoles,
     extra,
+    fieldErrors,
     excludeUserId,
     canSetPrimary,
     onSetPrimary,
@@ -312,6 +326,7 @@ function TenantItem({
                             ))}
                         </div>
                     )}
+                    <FieldError message={fieldErrors?.role_ids} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -323,8 +338,9 @@ function TenantItem({
                             type="date"
                             value={extra.hireDate}
                             onChange={(e) => onExtraChange({ hireDate: e.target.value })}
-                            className="bg-white"
+                            className={fieldErrors?.hire_date ? 'bg-white border-red-500' : 'bg-white'}
                         />
+                        <FieldError message={fieldErrors?.hire_date} />
                     </div>
                     <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-gray-600">
@@ -337,8 +353,9 @@ function TenantItem({
                             placeholder="0"
                             value={extra.vacationBalanceInitial}
                             onChange={(e) => onExtraChange({ vacationBalanceInitial: e.target.value })}
-                            className="bg-white"
+                            className={fieldErrors?.vacation_balance_initial ? 'bg-white border-red-500' : 'bg-white'}
                         />
+                        <FieldError message={fieldErrors?.vacation_balance_initial} />
                     </div>
                 </div>
 
@@ -352,8 +369,9 @@ function TenantItem({
                             placeholder="Ej: Sistemas"
                             value={extra.department}
                             onChange={(e) => onExtraChange({ department: e.target.value })}
-                            className="bg-white"
+                            className={fieldErrors?.department ? 'bg-white border-red-500' : 'bg-white'}
                         />
+                        <FieldError message={fieldErrors?.department} />
                     </div>
                     <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-gray-600">
@@ -364,8 +382,9 @@ function TenantItem({
                             placeholder="Ej: Analista Programador"
                             value={extra.position}
                             onChange={(e) => onExtraChange({ position: e.target.value })}
-                            className="bg-white"
+                            className={fieldErrors?.position ? 'bg-white border-red-500' : 'bg-white'}
                         />
+                        <FieldError message={fieldErrors?.position} />
                     </div>
                 </div>
 
@@ -380,6 +399,7 @@ function TenantItem({
                         tenantIds={[String(tenant.id)]}
                         placeholder="Seleccionar supervisor..."
                     />
+                    <FieldError message={fieldErrors?.supervisor_id} />
                 </div>
             </div>
         </div>

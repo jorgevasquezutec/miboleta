@@ -41,6 +41,7 @@ import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/present
 import { VacationStatusBadge } from "@/presentation/components/features/vacations";
 import { formatDate } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
+import { showApiError } from "@/presentation/utils/showApiError";
 import { toast } from "sonner";
 
 // Status badge helper component
@@ -194,13 +195,8 @@ export function VacationHistoryPage() {
             const filename = `vacaciones_${new Date().toISOString().split('T')[0]}.xlsx`;
             reportsRepository.downloadBlob(blob, filename);
             toast.success('Exportación completada');
-        } catch (error: any) {
-            // Try to get message from JSON response or error object
-            const errorMessage = error?.response?.data?.message
-                || error?.response?.data?.error
-                || error?.message
-                || 'Error al exportar vacaciones';
-            toast.error(errorMessage);
+        } catch (error) {
+            showApiError(error, 'Error al exportar vacaciones');
         } finally {
             setIsExporting(false);
         }

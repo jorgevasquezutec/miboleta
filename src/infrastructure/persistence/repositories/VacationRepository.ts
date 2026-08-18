@@ -5,7 +5,7 @@ import {
     VacationBalance,
 } from '@/core/domain/entities/VacationRequest';
 import { IVacationRepository, VacationFilters, PaginatedVacationRequests } from '@/core/domain/repositories/IVacationRepository';
-import apiClient from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 
 /**
  * Vacation Repository - Connected to real API
@@ -25,24 +25,32 @@ export class VacationRepository implements IVacationRepository {
             params.append('was_taken', filters.wasTaken);
         }
 
-        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
-            `/vacation-requests?${params.toString()}`
-        );
+        try {
+            const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+                `/vacation-requests?${params.toString()}`
+            );
 
-        return {
-            data: response.data.data.map((req) => this.mapVacationRequest(req)),
-            meta: {
-                currentPage: response.data.meta.current_page,
-                lastPage: response.data.meta.last_page,
-                perPage: response.data.meta.per_page,
-                total: response.data.meta.total,
-            },
-        };
+            return {
+                data: response.data.data.map((req) => this.mapVacationRequest(req)),
+                meta: {
+                    currentPage: response.data.meta.current_page,
+                    lastPage: response.data.meta.last_page,
+                    perPage: response.data.meta.per_page,
+                    total: response.data.meta.total,
+                },
+            };
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async findById(id: number): Promise<VacationRequest> {
-        const response = await apiClient.get<{ data: VacationRequest }>(`/vacation-requests/${id}`);
-        return this.mapVacationRequest(response.data.data);
+        try {
+            const response = await apiClient.get<{ data: VacationRequest }>(`/vacation-requests/${id}`);
+            return this.mapVacationRequest(response.data.data);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async create(data: CreateVacationRequestDTO): Promise<VacationRequest> {
@@ -58,43 +66,67 @@ export class VacationRepository implements IVacationRepository {
             payload.tenant_id = data.tenantId;
         }
 
-        const response = await apiClient.post<{ data: VacationRequest }>('/vacation-requests', payload);
-        return this.mapVacationRequest(response.data.data);
+        try {
+            const response = await apiClient.post<{ data: VacationRequest }>('/vacation-requests', payload);
+            return this.mapVacationRequest(response.data.data);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async cancel(id: number): Promise<void> {
-        await apiClient.delete(`/vacation-requests/${id}`);
+        try {
+            await apiClient.delete(`/vacation-requests/${id}`);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     // ============ Supervisor Actions ============
 
     async approve(id: number): Promise<VacationRequest> {
-        const response = await apiClient.put<{ data: VacationRequest }>(
-            `/vacation-requests/${id}/approve`
-        );
-        return this.mapVacationRequest(response.data.data);
+        try {
+            const response = await apiClient.put<{ data: VacationRequest }>(
+                `/vacation-requests/${id}/approve`
+            );
+            return this.mapVacationRequest(response.data.data);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async reject(id: number, data: RejectVacationRequestDTO): Promise<VacationRequest> {
-        const response = await apiClient.put<{ data: VacationRequest }>(
-            `/vacation-requests/${id}/reject`,
-            { reason: data.reason }
-        );
-        return this.mapVacationRequest(response.data.data);
+        try {
+            const response = await apiClient.put<{ data: VacationRequest }>(
+                `/vacation-requests/${id}/reject`,
+                { reason: data.reason }
+            );
+            return this.mapVacationRequest(response.data.data);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async markAsTaken(id: number): Promise<VacationRequest> {
-        const response = await apiClient.put<{ data: VacationRequest }>(
-            `/vacation-requests/${id}/mark-taken`
-        );
-        return this.mapVacationRequest(response.data.data);
+        try {
+            const response = await apiClient.put<{ data: VacationRequest }>(
+                `/vacation-requests/${id}/mark-taken`
+            );
+            return this.mapVacationRequest(response.data.data);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async markAsNotTaken(id: number): Promise<VacationRequest> {
-        const response = await apiClient.put<{ data: VacationRequest }>(
-            `/vacation-requests/${id}/mark-not-taken`
-        );
-        return this.mapVacationRequest(response.data.data);
+        try {
+            const response = await apiClient.put<{ data: VacationRequest }>(
+                `/vacation-requests/${id}/mark-not-taken`
+            );
+            return this.mapVacationRequest(response.data.data);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     // ============ Supervisor Views ============
@@ -105,19 +137,23 @@ export class VacationRepository implements IVacationRepository {
         if (filters?.page) params.append('page', filters.page.toString());
         if (filters?.perPage) params.append('per_page', filters.perPage.toString());
 
-        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
-            `/vacation-requests/pending-approval?${params.toString()}`
-        );
+        try {
+            const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+                `/vacation-requests/pending-approval?${params.toString()}`
+            );
 
-        return {
-            data: response.data.data.map((req) => this.mapVacationRequest(req)),
-            meta: {
-                currentPage: response.data.meta.current_page,
-                lastPage: response.data.meta.last_page,
-                perPage: response.data.meta.per_page,
-                total: response.data.meta.total,
-            },
-        };
+            return {
+                data: response.data.data.map((req) => this.mapVacationRequest(req)),
+                meta: {
+                    currentPage: response.data.meta.current_page,
+                    lastPage: response.data.meta.last_page,
+                    perPage: response.data.meta.per_page,
+                    total: response.data.meta.total,
+                },
+            };
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async getPendingConfirmations(filters?: VacationFilters): Promise<PaginatedVacationRequests> {
@@ -126,19 +162,23 @@ export class VacationRepository implements IVacationRepository {
         if (filters?.page) params.append('page', filters.page.toString());
         if (filters?.perPage) params.append('per_page', filters.perPage.toString());
 
-        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
-            `/vacation-requests/pending-confirmation?${params.toString()}`
-        );
+        try {
+            const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+                `/vacation-requests/pending-confirmation?${params.toString()}`
+            );
 
-        return {
-            data: response.data.data.map((req) => this.mapVacationRequest(req)),
-            meta: {
-                currentPage: response.data.meta.current_page,
-                lastPage: response.data.meta.last_page,
-                perPage: response.data.meta.per_page,
-                total: response.data.meta.total,
-            },
-        };
+            return {
+                data: response.data.data.map((req) => this.mapVacationRequest(req)),
+                meta: {
+                    currentPage: response.data.meta.current_page,
+                    lastPage: response.data.meta.last_page,
+                    perPage: response.data.meta.per_page,
+                    total: response.data.meta.total,
+                },
+            };
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async getMyTeam(filters?: VacationFilters): Promise<PaginatedVacationRequests> {
@@ -149,19 +189,23 @@ export class VacationRepository implements IVacationRepository {
         if (filters?.status) params.append('status', filters.status);
         if (filters?.year) params.append('year', filters.year.toString());
 
-        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
-            `/vacation-requests/my-team?${params.toString()}`
-        );
+        try {
+            const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+                `/vacation-requests/my-team?${params.toString()}`
+            );
 
-        return {
-            data: response.data.data.map((req) => this.mapVacationRequest(req)),
-            meta: {
-                currentPage: response.data.meta.current_page,
-                lastPage: response.data.meta.last_page,
-                perPage: response.data.meta.per_page,
-                total: response.data.meta.total,
-            },
-        };
+            return {
+                data: response.data.data.map((req) => this.mapVacationRequest(req)),
+                meta: {
+                    currentPage: response.data.meta.current_page,
+                    lastPage: response.data.meta.last_page,
+                    perPage: response.data.meta.per_page,
+                    total: response.data.meta.total,
+                },
+            };
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async getMyDecisions(filters?: VacationFilters): Promise<PaginatedVacationRequests> {
@@ -172,19 +216,23 @@ export class VacationRepository implements IVacationRepository {
         if (filters?.status) params.append('status', filters.status);
         if (filters?.year) params.append('year', filters.year.toString());
 
-        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
-            `/vacation-requests/my-decisions?${params.toString()}`
-        );
+        try {
+            const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+                `/vacation-requests/my-decisions?${params.toString()}`
+            );
 
-        return {
-            data: response.data.data.map((req) => this.mapVacationRequest(req)),
-            meta: {
-                currentPage: response.data.meta.current_page,
-                lastPage: response.data.meta.last_page,
-                perPage: response.data.meta.per_page,
-                total: response.data.meta.total,
-            },
-        };
+            return {
+                data: response.data.data.map((req) => this.mapVacationRequest(req)),
+                meta: {
+                    currentPage: response.data.meta.current_page,
+                    lastPage: response.data.meta.last_page,
+                    perPage: response.data.meta.per_page,
+                    total: response.data.meta.total,
+                },
+            };
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     /**
@@ -208,21 +256,25 @@ export class VacationRepository implements IVacationRepository {
         // Request all tenant vacation history
         params.append('scope', 'tenant');
 
-        const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
-            `/vacation-requests?${params.toString()}`
-        );
+        try {
+            const response = await apiClient.get<{ data: VacationRequest[]; meta: any }>(
+                `/vacation-requests?${params.toString()}`
+            );
 
-        return {
-            data: response.data.data.map((req) => this.mapVacationRequest(req)),
-            meta: {
-                currentPage: response.data.meta.current_page,
-                lastPage: response.data.meta.last_page,
-                perPage: response.data.meta.per_page,
-                total: response.data.meta.total,
-                approvedCount: response.data.meta.approved_count,
-                takenCount: response.data.meta.taken_count,
-            },
-        };
+            return {
+                data: response.data.data.map((req) => this.mapVacationRequest(req)),
+                meta: {
+                    currentPage: response.data.meta.current_page,
+                    lastPage: response.data.meta.last_page,
+                    perPage: response.data.meta.per_page,
+                    total: response.data.meta.total,
+                    approvedCount: response.data.meta.approved_count,
+                    takenCount: response.data.meta.taken_count,
+                },
+            };
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     // ============ Balance ============
@@ -236,11 +288,15 @@ export class VacationRepository implements IVacationRepository {
         if (tenantId) params.append('tenant_id', tenantId.toString());
         const query = params.toString();
 
-        const response = await apiClient.get<{ data: any }>(
-            `/vacation-requests/balance${query ? `?${query}` : ''}`
-        );
+        try {
+            const response = await apiClient.get<{ data: any }>(
+                `/vacation-requests/balance${query ? `?${query}` : ''}`
+            );
 
-        return this.mapVacationBalance(response.data.data);
+            return this.mapVacationBalance(response.data.data);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     // ============ Mappers ============

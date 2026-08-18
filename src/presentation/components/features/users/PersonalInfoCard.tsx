@@ -1,5 +1,6 @@
 import { Input } from '@/presentation/components/ui/input';
 import { Label } from '@/presentation/components/ui/label';
+import { FieldError } from '@/presentation/components/shared/FieldError';
 import {
     Card,
     CardContent,
@@ -85,9 +86,7 @@ export function PersonalInfoCard({ formData, errors, onChange }: PersonalInfoCar
                             placeholder="Juan"
                             className={errors.name ? 'border-red-500' : ''}
                         />
-                        {errors.name && (
-                            <p className="text-sm text-red-500">{errors.name}</p>
-                        )}
+                        <FieldError message={errors.name} />
                     </div>
 
                     <div className="space-y-2">
@@ -111,9 +110,7 @@ export function PersonalInfoCard({ formData, errors, onChange }: PersonalInfoCar
                         placeholder="juan@ejemplo.com"
                         className={errors.email ? 'border-red-500' : ''}
                     />
-                    {errors.email && (
-                        <p className="text-sm text-red-500">{errors.email}</p>
-                    )}
+                    <FieldError message={errors.email} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -149,9 +146,7 @@ export function PersonalInfoCard({ formData, errors, onChange }: PersonalInfoCar
                             className={errors.document_text ? 'border-red-500' : ''}
                         />
                         <p className="text-xs text-gray-500">{getDocumentHint()}</p>
-                        {errors.document_text && (
-                            <p className="text-sm text-red-500">{errors.document_text}</p>
-                        )}
+                        <FieldError message={errors.document_text} />
                     </div>
                 </div>
 

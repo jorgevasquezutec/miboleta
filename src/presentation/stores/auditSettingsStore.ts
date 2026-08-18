@@ -36,8 +36,11 @@ export const useAuditSettingsStore = create<AuditSettingsState>((set) => ({
       const catalog = await auditSettingsRepository.updateSettings(disabledActions);
       set({ catalog, isSaving: false });
     } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      set({ error: errorMessage, isSaving: false });
+      // A diferencia de fetchCatalog, este error ya no se guarda en
+      // `error`: la página (AuditSettingsPage.handleSave) lo trata con
+      // showApiError, así que dejarlo aquí también duplicaría el toast vía
+      // el useEffect genérico que sigue cubriendo los fallos de fetchCatalog.
+      set({ isSaving: false });
       throw error;
     }
   },

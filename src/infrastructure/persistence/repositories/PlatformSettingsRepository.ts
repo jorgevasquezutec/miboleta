@@ -4,7 +4,7 @@ import {
 } from '@/core/domain/repositories/IPlatformSettingsRepository';
 import { PlatformSettings } from '@/core/domain/entities/PlatformSettings';
 import type { MailEncryption } from '@/core/domain/entities/Tenant';
-import apiClient from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 
 interface PlatformSettingsResponseData {
   public_ip: string | null;
@@ -24,8 +24,12 @@ interface PlatformSettingsResponseData {
  */
 export class PlatformSettingsRepository implements IPlatformSettingsRepository {
   async getSettings(): Promise<PlatformSettings> {
-    const response = await apiClient.get<{ data: PlatformSettingsResponseData }>('/platform/settings');
-    return this.mapSettings(response.data.data);
+    try {
+      const response = await apiClient.get<{ data: PlatformSettingsResponseData }>('/platform/settings');
+      return this.mapSettings(response.data.data);
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 
   async updateSettings(data: UpdatePlatformSettingsRequest): Promise<PlatformSettings> {
@@ -46,8 +50,12 @@ export class PlatformSettingsRepository implements IPlatformSettingsRepository {
       payload.mail_password = data.mailPassword;
     }
 
-    const response = await apiClient.put<{ data: PlatformSettingsResponseData }>('/platform/settings', payload);
-    return this.mapSettings(response.data.data);
+    try {
+      const response = await apiClient.put<{ data: PlatformSettingsResponseData }>('/platform/settings', payload);
+      return this.mapSettings(response.data.data);
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 
   private mapSettings(data: PlatformSettingsResponseData): PlatformSettings {

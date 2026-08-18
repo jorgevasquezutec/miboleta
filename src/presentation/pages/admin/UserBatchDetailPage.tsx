@@ -8,6 +8,7 @@ import { BulkUploadStats } from '@/presentation/components/bulkUpload/BulkUpload
 import { BulkUploadErrors } from '@/presentation/components/bulkUpload/BulkUploadErrors';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import { toast } from 'sonner';
+import { showApiError } from '@/presentation/utils/showApiError';
 import { useState } from 'react';
 
 export function UserBatchDetailPage() {
@@ -28,7 +29,7 @@ export function UserBatchDetailPage() {
             }
         },
         onError: (err) => {
-            toast.error(err.message);
+            showApiError(err);
         },
     });
 
@@ -40,7 +41,7 @@ export function UserBatchDetailPage() {
             await bulkUserUploadService.downloadErrors(id);
             toast.success('Archivo de errores descargado');
         } catch (error) {
-            toast.error('Error al descargar errores');
+            showApiError(error, 'Error al descargar errores');
         } finally {
             setIsDownloading(false);
         }

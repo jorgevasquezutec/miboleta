@@ -33,6 +33,7 @@ import { VacationStatus } from "@/core/domain/entities";
 import { formatDate } from "@/presentation/utils";
 import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 
 export function VacationRequestsListPage() {
     useDocumentTitle('Mis Vacaciones');
@@ -116,8 +117,8 @@ export function VacationRequestsListPage() {
             await cancelVacationRequest(selectedRequestId);
             toast.success("Solicitud cancelada correctamente");
             setCancelDialogOpen(false);
-        } catch {
-            toast.error("No se pudo cancelar la solicitud");
+        } catch (error) {
+            showApiError(error, "No se pudo cancelar la solicitud");
         }
     };
 

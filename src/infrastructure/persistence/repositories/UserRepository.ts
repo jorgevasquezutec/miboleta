@@ -1,6 +1,6 @@
 import { IUserRepository, LoginResponse, GetUsersParams, MeResponse } from '@/core/domain/repositories/IUserRepository';
 import { User, CreateUserData, UpdateUserData } from '@/core/domain/entities';
-import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 import { PaginatedResponse } from './types';
 
 /**
@@ -22,7 +22,7 @@ export class UserRepository implements IUserRepository {
       });
       return response.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -50,7 +50,7 @@ export class UserRepository implements IUserRepository {
       const response = await apiClient.get<MeResponse>('/me');
       return response.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -67,7 +67,7 @@ export class UserRepository implements IUserRepository {
       const response = await apiClient.get<{ data: Record<string, string[]> }>('/access-matrix');
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -76,7 +76,7 @@ export class UserRepository implements IUserRepository {
       const response = await apiClient.get<User[]>('/users');
       return response.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -102,7 +102,7 @@ export class UserRepository implements IUserRepository {
       });
       return response.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -130,7 +130,9 @@ export class UserRepository implements IUserRepository {
       const response = await apiClient.post<{ data: User }>('/users', data);
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      // ApiError conserva los errores por campo (422) para que el formulario
+      // pinte el motivo junto al input, p. ej. el correo de un usuario eliminado.
+      throw toApiError(error);
     }
   }
 
@@ -139,7 +141,7 @@ export class UserRepository implements IUserRepository {
       const response = await apiClient.put<{ data: User }>(`/users/${id}`, data);
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 
@@ -147,7 +149,7 @@ export class UserRepository implements IUserRepository {
     try {
       await apiClient.delete(`/users/${id}`);
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 }

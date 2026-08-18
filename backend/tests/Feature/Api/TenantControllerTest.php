@@ -143,7 +143,9 @@ class TenantControllerTest extends TestCase
         ]);
 
         $response->assertStatus(422);
-        // CustomFormRequest returns {message: "error"} format
+        // Formato estándar {message, errors}: message = primer error real
+        // (sin el sufijo "(and N more errors)", ver renderable de
+        // ValidationException en bootstrap/app.php).
         $this->assertStringContainsString('nombre', strtolower($response->json('message')));
     }
 
@@ -155,7 +157,9 @@ class TenantControllerTest extends TestCase
         ]);
 
         $response->assertStatus(422);
-        // CustomFormRequest returns {message: "error"} format
+        // Formato estándar {message, errors}: message = primer error real
+        // (sin el sufijo "(and N more errors)", ver renderable de
+        // ValidationException en bootstrap/app.php).
         $this->assertStringContainsString('RUC', $response->json('message'));
     }
 

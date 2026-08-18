@@ -21,6 +21,9 @@ import { DateRangePicker, DateRange } from "@/presentation/components/ui/date-ra
 import { TenantSelector } from "@/presentation/components/shared/TenantSelector";
 import { useVacationsStore } from "@/presentation/stores/vacationsStore";
 import { useAuthStore } from "@/presentation/stores";
+import { useFormErrors } from "@/presentation/hooks/useFormErrors";
+import { showApiError } from "@/presentation/utils/showApiError";
+import { FormErrorSummary } from "@/presentation/components/shared/FieldError";
 import { toast } from "sonner";
 
 export function VacationRequestFormPage() {
@@ -41,7 +44,7 @@ export function VacationRequestFormPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [reason, setReason] = useState<string>("");
     const [submitting, setSubmitting] = useState(false);
-    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const { errors: fieldErrors, formErrors, applyApiError, clearAll: clearFieldErrors } = useFormErrors();
 
     // Check if user has multiple tenants
     const hasMultipleTenants = user?.tenants && user.tenants.length > 1;
@@ -205,7 +208,7 @@ export function VacationRequestFormPage() {
         }
 
         setSubmitting(true);
-        setFieldErrors({});
+        clearFieldErrors();
         clearError();
 
         try {
@@ -218,22 +221,12 @@ export function VacationRequestFormPage() {
             });
             toast.success("Solicitud de vacaciones creada correctamente");
             navigate("/vacations");
-        } catch (err: any) {
-            // Extraer errores de validación por campo si existen
-            if (err.response?.data?.errors) {
-                const errors: Record<string, string> = {};
-                Object.keys(err.response.data.errors).forEach((key) => {
-                    const errorMessages = err.response.data.errors[key];
-                    if (Array.isArray(errorMessages) && errorMessages.length > 0) {
-                        errors[key] = errorMessages[0];
-                    }
-                });
-                setFieldErrors(errors);
-            }
-
-            // Mostrar toast con el error general
-            const errorMessage = err.response?.data?.error || err.response?.data?.message || error || "Error al crear la solicitud";
-            toast.error(errorMessage);
+        } catch (err: unknown) {
+            // Errores de validación por campo (p.ej. fechas superpuestas) se
+            // pintan junto al control; el resto (y el resumen completo) sale
+            // en el toast, sin perder ningún mensaje del backend.
+            const apiError = applyApiError(err);
+            showApiError(apiError);
         } finally {
             setSubmitting(false);
         }
@@ -351,6 +344,8 @@ export function VacationRequestFormPage() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        <FormErrorSummary messages={formErrors} />
+
                         {/* Tenant Selection (only if user has multiple tenants) */}
                         {hasMultipleTenants && (
                             <div className="space-y-2">

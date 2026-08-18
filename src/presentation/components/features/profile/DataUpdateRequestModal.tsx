@@ -11,8 +11,9 @@ import {
 import { Button } from "@/presentation/components/ui/button";
 import { Textarea } from "@/presentation/components/ui/textarea";
 import { Label } from "@/presentation/components/ui/label";
-import apiClient, { getErrorMessage } from "@/infrastructure/http/apiClient";
+import apiClient from "@/infrastructure/http/apiClient";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 
 const MESSAGE_MAX_LENGTH = 1000;
 
@@ -59,7 +60,7 @@ export function DataUpdateRequestModal({ open, onOpenChange }: DataUpdateRequest
             onOpenChange(false);
             resetState();
         } catch (err) {
-            toast.error(getErrorMessage(err));
+            showApiError(err);
         } finally {
             setIsLoading(false);
         }

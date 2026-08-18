@@ -2,6 +2,7 @@
 
 namespace App\Models\Scopes;
 
+use App\Support\TenantAccessCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
@@ -78,9 +79,11 @@ class TenantFilterScope implements Scope
         }
 
         // Usuario no-root sin filtro: Restringir a sus tenants
+        // Se invalida desde TenantAccessCache::forget() en cada cambio de
+        // empresas del usuario (ver App\Support\TenantAccessCache).
         $userTenantIds = cache()->remember(
-            "user:{$user->id}:tenant_ids",
-            3600,
+            TenantAccessCache::tenantIdsKey($user->id),
+            TenantAccessCache::TTL,
             function () use ($user) {
                 // ✅ FIX: Especificar tenants.id para evitar ambigüedad en JOIN
                 return $user->tenants()->pluck('tenants.id')->map(fn($id) => (int) $id)->toArray();

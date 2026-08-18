@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { User, TenantAssociation } from "@/core/domain/entities";
 import { userRepository } from "@/infrastructure/persistence/repositories";
+import { useTenantFilterStore } from "./tenantFilterStore";
 
 /**
  * Prioridad de roles operativos (no incluye 'root', que es global y siempre
@@ -163,6 +164,13 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
+
+          // El filtro de empresa vive en localStorage y sobrevive a la sesión:
+          // si la anterior murió sin logout (token vencido, navegador cerrado),
+          // sus empresas seguirían viajando en X-Tenant-Ids y el backend
+          // respondería 403 a TODO, incluido el cambio de contraseña
+          // obligatorio. Se reinicia y se sella a nombre de quien entra.
+          useTenantFilterStore.getState().resetForUser(response.user.id);
         } catch (error) {
           console.error('[AuthStore] Login failed:', error);
           set({
@@ -196,6 +204,12 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
+
+          // El filtro es otro store: borrar su clave no basta, porque el logout
+          // navega por SPA sin recargar y el estado en memoria seguiría vivo (y
+          // se repersistiría al primer set). Se reinicia primero y luego se
+          // borran las claves.
+          useTenantFilterStore.getState().resetForUser(null);
 
           // Forzar limpieza del localStorage de Zustand
           localStorage.removeItem('auth-storage');
