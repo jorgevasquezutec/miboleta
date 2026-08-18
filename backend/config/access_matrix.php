@@ -61,6 +61,13 @@ return [
     'users.update' => ['root', 'admin', 'admin_tenant'],
     'users.deactivate' => ['root', 'admin_tenant'],
     'users.delete' => ['root'],
+    // [OBS-CLIENTE 2026-08] Habilitar (restaurar) una cuenta eliminada. Solo
+    // root, igual que 'users.delete': es la operación inversa y el cliente la
+    // pidió explícitamente acotada a root. Gatea tanto el listado de
+    // eliminados (GET /users?deleted=1) como POST /users/{id}/restore.
+    // OJO: no confundir con 'users.deactivate', que es el eje status
+    // (active/inactive) y no toca deleted_at.
+    'users.restore' => ['root'],
     'users.reset_password' => ['root', 'admin_tenant'],
     'users.bulk_upload' => ['root', 'admin_tenant'],
     // [OBS-CLIENTE 2026-08] Export de empleados (ReportsController::exportUsers).

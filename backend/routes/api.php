@@ -82,6 +82,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('users/{id}')->group(function () {
         Route::get('/subordinates', [UserController::class, 'subordinates']);
         Route::post('/reset-password', [PasswordController::class, 'adminResetPassword']);
+        // Habilitar una cuenta eliminada. Solo root: enforcement por la
+        // ability 'users.restore' dentro de UserController::restore.
+        Route::post('/restore', [UserController::class, 'restore']);
     });
 
     // Users - Resource routes (index, store, show, update, destroy)

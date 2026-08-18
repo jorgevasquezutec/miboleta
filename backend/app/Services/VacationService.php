@@ -34,7 +34,17 @@ class VacationService
         // Verify user has a supervisor for this tenant
         $supervisor = $user->getSupervisorForTenant($tenantId);
         if (!$supervisor) {
-            throw new \InvalidArgumentException('No tienes un supervisor asignado para esta empresa. Contacta a RRHH.');
+            // Dos causas distintas detrás del mismo null: nunca hubo
+            // supervisor, o el asignado fue eliminado (getSupervisorForTenant
+            // aplica el scope de SoftDeletes). Antes ambas daban "No tienes un
+            // supervisor asignado", lo que mandaba a RRHH a buscar una
+            // asignación que sí existe en el pivote, en vez de a habilitar o
+            // reemplazar la cuenta eliminada.
+            throw new \InvalidArgumentException(
+                $user->supervisorIdForTenant($tenantId)
+                    ? 'Tu supervisor asignado fue eliminado. Contacta a RRHH para que te asignen uno nuevo o habiliten su cuenta.'
+                    : 'No tienes un supervisor asignado para esta empresa. Contacta a RRHH.'
+            );
         }
 
         // Validate no overlap with existing approved vacations
@@ -716,6 +726,16 @@ class VacationService
         // Root and admin can also approve
         if (in_array($role, ['root', 'admin'], true)) {
             return;
+        }
+
+        // Solicitante eliminado: load('user') deja la relación cargada pero en
+        // null (scope global de SoftDeletes), y el acceso de abajo reventaba
+        // con 500. La bandeja del supervisor ya filtra estas solicitudes
+        // (scopeForSupervisor usa whereHas('user')), así que aquí solo se
+        // llega con un ID viejo —una pestaña abierta antes del borrado—; se
+        // responde con el error de autorización normal, no con un 500.
+        if (!$request->user) {
+            throw new UnauthorizedAccessException('El empleado de esta solicitud ya no está activo.');
         }
 
         // Check if user is the assigned supervisor for this tenant

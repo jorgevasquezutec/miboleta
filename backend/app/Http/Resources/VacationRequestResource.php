@@ -17,7 +17,11 @@ class VacationRequestResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
-            'user' => $this->when($this->relationLoaded('user'), function () {
+            // `&& $this->user` además de relationLoaded: si el solicitante
+            // fue eliminado (soft delete), la relación se marca como cargada
+            // pero resuelve a null por el scope global, y los accesos de
+            // abajo reventaban al listar. Misma guarda que ya tenía 'approver'.
+            'user' => $this->when($this->relationLoaded('user') && $this->user, function () {
                 return [
                     'id' => $this->user->id,
                     'name' => $this->user->name,

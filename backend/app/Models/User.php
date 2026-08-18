@@ -215,15 +215,34 @@ class User extends Authenticatable
     }
 
     /**
-     * Obtener el supervisor para un tenant específico
+     * ID del supervisor ASIGNADO en el pivote para esta empresa, exista o no
+     * todavía esa cuenta.
+     *
+     * Separado de getSupervisorForTenant() porque ese devuelve null en dos
+     * casos que para el usuario final son muy distintos: "nunca te asignaron
+     * supervisor" y "tu supervisor fue eliminado". Quien necesite explicar el
+     * porqué (ver VacationService::createRequest) compara ambos.
+     */
+    public function supervisorIdForTenant(int $tenantId): ?int
+    {
+        $tenant = $this->tenants()->where('tenants.id', $tenantId)->first();
+
+        return $tenant?->pivot->supervisor_id;
+    }
+
+    /**
+     * Obtener el supervisor para un tenant específico.
+     *
+     * Devuelve null si el supervisor asignado fue eliminado: User::find aplica
+     * el scope global de SoftDeletes, y es el comportamiento correcto — una
+     * cuenta eliminada no puede aprobar nada. Para distinguir ese caso de "sin
+     * supervisor asignado", usar supervisorIdForTenant().
      */
     public function getSupervisorForTenant(int $tenantId): ?User
     {
-        $tenant = $this->tenants()->where('tenants.id', $tenantId)->first();
-        if ($tenant && $tenant->pivot->supervisor_id) {
-            return User::find($tenant->pivot->supervisor_id);
-        }
-        return null;
+        $supervisorId = $this->supervisorIdForTenant($tenantId);
+
+        return $supervisorId ? User::find($supervisorId) : null;
     }
 
     /**

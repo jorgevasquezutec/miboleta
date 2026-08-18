@@ -100,6 +100,21 @@ class AuthService
 
         $user = $refreshToken->user;
 
+        // Usuario eliminado (soft delete): la relación belongsTo aplica el
+        // scope global de SoftDeletes, así que devuelve null aunque la fila de
+        // refresh_tokens siga ahí. Sin esta guarda, el `$user->status` de
+        // abajo reventaba con "property on null" y el endpoint respondía 500
+        // en vez de un 401 limpio, en bucle hasta que el token expirara.
+        // Se revocan TODOS los refresh tokens de ese user_id (la columna sí
+        // está en la fila) y no solo el presentado: si el usuario fue
+        // eliminado antes de que destroy() revocara sesiones, puede tener
+        // varios vivos y volveríamos aquí con cada uno.
+        if (!$user) {
+            RefreshToken::revokeAllForUser($refreshToken->user_id);
+
+            return null;
+        }
+
         // Check if user is still active
         if ($user->status !== 'active') {
             // User is now inactive - revoke session

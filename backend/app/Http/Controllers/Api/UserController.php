@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateTenantSettingsRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserSummaryResource;
+use App\Models\RefreshToken;
 use App\Models\User;
 use App\Services\ActiveTenantResolver;
 use App\Services\AuditService;
@@ -158,6 +159,28 @@ class UserController extends Controller
             $query->where('status', $request->status);
         }
 
+        // [OBS-CLIENTE 2026-08] Listado de cuentas ELIMINADAS (papelera), la
+        // mitad de "solo root puede habilitar cuentas eliminadas": sin este
+        // modo no hay forma de ver un usuario con deleted_at (el scope global
+        // de SoftDeletes lo oculta de TODA consulta), y por tanto tampoco de
+        // elegir a quién habilitar.
+        //
+        // onlyTrashed() y no withTrashed(): son dos listados disjuntos —
+        // "usuarios" y "papelera"— igual que los presenta el frontend (una
+        // opción más del Select de Estado). Mezclarlos obligaría a cada fila
+        // a decidir si pinta Eliminar o Habilitar sobre un listado ambiguo.
+        //
+        // El gate es 'users.restore' (solo root) y no 'users.view_list': ver
+        // la papelera ES el primer paso de habilitar, así que un admin_tenant
+        // —que sí lista usuarios— no debe siquiera saber quién fue eliminado.
+        // El authorize() va DENTRO del if y no arriba: aplicado siempre,
+        // dejaría todo /users accesible solo a root y rompería el listado
+        // normal de admin y admin_tenant.
+        if ($request->boolean('deleted')) {
+            $this->authorize('users.restore');
+            $query->onlyTrashed();
+        }
+
         // Paginación. filled() y no get('per_page', 10): el default de get()
         // solo aplica cuando la clave FALTA, y un `?per_page=` vacío llega
         // como null (ConvertEmptyStringsToNull), con lo que paginate(null)
@@ -229,6 +252,11 @@ class UserController extends Controller
                     'document_text' => $u->document_text,
                     'phone' => $u->phone,
                     'status' => $u->status,
+                    // Marca de fila eliminada: el frontend la necesita para
+                    // decidir si pinta el botón Eliminar o el de Habilitar.
+                    // null en el listado normal (el scope global ya excluye
+                    // a los eliminados), con fecha en el modo ?deleted=1.
+                    'deleted_at' => $u->deleted_at?->toIso8601String(),
                     'role' => $u->getCurrentRole(),
                     'roles' => $u->getCurrentRoles(),
                     'tenants' => $visibleTenants->map(function($t) use ($tenantRolesByTenant) {
@@ -446,6 +474,15 @@ class UserController extends Controller
 
         $deletedData = $user->only(self::AUDITED_FIELDS);
 
+        // Cortar las sesiones vivas ANTES del soft delete. El borrado por sí
+        // solo no revoca nada: las filas de personal_access_tokens y
+        // refresh_tokens sobreviven (sus FK en cascada son de BD y solo
+        // disparan con DELETE físico). Sin esto, un usuario recién eliminado
+        // conserva su refresh token —de validez larga— y sigue golpeando
+        // /auth/refresh hasta que expire.
+        $user->tokens()->delete();
+        RefreshToken::revokeAllForUser($user->id);
+
         $user->delete();
 
         TenantAccessCache::forget($user->id);
@@ -454,6 +491,62 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'Usuario eliminado exitosamente',
+        ]);
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/users/{id}/restore",
+     *     tags={"Usuarios"},
+     *     summary="Habilitar (restaurar) un usuario eliminado",
+     *     description="Solo root (ability 'users.restore'). Quita deleted_at y reasigna las boletas que quedaron huérfanas durante la baja.",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Usuario habilitado"),
+     *     @OA\Response(response=403, description="No autorizado"),
+     *     @OA\Response(response=404, description="Usuario no encontrado"),
+     *     @OA\Response(response=422, description="El usuario no está eliminado")
+     * )
+     */
+    public function restore(Request $request, $id)
+    {
+        // withTrashed(): el scope global de SoftDeletes esconde justamente al
+        // usuario que queremos alcanzar, así que un findOrFail normal daría
+        // 404 siempre.
+        $user = User::withTrashed()->findOrFail($id);
+
+        // Solo root habilita cuentas eliminadas (Matriz de Accesos:
+        // 'users.restore'), igual que 'users.delete'.
+        $this->authorize('users.restore');
+
+        // Defensa en profundidad, espejo de destroy(): la jerarquía de roles
+        // manda sobre el solapamiento de empresa. Para root siempre es true,
+        // pero deja la regla en un solo sitio si mañana la ability se abre.
+        if (!$this->userService->canManageUser($request->user(), $user)) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
+        // Idempotencia explícita: habilitar a alguien que ya está activo no es
+        // un no-op silencioso, es señal de una UI desincronizada (dos pestañas,
+        // dos roots). 422 y no 200 para que el frontend refresque.
+        if (!$user->trashed()) {
+            return response()->json([
+                'message' => 'El usuario no está eliminado',
+            ], 422);
+        }
+
+        $user->restore();
+
+        // Las boletas que llegaron durante la baja entraron como 'orphan'
+        // porque el matching por DNI no encontraba al usuario. Ahora que
+        // vuelve a existir, se le reasignan.
+        $reassignedDocuments = $this->userService->reassignOrphanDocumentsAcrossTenants($user);
+
+        $this->auditService->logUserRestored($user->id, $user->only(self::AUDITED_FIELDS));
+
+        return response()->json([
+            'message' => 'Usuario habilitado exitosamente',
+            'reassigned_documents' => $reassignedDocuments,
         ]);
     }
 

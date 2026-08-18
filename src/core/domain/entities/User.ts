@@ -24,6 +24,16 @@ export interface User {
   roles?: string[]; // Array de roles del usuario
   status: 'active' | 'inactive' | 'suspended' | 'pending';
 
+  /**
+   * Fecha de eliminación (soft delete). Solo llega con valor en el listado de
+   * la papelera (GET /users?deleted=1, exclusivo de root); en el listado
+   * normal es null/undefined porque el backend ni siquiera devuelve esas
+   * filas. Es lo que distingue una fila "eliminada" de una activa a la hora
+   * de decidir si se pinta Eliminar o Habilitar — `status` NO sirve para eso:
+   * un usuario eliminado conserva el status que tenía al momento del borrado.
+   */
+  deleted_at?: string | null;
+
   // Password management
   must_change_password?: boolean;
 

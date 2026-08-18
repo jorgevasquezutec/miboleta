@@ -48,6 +48,7 @@ class AuditLog extends Model
     public const ACTION_USER_CREATED = 'user.created';
     public const ACTION_USER_UPDATED = 'user.updated';
     public const ACTION_USER_DELETED = 'user.deleted';
+    public const ACTION_USER_RESTORED = 'user.restored';
 
     // Document Actions
     public const ACTION_DOCUMENT_UPLOADED = 'document.uploaded';
@@ -115,6 +116,7 @@ class AuditLog extends Model
         self::ACTION_USER_CREATED,
         self::ACTION_USER_UPDATED,
         self::ACTION_USER_DELETED,
+        self::ACTION_USER_RESTORED,
         self::ACTION_ROLE_ASSIGNED,
         self::ACTION_TENANT_CREATED,
         self::ACTION_TENANT_UPDATED,
@@ -253,6 +255,7 @@ class AuditLog extends Model
             self::ACTION_USER_CREATED => 'Creó un usuario',
             self::ACTION_USER_UPDATED => 'Actualizó un usuario',
             self::ACTION_USER_DELETED => 'Eliminó un usuario',
+            self::ACTION_USER_RESTORED => 'Habilitó un usuario eliminado',
             self::ACTION_DOCUMENT_UPLOADED => 'Cargó un documento',
             self::ACTION_DOCUMENT_VIEWED => 'Visualizó un documento',
             self::ACTION_DOCUMENT_DOWNLOADED => 'Descargó un documento',

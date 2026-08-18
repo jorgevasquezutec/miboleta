@@ -292,6 +292,25 @@ class AuditService
         );
     }
 
+    /**
+     * Habilitación (restauración) de una cuenta eliminada — solo root, ver
+     * ability 'users.restore'. Espeja a logUserDeleted(): allí los datos del
+     * usuario viajan como oldValues (lo que se perdió), aquí como newValues
+     * (lo que vuelve a existir), para que el diff del visor de auditoría se
+     * lea en la dirección correcta.
+     */
+    public function logUserRestored(int $userId, array $userData): ?AuditLog
+    {
+        unset($userData['password']);
+
+        return $this->log(
+            action: AuditLog::ACTION_USER_RESTORED,
+            entityType: 'User',
+            entityId: $userId,
+            newValues: $userData
+        );
+    }
+
     // ============ Document Actions ============
 
     public function logDocumentUploaded(int $documentId, string $filename, ?int $tenantId = null): ?AuditLog

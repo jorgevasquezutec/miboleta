@@ -64,6 +64,7 @@ distintos en cada una.
 | Editar usuarios | Sí | Sí | Sí | — | — |
 | Desactivar usuarios | Sí | Sí | — | — | — |
 | Eliminar usuarios | Sí | — | — | — | — |
+| Habilitar cuentas eliminadas | Sí | — | — | — | — |
 | Restablecer contraseñas | Sí | Sí | — | — | — |
 | Carga masiva de usuarios | Sí | Sí | — | — | — |
 | Exportar el listado de empleados | Sí | Sí | Sí | — | — |

@@ -141,4 +141,50 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['login', 'password']);
     }
+
+    public function test_deleted_user_cannot_login(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'borrado@example.com',
+            'password' => bcrypt('password'),
+            'status' => 'active',
+        ]);
+        $user->delete();
+
+        // 422 y no 401: el login rechaza por ValidationException con el mismo
+        // mensaje genérico que unas credenciales malas, para no revelar que la
+        // cuenta existe pero está eliminada.
+        $this->postJson('/api/login', [
+            'login' => 'borrado@example.com',
+            'password' => 'password',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['login']);
+    }
+
+    public function test_refresh_rejects_deleted_user_without_crashing(): void
+    {
+        // El soft delete NO borra la fila de refresh_tokens (su FK en cascada
+        // es de BD y solo dispara con DELETE físico), pero la relación ->user
+        // sí devuelve null por el scope global. Antes eso reventaba con
+        // "property on null" y respondía 500 en bucle hasta que el token
+        // expirara; ahora debe ser un rechazo limpio y dejar el token revocado.
+        $user = User::factory()->create(['status' => 'active']);
+        $refreshToken = \App\Models\RefreshToken::create([
+            'user_id' => $user->id,
+            'token' => 'token-de-usuario-eliminado',
+            'expires_at' => now()->addDays(30),
+            'is_revoked' => false,
+        ]);
+
+        $user->delete();
+
+        $result = app(\App\Services\AuthService::class)
+            ->refreshAccessToken('token-de-usuario-eliminado');
+
+        $this->assertNull($result);
+        $this->assertDatabaseHas('refresh_tokens', [
+            'id' => $refreshToken->id,
+            'is_revoked' => true,
+        ]);
+    }
 }
