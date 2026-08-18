@@ -759,6 +759,38 @@ class UserService
     }
 
     /**
+     * Reasigna a $user las boletas que quedaron huérfanas mientras estuvo
+     * eliminado, en TODAS sus empresas.
+     *
+     * Hace falta al habilitar una cuenta: mientras el usuario tiene
+     * deleted_at, el matching por DNI de la carga de boletas no lo encuentra
+     * (ProcessDocumentChunk lo busca con el scope global de SoftDeletes) y
+     * esos documentos entran con status 'orphan'. Un restore() a secas los
+     * dejaría huérfanos para siempre — assignOrphanDocuments solo corre al
+     * crear un usuario o al cambiarle el DNI, nunca por el simple hecho de
+     * que el usuario vuelva a existir.
+     *
+     * Se recorren todas las empresas y no solo la primaria porque el usuario
+     * puede haber acumulado huérfanas en cualquiera de ellas durante la baja.
+     *
+     * @return int Total de documentos reasignados.
+     */
+    public function reassignOrphanDocumentsAcrossTenants(User $user): int
+    {
+        if (empty($user->document_text)) {
+            return 0;
+        }
+
+        $reassigned = 0;
+
+        foreach ($user->tenants as $tenant) {
+            $reassigned += $this->assignOrphanDocuments($user, $user->document_text, $tenant->id);
+        }
+
+        return $reassigned;
+    }
+
+    /**
      * Regla centralizada de "quién puede ADMINISTRAR (editar, resetear
      * contraseña, eliminar) a quién" desde Gestión de Usuarios. Reemplaza a
      * la vieja canAccessUser(), que solo miraba solapamiento de tenant sin

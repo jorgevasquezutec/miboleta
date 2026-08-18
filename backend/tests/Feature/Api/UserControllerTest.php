@@ -715,6 +715,169 @@ class UserControllerTest extends TestCase
         $this->assertNotSoftDeleted('users', ['id' => $this->root->id]);
     }
 
+    // ── Habilitar cuentas eliminadas (ability 'users.restore', solo root) ──
+
+    public function test_root_can_restore_deleted_user(): void
+    {
+        $user = User::factory()->create();
+        $user->delete();
+
+        $response = $this->actingAs($this->root)->postJson("/api/users/{$user->id}/restore");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('message', 'Usuario habilitado exitosamente');
+        $this->assertNotSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    public function test_restore_logs_audit_entry(): void
+    {
+        $user = User::factory()->create();
+        $user->delete();
+
+        $this->actingAs($this->root)->postJson("/api/users/{$user->id}/restore")
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => \App\Models\AuditLog::ACTION_USER_RESTORED,
+            'entity_type' => 'User',
+            'entity_id' => $user->id,
+        ]);
+    }
+
+    public function test_restore_returns_422_when_user_is_not_deleted(): void
+    {
+        // Habilitar a alguien que ya está activo es señal de UI
+        // desincronizada, no un no-op: debe devolver error para que el
+        // frontend refresque.
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($this->root)->postJson("/api/users/{$user->id}/restore");
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'El usuario no está eliminado');
+    }
+
+    public function test_admin_cannot_restore_deleted_user(): void
+    {
+        $user = User::factory()->client()->create();
+        $user->tenants()->attach($this->tenant->id);
+        $user->delete();
+
+        $response = $this->actingAs($this->admin)->postJson("/api/users/{$user->id}/restore");
+
+        $response->assertStatus(403);
+        $this->assertSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    public function test_admin_tenant_cannot_restore_deleted_user(): void
+    {
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $user = User::factory()->client()->create();
+        $user->tenants()->attach($this->tenant->id);
+        $user->delete();
+
+        $response = $this->actingAs($adminTenant)->postJson("/api/users/{$user->id}/restore");
+
+        $response->assertStatus(403);
+        $this->assertSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    public function test_restore_reassigns_orphan_documents(): void
+    {
+        // Las boletas que llegaron mientras el usuario estaba eliminado
+        // entraron como 'orphan' porque el matching por DNI no lo encontraba.
+        $user = User::factory()->create(['document_text' => '76543210']);
+        $user->tenants()->attach($this->tenant->id, ['is_primary' => true]);
+        $user->delete();
+
+        $document = \App\Models\Document::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'employee_document_number' => '76543210',
+            'status' => 'orphan',
+            'user_id' => null,
+            // requires_signature=true a propósito: assignOrphanDocuments deja
+            // el documento en 'pending' cuando requiere firma y en 'active'
+            // cuando no, y 'active' no existe en el esquema de tests — la
+            // migración que lo añade al enum se salta sqlite explícitamente
+            // (2025_12_12_233900_add_active_status_to_documents). La rama de
+            // reasignación que se quiere probar es la misma.
+            'requires_signature' => true,
+        ]);
+
+        $response = $this->actingAs($this->root)->postJson("/api/users/{$user->id}/restore");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('reassigned_documents', 1);
+        $this->assertDatabaseHas('documents', [
+            'id' => $document->id,
+            'user_id' => $user->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_delete_revokes_refresh_tokens(): void
+    {
+        $user = User::factory()->create();
+        \App\Models\RefreshToken::create([
+            'user_id' => $user->id,
+            'token' => 'test-refresh-token',
+            'expires_at' => now()->addDays(30),
+            'is_revoked' => false,
+        ]);
+
+        $this->actingAs($this->root)->deleteJson("/api/users/{$user->id}")
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('refresh_tokens', [
+            'user_id' => $user->id,
+            'is_revoked' => true,
+        ]);
+    }
+
+    public function test_root_can_list_deleted_users(): void
+    {
+        $deleted = User::factory()->create();
+        $deleted->delete();
+        $active = User::factory()->create();
+
+        $response = $this->actingAs($this->root)->getJson('/api/users?deleted=1');
+
+        $response->assertStatus(200);
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($deleted->id, $ids);
+        $this->assertNotContains($active->id, $ids);
+        $this->assertNotNull(
+            collect($response->json('data'))->firstWhere('id', $deleted->id)['deleted_at']
+        );
+    }
+
+    public function test_deleted_users_are_absent_from_the_normal_listing(): void
+    {
+        $deleted = User::factory()->create();
+        $deleted->delete();
+
+        $response = $this->actingAs($this->root)->getJson('/api/users');
+
+        $response->assertStatus(200);
+        $this->assertNotContains(
+            $deleted->id,
+            collect($response->json('data'))->pluck('id')->all()
+        );
+    }
+
+    public function test_admin_cannot_list_deleted_users(): void
+    {
+        // Ver la papelera es el primer paso de habilitar: un admin, que sí
+        // lista usuarios, no debe siquiera saber a quién eliminaron.
+        $deleted = User::factory()->client()->create();
+        $deleted->tenants()->attach($this->tenant->id);
+        $deleted->delete();
+
+        $this->actingAs($this->admin)->getJson('/api/users?deleted=1')
+            ->assertStatus(403);
+    }
+
     public function test_filter_users_by_search(): void
     {
         User::factory()->create([

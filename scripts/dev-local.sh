@@ -26,10 +26,12 @@ cd "$PROJECT_DIR"
 # ============================================
 export MIBOLETA_HTTP_PORT="${MIBOLETA_HTTP_PORT:-8090}"
 export MIBOLETA_HTTPS_PORT="${MIBOLETA_HTTPS_PORT:-8443}"
-export MIBOLETA_MYSQL_PORT="${MIBOLETA_MYSQL_PORT:-3307}"
+# 3308: el 3307 lo ocupa el MySQL de otro proyecto local (ver docker-compose.yml).
+export MIBOLETA_MYSQL_PORT="${MIBOLETA_MYSQL_PORT:-3308}"
 export MIBOLETA_REDIS_PORT="${MIBOLETA_REDIS_PORT:-6399}"
 export MIBOLETA_REVERB_PORT="${MIBOLETA_REVERB_PORT:-8085}"
-export MIBOLETA_ADMINER_PORT="${MIBOLETA_ADMINER_PORT:-8091}"
+# 8093: el 8091 lo ocupa el adminer de otro proyecto local (ver docker-compose.yml).
+export MIBOLETA_ADMINER_PORT="${MIBOLETA_ADMINER_PORT:-8093}"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  MiBoleta - Desarrollo Local          ${NC}"

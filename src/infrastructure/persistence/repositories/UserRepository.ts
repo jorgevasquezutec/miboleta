@@ -98,6 +98,10 @@ export class UserRepository implements IUserRepository {
           ...(params?.search ? { search: params.search } : {}),
           ...(params?.status ? { status: params.status } : {}),
           ...(params?.tenant_id ? { tenant_id: params.tenant_id } : {}),
+          // Mismo criterio de omisión que el resto: sin el flag, listado
+          // normal. Se manda 1/0 y no true/false porque el backend lo lee con
+          // $request->boolean('deleted').
+          ...(params?.deleted ? { deleted: 1 } : {}),
         }
       });
       return response.data;
@@ -148,6 +152,14 @@ export class UserRepository implements IUserRepository {
   async delete(id: string): Promise<void> {
     try {
       await apiClient.delete(`/users/${id}`);
+    } catch (error) {
+      throw toApiError(error);
+    }
+  }
+
+  async restore(id: string): Promise<void> {
+    try {
+      await apiClient.post(`/users/${id}/restore`);
     } catch (error) {
       throw toApiError(error);
     }

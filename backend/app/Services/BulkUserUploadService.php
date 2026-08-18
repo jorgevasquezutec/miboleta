@@ -942,9 +942,15 @@ class BulkUserUploadService
             return [];
         }
 
-        // Buscar emails existentes en BD
-        $existingUsers = User::whereIn(DB::raw('LOWER(email)'), $emails)
-            ->select('id', 'name', 'last_name', 'email', 'document_text')
+        // Buscar emails existentes en BD, INCLUIDOS los eliminados: el índice
+        // único de users.email no contempla deleted_at, así que un usuario con
+        // soft delete sigue reservando su email. Sin withTrashed() esta
+        // validación lo daba por libre, la fila pasaba, y recién moría en el
+        // worker con un error de clave duplicada de MySQL —ilegible para quien
+        // sube el Excel—. Ver el mensaje de habilitación más abajo.
+        $existingUsers = User::withTrashed()
+            ->whereIn(DB::raw('LOWER(email)'), $emails)
+            ->select('id', 'name', 'last_name', 'email', 'document_text', 'deleted_at')
             ->get()
             ->keyBy(fn($user) => strtolower($user->email));
 
@@ -961,7 +967,7 @@ class BulkUserUploadService
                 $duplicates[] = [
                     'row' => $index + 2, // +2 porque Excel empieza en 1 y tiene header
                     'email' => $user['email'],
-                    'existing_user' => "{$existingUser->name} {$existingUser->last_name} ({$existingUser->email})",
+                    'existing_user' => $this->describeExistingUser($existingUser),
                     'new_user' => "{$user['nombre']} {$user['apellido']} ({$user['email']})",
                 ];
             }
@@ -1003,8 +1009,12 @@ class BulkUserUploadService
         }
         $lookupValues = array_values(array_unique($lookupValues));
 
-        $existingUsers = \App\Models\User::whereIn('document_text', $lookupValues)
-            ->select('id', 'name', 'last_name', 'email', 'document_text')
+        // withTrashed() por lo mismo que en checkDuplicateEmails(): el índice
+        // único de users.document_text tampoco contempla deleted_at, así que
+        // un empleado eliminado sigue reservando su DNI.
+        $existingUsers = \App\Models\User::withTrashed()
+            ->whereIn('document_text', $lookupValues)
+            ->select('id', 'name', 'last_name', 'email', 'document_text', 'deleted_at')
             ->get();
 
         // Indexar por ambas variantes (con y sin padding) para que el match
@@ -1029,7 +1039,7 @@ class BulkUserUploadService
                 $duplicates[] = [
                     'row' => $index + 2, // +2 porque Excel empieza en 1 y tiene header
                     'document' => $document,
-                    'existing_user' => "{$existingUser->name} {$existingUser->last_name} ({$existingUser->email})",
+                    'existing_user' => $this->describeExistingUser($existingUser),
                     'new_user' => "{$user['nombre']} {$user['apellido']} ({$user['email']})",
                 ];
             }
@@ -1041,6 +1051,21 @@ class BulkUserUploadService
     // ────────────────────────────────────────────────────────────
     // HELPERS
     // ────────────────────────────────────────────────────────────
+
+    /**
+     * Etiqueta del usuario que ya ocupa el email/DNI en un choque de carga
+     * masiva. Si la cuenta está eliminada lo dice explícitamente: el operador
+     * no puede resolverlo desde el Excel (el DNI seguirá reservado por más
+     * veces que lo suba), tiene que pedirle a root que la habilite.
+     */
+    private function describeExistingUser(\App\Models\User $existingUser): string
+    {
+        $label = "{$existingUser->name} {$existingUser->last_name} ({$existingUser->email})";
+
+        return $existingUser->trashed()
+            ? "{$label} — CUENTA ELIMINADA: pida a un usuario root que la habilite en Gestión de Usuarios"
+            : $label;
+    }
 
     /**
      * Generar password aleatorio seguro

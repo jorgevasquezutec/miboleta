@@ -22,6 +22,7 @@ interface UsersState {
   createUser: (userData: Omit<User, "id" | "createdAt" | "updatedAt">) => Promise<User>;
   updateUser: (id: string, updates: Partial<User>) => Promise<User>;
   deleteUser: (id: string) => Promise<void>;
+  restoreUser: (id: string) => Promise<void>;
   getUsersByTenant: (tenantId?: string) => User[];
   clearError: () => void;
 
@@ -134,6 +135,28 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : "Error al eliminar usuario",
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  restoreUser: async (id: string) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      await userRepository.restore(id);
+
+      // Se saca de la lista igual que deleteUser: el listado en pantalla es
+      // la papelera (?deleted=1) y el usuario habilitado deja de pertenecer a
+      // ella. Es solo el pintado optimista — la página refresca después.
+      set((state) => ({
+        users: state.users.filter((u) => u.id !== id),
+        isLoading: false,
+      }));
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Error al habilitar usuario",
         isLoading: false,
       });
       throw error;

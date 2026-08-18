@@ -26,6 +26,12 @@ export interface GetUsersParams {
   search?: string;
   status?: string;
   tenant_id?: string;
+  /**
+   * Papelera: lista SOLO las cuentas eliminadas en vez de las activas (son
+   * dos listados disjuntos, no un superconjunto). Exclusivo de root — el
+   * backend lo gatea con la ability 'users.restore'.
+   */
+  deleted?: boolean;
 }
 
 export interface IUserRepository {
@@ -45,4 +51,6 @@ export interface IUserRepository {
   create(data: CreateUserData): Promise<User>;
   update(id: string, data: UpdateUserData): Promise<User>;
   delete(id: string): Promise<void>;
+  /** Habilita una cuenta eliminada (soft delete). Solo root. */
+  restore(id: string): Promise<void>;
 }

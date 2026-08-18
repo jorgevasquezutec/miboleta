@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/presentation/components/ui/select";
-import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
+import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { showApiError } from "@/presentation/utils/showApiError";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -48,6 +48,7 @@ export function UsersListPage() {
     pagination,
     fetchUsers,
     deleteUser,
+    restoreUser,
     goToPage,
     changePerPage,
   } = useUsersStore();
@@ -64,6 +65,10 @@ export function UsersListPage() {
   const canCreateUser = useCanAny(["users.create_any_role", "users.create_limited_role"]);
   const canUpdateUser = useCan("users.update");
   const canDeleteUser = useCan("users.delete");
+  // Habilitar cuentas eliminadas: solo root. Gatea la opción "Eliminados" del
+  // filtro de Estado Y el botón Habilitar — sin ella, la papelera no existe
+  // para este usuario.
+  const canRestoreUser = useCan("users.restore");
   const canBulkUpload = useCan("users.bulk_upload");
   const canExportUsers = useCan("users.export");
   const canExportAppAccounts = useCan("reports.app_accounts_export");
@@ -77,10 +82,19 @@ export function UsersListPage() {
     }
   });
 
+  // ¿Estamos viendo la papelera? Deriva del mismo filtro de Estado que la UI,
+  // para que no haya un segundo estado que pueda desincronizarse con el Select.
+  // Se exige canRestoreUser porque el filtro viaja en la URL: sin esto, un
+  // no-root que abra un enlace con ?status=deleted (o que herede la URL al
+  // cambiar de sesión) dispararía la consulta de papelera y comería un 403.
+  const isTrashView = filters.status === 'deleted' && canRestoreUser;
+
   // Local state for search input (for debounce)
   const [searchInput, setSearchInput] = useState(filters.search);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
+  const [userToRestore, setUserToRestore] = useState<{ id: string; name: string } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingAppAccounts, setIsExportingAppAccounts] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
@@ -131,16 +145,30 @@ export function UsersListPage() {
   // en modo "Todas las empresas" no manda header y el backend no filtra:
   // mismo resultado que antes.
   // Recarga la lista con los filtros y la página que el usuario tiene puestos.
-  // Se usa también tras eliminar: llamar a fetchUsers() sin argumentos volvía a
+  // Se usa también tras eliminar o habilitar: llamar a fetchUsers() sin
+  // argumentos volvía a
   // la página 1 sin búsqueda ni filtro de estado, y parecía que la lista "no se
   // actualizaba" cuando en realidad cambiaba de sitio.
+  //
+  // 'deleted' es un valor más del Select de Estado en la UI, pero en el backend
+  // son dos listados disjuntos: ?deleted=1 (onlyTrashed) ignora `status`. De ahí
+  // las dos reglas de abajo:
+  //
+  // 1) 'deleted' nunca viaja como status. O es la papelera —y entonces va en el
+  //    flag `deleted`—, o el usuario no puede verla y se degrada a "sin filtro"
+  //    en vez de pedir un status que no existe en BD.
+  // 2) `deleted` se manda SIEMPRE, incluso en false: el store mezcla los params
+  //    sobre currentFilters, así que omitirlo dejaría pegado el deleted=true
+  //    anterior al volver a "Activo".
   const refreshUsers = useCallback(() => {
     return fetchUsers({
       search: filters.search,
-      status: filters.status === 'all' ? '' : filters.status,
+      status:
+        filters.status === 'all' || filters.status === 'deleted' ? '' : filters.status,
+      deleted: isTrashView,
       page: filters.page,
     });
-  }, [fetchUsers, filters.search, filters.status, filters.page]);
+  }, [fetchUsers, filters.search, filters.status, isTrashView, filters.page]);
 
   useTenantAwareEffect(() => {
     const tenantChanged = prevTenantIdRef.current !== currentTenant?.id;
@@ -152,7 +180,7 @@ export function UsersListPage() {
     }
 
     refreshUsers();
-  }, [filters.search, filters.status, filters.page, currentTenant?.id, refreshUsers]);
+  }, [filters.search, filters.status, isTrashView, filters.page, currentTenant?.id, refreshUsers]);
 
   const handleDelete = (id: string, userName: string) => {
     setUserToDelete({ id, name: userName });
@@ -167,6 +195,25 @@ export function UsersListPage() {
       await refreshUsers();
     } catch (error) {
       showApiError(error, "Error al eliminar usuario");
+    }
+  };
+
+  const handleRestore = (id: string, userName: string) => {
+    setUserToRestore({ id, name: userName });
+    setIsRestoreConfirmOpen(true);
+  };
+
+  const confirmRestore = async () => {
+    if (!userToRestore) return;
+    try {
+      await restoreUser(userToRestore.id);
+      toast.success("Usuario habilitado exitosamente");
+      // refreshUsers() y no fetchUsers(): el filtrado optimista del store deja
+      // la fila fuera pero no corrige paginación ni totales, y hay que volver
+      // conservando el filtro de papelera y la página actual.
+      await refreshUsers();
+    } catch (error) {
+      showApiError(error, "Error al habilitar usuario");
     }
   };
 
@@ -354,6 +401,13 @@ export function UsersListPage() {
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="active">Activo</SelectItem>
                   <SelectItem value="inactive">Inactivo</SelectItem>
+                  {/* La papelera vive aquí y no en una ruta aparte porque es
+                      el mismo listado con las mismas columnas; y solo la ve
+                      root (users.restore). "Eliminados" no es un status: el
+                      backend lo traduce a ?deleted=1 (onlyTrashed). */}
+                  {canRestoreUser && (
+                    <SelectItem value="deleted">Eliminados</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -580,7 +634,12 @@ export function UsersListPage() {
                                   (canUpdateUser || canDeleteUser), así que a un
                                   admin_tenant (que tiene users.update pero NO
                                   users.delete) se le colaba el basurero. */}
-                              {canUpdateUser && canEditTarget(user, currentUser?.id, currentRole, currentTenant?.id) && (
+                              {/* En la papelera no se edita ni se vuelve a
+                                  eliminar: la única acción sobre una cuenta
+                                  eliminada es habilitarla. Editar sobre una
+                                  fila con deleted_at daría 404 (el scope
+                                  global la esconde de findOrFail). */}
+                              {!isTrashView && canUpdateUser && canEditTarget(user, currentUser?.id, currentRole, currentTenant?.id) && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -591,7 +650,7 @@ export function UsersListPage() {
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               )}
-                              {canDeleteUser && (
+                              {!isTrashView && canDeleteUser && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -600,6 +659,26 @@ export function UsersListPage() {
                                   }
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              )}
+                              {/* Condición propia y no reusada de la de
+                                  Eliminar, por la misma razón que C2 (ver
+                                  arriba): son abilities distintas y colgar
+                                  este botón de canDeleteUser lo colaría a
+                                  quien no puede habilitar. `deleted_at` como
+                                  guarda extra al flag de vista, para no pintar
+                                  Habilitar sobre una fila activa si alguna vez
+                                  los listados se mezclan. */}
+                              {isTrashView && canRestoreUser && user.deleted_at && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Habilitar usuario"
+                                  onClick={() =>
+                                    handleRestore(user.id, user.full_name || user.name)
+                                  }
+                                >
+                                  <RotateCcw className="h-4 w-4 text-primary" />
                                 </Button>
                               )}
                             </div>
@@ -638,6 +717,16 @@ export function UsersListPage() {
         onConfirm={confirmDelete}
         confirmText="Eliminar"
         variant="destructive"
+      />
+
+      {/* Confirm Restore Dialog */}
+      <ConfirmDialog
+        open={isRestoreConfirmOpen}
+        onOpenChange={setIsRestoreConfirmOpen}
+        title="Habilitar Usuario"
+        description={userToRestore ? `¿Habilitar la cuenta de ${userToRestore.name}? Recuperará su acceso, sus empresas y sus documentos.` : ''}
+        onConfirm={confirmRestore}
+        confirmText="Habilitar"
       />
     </div>
   );
