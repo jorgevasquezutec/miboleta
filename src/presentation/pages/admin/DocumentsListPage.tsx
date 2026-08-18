@@ -31,6 +31,7 @@ import { useTenantFilterStore } from "@/presentation/stores";
 import { getDocumentStatusBadgeInline } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 
 export function DocumentsListPage() {
     useDocumentTitle('Documentos');
@@ -218,7 +219,7 @@ export function DocumentsListPage() {
             reportsRepository.downloadBlob(blob, filename);
             toast.success('Exportación completada');
         } catch (error) {
-            toast.error('Error al exportar documentos');
+            showApiError(error, 'Error al exportar documentos');
         } finally {
             setIsExporting(false);
         }

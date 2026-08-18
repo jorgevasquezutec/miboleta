@@ -8,7 +8,7 @@ import { UserBatchCard } from '@/presentation/components/bulkUpload/UserBatchCar
 import { PaginationControls } from '@/presentation/components/shared/PaginationControls';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import type { UserBatchListItem, PaginatedBatchList } from '@/domain/types/bulkUserUpload.types';
-import { toast } from 'sonner';
+import { showApiError } from '@/presentation/utils/showApiError';
 
 export function UserBatchesListPage() {
     useDocumentTitle('Historial de Cargas de Usuarios');
@@ -39,7 +39,7 @@ export function UserBatchesListPage() {
             setTotalBatches(data.meta.total);
         } catch (error) {
             console.error('Error fetching batches:', error);
-            toast.error('Error al cargar el historial');
+            showApiError(error, 'Error al cargar el historial');
         } finally {
             setIsLoading(false);
         }

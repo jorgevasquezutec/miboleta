@@ -34,6 +34,7 @@ import { DocumentBatch } from "@/core/domain/entities/DocumentBatch";
 import { getBatchStatusBadge, formatDateTime } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 
 export function BatchesListPage() {
     useDocumentTitle('Lotes de Carga');
@@ -108,7 +109,7 @@ export function BatchesListPage() {
             reportsRepository.downloadBlob(blob, filename);
             toast.success('Exportación completada');
         } catch (error) {
-            toast.error('Error al exportar lotes');
+            showApiError(error, 'Error al exportar lotes');
         } finally {
             setIsExporting(false);
         }

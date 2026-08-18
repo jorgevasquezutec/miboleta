@@ -15,6 +15,7 @@ use App\Services\ActiveTenantResolver;
 use App\Services\AuditService;
 use App\Services\UserService;
 use App\Services\VacationBalanceService;
+use App\Support\TenantAccessCache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -446,6 +447,8 @@ class UserController extends Controller
         $deletedData = $user->only(self::AUDITED_FIELDS);
 
         $user->delete();
+
+        TenantAccessCache::forget($user->id);
 
         $this->auditService->logUserDeleted($user->id, $deletedData);
 

@@ -3,8 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ResolvesActiveRole;
+use Illuminate\Foundation\Http\FormRequest;
 
-class StoreTenantRequest extends CustomFormRequest
+class StoreTenantRequest extends FormRequest
 {
     use ResolvesActiveRole;
 

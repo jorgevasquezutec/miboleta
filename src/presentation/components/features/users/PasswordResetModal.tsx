@@ -14,6 +14,7 @@ import {
 } from '@/presentation/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/presentation/components/ui/radio-group';
 import apiClient from '@/infrastructure/http/apiClient';
+import { showApiError } from '@/presentation/utils/showApiError';
 import { toast } from 'sonner';
 
 type ResetAction = 'no_change' | 'generate' | 'manual' | 'force_change_only';
@@ -99,9 +100,8 @@ export function PasswordResetModal({
             onOpenChange(false);
             handleReset();
             onSuccess?.();
-        } catch (error: any) {
-            const message = error.response?.data?.message || 'Error al restablecer contraseña';
-            toast.error(message);
+        } catch (error) {
+            showApiError(error, 'Error al restablecer contraseña');
         } finally {
             setIsLoading(false);
         }

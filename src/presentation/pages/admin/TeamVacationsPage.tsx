@@ -23,6 +23,7 @@ import { VacationRejectModal } from "@/presentation/components/features/vacation
 import { VacationCalendar } from "@/presentation/components/features/vacations/VacationCalendar";
 import { VacationRequest } from "@/core/domain/entities";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -111,8 +112,8 @@ export function TeamVacationsPage() {
             await approveRequest(confirmDialog.requestId);
             toast.success("Solicitud aprobada correctamente");
             setConfirmDialog({ ...confirmDialog, open: false });
-        } catch {
-            toast.error("Error al aprobar la solicitud");
+        } catch (error) {
+            showApiError(error, "Error al aprobar la solicitud");
         } finally {
             setProcessingId(null);
         }
@@ -131,8 +132,8 @@ export function TeamVacationsPage() {
             toast.success("Solicitud rechazada");
             setRejectModalOpen(false);
             setSelectedRequest(null);
-        } catch {
-            toast.error("Error al rechazar la solicitud");
+        } catch (error) {
+            showApiError(error, "Error al rechazar la solicitud");
         } finally {
             setProcessingId(null);
         }
@@ -169,8 +170,8 @@ export function TeamVacationsPage() {
                 toast.success("Vacaciones marcadas como NO tomadas");
             }
             setConfirmDialog({ ...confirmDialog, open: false });
-        } catch {
-            toast.error("Error al actualizar las vacaciones");
+        } catch (error) {
+            showApiError(error, "Error al actualizar las vacaciones");
         } finally {
             setProcessingId(null);
         }

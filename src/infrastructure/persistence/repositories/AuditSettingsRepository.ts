@@ -1,6 +1,6 @@
 import { IAuditSettingsRepository } from '@/core/domain/repositories/IAuditSettingsRepository';
 import { AuditActionSetting } from '@/core/domain/entities/AuditSettings';
-import apiClient from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 
 interface AuditActionSettingResponse {
   action: string;
@@ -17,15 +17,23 @@ interface AuditActionSettingResponse {
  */
 export class AuditSettingsRepository implements IAuditSettingsRepository {
   async getCatalog(): Promise<AuditActionSetting[]> {
-    const response = await apiClient.get<{ data: AuditActionSettingResponse[] }>('/audit/settings');
-    return response.data.data;
+    try {
+      const response = await apiClient.get<{ data: AuditActionSettingResponse[] }>('/audit/settings');
+      return response.data.data;
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 
   async updateSettings(disabledActions: string[]): Promise<AuditActionSetting[]> {
-    const response = await apiClient.put<{ data: AuditActionSettingResponse[] }>('/audit/settings', {
-      disabled_actions: disabledActions,
-    });
-    return response.data.data;
+    try {
+      const response = await apiClient.put<{ data: AuditActionSettingResponse[] }>('/audit/settings', {
+        disabled_actions: disabledActions,
+      });
+      return response.data.data;
+    } catch (error) {
+      throw toApiError(error);
+    }
   }
 }
 

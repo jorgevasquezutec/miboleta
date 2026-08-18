@@ -10,6 +10,7 @@ import { Button } from "@/presentation/components/ui/button";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Checkbox } from "@/presentation/components/ui/checkbox";
 import { OTPInput } from "@/presentation/components/ui/otp-input";
+import { toApiError } from "@/infrastructure/http/apiClient";
 
 interface DocumentSignatureModalProps {
   isOpen: boolean;
@@ -85,9 +86,10 @@ export function DocumentSignatureModal({
       await onAcceptTerms();
       console.log('[DocumentSignatureModal] Terms accepted successfully');
       setStep("request-code");
-    } catch (err: any) {
+    } catch (err) {
       console.error('[DocumentSignatureModal] Error accepting terms:', err);
-      setError(err.response?.data?.error || "Error al aceptar términos");
+      const apiError = toApiError(err);
+      setError(apiError.message || "Error al aceptar términos");
     } finally {
       setLoading(false);
     }
@@ -105,9 +107,10 @@ export function DocumentSignatureModal({
       setRemainingTime(result.expiresIn);
       setAttempts(0); // Reset attempts for new code
       setStep("verify-code");
-    } catch (err: any) {
+    } catch (err) {
       console.error('[DocumentSignatureModal] Error requesting code:', err);
-      const errorData = err.response?.data;
+      const apiError = toApiError(err);
+      const errorData = apiError.data as { requires_terms?: boolean; cooldown_remaining?: number } | undefined;
       console.log('[DocumentSignatureModal] Error data:', errorData);
 
       // If user hasn't accepted terms, redirect to terms step
@@ -119,14 +122,13 @@ export function DocumentSignatureModal({
       }
 
       // Handle cooldown error with remaining time
-      if (err.response?.status === 429 && errorData?.cooldown_remaining) {
+      if (apiError.status === 429 && errorData?.cooldown_remaining) {
         const seconds = errorData.cooldown_remaining;
         setError(`Debes esperar ${seconds} segundos antes de solicitar otro código.`);
         console.log('[DocumentSignatureModal] Cooldown error, staying in request-code step');
         setStep("request-code");
       } else {
-        const errorMsg = errorData?.error || "Error al solicitar código";
-        setError(errorMsg);
+        setError(apiError.message || "Error al solicitar código");
       }
     } finally {
       setLoading(false);
@@ -149,8 +151,9 @@ export function DocumentSignatureModal({
         onSuccess();
         onClose();
       }, 2000);
-    } catch (err: any) {
-      const errorData = err.response?.data;
+    } catch (err) {
+      const apiError = toApiError(err);
+      const errorData = apiError.data as { requires_new_code?: boolean } | undefined;
       const newAttempts = attempts + 1;
       setAttempts(newAttempts);
 

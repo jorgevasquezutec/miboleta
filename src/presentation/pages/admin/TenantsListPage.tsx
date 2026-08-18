@@ -36,6 +36,7 @@ import { PaginationControls } from '@/presentation/components/shared/PaginationC
 import { StatsCard } from '@/presentation/components/common';
 import { reportsRepository } from '@/infrastructure/persistence/repositories';
 import { toast } from 'sonner';
+import { showApiError } from '@/presentation/utils/showApiError';
 
 export function TenantsListPage() {
     useDocumentTitle('Empresas');
@@ -154,7 +155,7 @@ export function TenantsListPage() {
             reportsRepository.downloadBlob(blob, filename);
             toast.success('Exportación completada');
         } catch (error) {
-            toast.error('Error al exportar organizaciones');
+            showApiError(error, 'Error al exportar organizaciones');
         } finally {
             setIsExporting(false);
         }

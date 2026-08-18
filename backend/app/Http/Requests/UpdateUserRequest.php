@@ -5,13 +5,14 @@ namespace App\Http\Requests;
 use App\Models\Role;
 use App\Models\User;
 use App\Http\Requests\Concerns\ResolvesActiveRole;
+use App\Http\Requests\Concerns\ValidatesUserIdentityUniqueness;
 use App\Services\UserService;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateUserRequest extends FormRequest
 {
     use ResolvesActiveRole;
+    use ValidatesUserIdentityUniqueness;
 
     /**
      * Roles de supervisión válidos: quien figure como "jefe inmediato" de un
@@ -157,17 +158,21 @@ class UpdateUserRequest extends FormRequest
         return [
             'name' => 'sometimes|required|string|max:255',
             'last_name' => 'nullable|string|max:255',
+            // Unicidad con reglas propias (no `Rule::unique`) para distinguir el
+            // choque contra un usuario ELIMINADO, que sigue ocupando el correo y
+            // el documento sin aparecer en ningún listado. Ver
+            // ValidatesUserIdentityUniqueness.
             'email' => [
                 'sometimes',
                 'required',
                 'email',
-                Rule::unique('users', 'email')->ignore($userId),
+                $this->uniqueEmailRule($userId !== null ? (int) $userId : null),
             ],
             'document_type' => 'nullable|string|in:dni,ruc,ce,passport',
             'document_text' => [
                 'nullable',
                 'string',
-                Rule::unique('users', 'document_text')->ignore($userId),
+                $this->uniqueDocumentRule($userId !== null ? (int) $userId : null),
             ],
             'phone' => 'nullable|string|max:20',
             'birth_date' => 'nullable|date',
@@ -355,9 +360,10 @@ class UpdateUserRequest extends FormRequest
             'name.max' => 'El nombre no puede exceder 255 caracteres',
             'email.required' => 'El email es requerido',
             'email.email' => 'El email debe ser una dirección válida',
-            'email.unique' => 'Este email ya está registrado',
+            // Los mensajes de duplicado (correo y documento) los emite la regla
+            // propia de ValidatesUserIdentityUniqueness, que distingue si el
+            // choque es contra un usuario activo o contra uno eliminado.
             'document_type.in' => 'El tipo de documento debe ser: dni, ruc, ce o passport',
-            'document_text.unique' => 'Este número de documento ya está registrado',
             'phone.max' => 'El teléfono no puede exceder 20 caracteres',
             'birth_date.date' => 'La fecha de nacimiento no es válida',
             'role_id.exists' => 'El rol seleccionado no existe',

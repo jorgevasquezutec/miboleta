@@ -1,4 +1,4 @@
-import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 import {
     DashboardStats,
     DocumentStats,
@@ -10,6 +10,21 @@ import {
     PaginatedAuditResponse,
 } from '@/core/domain/entities';
 import { IReportsRepository } from '@/core/domain/repositories/IReportsRepository';
+
+/**
+ * Los exports piden `responseType: 'blob'`, así que cuando el backend responde
+ * con un error el JSON viaja DENTRO del Blob y hay que leerlo para sacar el
+ * mensaje. Devuelve null si el Blob no trae un JSON con mensaje, para que el
+ * llamador caiga al error ya normalizado.
+ */
+async function blobErrorMessage(blob: Blob): Promise<string | null> {
+    try {
+        const json = JSON.parse(await blob.text());
+        return json.message || json.error || null;
+    } catch {
+        return null;
+    }
+}
 
 /**
  * Reports Repository
@@ -29,7 +44,7 @@ export class ReportsRepository implements IReportsRepository {
             const response = await apiClient.get<{ data: DashboardStats }>('/reports/dashboard', { params });
             return response.data.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -42,7 +57,7 @@ export class ReportsRepository implements IReportsRepository {
             const response = await apiClient.get<{ data: DocumentStats }>('/reports/documents', { params });
             return response.data.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -55,7 +70,7 @@ export class ReportsRepository implements IReportsRepository {
             const response = await apiClient.get<{ data: VacationStats }>('/reports/vacations', { params });
             return response.data.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -68,7 +83,7 @@ export class ReportsRepository implements IReportsRepository {
             const response = await apiClient.get<{ data: UserStats }>('/reports/users', { params });
             return response.data.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -83,7 +98,7 @@ export class ReportsRepository implements IReportsRepository {
             const response = await apiClient.get<{ data: ActivityEntry[] }>('/reports/activity', { params });
             return response.data.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -95,7 +110,7 @@ export class ReportsRepository implements IReportsRepository {
             const response = await apiClient.get<PaginatedAuditResponse>('/reports/audit', { params: filters });
             return response.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -107,7 +122,7 @@ export class ReportsRepository implements IReportsRepository {
             const response = await apiClient.get<{ data: AuditActions }>('/reports/audit/actions');
             return response.data.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -122,7 +137,7 @@ export class ReportsRepository implements IReportsRepository {
             });
             return response.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -136,20 +151,16 @@ export class ReportsRepository implements IReportsRepository {
                 responseType: 'blob',
             });
             return response.data;
-        } catch (error: any) {
-            // If response is a blob, try to parse it as JSON to get error message
-            if (error?.response?.data instanceof Blob) {
-                try {
-                    const text = await error.response.data.text();
-                    const json = JSON.parse(text);
-                    throw new Error(json.message || json.error || 'Error al exportar');
-                } catch (parseError) {
-                    if (parseError instanceof Error && parseError.message !== 'Error al exportar') {
-                        throw parseError;
-                    }
-                }
+        } catch (error: unknown) {
+            const apiError = toApiError(error);
+
+            // El payload del error viene como Blob (responseType: 'blob')
+            if (apiError.data instanceof Blob) {
+                const message = await blobErrorMessage(apiError.data);
+                if (message) throw new Error(message);
             }
-            throw new Error(getErrorMessage(error));
+
+            throw apiError;
         }
     }
 
@@ -163,20 +174,16 @@ export class ReportsRepository implements IReportsRepository {
                 responseType: 'blob',
             });
             return response.data;
-        } catch (error: any) {
-            // If response is a blob, try to parse it as JSON to get error message
-            if (error?.response?.data instanceof Blob) {
-                try {
-                    const text = await error.response.data.text();
-                    const json = JSON.parse(text);
-                    throw new Error(json.message || json.error || 'Error al exportar');
-                } catch (parseError) {
-                    if (parseError instanceof Error && parseError.message !== 'Error al exportar') {
-                        throw parseError;
-                    }
-                }
+        } catch (error: unknown) {
+            const apiError = toApiError(error);
+
+            // El payload del error viene como Blob (responseType: 'blob')
+            if (apiError.data instanceof Blob) {
+                const message = await blobErrorMessage(apiError.data);
+                if (message) throw new Error(message);
             }
-            throw new Error(getErrorMessage(error));
+
+            throw apiError;
         }
     }
 
@@ -191,20 +198,16 @@ export class ReportsRepository implements IReportsRepository {
                 responseType: 'blob',
             });
             return response.data;
-        } catch (error: any) {
-            // If response is a blob, try to parse it as JSON to get error message
-            if (error?.response?.data instanceof Blob) {
-                try {
-                    const text = await error.response.data.text();
-                    const json = JSON.parse(text);
-                    throw new Error(json.message || json.error || 'Error al exportar');
-                } catch (parseError) {
-                    if (parseError instanceof Error && parseError.message !== 'Error al exportar') {
-                        throw parseError;
-                    }
-                }
+        } catch (error: unknown) {
+            const apiError = toApiError(error);
+
+            // El payload del error viene como Blob (responseType: 'blob')
+            if (apiError.data instanceof Blob) {
+                const message = await blobErrorMessage(apiError.data);
+                if (message) throw new Error(message);
             }
-            throw new Error(getErrorMessage(error));
+
+            throw apiError;
         }
     }
 
@@ -219,7 +222,7 @@ export class ReportsRepository implements IReportsRepository {
             });
             return response.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -234,7 +237,7 @@ export class ReportsRepository implements IReportsRepository {
             });
             return response.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 
@@ -249,7 +252,7 @@ export class ReportsRepository implements IReportsRepository {
             });
             return response.data;
         } catch (error) {
-            throw new Error(getErrorMessage(error));
+            throw toApiError(error);
         }
     }
 

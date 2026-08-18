@@ -1,6 +1,6 @@
 import { IRoleRepository } from '@/core/domain/repositories/IRoleRepository';
 import { Role } from '@/core/domain/entities';
-import apiClient, { getErrorMessage } from '@/infrastructure/http/apiClient';
+import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 
 /**
  * Catálogo de roles del sistema (incluye 'root').
@@ -14,7 +14,7 @@ export class RoleRepository implements IRoleRepository {
       const response = await apiClient.get<{ data: Role[] }>('/roles');
       return response.data.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error));
+      throw toApiError(error);
     }
   }
 }

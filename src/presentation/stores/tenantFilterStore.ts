@@ -26,11 +26,24 @@ export interface TenantFilter {
 interface TenantFilterState {
     filter: TenantFilter;
 
+    /**
+     * Id del usuario dueño del filtro persistido (null si no hay sesión).
+     *
+     * El filtro vive en localStorage y sobrevive a la sesión. Sin este sello,
+     * el siguiente usuario que entra en el mismo navegador hereda las empresas
+     * del anterior y el backend le responde 403 ("Las empresas seleccionadas no
+     * están asociadas a tu cuenta") en TODAS sus peticiones.
+     */
+    ownerUserId: string | null;
+
     // Actions
     setFilter: (tenantIds: string[], availableTenants: TenantAssociation[], mode?: TenantFilterMode) => void;
     clearFilter: () => void;
     toggleTenant: (tenantId: string, availableTenants: TenantAssociation[]) => void;
     selectAll: (availableTenants: TenantAssociation[]) => void;
+
+    /** Descarta el filtro y lo sella a nombre de `userId` (login / cambio de dueño). */
+    resetForUser: (userId: string | number | null) => void;
 
     // Selectors (memoizados internamente)
     getFilteredTenantIds: () => number[] | undefined;
@@ -39,9 +52,37 @@ interface TenantFilterState {
     getFilterDisplayText: () => string;
 }
 
+/** Filtro por defecto: sin selección explícita (todas las empresas del usuario). */
+const defaultFilter = (): TenantFilter => ({
+    mode: 'all',
+    tenantIds: [],
+    tenants: [],
+});
+
+/**
+ * Lee el usuario autenticado desde el storage del authStore.
+ * Devuelve null si no hay sesión o el JSON está corrupto.
+ */
+const readAuthUser = (): { id?: string | number; role?: string; tenants?: any[] } | null => {
+    try {
+        const authStorage = localStorage.getItem('auth-storage');
+        if (!authStorage) return null;
+        const { state } = JSON.parse(authStorage);
+        return state?.user ?? null;
+    } catch {
+        return null;
+    }
+};
+
+/** Id del usuario autenticado como string, o null si no hay sesión. */
+const currentOwnerId = (): string | null => {
+    const id = readAuthUser()?.id;
+    return id === undefined || id === null ? null : String(id);
+};
+
 /**
  * Store especializado para manejo de filtros de tenant
- * 
+ *
  * Separado del authStore para:
  * - Mejor separación de responsabilidades
  * - Facilitar testing
@@ -67,11 +108,8 @@ export const useTenantFilterStore = create<TenantFilterState>()(
     persist(
         (set, get) => ({
             // Estado inicial: sin filtro (todas las empresas)
-            filter: {
-                mode: 'all',
-                tenantIds: [],
-                tenants: [],
-            },
+            filter: defaultFilter(),
+            ownerUserId: null,
 
             /**
              * Establece el filtro de tenants
@@ -103,7 +141,8 @@ export const useTenantFilterStore = create<TenantFilterState>()(
                         mode: finalMode,
                         tenantIds,
                         tenants
-                    }
+                    },
+                    ownerUserId: currentOwnerId(),
                 });
             },
 
@@ -114,41 +153,43 @@ export const useTenantFilterStore = create<TenantFilterState>()(
             clearFilter: () => {
                 console.log('🏢 [TenantFilter] Clearing filter');
 
+                const user = readAuthUser();
+                const owner = currentOwnerId();
+
                 // Check if user is root
-                try {
-                    const authStorage = localStorage.getItem('auth-storage');
-                    if (authStorage) {
-                        const { state } = JSON.parse(authStorage);
-                        const user = state?.user;
-                        if (user?.role !== 'root' && user?.tenants && user.tenants.length > 0) {
-                            // Non-root: set mode 'all' but include their tenant IDs
-                            const tenantIds = user.tenants.map((t: any) => String(t.id));
-                            const tenants = user.tenants.map((t: any) => ({
-                                id: t.id,
-                                name: t.name,
-                                slug: t.slug,
-                            }));
-                            set({
-                                filter: {
-                                    mode: 'all',
-                                    tenantIds,
-                                    tenants,
-                                }
-                            });
-                            return;
-                        }
-                    }
-                } catch (e) {
-                    // Fallback to default behavior
+                if (user && user.role !== 'root' && user.tenants && user.tenants.length > 0) {
+                    // Non-root: set mode 'all' but include their tenant IDs
+                    const tenantIds = user.tenants.map((t: any) => String(t.id));
+                    const tenants = user.tenants as TenantAssociation[];
+                    set({
+                        filter: {
+                            mode: 'all',
+                            tenantIds,
+                            tenants,
+                        },
+                        ownerUserId: owner,
+                    });
+                    return;
                 }
 
                 set({
-                    filter: {
-                        mode: 'all',
-                        tenantIds: [],
-                        tenants: []
-                    }
+                    filter: defaultFilter(),
+                    ownerUserId: owner,
                 });
+            },
+
+            /**
+             * Descarta el filtro y lo sella a nombre de `userId`.
+             *
+             * Se llama al iniciar sesión: el filtro arranca sin selección, así que
+             * nunca puede arrastrar empresas del usuario anterior. Para usuarios
+             * no-root el interceptor rellena el header con sus propias empresas
+             * mientras no elijan una (`apiClient.ts`), así que no se pierde nada.
+             */
+            resetForUser: (userId: string | number | null) => {
+                const owner = userId === undefined || userId === null ? null : String(userId);
+                console.log(`🏢 [TenantFilter] Filtro reiniciado para el usuario ${owner ?? '(sin sesión)'}`);
+                set({ filter: defaultFilter(), ownerUserId: owner });
             },
 
             /**
@@ -177,25 +218,13 @@ export const useTenantFilterStore = create<TenantFilterState>()(
              */
             selectAll: (availableTenants: TenantAssociation[]) => {
                 // Check if user is root
-                let isRoot = false;
-                try {
-                    const authStorage = localStorage.getItem('auth-storage');
-                    if (authStorage) {
-                        const { state } = JSON.parse(authStorage);
-                        isRoot = state?.user?.role === 'root';
-                    }
-                } catch (e) {
-                    // Default to non-root behavior
-                }
+                const isRoot = readAuthUser()?.role === 'root';
 
                 if (isRoot) {
                     // Root users: set mode 'all' without IDs (sees everything)
                     set({
-                        filter: {
-                            mode: 'all',
-                            tenantIds: [],
-                            tenants: [],
-                        }
+                        filter: defaultFilter(),
+                        ownerUserId: currentOwnerId(),
                     });
                 } else {
                     // Non-root users: select all available tenants with IDs
@@ -266,9 +295,28 @@ export const useTenantFilterStore = create<TenantFilterState>()(
         {
             name: "tenant-filter-storage",
             partialize: (state) => ({
-                // Solo persistir el filtro, no las funciones
+                // Solo persistir el filtro y su dueño, no las funciones
                 filter: state.filter,
+                ownerUserId: state.ownerUserId,
             }),
+            /**
+             * Al rehidratar, el filtro solo se conserva si está sellado con el
+             * usuario que hay ahora en sesión. Un filtro sin sello (persistido
+             * por una versión anterior) o de otro usuario se descarta: es el caso
+             * de la sesión que murió sin logout y dejó sus empresas en el
+             * navegador para el siguiente que entrara.
+             */
+            onRehydrateStorage: () => (state, error) => {
+                if (error || !state) return;
+
+                const owner = currentOwnerId();
+                if (state.ownerUserId !== null && state.ownerUserId === owner) return;
+
+                console.warn(
+                    `🏢 [TenantFilter] Filtro persistido de otra sesión (dueño ${state.ownerUserId ?? 'sin sello'}, sesión actual ${owner ?? 'ninguna'}): se descarta`
+                );
+                state.resetForUser(owner);
+            },
         }
     )
 );

@@ -1,4 +1,4 @@
-import apiClient from "@/infrastructure/http/apiClient";
+import apiClient, { toApiError } from "@/infrastructure/http/apiClient";
 import {
     Notification,
     NotificationFilters,
@@ -16,42 +16,62 @@ class NotificationRepositoryClass implements INotificationRepository {
         if (filters?.unread_only) params.append('unread_only', 'true');
         if (filters?.type) params.append('type', filters.type);
 
-        const response = await apiClient.get<{ data: Notification[]; meta: any }>(
-            `/notifications?${params.toString()}`
-        );
+        try {
+            const response = await apiClient.get<{ data: Notification[]; meta: any }>(
+                `/notifications?${params.toString()}`
+            );
 
-        return {
-            data: response.data.data,
-            meta: {
-                currentPage: response.data.meta.current_page,
-                lastPage: response.data.meta.last_page,
-                perPage: response.data.meta.per_page,
-                total: response.data.meta.total,
-            },
-        };
+            return {
+                data: response.data.data,
+                meta: {
+                    currentPage: response.data.meta.current_page,
+                    lastPage: response.data.meta.last_page,
+                    perPage: response.data.meta.per_page,
+                    total: response.data.meta.total,
+                },
+            };
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async getUnreadCount(): Promise<number> {
-        const response = await apiClient.get<{ count: number }>('/notifications/unread-count');
-        return response.data.count;
+        try {
+            const response = await apiClient.get<{ count: number }>('/notifications/unread-count');
+            return response.data.count;
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async markAsRead(id: number): Promise<Notification> {
-        const response = await apiClient.put<{ data: Notification }>(
-            `/notifications/${id}/read`
-        );
-        return response.data.data;
+        try {
+            const response = await apiClient.put<{ data: Notification }>(
+                `/notifications/${id}/read`
+            );
+            return response.data.data;
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async markAllAsRead(): Promise<number> {
-        const response = await apiClient.put<{ count: number }>(
-            '/notifications/read-all'
-        );
-        return response.data.count;
+        try {
+            const response = await apiClient.put<{ count: number }>(
+                '/notifications/read-all'
+            );
+            return response.data.count;
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 
     async delete(id: number): Promise<void> {
-        await apiClient.delete(`/notifications/${id}`);
+        try {
+            await apiClient.delete(`/notifications/${id}`);
+        } catch (error) {
+            throw toApiError(error);
+        }
     }
 }
 

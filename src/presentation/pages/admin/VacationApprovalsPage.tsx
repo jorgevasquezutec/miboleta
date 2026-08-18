@@ -22,6 +22,7 @@ import { useAuthStore } from "@/presentation/stores";
 import { useUrlFilters, useDocumentTitle } from "@/presentation/hooks";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 
 export function VacationApprovalsPage() {
     useDocumentTitle('Aprobar Vacaciones');
@@ -65,8 +66,8 @@ export function VacationApprovalsPage() {
         try {
             await approveRequest(id);
             toast.success("Solicitud aprobada correctamente. Se ha notificado al empleado.");
-        } catch {
-            toast.error("No se pudo aprobar la solicitud");
+        } catch (error) {
+            showApiError(error, "No se pudo aprobar la solicitud");
         } finally {
             setProcessingId(null);
         }
@@ -87,8 +88,8 @@ export function VacationApprovalsPage() {
             toast.success("Solicitud rechazada. Se ha notificado al empleado.");
             setRejectModalOpen(false);
             setSelectedRequest(null);
-        } catch {
-            toast.error("No se pudo rechazar la solicitud");
+        } catch (error) {
+            showApiError(error, "No se pudo rechazar la solicitud");
         } finally {
             setProcessingId(null);
         }
@@ -119,7 +120,7 @@ export function VacationApprovalsPage() {
             reportsRepository.downloadBlob(blob, filename);
             toast.success('Exportación completada');
         } catch (error) {
-            toast.error('Error al exportar vacaciones');
+            showApiError(error, 'Error al exportar vacaciones');
         } finally {
             setIsExporting(false);
         }

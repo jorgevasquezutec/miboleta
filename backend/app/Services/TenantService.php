@@ -6,6 +6,7 @@ use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Resources\TenantResource;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\TenantAccessCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class TenantService
@@ -145,12 +146,9 @@ class TenantService
 
         $tenant->update($data);
 
-        // If status changed, clear the active tenant IDs cache for all users of this tenant
+        // If status changed, clear the tenant caches for all users of this tenant
         if ($statusChanged) {
-            $userIds = $tenant->users()->pluck('users.id');
-            foreach ($userIds as $userId) {
-                cache()->forget("user:{$userId}:active_tenant_ids");
-            }
+            TenantAccessCache::forget($tenant->users()->pluck('users.id'));
         }
 
         $fresh = $tenant->fresh();
@@ -244,6 +242,8 @@ class TenantService
 
         $tenant->users()->attach($user->id, ['is_primary' => $isPrimary]);
 
+        TenantAccessCache::forget($user->id);
+
         return [
             'success' => true,
             'message' => 'Usuario agregado al tenant exitosamente',
@@ -286,6 +286,8 @@ class TenantService
         }
 
         $tenant->users()->detach($userId);
+
+        TenantAccessCache::forget($userId);
 
         return [
             'success' => true,

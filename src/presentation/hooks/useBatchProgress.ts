@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
+import { toApiError } from '@/infrastructure/http/apiClient';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
 import type { UserBatch } from '@/domain/types/bulkUserUpload.types';
 
@@ -72,17 +72,18 @@ export function useBatchProgress({
             // tenant_id) que este hook mostraba con un mensaje que sonaba a
             // fallo de procesamiento en vez de a "no encontrado/sin acceso".
             let message = 'Error de red al cargar el batch';
+            const apiError = toApiError(err);
 
-            if (axios.isAxiosError(err)) {
-                const status = err.response?.status;
-                if (status === 404) {
-                    message = 'La carga no existe o no tienes acceso a ella';
-                } else if (status === 403) {
-                    message = 'No tienes permisos para ver esta carga';
-                } else if (err.response) {
-                    message = 'Error al cargar el batch';
-                }
-            } else if (err instanceof Error) {
+            if (apiError.status === 404) {
+                message = 'La carga no existe o no tienes acceso a ella';
+            } else if (apiError.status === 403) {
+                message = 'No tienes permisos para ver esta carga';
+            } else if (apiError.status !== undefined) {
+                message = 'Error al cargar el batch';
+            } else if (apiError.code !== 'network' && err instanceof Error) {
+                // `code === 'network'` es un AxiosError sin `response` (sin conexión,
+                // timeout, CORS): ahí se conserva el mensaje genérico de arriba, igual
+                // que antes. Cualquier otro Error (no-Axios) sí aporta su propio mensaje.
                 message = err.message;
             }
 

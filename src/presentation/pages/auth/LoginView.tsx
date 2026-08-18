@@ -10,6 +10,7 @@ import { useAuth } from "@/presentation/hooks/useAuth";
 import { useAuthStore } from "@/presentation/stores/authStore";
 import { APP_VERSION } from "@/shared/constants";
 import { toast } from "sonner";
+import { showApiError } from "@/presentation/utils/showApiError";
 
 export default function LoginView() {
   useDocumentTitle('Iniciar Sesión');
@@ -37,7 +38,7 @@ export default function LoginView() {
       toast.success("¡Bienvenido!");
       navigate("/");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error al iniciar sesión");
+      showApiError(error, "Error al iniciar sesión");
     }
   };
 

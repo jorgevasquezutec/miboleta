@@ -116,4 +116,19 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
         });
+
+        // ValidationException -> {message, errors}. Sin este renderable, el
+        // 'message' es ValidationException::summarize(): el primer mensaje
+        // más el sufijo en inglés "(and N more errors)" cuando fallan varios
+        // campos. Aquí 'message' es el primer mensaje REAL (mismo orden que
+        // summarize(), sin el sufijo) y 'errors' trae TODOS los campos, no
+        // solo el primero.
+        $exceptions->renderable(function (ValidationException $e, Request $request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'message' => $e->validator->errors()->first(),
+                    'errors' => $e->errors(),
+                ], $e->status);
+            }
+        });
     })->create();

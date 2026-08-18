@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserTenantRole;
+use App\Support\TenantAccessCache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -251,6 +252,7 @@ class UserService
                     // Si el nuevo rol es root, remover todos los tenants y roles por empresa
                     $user->tenants()->detach();
                     UserTenantRole::where('user_id', $user->id)->delete();
+                    TenantAccessCache::forget($user->id);
                     unset($data['tenants_config'], $data['tenant_id'], $data['tenant_ids']);
                     $tenantFieldsProvided = false;
 
@@ -532,6 +534,8 @@ class UserService
             ];
         }
         $user->tenants()->sync($pivotData);
+
+        TenantAccessCache::forget($user->id);
     }
 
     /**
@@ -646,6 +650,10 @@ class UserService
                 ->whereIn('tenant_id', $syncResult['detached'])
                 ->delete();
         }
+
+        // Sus empresas cambiaron: sin esto, el filtro por empresa seguiría
+        // usando las anteriores hasta una hora (ver TenantAccessCache).
+        TenantAccessCache::forget($user->id);
 
         return $syncResult;
     }

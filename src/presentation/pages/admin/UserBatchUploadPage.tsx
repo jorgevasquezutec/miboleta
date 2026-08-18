@@ -8,6 +8,7 @@ import { TemplateConfigModal } from '@/presentation/components/bulkUpload/Templa
 import { UserDataGrid } from '@/presentation/components/bulkUpload/UserDataGrid';
 import { useEditableUsers } from '@/presentation/hooks/useEditableUsers';
 import { bulkUserUploadService } from '@/infrastructure/services/bulkUserUploadService';
+import { showApiError } from '@/presentation/utils/showApiError';
 import type { BulkUploadConfigData, TemplateConfig } from '@/domain/types/bulkUserUpload.types';
 import { Switch } from '@/presentation/components/ui/switch';
 import { Label } from '@/presentation/components/ui/label';
@@ -48,7 +49,7 @@ export function UserBatchUploadPage() {
             toast.success('Template descargado exitosamente');
             setIsModalOpen(false);
         } catch (error) {
-            toast.error('Error al descargar template');
+            showApiError(error, 'Error al descargar template');
         }
     };
 
@@ -122,9 +123,8 @@ export function UserBatchUploadPage() {
             } else {
                 toast.success(`Archivo validado: ${result.summary.valid} usuarios listos`);
             }
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.message || 'Error al validar archivo';
-            toast.error(errorMessage);
+        } catch (error) {
+            showApiError(error, 'Error al validar archivo');
         } finally {
             setIsValidating(false);
         }
@@ -214,9 +214,8 @@ export function UserBatchUploadPage() {
 
             toast.success(`Carga iniciada: ${result.batch.total_rows} usuarios`);
             navigate(`/users/batch/${result.batch.id}`);
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.message || 'Error al procesar usuarios';
-            toast.error(errorMessage);
+        } catch (error) {
+            showApiError(error, 'Error al procesar usuarios');
         } finally {
             setIsUploading(false);
         }
