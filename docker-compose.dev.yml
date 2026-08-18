@@ -54,7 +54,10 @@ services:
       MYSQL_USER: miboleta_user
       MYSQL_PASSWORD: secret123
     ports:
-      - "3307:3306"
+      # Mismo motivo que en docker-compose.yml: el 3307 lo ocupa el MySQL de
+      # otro proyecto local (db_ppa_conecta). Parametrizado para poder
+      # override sin tocar el archivo.
+      - "${MIBOLETA_MYSQL_PORT:-3308}:3306"
     volumes:
       - mysql_dev_data:/var/lib/mysql
     networks:
