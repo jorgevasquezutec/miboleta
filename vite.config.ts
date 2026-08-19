@@ -25,6 +25,27 @@ export default defineConfig(({ mode }) => ({
     minify: 'esbuild',
     rollupOptions: {
       output: {
+        // El worker de PDF.js (pdfjs-dist 5.x) solo existe upstream como
+        // pdf.worker.min.mjs, y PDFViewer.tsx lo referencia con
+        // `new URL(..., import.meta.url)`, asi que Vite lo emite tal cual con
+        // extension .mjs. El problema: mime.types de nginx NO trae .mjs, asi
+        // que se sirve como application/octet-stream y el navegador rechaza
+        // tanto `new Worker(url, {type:'module'})` como el import() del fake
+        // worker -> "Error al cargar el PDF" en TODOS los documentos.
+        //
+        // Se puede arreglar en cada nginx (y se hizo: bloque `location ~*
+        // \.mjs$` en los conf del repo), pero eso no escala a las entregas
+        // donde el cliente administra su propio servidor. Renombrando el
+        // asset a .js, Rollup reescribe la URL en el bundle y el worker cae
+        // en las reglas de estaticos que TODO servidor ya trae bien.
+        // La extension no cambia nada del contenido: sigue siendo un modulo
+        // ES y el navegador decide por el MIME, no por el nombre.
+        assetFileNames: (info) => {
+          const name = info.names?.[0] ?? info.name ?? '';
+          return name.endsWith('.mjs')
+            ? 'assets/[name]-[hash].js'
+            : 'assets/[name]-[hash][extname]';
+        },
         manualChunks: {
           // Vendor chunks - Core React ecosystem
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],

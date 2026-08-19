@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout (para docker-stack.yml)
+      - name: Checkout (para docker-stack.yml y config/nginx.conf)
         uses: actions/checkout@v4
       
       - name: Install VPN and SSH tools
@@ -181,6 +181,23 @@ jobs:
             -P ${{ secrets.SSH_PORT }} \
             docker-stack.yml \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/miboleta/
+
+      # docker-stack.yml monta ./config/nginx.conf del HOST como bind-mount, no
+      # va dentro de la imagen: si el CI no lo copia, los cambios de nginx del
+      # repo NUNCA llegan a produccion por mas que se redespliegue el stack.
+      # Paso justo lo que ocurrio con el bloque `location ~* \.mjs$` (b082c64):
+      # commiteado, mergeado a main, desplegado muchas veces... y el visor de
+      # PDF siguio roto semanas porque el nginx.conf del servidor era el viejo.
+      - name: Copy nginx config to server
+        env:
+          SSH_PASS: ${{ secrets.SSH_PASS }}
+        run: |
+          sshpass -p "${SSH_PASS}" scp \
+            -o ConnectTimeout=30 \
+            -o StrictHostKeyChecking=no \
+            -P ${{ secrets.SSH_PORT }} \
+            config/nginx.conf \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/miboleta/config/nginx.conf
       
       - name: Deploy via SSH
         env:
@@ -195,8 +212,14 @@ jobs:
           set -e
           cd /opt/miboleta
           
+          # Carga robusta del .env.stack (de aqui salen las ${VARIABLES} que
+          # interpola docker-stack.yml). Con `export $(cat ... | xargs)` basta
+          # un valor con espacios o comillas para que xargs lo parta y deje
+          # REDIS_PASSWORD VACIO: redis arranca con `--requirepass` sin
+          # argumento, crashea en bucle y se lleva por delante horizon y reverb,
+          # que dependen de el. Ya paso una vez en produccion.
           echo "=== Loading environment variables ==="
-          export $(cat .env.stack | grep -v '^#' | xargs)
+          set -a; . ./.env.stack; set +a
           
           echo "=== Pulling latest image ==="
           docker pull ghcr.io/${{ github.repository }}:latest
@@ -248,6 +271,27 @@ jobs:
           docker exec $APP_CONTAINER php artisan route:cache || true
           docker exec $APP_CONTAINER php artisan view:cache || true
           
+          # El nginx.conf recien copiado NO se aplica solo: `stack deploy` no
+          # toca el servicio si su spec no cambio, y como el bind-mount es de
+          # ARCHIVO unico, el scp deja un inode nuevo que el contenedor viejo
+          # ni siquiera ve (por eso `nginx -s reload` puede "pasar" sin aplicar
+          # nada). Se valida primero y se fuerza la task para que rebindee.
+          # El nginx.conf recien copiado NO se aplica solo: `stack deploy` no
+          # toca el servicio si su spec no cambio, y como el bind-mount es de
+          # ARCHIVO unico, el scp deja un inode NUEVO que el contenedor en
+          # marcha ni siquiera ve. Por eso hay que forzar la task para que
+          # rebindee, y por eso la validacion va en un contenedor DESECHABLE:
+          # un `docker exec ... nginx -t` sobre el contenedor vivo estaria
+          # validando el archivo VIEJO y daria OK aunque el nuevo este roto.
+          echo "=== Applying nginx config ==="
+          if ! docker run --rm \
+              -v /opt/miboleta/config/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
+              nginx:1.27-alpine nginx -t; then
+            echo "❌ nginx.conf invalido: no se recarga, el sitio sigue con el conf anterior"
+            exit 1
+          fi
+          docker service update --force miboleta_nginx || echo "⚠ No se pudo forzar nginx"
+
           echo "=== Final service status ==="
           docker stack services miboleta
           
