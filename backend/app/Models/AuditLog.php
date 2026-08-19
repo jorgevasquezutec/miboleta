@@ -36,6 +36,18 @@ class AuditLog extends Model
         'created_at' => 'datetime',
     ];
 
+    /**
+     * `description` viaja siempre en el JSON. El listado de auditoría
+     * (ReportsService::getAuditLogs) devuelve el modelo paginado tal cual, sin
+     * mapear campos, así que sin esto el accessor no llegaba al frontend y
+     * AuditLogsPage tenía que mantener su PROPIA tabla de etiquetas, duplicada
+     * de getDescriptionAttribute(). Esa duplicación ya se desincronizó dos
+     * veces (user.restored y las dos de impersonation salían crudas en la
+     * columna Acción): la etiqueta la define el backend, que es donde vive el
+     * catálogo de acciones.
+     */
+    protected $appends = ['description'];
+
     // ============ Action Constants ============
 
     // Authentication
