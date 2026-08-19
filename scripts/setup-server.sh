@@ -31,6 +31,40 @@ print_info() {
     echo -e "${BLUE}→ $1${NC}"
 }
 
+# Si el script corre desde un checkout del repo, config/ esta un nivel arriba.
+# Ejecutado suelto (scp del .sh a /tmp, como decia la guia vieja) no existe.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_CONFIG="${SCRIPT_DIR}/../config"
+
+# Instala un archivo de configuracion en /opt/miboleta/config/.
+#
+# ANTES este script llevaba los conf embebidos en heredocs, y se congelaron: el
+# nginx.conf inline no tenia el bloque `location ~* \.mjs$` (visor de PDF roto),
+# ni `^~ /storage` (imagenes 404), ni los `resolver` que evitan el 502 permanente
+# cuando el contenedor de PHP cambia de IP, ni el proxy de Reverb. Una instalacion
+# nueva arrancaba con cuatro bugs ya arreglados en el repo. La fuente de verdad es
+# config/ del repositorio — de ahi se copia, no se reinventa.
+#
+# Si no hay repo a mano se crea el archivo VACIO a proposito: el bind-mount de
+# docker-stack.yml apunta a un ARCHIVO, y si la ruta no existe Docker crea un
+# DIRECTORIO en su lugar y el contenedor no levanta. Vacio, el primer deploy lo
+# sobrescribe con el bueno.
+instalar_config() {
+    local nombre="$1"
+    local destino="/opt/miboleta/config/${nombre}"
+
+    if [ -f "${REPO_CONFIG}/${nombre}" ]; then
+        cp "${REPO_CONFIG}/${nombre}" "${destino}"
+        print_success "${nombre} copiado desde el repositorio"
+    elif [ -s "${destino}" ]; then
+        print_info "${nombre} ya existe (el deploy lo sobrescribe con el del repo)"
+    else
+        : > "${destino}"
+        print_warning "${nombre}: sin repo a mano, se dejo un placeholder VACIO"
+        print_warning "  cópialo antes del primer deploy:  scp config/${nombre} SERVIDOR:${destino}"
+    fi
+}
+
 print_header "MIBOLETA - SETUP INICIAL DEL SERVIDOR"
 
 # 1. Verificar/Instalar Docker
@@ -64,109 +98,25 @@ print_success "Directorios creados en /opt/miboleta/"
 # 4. Crear archivos de configuración base
 print_header "[4/6] Archivos de Configuración"
 
-# Crear .env de ejemplo si no existe
-if [ ! -f /opt/miboleta/config/.env ]; then
-    cat << 'ENVFILE' > /opt/miboleta/config/.env
-# MiBoleta Production Environment
-# IMPORTANTE: Cambiar todos los valores por defecto
-
-APP_NAME=MiBoleta
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://tudominio.com
-
-DB_CONNECTION=mysql
-DB_HOST=db
-DB_PORT=3306
-DB_DATABASE=miboleta_prod
-DB_USERNAME=miboleta
-DB_PASSWORD=CAMBIAR_PASSWORD_DB
-
-REDIS_HOST=redis
-REDIS_PASSWORD=CAMBIAR_PASSWORD_REDIS
-REDIS_PORT=6379
-
-CACHE_DRIVER=redis
-QUEUE_CONNECTION=redis
-SESSION_DRIVER=redis
-ENVFILE
-    print_success "Archivo .env creado en /opt/miboleta/config/.env"
-    print_warning "EDITAR con valores reales antes del deploy"
+# .env: se siembra desde config/.env.example del repo, que es lo unico que se
+# mantiene al dia. El heredoc que habia aqui tampoco traia APP_KEY (Laravel ni
+# arranca sin ella), ni MAIL_*, ni REVERB_*. A diferencia de los otros conf, este
+# NO se sobrescribe nunca: lleva las claves reales del servidor.
+if [ -s /opt/miboleta/config/.env ]; then
+    print_info "Archivo .env ya existe (no se toca: tiene las claves reales)"
+elif [ -f "${REPO_CONFIG}/.env.example" ]; then
+    cp "${REPO_CONFIG}/.env.example" /opt/miboleta/config/.env
+    print_success ".env creado desde config/.env.example"
+    print_warning "EDITAR con valores reales antes del deploy (APP_KEY incluida)"
 else
-    print_info "Archivo .env ya existe"
+    print_warning ".env no existe y no hay repo a mano; cópialo antes del deploy:"
+    print_warning "  scp config/.env.example SERVIDOR:/opt/miboleta/config/.env"
 fi
 
-# Crear nginx.conf
-if [ ! -f /opt/miboleta/config/nginx.conf ]; then
-    cat << 'NGINXCONF' > /opt/miboleta/config/nginx.conf
-server {
-    listen 80;
-    server_name _;
-    root /var/www/html/public;
-    index index.html index.php;
+# nginx.conf y my.cnf: se copian del repo, NO se generan aqui (ver instalar_config)
+instalar_config nginx.conf
 
-    client_max_body_size 20M;
-
-    # Health check
-    location /health {
-        access_log off;
-        return 200 "healthy\n";
-        add_header Content-Type text/plain;
-    }
-
-    # Static files
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        try_files $uri /index.php?$query_string;
-    }
-
-    # API routes
-    location /api {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    # Horizon
-    location /horizon {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    # PHP handler
-    location ~ \.php$ {
-        fastcgi_pass app:9000;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_read_timeout 60s;
-    }
-
-    # SPA fallback
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Deny hidden files
-    location ~ /\. {
-        deny all;
-    }
-}
-NGINXCONF
-    print_success "Archivo nginx.conf creado"
-else
-    print_info "Archivo nginx.conf ya existe"
-fi
-
-# Crear my.cnf para MySQL
-if [ ! -f /opt/miboleta/config/my.cnf ]; then
-    cat << 'MYCNF' > /opt/miboleta/config/my.cnf
-[mysqld]
-character-set-server=utf8mb4
-collation-server=utf8mb4_unicode_ci
-max_connections=200
-innodb_buffer_pool_size=256M
-MYCNF
-    print_success "Archivo my.cnf creado"
-fi
+instalar_config my.cnf
 
 # 5. Login a GitHub Container Registry
 print_header "[5/6] GitHub Container Registry"

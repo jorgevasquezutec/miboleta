@@ -17,15 +17,27 @@ Deploy automático usando GitHub Actions + Docker Swarm + VPN
 
 ### 1. Ejecutar el script de setup en el servidor
 
+El script ya **no** genera los `.conf` por su cuenta: los copia de `config/` del
+repositorio, que es la fuente de verdad. Por eso hay que subir el script **junto
+a `config/`**, no suelto a `/tmp/` como decia esta guia antes.
+
 ```bash
-# Copiar el script al servidor
-scp scripts/setup-server.sh user@server:/tmp/
+# Copiar el script Y la carpeta config/ al servidor
+ssh user@server 'mkdir -p ~/miboleta-setup/scripts'
+scp -r config user@server:~/miboleta-setup/
+scp scripts/setup-server.sh user@server:~/miboleta-setup/scripts/
 
 # Conectarse al servidor y ejecutar
 ssh user@server
-chmod +x /tmp/setup-server.sh
-/tmp/setup-server.sh
+chmod +x ~/miboleta-setup/scripts/setup-server.sh
+~/miboleta-setup/scripts/setup-server.sh
 ```
+
+> Si el servidor tiene un clon del repo, basta con `./scripts/setup-server.sh`.
+> Ejecutado sin `config/` al lado, el script deja placeholders **vacios** y avisa
+> con el `scp` exacto que falta: son archivos vacios a proposito, porque si la
+> ruta del bind-mount no existe Docker crea un **directorio** ahi y el
+> contenedor no levanta.
 
 Esto creará la estructura:
 ```
