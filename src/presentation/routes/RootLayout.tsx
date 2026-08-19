@@ -1,6 +1,13 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/presentation/stores";
 import { Navbar } from "@/presentation/components/layout";
+// Import directo del archivo, no del barrel (components/shared/index.ts):
+// ese barrel también re-exporta PDFViewer, que trae pdfjs-dist y usa
+// DOMMatrix a nivel de módulo — inexistente en jsdom, así que cualquier test
+// que pasara por el barrel (como este layout, montado en TODAS las páginas)
+// rompía en la importación, sin siquiera llegar a correr un test.
+import { ImpersonationBanner, IMPERSONATION_BANNER_HEIGHT } from "@/presentation/components/shared/ImpersonationBanner";
+import { PageLoader } from "@/presentation/components/shared/PageLoader";
 import { useState, useEffect, useMemo } from "react";
 import {
   Users,
@@ -28,6 +35,13 @@ interface SidebarProps {
   isMobile: boolean;
   onClose?: () => void;
   onNavigate?: () => void;
+  /**
+   * Alto total de la cabecera fija (Navbar + ImpersonationBanner si está
+   * montado) en px. El sidebar de escritorio se ancla justo debajo — ver
+   * headerHeight en RootLayout(). No aplica al drawer móvil, que es un
+   * overlay a pantalla completa (top-0/h-full) independiente de la cabecera.
+   */
+  topOffset: number;
 }
 
 interface NavItem {
@@ -204,7 +218,7 @@ function SidebarVersion({ isExpanded }: { isExpanded: boolean }) {
   );
 }
 
-function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
+function Sidebar({ isExpanded, isMobile, onClose, onNavigate, topOffset }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [openSections, setOpenSections] = useState<string[]>(['Vacaciones']); // Default open
@@ -372,12 +386,18 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
 
   // Desktop sidebar
   return (
-    <aside className={cn(
-      // El scroll pasa al <nav>: si se queda en el <aside>, el pie de versión
-      // scrollea con el menú en vez de quedarse anclado abajo.
-      "fixed top-[73px] left-0 bg-white border-r border-[rgba(0,0,0,0.1)] h-[calc(100vh-73px)] flex flex-col z-40 transition-all duration-300",
-      isExpanded ? "w-64" : "w-16"
-    )}>
+    <aside
+      className={cn(
+        // El scroll pasa al <nav>: si se queda en el <aside>, el pie de versión
+        // scrollea con el menú en vez de quedarse anclado abajo.
+        // top/height dinámicos por `style` (más abajo): topOffset varía si el
+        // ImpersonationBanner está montado, y ese valor no se conoce en build
+        // time, así que no hay clase Tailwind `top-[Npx]` que sirva aquí.
+        "fixed left-0 bg-white border-r border-[rgba(0,0,0,0.1)] flex flex-col z-40 transition-all duration-300",
+        isExpanded ? "w-64" : "w-16"
+      )}
+      style={{ top: topOffset, height: `calc(100vh - ${topOffset}px)` }}
+    >
       <nav className={cn("flex-1 overflow-y-auto pt-4 space-y-1", isExpanded ? "p-4" : "p-2")}>
         {navItems.map((item) => (
           <CollapsibleSection
@@ -402,16 +422,54 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate }: SidebarProps) {
 export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user, logout, me } = useAuthStore();
+  // Ver CONTRATO-IMPERSONATION: `impersonator` (root detrás de la sesión, o
+  // null) solo se sabe con certeza por lo que devuelva /me — no se persiste
+  // en localStorage a propósito (ver authStore). Selector aparte de
+  // `useAuthStore()` de arriba para no reconstruir el objeto desestructurado
+  // en cada render (mismo criterio que el Sidebar más abajo).
+  const impersonator = useAuthStore((s) => s.impersonator);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  // Arranca en true solo si no hay `user` en caché: si YA hay uno (el caso
+  // normal), no hace falta bloquear el render con un loader.
+  const [isRestoringSession, setIsRestoringSession] = useState(() => user === null);
 
-  // Redirect to login if not authenticated
+  // Revalida contra /me una vez por carga completa de la app (este efecto
+  // corre una sola vez: RootLayout NO se remonta al navegar entre páginas de
+  // "/", solo al recargar o al volver a entrar desde una ruta fuera de él,
+  // p. ej. /login). Dos motivos, ambos ligados a impersonation:
+  //
+  // 1) Si no hay `user` en caché, es la ÚNICA forma de recuperar la sesión
+  //    tras la recarga dura de enterImpersonation/leaveImpersonation: esas
+  //    acciones borran 'auth-storage' a propósito (para no rehidratar la
+  //    identidad vieja), así que lo único que sobrevive son las cookies
+  //    HttpOnly, y solo /me puede leerlas y repoblar el store.
+  // 2) Si YA hay `user` en caché (sesión "normal" restaurada de
+  //    localStorage), igual hace falta refrescar: `impersonator` nunca se
+  //    persiste, así que un F5 a mitad de una impersonation activa perdería
+  //    el banner si nadie volviera a preguntarle al backend.
+  //
+  // Se ignora el error a propósito: sin sesión válida (sin cookie o
+  // vencida), `me()` deja `user` en null y el efecto de abajo redirige a
+  // login; con sesión válida pero fallo de red transitorio, se conserva el
+  // `user` cacheado en vez de forzar un logout.
   useEffect(() => {
-    if (!user) {
+    me()
+      .catch(() => {
+        // Manejado por el efecto de redirect de abajo.
+      })
+      .finally(() => setIsRestoringSession(false));
+  }, [me]);
+
+  // Redirect to login if not authenticated (tras el intento de /me de
+  // arriba: si confirma que no hay sesión, user sigue en null y recién ahí
+  // se redirige, no antes).
+  useEffect(() => {
+    if (!user && !isRestoringSession) {
       navigate("/login", { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, isRestoringSession, navigate]);
 
   // Handle responsive behavior
   useEffect(() => {
@@ -444,7 +502,10 @@ export function RootLayout() {
   }, [location.pathname, isMobile]);
 
   // Sin sesión no se pinta el layout (evita el flash antes de que el efecto de
-  // arriba redirija al login).
+  // arriba redirija al login). Mientras se resuelve el /me inicial (arriba)
+  // no se sabe todavía si hay sesión o no: se muestra el loader en vez de
+  // parpadear al login y volver, que es justo el caso de la recarga dura al
+  // entrar/salir de impersonation.
   //
   // Va DESPUÉS de todos los hooks a propósito: estaba justo tras el primer
   // useEffect, por encima de los otros dos, así que al hacer logout
@@ -452,7 +513,7 @@ export function RootLayout() {
   // render anterior ("Rendered fewer hooks than expected"). Un return temprano
   // nunca puede quedar por encima de un hook.
   if (!user) {
-    return null;
+    return isRestoringSession ? <PageLoader /> : null;
   }
 
   const handleLogout = async () => {
@@ -468,13 +529,24 @@ export function RootLayout() {
     setIsSidebarExpanded(false);
   };
 
+  // Alto de la franja fija superior: Navbar (73px, el valor ya usado en todo
+  // el layout) + el ImpersonationBanner (40px) cuando la sesión está
+  // impersonada. Navbar, Sidebar y el padding del body se anclan a este
+  // único valor para que nunca quede un hueco (banner ausente) ni el banner
+  // tape el navbar (banner presente) — ver también IMPERSONATION_BANNER_HEIGHT.
+  const NAVBAR_HEIGHT = 73;
+  const bannerOffset = impersonator ? IMPERSONATION_BANNER_HEIGHT : 0;
+  const headerHeight = NAVBAR_HEIGHT + bannerOffset;
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pt-[73px]">
+    <div className="min-h-screen bg-[#F8FAFC]" style={{ paddingTop: headerHeight }}>
+      {impersonator && <ImpersonationBanner />}
       <Navbar
         user={user}
         onLogout={handleLogout}
         onToggleSidebar={handleToggleSidebar}
         isSidebarExpanded={isSidebarExpanded}
+        topOffset={bannerOffset}
       />
       <div className="flex">
         <Sidebar
@@ -482,20 +554,24 @@ export function RootLayout() {
           isMobile={isMobile}
           onClose={handleCloseSidebar}
           onNavigate={handleCloseSidebar}
+          topOffset={headerHeight}
         />
-        <main className={cn(
-          // min-w-0: sin esto, un flex item con contenido ancho (p.ej. una
-          // tabla) fuerza su propio ancho en vez de encogerse al espacio
-          // disponible; como `body { overflow-x: hidden }` (index.css) recorta
-          // cualquier desborde sin dejar scroll alcanzable, el contenido que
-          // no entraba (incluyendo botones de "Acciones" de las tablas)
-          // quedaba fuera de pantalla y sin forma de llegar a él. Con
-          // min-w-0, main se ajusta al ancho real y es el overflow-x-auto
-          // interno de cada tabla el que scrollea.
-          "flex-1 min-w-0 p-4 sm:p-6 min-h-[calc(100vh-73px)] transition-all duration-300 bg-[#F8FAFC] max-w-full",
-          // On mobile, no margin; on desktop, margin based on sidebar width
-          isMobile ? "ml-0" : (isSidebarExpanded ? "ml-64" : "ml-16")
-        )}>
+        <main
+          className={cn(
+            // min-w-0: sin esto, un flex item con contenido ancho (p.ej. una
+            // tabla) fuerza su propio ancho en vez de encogerse al espacio
+            // disponible; como `body { overflow-x: hidden }` (index.css) recorta
+            // cualquier desborde sin dejar scroll alcanzable, el contenido que
+            // no entraba (incluyendo botones de "Acciones" de las tablas)
+            // quedaba fuera de pantalla y sin forma de llegar a él. Con
+            // min-w-0, main se ajusta al ancho real y es el overflow-x-auto
+            // interno de cada tabla el que scrollea.
+            "flex-1 min-w-0 p-4 sm:p-6 transition-all duration-300 bg-[#F8FAFC] max-w-full",
+            // On mobile, no margin; on desktop, margin based on sidebar width
+            isMobile ? "ml-0" : (isSidebarExpanded ? "ml-64" : "ml-16")
+          )}
+          style={{ minHeight: `calc(100vh - ${headerHeight}px)` }}
+        >
           <Outlet />
         </main>
       </div>

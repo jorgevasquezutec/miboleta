@@ -23,12 +23,22 @@ interface NavbarProps {
   onLogout?: () => void;
   onToggleSidebar?: () => void;
   isSidebarExpanded?: boolean;
+  /**
+   * Corrimiento vertical en px desde el borde superior de la ventana.
+   * RootLayout lo usa para bajar el navbar cuando el ImpersonationBanner
+   * está montado encima (0 en sesión normal). Se aplica con `style`, no con
+   * una clase Tailwind, porque el valor es dinámico (no hay forma de generar
+   * una clase `top-[Npx]` en build time para un N que solo se conoce en
+   * runtime).
+   */
+  topOffset?: number;
 }
 
 export function Navbar({
   user,
   onLogout,
   onToggleSidebar,
+  topOffset = 0,
 }: NavbarProps) {
   const navigate = useNavigate();
   const currentRole = useAuthStore((state) => state.currentRole);
@@ -56,7 +66,10 @@ export function Navbar({
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 bg-white border-b border-[rgba(0,0,0,0.1)] px-3 sm:px-6 py-3 sm:py-4 z-50">
+    <nav
+      className="fixed left-0 right-0 bg-white border-b border-[rgba(0,0,0,0.1)] px-3 sm:px-6 py-3 sm:py-4 z-50"
+      style={{ top: topOffset }}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           {/* Sidebar Toggle Button */}

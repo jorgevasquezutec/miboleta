@@ -74,6 +74,14 @@ export interface AuditLog {
     user_id: number | null;
     tenant_id: number | null;
     action: string;
+    /**
+     * Etiqueta legible de `action`, servida por el backend
+     * (AuditLog::$appends → getDescriptionAttribute). Es la fuente principal
+     * del texto de la columna Acción: el catálogo de acciones vive en el
+     * backend, y mantener una tabla paralela en el frontend ya se
+     * desincronizó dos veces.
+     */
+    description?: string;
     entity_type: string | null;
     entity_id: number | null;
     old_values: Record<string, unknown> | null;

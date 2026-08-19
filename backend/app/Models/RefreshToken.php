@@ -11,6 +11,7 @@ class RefreshToken extends Model
 {
     protected $fillable = [
         'user_id',
+        'impersonator_id',
         'token',
         'expires_at',
         'ip_address',
@@ -36,10 +37,19 @@ class RefreshToken extends Model
     /**
      * Genera un nuevo refresh token
      */
-    public static function generate(User $user, ?string $ipAddress = null, ?string $userAgent = null): self
-    {
+    public static function generate(
+        User $user,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+        ?int $impersonatorId = null
+    ): self {
         return self::create([
             'user_id' => $user->id,
+            // Solo con valor cuando la sesión nace de una impersonación (ver
+            // AuthService::impersonate). Es lo que permite que el refresh
+            // conserve la marca sin depender de la cookie access_token, que
+            // para entonces el navegador ya descartó.
+            'impersonator_id' => $impersonatorId,
             'token' => hash('sha256', Str::random(60)),
             'expires_at' => Carbon::now()->addDays(30),
             'ip_address' => $ipAddress,

@@ -48,10 +48,18 @@ class ReportsServiceFullNameSearchTest extends TestCase
         $this->tenant = Tenant::factory()->create(['status' => 'active']);
         $clientRole = Role::where('name', 'client')->firstOrFail();
 
+        // Email FIJADO, no el de la factory: la búsqueda de estos exports hace
+        // `orWhere('email', 'like', "%term%")`, así que un email de faker que
+        // contenga por casualidad la subcadena buscada mete una fila de más y
+        // rompe los assertCount(1). Con 'Ana' pasa a menudo — susana,
+        // mariana, ana.lopez… — y el test fallaba de forma intermitente solo
+        // en CI. Los valores de abajo no contienen ninguno de los términos que
+        // busca este archivo (Ana, Torres, Ramos, Luis).
         $this->ana = User::factory()->create([
             'status' => 'active',
             'name' => 'Ana',
             'last_name' => 'Torres',
+            'email' => 'empleada.primera@example.test',
             'document_text' => '10000001',
         ]);
         $this->ana->tenants()->attach($this->tenant->id, ['is_primary' => true]);
@@ -68,6 +76,7 @@ class ReportsServiceFullNameSearchTest extends TestCase
             'status' => 'active',
             'name' => 'Luis',
             'last_name' => 'Ramos',
+            'email' => 'empleado.segundo@example.test',
             'document_text' => '10000002',
         ]);
         $this->luis->tenants()->attach($this->tenant->id, ['is_primary' => true]);

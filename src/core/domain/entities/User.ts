@@ -1,3 +1,15 @@
+/**
+ * Root que está operando la sesión activa "como" otro usuario (ver
+ * CONTRATO-IMPERSONATION del backend). Mismo shape en la respuesta de
+ * POST /users/{id}/impersonate y en GET /me — nunca viene anidado dentro de
+ * `User`, siempre como campo hermano (igual que `access_matrix`).
+ */
+export interface ImpersonatorInfo {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 // Domain Entity - User
 export interface User {
   id: string;

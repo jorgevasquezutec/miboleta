@@ -52,6 +52,7 @@ const ETIQUETAS = [
     'users.deactivate' => 'Desactivar usuarios',
     'users.delete' => 'Eliminar usuarios',
     'users.restore' => 'Habilitar cuentas eliminadas',
+    'users.impersonate' => 'Iniciar sesión como otro usuario',
     'users.reset_password' => 'Restablecer contraseñas',
     'users.bulk_upload' => 'Carga masiva de usuarios',
     'users.export' => 'Exportar el listado de empleados',
@@ -94,8 +95,8 @@ const SECCIONES = [
     'Usuarios' => [
         'users.view_list', 'users.create_any_role', 'users.create_limited_role',
         'users.update', 'users.deactivate', 'users.delete', 'users.restore',
-        'users.reset_password', 'users.bulk_upload', 'users.export',
-        'reports.app_accounts_export',
+        'users.impersonate', 'users.reset_password', 'users.bulk_upload',
+        'users.export', 'reports.app_accounts_export',
     ],
     'Documentos' => [
         'documents.view_all_multi_tenant', 'documents.view_org', 'documents.view_own',

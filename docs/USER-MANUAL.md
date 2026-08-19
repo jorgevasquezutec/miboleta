@@ -65,6 +65,7 @@ distintos en cada una.
 | Desactivar usuarios | Sí | Sí | — | — | — |
 | Eliminar usuarios | Sí | — | — | — | — |
 | Habilitar cuentas eliminadas | Sí | — | — | — | — |
+| Iniciar sesión como otro usuario | Sí | — | — | — | — |
 | Restablecer contraseñas | Sí | Sí | — | — | — |
 | Carga masiva de usuarios | Sí | Sí | — | — | — |
 | Exportar el listado de empleados | Sí | Sí | Sí | — | — |
@@ -128,6 +129,7 @@ empresa**: una misma persona puede ser Admin Empleados en una y Empleado en
 otra, y el switcher de la barra superior decide con cuál está operando.
 
 <!-- MATRIZ-ACCESOS:FIN -->
+
 ---
 
 ## 1. Autenticación

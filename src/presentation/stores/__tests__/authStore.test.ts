@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import { useAuthStore } from '../authStore';
 import { mockUser } from '@/test/mocks/handlers';
+import type { MeResponse, ImpersonateResponse, LeaveImpersonationResponse } from '@/core/domain/repositories/IUserRepository';
 
 // Mock the userRepository
 vi.mock('@/infrastructure/persistence/repositories', () => ({
@@ -9,6 +10,8 @@ vi.mock('@/infrastructure/persistence/repositories', () => ({
     login: vi.fn(),
     logout: vi.fn(),
     me: vi.fn(),
+    impersonate: vi.fn(),
+    stopImpersonating: vi.fn(),
   },
 }));
 
@@ -20,6 +23,7 @@ describe('authStore', () => {
     useAuthStore.setState({
       user: null,
       currentTenant: null,
+      impersonator: null,
       isLoading: false,
       error: null,
     });
@@ -221,6 +225,113 @@ describe('authStore', () => {
 
       const state = useAuthStore.getState();
       expect(state.error).toBe('Unauthorized');
+    });
+
+    // Ver CONTRATO-IMPERSONATION: /me es la ÚNICA fuente de verdad para
+    // `impersonator` (no se persiste, ver authStore.impersonator).
+    it('should populate impersonator when /me reports an active impersonation', async () => {
+      const impersonator = { id: '99', full_name: 'Root Admin', email: 'root@example.com' };
+      vi.mocked(userRepository.me).mockResolvedValueOnce({ ...mockUser, impersonator } as unknown as MeResponse);
+
+      await act(async () => {
+        await useAuthStore.getState().me();
+      });
+
+      expect(useAuthStore.getState().impersonator).toEqual(impersonator);
+    });
+
+    it('should clear a stale impersonator when /me no longer reports one', async () => {
+      useAuthStore.setState({
+        impersonator: { id: '99', full_name: 'Root Admin', email: 'root@example.com' },
+      });
+      vi.mocked(userRepository.me).mockResolvedValueOnce(mockUser as unknown as MeResponse);
+
+      await act(async () => {
+        await useAuthStore.getState().me();
+      });
+
+      expect(useAuthStore.getState().impersonator).toBeNull();
+    });
+  });
+
+  describe('enterImpersonation / leaveImpersonation', () => {
+    // window.location.href no se puede asignar de verdad en jsdom sin que
+    // intente "navegar"; se reemplaza por un objeto controlado y se restaura
+    // al final para no filtrar estado entre archivos de test.
+    const originalLocation = window.location;
+
+    beforeEach(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { ...originalLocation, href: 'http://localhost/users' },
+      });
+      localStorage.setItem('auth-storage', JSON.stringify({ state: { user: mockUser } }));
+      localStorage.setItem('tenant-filter-storage', JSON.stringify({ state: {} }));
+    });
+
+    afterAll(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: originalLocation,
+      });
+    });
+
+    it('should call the repository, wipe the cached identity and hard-reload to "/" on enterImpersonation', async () => {
+      vi.mocked(userRepository.impersonate).mockResolvedValueOnce({
+        user: mockUser,
+        impersonator: { id: '99', full_name: 'Root Admin', email: 'root@example.com' },
+      } as unknown as ImpersonateResponse);
+
+      await act(async () => {
+        await useAuthStore.getState().enterImpersonation('42');
+      });
+
+      expect(userRepository.impersonate).toHaveBeenCalledWith('42');
+      // Se limpia ANTES de recargar: si no, el arranque de la app rehidrata
+      // la identidad vieja (root) desde localStorage en vez de esperar a /me.
+      expect(localStorage.getItem('auth-storage')).toBeNull();
+      expect(localStorage.getItem('tenant-filter-storage')).toBeNull();
+      expect(window.location.href).toBe('/');
+    });
+
+    it('should NOT clear storage or redirect if the backend rejects enterImpersonation', async () => {
+      vi.mocked(userRepository.impersonate).mockRejectedValueOnce(new Error('No puedes impersonar a otro root'));
+
+      await act(async () => {
+        await expect(useAuthStore.getState().enterImpersonation('42')).rejects.toThrow();
+      });
+
+      expect(localStorage.getItem('auth-storage')).not.toBeNull();
+      expect(window.location.href).toBe('http://localhost/users');
+      expect(useAuthStore.getState().error).toBe('No puedes impersonar a otro root');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it('should call the repository, wipe the cached identity and hard-reload to "/" on leaveImpersonation', async () => {
+      vi.mocked(userRepository.stopImpersonating).mockResolvedValueOnce({ user: mockUser } as unknown as LeaveImpersonationResponse);
+
+      await act(async () => {
+        await useAuthStore.getState().leaveImpersonation();
+      });
+
+      expect(userRepository.stopImpersonating).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem('auth-storage')).toBeNull();
+      expect(localStorage.getItem('tenant-filter-storage')).toBeNull();
+      expect(window.location.href).toBe('/');
+    });
+
+    it('should NOT clear storage or redirect if the backend rejects leaveImpersonation', async () => {
+      vi.mocked(userRepository.stopImpersonating).mockRejectedValueOnce(new Error('No hay impersonation activa'));
+
+      await act(async () => {
+        await expect(useAuthStore.getState().leaveImpersonation()).rejects.toThrow();
+      });
+
+      expect(localStorage.getItem('auth-storage')).not.toBeNull();
+      expect(window.location.href).toBe('http://localhost/users');
+      expect(useAuthStore.getState().error).toBe('No hay impersonation activa');
     });
   });
 

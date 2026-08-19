@@ -113,6 +113,9 @@ const actionDescriptions: Record<string, string> = {
     'user.created': 'Usuario creado',
     'user.updated': 'Usuario actualizado',
     'user.deleted': 'Usuario eliminado',
+    'user.restored': 'Habilitó un usuario eliminado',
+    'impersonation.started': 'Inició sesión como otro usuario',
+    'impersonation.stopped': 'Salió de la sesión de otro usuario',
     'user.password_changed': 'Cambió contraseña',
     'user.password_reset': 'Restableció contraseña',
     'user.password_reset_requested': 'Solicitó restablecer contraseña',
@@ -509,7 +512,14 @@ export function AuditLogsPage() {
                                                     </TableCell>
                                                 )}
                                                 <TableCell className="text-sm">
-                                                    {actionDescriptions[log.action] || log.action}
+                                                    {/* `description` la sirve el backend
+                                                        (AuditLog::$appends), que es donde vive el
+                                                        catálogo de acciones. actionDescriptions
+                                                        queda solo de respaldo: mantenerla como
+                                                        fuente principal obligaba a recordar cada
+                                                        acción nueva en dos sitios, y ya se
+                                                        desincronizó dos veces. */}
+                                                    {log.description || actionDescriptions[log.action] || log.action}
                                                 </TableCell>
                                                 <TableCell className="text-gray-500 text-sm hidden md:table-cell">
                                                     {log.entity_type && log.entity_id && (

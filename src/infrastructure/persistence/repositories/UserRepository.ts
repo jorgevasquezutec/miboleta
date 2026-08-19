@@ -1,4 +1,4 @@
-import { IUserRepository, LoginResponse, GetUsersParams, MeResponse } from '@/core/domain/repositories/IUserRepository';
+import { IUserRepository, LoginResponse, GetUsersParams, MeResponse, ImpersonateResponse, LeaveImpersonationResponse } from '@/core/domain/repositories/IUserRepository';
 import { User, CreateUserData, UpdateUserData } from '@/core/domain/entities';
 import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
 import { PaginatedResponse } from './types';
@@ -160,6 +160,29 @@ export class UserRepository implements IUserRepository {
   async restore(id: string): Promise<void> {
     try {
       await apiClient.post(`/users/${id}/restore`);
+    } catch (error) {
+      throw toApiError(error);
+    }
+  }
+
+  /**
+   * root entra a operar como `id`. Las cookies (access_token/refresh_token
+   * del empleado + impersonator_return del root) las setea el backend en la
+   * respuesta; aquí solo se devuelve el payload JSON.
+   */
+  async impersonate(id: string): Promise<ImpersonateResponse> {
+    try {
+      const response = await apiClient.post<ImpersonateResponse>(`/users/${id}/impersonate`);
+      return response.data;
+    } catch (error) {
+      throw toApiError(error);
+    }
+  }
+
+  async stopImpersonating(): Promise<LeaveImpersonationResponse> {
+    try {
+      const response = await apiClient.post<LeaveImpersonationResponse>('/impersonate/leave');
+      return response.data;
     } catch (error) {
       throw toApiError(error);
     }

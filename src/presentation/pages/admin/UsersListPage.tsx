@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/presentation/components/ui/select";
-import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload, RotateCcw } from "lucide-react";
+import { UserPlus, Search, Eye, Pencil, Trash2, Loader2, Download, Upload, RotateCcw, LogIn } from "lucide-react";
 import { toast } from "sonner";
 import { showApiError } from "@/presentation/utils/showApiError";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
@@ -53,6 +53,10 @@ export function UsersListPage() {
     changePerPage,
   } = useUsersStore();
   const { user: currentUser, currentTenant, currentRole } = useAuthStore();
+  // Selector aparte del resto (no en la desestructuración de arriba): es una
+  // acción estable de zustand, no hace falta que dispare un re-render de todo
+  // lo que ya lee `useAuthStore()` ahí.
+  const enterImpersonation = useAuthStore((s) => s.enterImpersonation);
   // El navbar (TenantSwitcher) es el único control de empresa para todos los
   // roles. isRootUser solo se usa para el export: ReportsController resuelve
   // la empresa de root por query param y la de no-root por header.
@@ -72,6 +76,9 @@ export function UsersListPage() {
   const canBulkUpload = useCan("users.bulk_upload");
   const canExportUsers = useCan("users.export");
   const canExportAppAccounts = useCan("reports.app_accounts_export");
+  // "Iniciar sesión como" (impersonation, ver CONTRATO-IMPERSONATION): solo
+  // root, vía la Matriz de Accesos igual que el resto de estos flags.
+  const canImpersonate = useCan("users.impersonate");
 
   // URL-synced filters
   const { filters, setFilter, setFilters } = useUrlFilters({
@@ -97,6 +104,12 @@ export function UsersListPage() {
   const [userToRestore, setUserToRestore] = useState<{ id: string; name: string } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingAppAccounts, setIsExportingAppAccounts] = useState(false);
+  // Id del usuario cuyo botón "Iniciar sesión como" está en vuelo. Solo gatea
+  // el spinner de SU fila (no el `isLoading` global de authStore, que
+  // enterImpersonation también toca): con `isLoading` global, cualquier otro
+  // control de la página que lo mire quedaría deshabilitado de rebote por una
+  // acción ajena a él.
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Debounce search input -> update URL
@@ -214,6 +227,19 @@ export function UsersListPage() {
       await refreshUsers();
     } catch (error) {
       showApiError(error, "Error al habilitar usuario");
+    }
+  };
+
+  const handleImpersonate = async (id: string) => {
+    setImpersonatingId(id);
+    try {
+      await enterImpersonation(id);
+      // No hay nada más que hacer: enterImpersonation() ya dispara la
+      // recarga dura (window.location.href) en cuanto el backend confirma,
+      // así que este componente ni siquiera llega a desmontarse limpio.
+    } catch (error) {
+      setImpersonatingId(null);
+      showApiError(error, "No se pudo iniciar sesión como este usuario");
     }
   };
 
@@ -629,6 +655,29 @@ export function UsersListPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
+                              {/* Condición propia, no reusada de Editar/Eliminar (mismo
+                                  criterio de C2, justo abajo): 'users.impersonate' es una
+                                  ability distinta y exclusiva de root, y colgar este botón
+                                  de otra condición se la colaría a quien no debe tenerla.
+                                  Se oculta además en la papelera, sobre uno mismo y sobre
+                                  otro root: el backend devuelve 403 en los tres casos (ver
+                                  CONTRATO-IMPERSONATION), así que no se ofrece un botón
+                                  condenado a fallar. */}
+                              {!isTrashView && canImpersonate && user.role !== "root" && user.id !== currentUser?.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Iniciar sesión como este usuario"
+                                  disabled={impersonatingId === user.id}
+                                  onClick={() => handleImpersonate(user.id)}
+                                >
+                                  {impersonatingId === user.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <LogIn className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
                               {/* C2: Editar y Eliminar son botones independientes, no un
                                   bloque OR. Antes compartían una sola condición
                                   (canUpdateUser || canDeleteUser), así que a un

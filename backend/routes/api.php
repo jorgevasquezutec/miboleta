@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuditSettingsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\ImpersonationController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RoleController;
@@ -53,6 +54,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    // Impersonation ("iniciar sesión como"): salir. El inicio va junto a
+    // /users/{id} más abajo (ability 'users.impersonate', solo root).
+    Route::post('/impersonate/leave', [ImpersonationController::class, 'leave']);
+
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
@@ -85,6 +90,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Habilitar una cuenta eliminada. Solo root: enforcement por la
         // ability 'users.restore' dentro de UserController::restore.
         Route::post('/restore', [UserController::class, 'restore']);
+        // "Iniciar sesión como" este usuario. Solo root: enforcement por la
+        // ability 'users.impersonate' dentro de ImpersonationController::start.
+        Route::post('/impersonate', [ImpersonationController::class, 'start']);
     });
 
     // Users - Resource routes (index, store, show, update, destroy)
