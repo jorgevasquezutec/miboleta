@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { User, TenantAssociation } from "@/core/domain/entities";
+import { User, TenantAssociation, ImpersonatorInfo } from "@/core/domain/entities";
 import { userRepository } from "@/infrastructure/persistence/repositories";
 import { useTenantFilterStore } from "./tenantFilterStore";
 
@@ -81,6 +81,19 @@ interface AuthState {
    * existía en su mapa y `evaluate()` la denegaba por fail-closed).
    */
   accessMatrixRefreshed: boolean;
+  /**
+   * Root que está detrás de la sesión activa (ver CONTRATO-IMPERSONATION del
+   * backend), o `null` en sesión normal. `user` sigue siendo el empleado
+   * impersonado — este campo es solo el rastro de quién opera realmente.
+   *
+   * NO se persiste (ver `partialize`): tras la recarga dura que hacen
+   * `enterImpersonation`/`leaveImpersonation` la única fuente de verdad es lo
+   * que devuelva GET /me con las cookies ya canjeadas por el backend. Una
+   * copia en localStorage podría quedar "pegada" si la impersonation termina
+   * por otra vía (otra pestaña, expiración del token), mostrando el banner
+   * de una sesión que ya no es impersonada.
+   */
+  impersonator: ImpersonatorInfo | null;
   isLoading: boolean;
   error: string | null;
 
@@ -115,6 +128,22 @@ interface AuthState {
    * usuario efectivamente tenga ese rol allí. No aplica a root.
    */
   switchRole: (roleName: string) => void;
+  /**
+   * root entra a operar como `userId` (ver CONTRATO-IMPERSONATION). Al
+   * confirmar el backend, hace una RECARGA DURA (`window.location.href`),
+   * igual que apiClient.ts al fallar el refresh: hay 9 stores de datos
+   * (documentsStore, vacationsStore, tenantsStore, usersStore,
+   * notificationsStore, reportsStore, auditSettingsStore,
+   * platformSettingsStore, signatureSettingsStore) sin ninguna lógica de
+   * reset por cambio de identidad, y la recarga los limpia todos de golpe.
+   * Antes de recargar borra 'auth-storage'/'tenant-filter-storage' de
+   * localStorage: sin eso, el arranque de la app rehidrataría la identidad
+   * vieja (root) desde la copia persistida en vez de tomar la del empleado
+   * que sirve /me con las cookies nuevas.
+   */
+  enterImpersonation: (userId: string) => Promise<void>;
+  /** Termina la impersonation activa y vuelve a la sesión de root. Misma recarga dura que `enterImpersonation`. */
+  leaveImpersonation: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   uploadAvatar: (file: File) => Promise<string>;
   deleteAvatar: () => Promise<void>;
@@ -129,6 +158,7 @@ export const useAuthStore = create<AuthState>()(
       currentRole: null,
       accessMatrix: null,
       accessMatrixRefreshed: false,
+      impersonator: null,
       isLoading: false,
       error: null,
 
@@ -161,6 +191,10 @@ export const useAuthStore = create<AuthState>()(
             currentTenant,
             currentRole,
             accessMatrix: response.access_matrix ?? null,
+            // Un login fresco nunca arranca impersonado: si quedara un valor
+            // de una sesión previa en memoria (p. ej. login tras logout sin
+            // recarga), se descarta explícitamente.
+            impersonator: null,
             isLoading: false,
             error: null,
           });
@@ -201,6 +235,7 @@ export const useAuthStore = create<AuthState>()(
             currentTenant: null,
             currentRole: null,
             accessMatrixRefreshed: false,
+            impersonator: null,
             isLoading: false,
             error: null,
           });
@@ -274,6 +309,10 @@ export const useAuthStore = create<AuthState>()(
             // Si el backend no la envía (versión anterior), conservar la que ya
             // hubiera en el store en vez de borrarla.
             accessMatrix: user.access_matrix ?? get().accessMatrix,
+            // A diferencia de accessMatrix, SIN fallback al valor previo: acá
+            // "ausente" (undefined o null) significa "ya no hay impersonation
+            // activa" y hay que reflejarlo, no conservar un banner viejo.
+            impersonator: user.impersonator ?? null,
             isLoading: false,
           });
         } catch (error) {
@@ -351,6 +390,50 @@ export const useAuthStore = create<AuthState>()(
         }
 
         set({ currentRole: roleName });
+      },
+
+      enterImpersonation: async (userId: string) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          // El backend ya deja las cookies (access_token/refresh_token del
+          // empleado + impersonator_return del root) puestas en la respuesta;
+          // acá no hay nada que guardar del payload porque viene la recarga
+          // dura de inmediato.
+          await userRepository.impersonate(userId);
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : "Error al iniciar sesión como el usuario",
+            isLoading: false,
+          });
+          throw error;
+        }
+
+        // Limpiar ANTES de recargar (mismo orden que apiClient.ts al fallar
+        // el refresh): si el arranque de la app llega a alcanzar a leer
+        // 'auth-storage' antes de que /me responda, rehidrataría la sesión
+        // de root en vez de esperar a la del empleado.
+        localStorage.removeItem('auth-storage');
+        localStorage.removeItem('tenant-filter-storage');
+        window.location.href = '/';
+      },
+
+      leaveImpersonation: async () => {
+        set({ isLoading: true, error: null });
+
+        try {
+          await userRepository.stopImpersonating();
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : "Error al volver a tu cuenta",
+            isLoading: false,
+          });
+          throw error;
+        }
+
+        localStorage.removeItem('auth-storage');
+        localStorage.removeItem('tenant-filter-storage');
+        window.location.href = '/';
       },
 
       updateProfile: async (updates: Partial<User>) => {
@@ -458,6 +541,7 @@ export const useAuthStore = create<AuthState>()(
         // el backend; esto es solo gating de UI.
         accessMatrix: state.accessMatrix,
         // No persistimos token porque ahora está en cookies HttpOnly
+        // Tampoco persistimos `impersonator`: ver su comentario en AuthState.
       }),
     }
   )

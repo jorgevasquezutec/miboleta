@@ -9,4 +9,5 @@ export { TenantMultiSelector } from './TenantMultiSelector';
 export { TenantSwitcher } from './TenantSwitcher';
 export { TenantMultiSwitcher } from './TenantMultiSwitcher';
 export { PageLoader } from './PageLoader';
+export { ImpersonationBanner, IMPERSONATION_BANNER_HEIGHT } from './ImpersonationBanner';
 

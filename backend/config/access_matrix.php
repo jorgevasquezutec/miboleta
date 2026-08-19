@@ -68,6 +68,15 @@ return [
     // OJO: no confundir con 'users.deactivate', que es el eje status
     // (active/inactive) y no toca deleted_at.
     'users.restore' => ['root'],
+    // [OBS-CLIENTE 2026-08] "Iniciar sesión como" otro usuario. Solo root, y
+    // NO restringida a solo lectura ni excluida de la auditoría normal: el
+    // cliente pidió explícitamente que root pueda operar EXACTAMENTE como el
+    // usuario impersonado. Lo único que cambia es que cada acción deja
+    // rastro de quién estaba detrás (ver columna audit_logs.impersonator_id
+    // y AuditService::log()). No puede impersonar a otro root ni a sí mismo
+    // — esas reglas viven en ImpersonationController::start, no aquí: son
+    // sobre el PAR (actor, objetivo), no sobre el rol.
+    'users.impersonate' => ['root'],
     'users.reset_password' => ['root', 'admin_tenant'],
     'users.bulk_upload' => ['root', 'admin_tenant'],
     // [OBS-CLIENTE 2026-08] Export de empleados (ReportsController::exportUsers).

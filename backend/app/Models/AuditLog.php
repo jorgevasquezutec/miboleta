@@ -16,6 +16,7 @@ class AuditLog extends Model
 
     protected $fillable = [
         'user_id',
+        'impersonator_id',
         'tenant_id',
         'action',
         'entity_type',
@@ -97,6 +98,16 @@ class AuditLog extends Model
     // SIEMPRE activo (ver ALWAYS_ON): registrar quién activó/desactivó qué.
     public const ACTION_AUDIT_SETTINGS_UPDATED = 'audit.settings_updated';
 
+    // Impersonation ("iniciar sesión como"): root operando con la identidad
+    // de otro usuario (ver AuthService::impersonate/leaveImpersonation). El
+    // actor de estos dos eventos es SIEMPRE root (userId explícito) y el
+    // empleado va como entityId — es la acción de root de entrar/salir, no
+    // algo que el empleado hizo. Distinto de `impersonator_id`, que marca las
+    // acciones QUE SÍ hace el empleado (con root detrás) mientras la sesión
+    // impersonada está activa.
+    public const ACTION_IMPERSONATION_STARTED = 'impersonation.started';
+    public const ACTION_IMPERSONATION_STOPPED = 'impersonation.stopped';
+
     /**
      * Acciones que NUNCA pueden desactivarse desde el mantenedor de auditoría
      * (seguridad/legal): autenticación, autorización, eliminaciones, cambios de
@@ -129,6 +140,8 @@ class AuditLog extends Model
         self::ACTION_SIGNATURE_CERT_DELETED,
         self::ACTION_SIGNATURE_TERMS_ACCEPTED,
         self::ACTION_AUDIT_SETTINGS_UPDATED,
+        self::ACTION_IMPERSONATION_STARTED,
+        self::ACTION_IMPERSONATION_STOPPED,
     ];
 
     /**
@@ -176,6 +189,16 @@ class AuditLog extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Root que estaba detrás de la acción, cuando se realizó durante una
+     * sesión de impersonation (ver AuditService::log()). null en el caso
+     * normal (sin impersonar).
+     */
+    public function impersonator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'impersonator_id');
     }
 
     public function tenant(): BelongsTo
@@ -284,6 +307,8 @@ class AuditLog extends Model
             self::ACTION_EMAIL_CHANGED => 'Cambió el correo electrónico',
             self::ACTION_PASSWORD_RESET_REQUESTED => 'Solicitó restablecer contraseña',
             self::ACTION_AUDIT_SETTINGS_UPDATED => 'Actualizó la configuración de auditoría',
+            self::ACTION_IMPERSONATION_STARTED => 'Inició sesión como otro usuario',
+            self::ACTION_IMPERSONATION_STOPPED => 'Salió de la sesión de otro usuario',
         ];
 
         return $descriptions[$this->action] ?? $this->action;

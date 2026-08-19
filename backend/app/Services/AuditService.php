@@ -47,8 +47,32 @@ class AuditService
         $userId = $userId ?? $user?->id;
         $tenantId = $tenantId ?? $this->resolveActorTenantId($user);
 
+        // Impersonation ("iniciar sesión como"): root opera con el user_id del
+        // EMPLEADO (no se altera autorización ni lógica de negocio, ver
+        // contrato de AuthService::impersonate), así que el rastro de "quién
+        // estaba detrás" no puede ir en $userId — ese campo ya lo usan varios
+        // helpers para fijar un actor explícito (p. ej. logUserDeleted) y
+        // pisarlo rompería esa convención. impersonator_id se resuelve APARTE
+        // y SIEMPRE del canal token (currentAccessToken()->name, marcado por
+        // AuthService::impersonate con el prefijo "impersonation:"), nunca del
+        // $userId que reciba esta llamada.
+        //
+        // Punto ciego CONOCIDO y ACEPTADO: los jobs en cola no llevan esta
+        // marca (corren sin Auth ni token asociado a la request). No se
+        // arregla aquí — no hay token que inspeccionar fuera de un ciclo HTTP.
+        // "?->name ?? null" y no solo "?->name": cuando la request se
+        // autenticó por el guard de sesión (Sanctum SIN token real —
+        // Auth::viaRequest/actingAs()), currentAccessToken() no es null sino
+        // un Laravel\Sanctum\TransientToken, que NO tiene propiedad `name`.
+        // El "?->" solo protege contra el objeto null; leer una propiedad
+        // inexistente en un objeto SÍ existente sigue siendo un error (500).
+        $impersonatorId = $user instanceof \App\Models\User
+            ? AuthService::impersonatorIdFromTokenName($user->currentAccessToken()?->name ?? null)
+            : null;
+
         $auditLog = AuditLog::create([
             'user_id' => $userId,
+            'impersonator_id' => $impersonatorId,
             'tenant_id' => $tenantId,
             'action' => $action,
             'entity_type' => $entityType,
@@ -308,6 +332,41 @@ class AuditService
             entityType: 'User',
             entityId: $userId,
             newValues: $userData
+        );
+    }
+
+    // ============ Impersonation Actions ============
+
+    /**
+     * Root inicia una sesión "iniciar sesión como" otro usuario. El actor es
+     * SIEMPRE root (userId explícito): en el momento de esta llamada, root
+     * todavía opera con su propia sesión (sin marca), así que el $userId
+     * explícito no es opcional aquí como en otros helpers — sin él, log()
+     * tomaría el user_id del Auth::user() actual, que también es root, pero
+     * dejaría la relación acción→objetivo solo en entityId, menos explícita.
+     */
+    public function logImpersonationStarted(int $rootId, int $targetUserId): ?AuditLog
+    {
+        return $this->log(
+            action: AuditLog::ACTION_IMPERSONATION_STARTED,
+            entityType: 'User',
+            entityId: $targetUserId,
+            userId: $rootId
+        );
+    }
+
+    /**
+     * Root sale de una sesión impersonada y recupera la suya. Espejo de
+     * logImpersonationStarted(): mismo actor (root) y mismo entityId (el
+     * empleado cuya identidad se dejó de usar).
+     */
+    public function logImpersonationStopped(int $rootId, int $targetUserId): ?AuditLog
+    {
+        return $this->log(
+            action: AuditLog::ACTION_IMPERSONATION_STOPPED,
+            entityType: 'User',
+            entityId: $targetUserId,
+            userId: $rootId
         );
     }
 

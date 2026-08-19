@@ -232,6 +232,13 @@ class AuthController extends Controller
             'message' => 'Sesión cerrada correctamente',
         ])
             ->cookie($this->authService->createExpiredCookie('access_token'))
-            ->cookie($this->authService->createExpiredCookie('refresh_token'));
+            ->cookie($this->authService->createExpiredCookie('refresh_token'))
+            // También el "boleto de vuelta" de una impersonación en curso: si
+            // root cierra sesión desde dentro de una (el botón de logout sigue
+            // ahí), la cookie sobreviviría hasta 8 h y lo dejaría en un punto
+            // muerto — start() responde 403 porque la ve, y leave() responde
+            // 422 porque el token nuevo ya no lleva la marca. Expirarla siempre
+            // es inocuo: en una sesión normal no existe.
+            ->cookie($this->authService->createExpiredCookie('impersonator_return'));
     }
 }

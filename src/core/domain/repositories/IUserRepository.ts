@@ -1,4 +1,4 @@
-import { User, CreateUserData, UpdateUserData } from '../entities';
+import { User, CreateUserData, UpdateUserData, ImpersonatorInfo } from '../entities';
 import { PaginatedResponse } from '@/infrastructure/persistence/repositories/types';
 
 export interface LoginResponse {
@@ -13,12 +13,28 @@ export interface LoginResponse {
 
 /**
  * Respuesta de GET /me: el usuario plano en la raíz (asimétrico respecto a
- * /login, que lo envuelve en {user}) más la Matriz de Accesos como campo
- * hermano.
+ * /login, que lo envuelve en {user}) más la Matriz de Accesos y el
+ * `impersonator` (o null) como campos hermanos. Ver CONTRATO-IMPERSONATION:
+ * es la ÚNICA fuente de verdad para el impersonator tras un F5 — no se
+ * persiste en localStorage (ver authStore.impersonator).
  */
 export type MeResponse = User & {
   access_matrix?: Record<string, string[]>;
+  impersonator?: ImpersonatorInfo | null;
 };
+
+/** Respuesta de POST /users/{id}/impersonate. */
+export interface ImpersonateResponse {
+  user: User;
+  access_matrix?: Record<string, string[]>;
+  impersonator: ImpersonatorInfo;
+}
+
+/** Respuesta de POST /impersonate/leave. */
+export interface LeaveImpersonationResponse {
+  user: User;
+  access_matrix?: Record<string, string[]>;
+}
 
 export interface GetUsersParams {
   page?: number;
@@ -53,4 +69,12 @@ export interface IUserRepository {
   delete(id: string): Promise<void>;
   /** Habilita una cuenta eliminada (soft delete). Solo root. */
   restore(id: string): Promise<void>;
+  /**
+   * root entra a operar como `id` (ver CONTRATO-IMPERSONATION). El backend
+   * marca el token nuevo (name: "impersonation:{rootId}") y lo entrega vía
+   * cookies HttpOnly; el frontend nunca ve ni maneja los tokens.
+   */
+  impersonate(id: string): Promise<ImpersonateResponse>;
+  /** Termina la impersonation activa y restaura la sesión del root. */
+  stopImpersonating(): Promise<LeaveImpersonationResponse>;
 }
