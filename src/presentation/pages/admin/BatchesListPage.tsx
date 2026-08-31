@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import { showApiError } from "@/presentation/utils/showApiError";
 
 export function BatchesListPage() {
-    useDocumentTitle('Lotes de Carga');
+    useDocumentTitle('Historial de Carga');
     const navigate = useNavigate();
 
     // URL-synced filters
@@ -132,7 +132,7 @@ export function BatchesListPage() {
                 <div>
                     <h1 className="flex items-center gap-2">
                         <FileStack className="w-6 h-6 text-[#2563EB]" />
-                        Lotes de Carga
+                        Historial de Carga
                     </h1>
                     <p className="text-[#64748B]">
                         Historial de cargas masivas de documentos
