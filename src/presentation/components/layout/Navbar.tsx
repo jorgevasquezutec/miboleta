@@ -67,7 +67,7 @@ export function Navbar({
 
   return (
     <nav
-      className="fixed left-0 right-0 bg-white border-b border-[rgba(0,0,0,0.1)] px-3 sm:px-6 py-3 sm:py-4 z-50"
+      className="fixed left-0 right-0 bg-white border-b border-[rgba(0,0,0,0.1)] px-3 sm:px-6 py-2 sm:py-3 z-50"
       style={{ top: topOffset }}
     >
       <div className="flex items-center justify-between">

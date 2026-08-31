@@ -151,14 +151,14 @@ export function TenantSwitcher() {
                                 <img
                                     src={currentTenant.logo_url}
                                     alt={currentTenant.name}
-                                    className="h-6 w-6 rounded-md object-cover flex-shrink-0"
+                                    className="h-10 w-auto max-w-[140px] object-contain flex-shrink-0"
                                 />
                             ) : (
-                                <div className="flex h-6 w-6 items-center justify-center rounded-md flex-shrink-0">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-md flex-shrink-0">
                                     {currentTenant ? (
-                                        <Building2 className="h-4 w-4 !text-blue-600" />
+                                        <Building2 className="h-7 w-7 !text-blue-600" />
                                     ) : (
-                                        <Globe2 className="h-4 w-4 !text-blue-600" />
+                                        <Globe2 className="h-7 w-7 !text-blue-600" />
                                     )}
                                 </div>
                             )}
@@ -220,11 +220,11 @@ export function TenantSwitcher() {
                                             <img
                                                 src={tenant.logo_url}
                                                 alt={tenant.name}
-                                                className="h-5 w-5 rounded object-cover flex-shrink-0"
+                                                className="h-7 w-10 object-contain flex-shrink-0"
                                             />
                                         ) : (
-                                            <div className="flex h-5 w-5 items-center justify-center rounded bg-gray-100 flex-shrink-0">
-                                                <Building2 className="h-3 w-3 text-gray-400" />
+                                            <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-100 flex-shrink-0">
+                                                <Building2 className="h-6 w-6 text-gray-400" />
                                             </div>
                                         )}
                                         <span className="text-sm truncate">{tenant.name}</span>
@@ -272,11 +272,11 @@ export function TenantSwitcher() {
                     <img
                         src={currentTenant.logo_url}
                         alt={tenantName}
-                        className="h-10 w-10 rounded-md object-cover flex-shrink-0"
+                        className="h-14 w-auto max-w-[200px] object-contain flex-shrink-0"
                     />
                 ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 flex-shrink-0">
-                        <Building2 className="h-5 w-5 text-blue-600" />
+                    <div className="flex h-14 w-14 items-center justify-center rounded-md bg-blue-100 flex-shrink-0">
+                        <Building2 className="h-8 w-8 text-blue-600" />
                     </div>
                 )}
                 <div className="flex flex-col">
@@ -303,11 +303,11 @@ export function TenantSwitcher() {
                             <img
                                 src={currentTenant.logo_url}
                                 alt={currentTenant.name}
-                                className="h-6 w-6 rounded-md object-cover flex-shrink-0"
+                                className="h-10 w-auto max-w-[140px] object-contain flex-shrink-0"
                             />
                         ) : (
-                            <div className="flex h-6 w-6 items-center justify-center rounded-md flex-shrink-0">
-                                <Building2 className="h-4 w-4 !text-blue-600" />
+                            <div className="flex h-12 w-12 items-center justify-center rounded-md flex-shrink-0">
+                                <Building2 className="h-7 w-7 !text-blue-600" />
                             </div>
                         )}
                         <div className="flex flex-col items-start min-w-0 flex-1">
@@ -349,11 +349,11 @@ export function TenantSwitcher() {
                                         <img
                                             src={tenant.logo_url}
                                             alt={tenant.name}
-                                            className="h-5 w-5 rounded object-cover flex-shrink-0"
+                                            className="h-7 w-10 object-contain flex-shrink-0"
                                         />
                                     ) : (
-                                        <div className="flex h-5 w-5 items-center justify-center rounded bg-gray-100 flex-shrink-0">
-                                            <Building2 className="h-3 w-3 text-gray-400" />
+                                        <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-100 flex-shrink-0">
+                                            <Building2 className="h-6 w-6 text-gray-400" />
                                         </div>
                                     )}
                                     <span className="text-sm truncate">{tenant.name}</span>
