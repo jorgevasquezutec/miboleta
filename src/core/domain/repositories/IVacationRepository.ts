@@ -3,6 +3,7 @@ import {
   CreateVacationRequestDTO,
   RejectVacationRequestDTO,
   VacationBalance,
+  TeamRosterMember,
 } from '../entities/VacationRequest';
 
 export interface VacationFilters {
@@ -51,6 +52,12 @@ export interface IVacationRepository {
   getMyTeam(filters?: VacationFilters): Promise<PaginatedVacationRequests>;
   getMyDecisions(filters?: VacationFilters): Promise<PaginatedVacationRequests>;
   getAllHistory(filters?: VacationFilters): Promise<PaginatedVacationRequests>;
+
+  // Team Roster (Mi Equipo, ítem 43): directorio del personal a cargo en la
+  // empresa activa (no solicitudes). La empresa la resuelve el backend igual
+  // que getMyTeam() (header X-Tenant-Ids inyectado por el interceptor de
+  // apiClient), sin parámetro explícito.
+  getMyTeamRoster(): Promise<TeamRosterMember[]>;
 
   // Balance
   getBalance(tenantId?: number): Promise<VacationBalance>;

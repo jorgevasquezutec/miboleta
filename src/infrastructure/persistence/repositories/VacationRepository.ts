@@ -3,6 +3,7 @@ import {
     CreateVacationRequestDTO,
     RejectVacationRequestDTO,
     VacationBalance,
+    TeamRosterMember,
 } from '@/core/domain/entities/VacationRequest';
 import { IVacationRepository, VacationFilters, PaginatedVacationRequests } from '@/core/domain/repositories/IVacationRepository';
 import apiClient, { toApiError } from '@/infrastructure/http/apiClient';
@@ -277,6 +278,24 @@ export class VacationRepository implements IVacationRepository {
         }
     }
 
+    // ============ Team Roster (Mi Equipo, ítem 43) ============
+
+    /**
+     * Directorio del personal a cargo en la empresa activa (no solicitudes).
+     * La empresa la resuelve el backend con el mismo mecanismo que
+     * getMyTeam() (header X-Tenant-Ids, inyectado por el interceptor de
+     * apiClient), por eso no recibe tenantId explícito.
+     */
+    async getMyTeamRoster(): Promise<TeamRosterMember[]> {
+        try {
+            const response = await apiClient.get<{ data: any[] }>('/vacation-requests/my-team-roster');
+
+            return response.data.data.map((member) => this.mapTeamRosterMember(member));
+        } catch (error) {
+            throw toApiError(error);
+        }
+    }
+
     // ============ Balance ============
 
     /**
@@ -352,6 +371,33 @@ export class VacationRepository implements IVacationRepository {
             fullName: data.full_name,
             email: data.email,
             documentText: data.document_text,
+        };
+    }
+
+    private mapTeamRosterMember(data: any): TeamRosterMember {
+        return {
+            id: data.id,
+            fullName: data.full_name,
+            email: data.email,
+            position: data.position ?? null,
+            department: data.department ?? null,
+            avatarUrl: data.avatar_url ?? null,
+            balance: data.balance
+                ? {
+                    pending: Number(data.balance.pending),
+                    taken: Number(data.balance.taken),
+                    truncated: Number(data.balance.truncated),
+                    balance: Number(data.balance.balance),
+                }
+                : null,
+            isOnVacationNow: Boolean(data.is_on_vacation_now),
+            nextPendingRequest: data.next_pending_request
+                ? {
+                    startDate: data.next_pending_request.start_date,
+                    endDate: data.next_pending_request.end_date,
+                    daysRequested: Number(data.next_pending_request.days_requested),
+                }
+                : null,
         };
     }
 

@@ -6,6 +6,7 @@ use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateVacationRequestRequest;
 use App\Http\Requests\RejectVacationRequestRequest;
+use App\Http\Resources\TeamRosterResource;
 use App\Http\Resources\VacationRequestResource;
 use App\Models\Scopes\TenantFilterScope;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Models\VacationRequest;
 use App\Services\ActiveTenantResolver;
 use App\Services\VacationBalanceService;
 use App\Services\VacationService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -526,6 +528,108 @@ class VacationRequestController extends Controller
                 'per_page' => $requests->perPage(),
                 'total' => $requests->total(),
             ],
+        ]);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/vacation-requests/my-team-roster",
+     *     tags={"Vacaciones"},
+     *     summary="Directorio del personal a cargo (ítem 43)",
+     *     description="Lista, no solicitudes: el personal a cargo del supervisor en la empresa activa, con su saldo de vacaciones y si está de vacaciones ahora mismo.",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(name="tenant_id", in="query", required=false, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Directorio del equipo"),
+     *     @OA\Response(response=400, description="Tenant no especificado"),
+     *     @OA\Response(response=403, description="No autorizado")
+     * )
+     */
+    public function myTeamRoster(Request $request): JsonResponse
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        // Igual que balance(): un listado de tipo "dashboard" sin recurso
+        // puntual necesita UNA empresa concreta (subordinatesForTenant() y
+        // getBalancesForUsers() no aceptan una lista), así que se resuelve con
+        // ActiveTenantResolver en vez del array _tenant_filter_ids que usa
+        // myTeam() (pensado para TenantFilterScope, que sí filtra por varias).
+        $tenantId = $this->activeTenantResolver->resolve($request, $user);
+
+        if (!$tenantId) {
+            return response()->json(['message' => 'Tenant no especificado'], 400);
+        }
+
+        // E1-style [seguridad]: expone saldos de vacaciones de terceros. Sin
+        // esto, cualquier autenticado podría pedir el roster de otra empresa
+        // adivinando un tenant_id — el mismo riesgo que hoy tienen sin cerrar
+        // UserController::subordinates y VacationRequestController::myTeam.
+        // No se replica esa omisión aquí.
+        $this->authorize('vacations.view_team_roster', $tenantId);
+
+        // subordinatesForTenant() (NO subordinates(), que es GLOBAL a todas
+        // las empresas del supervisor — mezclaría equipos de distintas
+        // empresas y no habría con qué tenant calcular el saldo).
+        // withPivot agrega position/department: no vienen en el withPivot
+        // base de subordinates() (solo is_primary/tenant_id).
+        $subordinates = $user->subordinatesForTenant($tenantId)
+            ->withPivot(['position', 'department'])
+            ->get();
+
+        if ($subordinates->isEmpty()) {
+            return response()->json(['data' => []]);
+        }
+
+        // Saldo de TODO el lote en 2 queries (ver VacationBalanceService::
+        // getBalancesForUsers), nunca una por subordinado.
+        $balances = $this->vacationBalanceService->getBalancesForUsers($subordinates, $tenantId);
+
+        $subordinateIds = $subordinates->pluck('id')->all();
+        $today = Carbon::today()->toDateString();
+
+        // De vacaciones AHORA MISMO: 1 query en lote (whereIn), no una por
+        // persona. withoutGlobalScope(TenantFilterScope) igual que el resto
+        // de este controller/VacationBalanceService: no debe depender del
+        // filtro de tenant activo de la sesión, solo del $tenantId resuelto.
+        $onVacationNowIds = VacationRequest::withoutGlobalScope(TenantFilterScope::class)
+            ->whereIn('user_id', $subordinateIds)
+            ->where('tenant_id', $tenantId)
+            ->where('status', VacationRequest::STATUS_APPROVED)
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->pluck('user_id')
+            ->flip();
+
+        // Próxima solicitud PENDIENTE por persona: 1 query en lote ordenada
+        // por start_date, y luego unique('user_id') — Collection::unique()
+        // conserva la PRIMERA aparición de cada clave, así que con el orden
+        // ascendente cada usuario se queda con su pendiente más próxima.
+        $nextPendingByUser = VacationRequest::withoutGlobalScope(TenantFilterScope::class)
+            ->whereIn('user_id', $subordinateIds)
+            ->where('tenant_id', $tenantId)
+            ->where('status', VacationRequest::STATUS_PENDING)
+            ->orderBy('start_date')
+            ->get(['user_id', 'start_date', 'end_date', 'days_requested'])
+            ->unique('user_id')
+            ->keyBy('user_id');
+
+        // Atributos dinámicos para que TeamRosterResource los serialice, sin
+        // que el Resource tenga que volver a tocar la BD (mismo patrón que
+        // attachVacationBalances() con `vacation_balance`).
+        $subordinates->each(function (User $subordinate) use ($balances, $onVacationNowIds, $nextPendingByUser) {
+            $subordinate->roster_balance = $balances[$subordinate->id] ?? null;
+            $subordinate->roster_is_on_vacation_now = $onVacationNowIds->has($subordinate->id);
+
+            $nextPending = $nextPendingByUser->get($subordinate->id);
+            $subordinate->roster_next_pending_request = $nextPending ? [
+                'start_date' => $nextPending->start_date->format('Y-m-d'),
+                'end_date' => $nextPending->end_date->format('Y-m-d'),
+                'days_requested' => (float) $nextPending->days_requested,
+            ] : null;
+        });
+
+        return response()->json([
+            'data' => TeamRosterResource::collection($subordinates),
         ]);
     }
 

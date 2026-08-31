@@ -138,6 +138,44 @@ export interface VacationBalance {
     requests: VacationBalanceRequestCounts;
 }
 
+// ============ Team Roster (Mi Equipo) ============
+// Directorio del personal a cargo del supervisor en la empresa activa
+// (GET /vacation-requests/my-team-roster, ítem 43). A diferencia de
+// VacationRequest, cada fila es UNA PERSONA, no una solicitud: por eso el
+// saldo va reducido a los 4 conceptos que se pintan en la tarjeta (mismo
+// subconjunto que VacationRequestBalance) y el estado se resume en dos
+// campos ya resueltos por el backend (is_on_vacation_now / next_pending_request),
+// sin que el frontend tenga que derivarlos de una lista de solicitudes.
+
+export interface TeamRosterMemberBalance {
+    pending: number;
+    taken: number;
+    truncated: number;
+    balance: number;
+}
+
+export interface TeamRosterNextPendingRequest {
+    startDate: string; // YYYY-MM-DD
+    endDate: string; // YYYY-MM-DD
+    daysRequested: number;
+}
+
+export interface TeamRosterMember {
+    id: number;
+    fullName: string;
+    email: string;
+    position: string | null;
+    department: string | null;
+    avatarUrl: string | null;
+    // null cuando el backend no encontró un user_tenants para esta persona en
+    // esta empresa (dato inconsistente, no debería ocurrir en la práctica).
+    balance: TeamRosterMemberBalance | null;
+    isOnVacationNow: boolean;
+    // La solicitud pendiente más próxima (menor start_date), o null si no
+    // tiene ninguna pendiente.
+    nextPendingRequest: TeamRosterNextPendingRequest | null;
+}
+
 // Status helpers
 export const vacationStatusLabels: Record<VacationStatus, string> = {
     pending: 'Pendiente',
