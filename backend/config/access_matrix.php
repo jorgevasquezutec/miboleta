@@ -108,7 +108,14 @@ return [
     'vacations.view_team_roster' => ['admin', 'admin_tenant', 'aprobador'],
     'vacations.confirm_preapproved' => ['admin', 'admin_tenant', 'aprobador'],
     'vacations.view_team_calendar' => ['admin', 'admin_tenant'],
-    'vacations.view_history' => ['root', 'admin', 'client', 'admin_tenant'],
+    // [ítem 47] Sin 'root' a propósito: el cliente pidió retirarle Vacaciones
+    // a ese perfil ("es un tema más interno, responsable el ADMIN EMPLEADO").
+    // Era la única ability de vacaciones que root tenía, así que quitarla le
+    // oculta el grupo del menú Y le bloquea /vacation-history por la URL
+    // directa (ProtectedRoute lee esta misma matriz). No afecta al backend:
+    // ningún controller invoca esta ability — la pantalla llama a
+    // VacationRequestController::index, que resuelve el acceso en su Service.
+    'vacations.view_history' => ['admin', 'client', 'admin_tenant'],
 
     // ── AUDITORÍA Y REPORTES ── [MATRIZ]
     'audit.view' => ['root', 'admin', 'admin_tenant'],
