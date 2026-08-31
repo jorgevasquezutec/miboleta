@@ -71,7 +71,8 @@ class UserController extends Controller
         // recurso puntual del cual tomar el tenant, así que corresponde
         // ActiveTenantResolver (empresa activa del switcher / query
         // ?tenant_id para root), no un tenant de recurso.
-        $this->authorize('users.view_list', $this->activeTenantResolver->resolve($request, $user));
+        $authTenantId = $this->activeTenantResolver->resolve($request, $user);
+        $this->authorize('users.view_list', $authTenantId);
 
         // Query base
         $query = User::with(['roles', 'tenants', 'tenantRoles.role']);
@@ -212,7 +213,22 @@ class UserController extends Controller
         // El agrupamiento por-usuario es obligatorio: getBalancesForUsers
         // emite ceros silenciosos para usuarios que no pertenecen al tenant
         // pedido, así que mezclar grupos mostraría 0 en vez de la cifra real.
-        if ($activeTenantId) {
+        // [ítem 47] Quien no puede ver vacaciones tampoco recibe los saldos
+        // aquí: para root, que perdió vacations.view_history a petición del
+        // cliente, esta columna era la última puerta al tema. Se corta en el
+        // backend y no solo en la tabla, porque ocultar la columna dejaría los
+        // saldos de toda la planilla viajando igual en la respuesta.
+        // Se evalúa contra el MISMO tenant con el que se autorizó la pantalla:
+        // sin tenant, roleForTenant() devuelve null para cualquier no-root y
+        // le negaría la columna también al Admin Empleado. Para root da 'root'
+        // sea cual sea el tenant, así que queda denegado incluso en modo
+        // global, que es justo lo que se busca.
+        $canSeeVacationBalances = $user->can('vacations.view_history', $authTenantId);
+
+        if (!$canSeeVacationBalances) {
+            $vacationBalances = [];
+            $balanceFromPrimary = false;
+        } elseif ($activeTenantId) {
             $vacationBalances = $this->vacationBalanceService->getBalancesForUsers($users->getCollection(), $activeTenantId);
             $balanceFromPrimary = false;
         } else {

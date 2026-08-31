@@ -73,6 +73,10 @@ export function UsersListPage() {
   // filtro de Estado Y el botón Habilitar — sin ella, la papelera no existe
   // para este usuario.
   const canRestoreUser = useCan("users.restore");
+  // [ítem 47] La columna de saldos es la última puerta a vacaciones que le
+  // quedaba a root, que perdió esta ability a petición del cliente. El
+  // backend ya no manda las cifras; esto evita además la columna vacía.
+  const canSeeVacations = useCan("vacations.view_history");
   const canBulkUpload = useCan("users.bulk_upload");
   const canExportUsers = useCan("users.export");
   const canExportAppAccounts = useCan("reports.app_accounts_export");
@@ -469,6 +473,7 @@ export function UsersListPage() {
                             de un breakpoint que el cliente no ve equivale a no haberlas
                             hecho (ya pasó con otra columna en una fase anterior). La tabla
                             ya scrollea horizontalmente (overflow-x-auto) si no entra. */}
+                        {canSeeVacations && (
                         <TableHead className="whitespace-nowrap">
                           Vacaciones
                           {/* Modo "Todas las empresas" (root): se muestra el
@@ -486,6 +491,7 @@ export function UsersListPage() {
                             </span>
                           )}
                         </TableHead>
+                        )}
                         <TableHead className="whitespace-nowrap hidden lg:table-cell">Supervisor</TableHead>
                         <TableHead className="whitespace-nowrap">Estado</TableHead>
                         {/* sticky right-0: sin esto, con todas las columnas visibles
@@ -557,6 +563,7 @@ export function UsersListPage() {
                               )}
                             </div>
                           </TableCell>
+                          {canSeeVacations && (
                           <TableCell className="whitespace-nowrap">
                             {/* B3: Pendientes/Gozadas/Truncas/Saldo (vocabulario del
                                 cliente, mensaje del 31/07/2026) para la empresa activa
@@ -617,6 +624,7 @@ export function UsersListPage() {
                               </span>
                             )}
                           </TableCell>
+                          )}
                           <TableCell className="whitespace-nowrap hidden lg:table-cell">
                             {user.tenants && user.tenants.length > 0 ? (
                               <div className="flex flex-col gap-1">
