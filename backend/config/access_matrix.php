@@ -100,6 +100,12 @@ return [
     'vacations.view_own_requests' => ['admin', 'client', 'admin_tenant'],
     'vacations.cancel_own_pending' => ['admin', 'client', 'admin_tenant', 'aprobador'],
     'vacations.approve_reject_team' => ['admin', 'admin_tenant', 'aprobador'],
+    // [ítem 43] Directorio "Mi Equipo" (GET /vacation-requests/my-team-roster):
+    // expone saldos de vacaciones de terceros, así que va gateado igual que
+    // approve_reject_team (mismos roles que hoy ven la pestaña "Vacaciones
+    // del Equipo"), no [MATRIZ] — la Matriz de Accesos no cubre este listado
+    // nuevo, y no existía antes de este cambio.
+    'vacations.view_team_roster' => ['admin', 'admin_tenant', 'aprobador'],
     'vacations.confirm_preapproved' => ['admin', 'admin_tenant', 'aprobador'],
     'vacations.view_team_calendar' => ['admin', 'admin_tenant'],
     'vacations.view_history' => ['root', 'admin', 'client', 'admin_tenant'],

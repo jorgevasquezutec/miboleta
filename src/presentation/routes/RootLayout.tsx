@@ -26,6 +26,8 @@ import {
   FileKey,
   Settings,
   ShieldCheck,
+  FileUp,
+  FolderOpen,
 } from "lucide-react";
 import { APP_VERSION, NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
@@ -221,7 +223,11 @@ function SidebarVersion({ isExpanded }: { isExpanded: boolean }) {
 function Sidebar({ isExpanded, isMobile, onClose, onNavigate, topOffset }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [openSections, setOpenSections] = useState<string[]>(['Vacaciones']); // Default open
+  // Abiertos por defecto: antes de agrupar, sus ítems se veían planos (sin
+  // clic extra) para quien tuviera acceso — "Documentos" entra al lado de
+  // "Vacaciones" para no restarle visibilidad al caso más común (p. ej. un
+  // Admin Empleado que hoy ve "Mis Documentos"/"Cargar Documentos" sueltos).
+  const [openSections, setOpenSections] = useState<string[]>(['Vacaciones', 'Documentos']);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -249,12 +255,29 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate, topOffset }: Sideb
   const ALL_NAV_ITEMS: NavItem[] = [
     { label: "Dashboard", path: "/admin", icon: LayoutDashboard, abilities: ["dashboard.global_metrics", "dashboard.org_metrics"] },
     { label: NAV_LABELS.TENANTS, path: ROUTES.TENANTS, icon: Building2, abilities: ["tenants.view"] },
-    { label: "Mis Documentos", path: "/dashboard", icon: FileText, abilities: ["documents.view_own"] },
-    { label: "Cargar Documentos", path: "/upload", icon: FileText, abilities: ["documents.bulk_upload_zip"] },
+    {
+      // Agrupa lo que antes eran 4 ítems sueltos con mucha redundancia
+      // ("Mis Documentos" / "Cargar Documentos" / "Lotes de Carga" /
+      // "Documentos" mezclados entre Usuarios y Carga Masiva). Mismo patrón
+      // que "Vacaciones"/"Auditoría": el padre nunca navega a su propio
+      // `path` cuando tiene hijos visibles (ver CollapsibleSection), así que
+      // "Mis Documentos" se repite como hijo con el mismo path que el padre.
+      // Las abilities del padre son la unión EXACTA de las de sus 4 hijos:
+      // así nunca queda visible con 0 hijos (el filtro es
+      // item.children?.filter(isVisible)).
+      label: "Documentos",
+      path: "/dashboard",
+      icon: FileText,
+      abilities: ["documents.view_own", "documents.bulk_upload_zip", "documents.view_batches", "documents.view_org"],
+      children: [
+        { label: "Mis Documentos", path: "/dashboard", icon: FileText, abilities: ["documents.view_own"] },
+        { label: "Cargar Documentos", path: "/upload", icon: FileUp, abilities: ["documents.bulk_upload_zip"] },
+        { label: "Historial de Carga", path: "/batches", icon: FileStack, abilities: ["documents.view_batches"] },
+        { label: "Documentos de la Empresa", path: "/documents", icon: FolderOpen, abilities: ["documents.view_org"] },
+      ],
+    },
     { label: "Usuarios", path: "/users", icon: Users, abilities: ["users.view_list"] },
     { label: "Carga Masiva", path: "/users/batch", icon: Upload, abilities: ["users.bulk_upload"] },
-    { label: "Lotes de Carga", path: "/batches", icon: FileStack, abilities: ["documents.view_batches"] },
-    { label: "Documentos", path: "/documents", icon: FileText, abilities: ["documents.view_org"] },
     {
       label: "Vacaciones",
       path: "/vacations",
@@ -311,10 +334,18 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate, topOffset }: Sideb
   const isVisible = (item: NavItem) =>
     !item.abilities || item.abilities.some((a) => grantedAbilities.has(a));
 
-  const navItems: NavItem[] = ALL_NAV_ITEMS.filter(isVisible).map((item) => ({
-    ...item,
-    children: item.children?.filter(isVisible),
-  }));
+  // Un grupo al que el filtro de permisos le deja UN solo hijo se muestra
+  // plano, con la etiqueta de ese hijo. Agrupar existe para quitar redundancia
+  // —lo que pidió el cliente sobre "Documentos", que el Admin Empleado ve como
+  // 4 ítems casi iguales—, y un acordeón de una sola fila no quita ninguna:
+  // solo mete un nivel de más para llegar a lo único a lo que se tiene acceso.
+  // Pasa con "Documentos" en root (solo documents.view_org) y en el Empleado
+  // (solo documents.view_own), y también con "Auditoría" en quien tiene
+  // audit.view pero no platform.manage.
+  const navItems: NavItem[] = ALL_NAV_ITEMS.filter(isVisible).map((item) => {
+    const children = item.children?.filter(isVisible);
+    return children?.length === 1 ? children[0] : { ...item, children };
+  });
 
 
   // Mobile sidebar with overlay
@@ -529,12 +560,27 @@ export function RootLayout() {
     setIsSidebarExpanded(false);
   };
 
-  // Alto de la franja fija superior: Navbar (73px, el valor ya usado en todo
-  // el layout) + el ImpersonationBanner (40px) cuando la sesión está
-  // impersonada. Navbar, Sidebar y el padding del body se anclan a este
-  // único valor para que nunca quede un hueco (banner ausente) ni el banner
-  // tape el navbar (banner presente) — ver también IMPERSONATION_BANNER_HEIGHT.
-  const NAVBAR_HEIGHT = 73;
+  // Alto de la franja fija superior: Navbar + el ImpersonationBanner (40px)
+  // cuando la sesión está impersonada. Navbar, Sidebar y el padding del body
+  // se anclan a este único valor para que nunca quede un hueco (banner
+  // ausente) ni el banner tape el navbar (banner presente) — ver también
+  // IMPERSONATION_BANNER_HEIGHT.
+  //
+  // NAVBAR_HEIGHT no se mide del DOM (headerHeight hace falta antes del
+  // primer paint, para el padding-top del body y el top/height del sidebar
+  // de escritorio), así que queda hardcodeado a mano: el header es
+  // `py-2 sm:py-3` (Navbar.tsx) y en desktop (sm+, que es el caso a cubrir:
+  // en mobile el padding es menor y sobra alto, nunca falta) el elemento más
+  // alto ya no es el avatar (h-10 w-10 = 40px) sino el logo de la empresa en
+  // TenantSwitcher.tsx, variante estática (usuario con 0 o 1 empresa), que
+  // mide h-14 = 56px de alto (el ancho es libre: los logos reales de los
+  // clientes son horizontales —1024x559, 1564x600, 347x149— y se muestran
+  // con object-contain para no recortarlos). 56 + 12*2 (py-3) = 80.
+  //
+  // El aire vertical del Navbar se bajó de py-4 a py-3 justo para esto: el
+  // cliente quería el logo más grande, y sin recortar padding la barra se
+  // comía cada vez más pantalla en las pantallas de trabajo.
+  const NAVBAR_HEIGHT = 80;
   const bannerOffset = impersonator ? IMPERSONATION_BANNER_HEIGHT : 0;
   const headerHeight = NAVBAR_HEIGHT + bannerOffset;
 
