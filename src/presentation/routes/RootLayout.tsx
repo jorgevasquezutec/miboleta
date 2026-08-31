@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   FileUp,
   FolderOpen,
+  UserRound,
 } from "lucide-react";
 import { APP_VERSION, NAV_LABELS, ROUTES } from "@/shared/constants";
 import { cn } from "@/presentation/components/ui/utils";
@@ -307,6 +308,11 @@ function Sidebar({ isExpanded, isMobile, onClose, onNavigate, topOffset }: Sideb
     },
     { label: "Firma Digital", path: "/signature-settings", icon: FileKey, abilities: ["platform.manage"] },
     { label: "Configuración", path: "/platform-settings", icon: Settings, abilities: ["platform.manage"] },
+    // "Mis Datos" (ítem 46): la pantalla ya existía desde el ítem 37, pero
+    // solo se llegaba a ella por el menú del avatar, arriba a la derecha,
+    // donde el empleado no la encontraba. Sin `abilities`: cualquier sesión
+    // tiene perfil propio, y la ruta /profile ya declara requires={[]}.
+    { label: "Mis Datos", path: ROUTES.PROFILE, icon: UserRound },
   ];
 
   // El set de abilities del rol activo se calcula FUERA del selector.
