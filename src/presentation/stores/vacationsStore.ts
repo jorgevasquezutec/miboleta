@@ -4,6 +4,7 @@ import {
     VacationStatus,
     CreateVacationRequestDTO,
     VacationBalance,
+    TeamRosterMember,
     // RejectVacationRequestDTO,
 } from "@/core/domain/entities";
 import { vacationRepository, VacationFilters } from "@/infrastructure/persistence/repositories";
@@ -33,6 +34,12 @@ interface VacationsState {
     pendingConfirmationsCount: number;
     teamRequests: VacationRequest[];
     myTeam: VacationRequest[]; // alias for calendar view
+
+    // Team Roster (Mi Equipo, ítem 43): directorio del personal a cargo, no
+    // solicitudes. Estado propio (no isLoading) para que no parpadee cuando
+    // loadData() dispara los otros 3 fetches de la página en paralelo.
+    teamRoster: TeamRosterMember[];
+    teamRosterLoading: boolean;
 
     // Admin history view
     historyRequests: VacationRequest[];
@@ -68,6 +75,7 @@ interface VacationsState {
     fetchPendingConfirmations: (page?: number) => Promise<void>;
     fetchTeamRequests: (params?: VacationFilters) => Promise<void>;
     fetchMyTeam: (params?: VacationFilters) => Promise<void>; // alias for calendar
+    fetchMyTeamRoster: () => Promise<void>;
     fetchMyDecisions: (params?: VacationFilters) => Promise<void>;
     approveRequest: (id: number) => Promise<void>;
     rejectRequest: (id: number, reason: string) => Promise<void>;
@@ -107,6 +115,8 @@ const initialState = {
     pendingConfirmationsCount: 0,
     teamRequests: [],
     myTeam: [],
+    teamRoster: [],
+    teamRosterLoading: false,
     historyRequests: [],
     historyTotal: 0,
     historyTotalPages: 0,
@@ -247,6 +257,16 @@ export const useVacationsStore = create<VacationsState>((set, get) => ({
             });
         } catch (error: any) {
             set({ error: error.message || 'Error al cargar vacaciones para calendario', isLoading: false });
+        }
+    },
+
+    fetchMyTeamRoster: async () => {
+        set({ teamRosterLoading: true, error: null });
+        try {
+            const roster = await vacationRepository.getMyTeamRoster();
+            set({ teamRoster: roster, teamRosterLoading: false });
+        } catch (error: any) {
+            set({ error: error.message || 'Error al cargar el equipo', teamRosterLoading: false });
         }
     },
 

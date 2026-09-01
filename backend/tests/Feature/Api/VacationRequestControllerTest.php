@@ -6,7 +6,9 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\VacationRequest;
 use App\Services\VacationBalanceService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -332,6 +334,260 @@ class VacationRequestControllerTest extends TestCase
             ->getJson('/api/vacation-requests/my-team');
 
         $response->assertStatus(200);
+    }
+
+    // ==========================================
+    // My Team Roster (ítem 43 — directorio "Mi Equipo")
+    // ==========================================
+
+    public function test_my_team_roster_lists_subordinates_with_balance_and_status(): void
+    {
+        $rosterSupervisor = User::factory()
+            ->withTenantRole($this->tenant, 'aprobador', true)
+            ->create([
+                'name' => 'Rosa',
+                'last_name' => 'Supervisora',
+                'email' => 'rosa.supervisora@example.com',
+                'status' => 'active',
+            ]);
+
+        $onVacation = User::factory()->client()->create([
+            'name' => 'Ana',
+            'last_name' => 'DeVacaciones',
+            'email' => 'ana.devacaciones@example.com',
+            'status' => 'active',
+        ]);
+        $onVacation->tenants()->attach($this->tenant->id, [
+            'is_primary' => true,
+            'supervisor_id' => $rosterSupervisor->id,
+            'vacation_balance_initial' => 12,
+            'position' => 'Analista Contable',
+            'department' => 'Finanzas',
+        ]);
+        VacationRequest::factory()->create([
+            'user_id' => $onVacation->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'approved',
+            'start_date' => now()->subDay()->format('Y-m-d'),
+            'end_date' => now()->addDay()->format('Y-m-d'),
+        ]);
+
+        $withPending = User::factory()->client()->create([
+            'name' => 'Luis',
+            'last_name' => 'ConPendiente',
+            'email' => 'luis.conpendiente@example.com',
+            'status' => 'active',
+        ]);
+        $withPending->tenants()->attach($this->tenant->id, [
+            'is_primary' => true,
+            'supervisor_id' => $rosterSupervisor->id,
+            'vacation_balance_initial' => 20,
+            'position' => 'Contador Senior',
+            'department' => 'Finanzas',
+        ]);
+        // La más lejana se crea PRIMERO, para probar que el roster elige la
+        // pendiente más PRÓXIMA (menor start_date), no la primera creada.
+        VacationRequest::factory()->create([
+            'user_id' => $withPending->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(20)->format('Y-m-d'),
+            'end_date' => now()->addDays(22)->format('Y-m-d'),
+            'days_requested' => 3,
+        ]);
+        VacationRequest::factory()->create([
+            'user_id' => $withPending->id,
+            'tenant_id' => $this->tenant->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(5)->format('Y-m-d'),
+            'end_date' => now()->addDays(7)->format('Y-m-d'),
+            'days_requested' => 3,
+        ]);
+
+        $response = $this->actingAs($rosterSupervisor)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/my-team-roster');
+
+        $response->assertStatus(200)
+            ->assertJsonCount(2, 'data')
+            ->assertJsonStructure([
+                'data' => [
+                    '*' => [
+                        'id', 'full_name', 'email', 'position', 'department', 'avatar_url',
+                        'balance' => ['pending', 'taken', 'truncated', 'balance'],
+                        'is_on_vacation_now',
+                        'next_pending_request',
+                    ],
+                ],
+            ]);
+
+        $byId = collect($response->json('data'))->keyBy('id');
+
+        $this->assertTrue($byId[$onVacation->id]['is_on_vacation_now']);
+        $this->assertNull($byId[$onVacation->id]['next_pending_request']);
+        $this->assertSame('Analista Contable', $byId[$onVacation->id]['position']);
+        $this->assertSame('Finanzas', $byId[$onVacation->id]['department']);
+        $this->assertEqualsWithDelta(12, $byId[$onVacation->id]['balance']['pending'], 0.01);
+
+        $this->assertFalse($byId[$withPending->id]['is_on_vacation_now']);
+        $this->assertNotNull($byId[$withPending->id]['next_pending_request']);
+        $this->assertSame(
+            now()->addDays(5)->format('Y-m-d'),
+            $byId[$withPending->id]['next_pending_request']['start_date']
+        );
+    }
+
+    /**
+     * $this->supervisor (ver setUp) solo tiene el rol GLOBAL 'client'
+     * (respaldo de display), sin rol operativo DENTRO del tenant — así que
+     * roleForTenant() resuelve null y hasAbility() deniega. El endpoint SÍ
+     * debe llevar authorize(): a diferencia de myTeam()/UserController::
+     * subordinates, expone saldos de vacaciones de terceros.
+     */
+    public function test_my_team_roster_requires_view_team_roster_ability(): void
+    {
+        $response = $this->actingAs($this->supervisor)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/my-team-roster');
+
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Un supervisor con equipo en DOS empresas no debe ver ambos mezclados:
+     * el roster queda acotado a la empresa ACTIVA (X-Tenant-Ids), igual que
+     * balance()/index().
+     */
+    public function test_my_team_roster_is_scoped_to_active_tenant(): void
+    {
+        $rosterSupervisor = User::factory()
+            ->withTenantRole($this->tenant, 'admin', true)
+            ->create([
+                'name' => 'Marta',
+                'last_name' => 'Multiempresa',
+                'email' => 'marta.multiempresa@example.com',
+                'status' => 'active',
+            ]);
+
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+        $rosterSupervisor->tenants()->attach($otherTenant->id, ['is_primary' => false]);
+        \App\Models\UserTenantRole::firstOrCreate([
+            'user_id' => $rosterSupervisor->id,
+            'tenant_id' => $otherTenant->id,
+            'role_id' => \App\Models\Role::where('name', 'admin')->first()->id,
+        ]);
+
+        $subordinateHere = User::factory()->client()->create([
+            'name' => 'Pedro',
+            'last_name' => 'DeEstaEmpresa',
+            'email' => 'pedro.deestaempresa@example.com',
+            'status' => 'active',
+        ]);
+        $subordinateHere->tenants()->attach($this->tenant->id, [
+            'is_primary' => true,
+            'supervisor_id' => $rosterSupervisor->id,
+        ]);
+
+        $subordinateThere = User::factory()->client()->create([
+            'name' => 'Sofia',
+            'last_name' => 'DeLaOtraEmpresa',
+            'email' => 'sofia.delaotraempresa@example.com',
+            'status' => 'active',
+        ]);
+        $subordinateThere->tenants()->attach($otherTenant->id, [
+            'is_primary' => true,
+            'supervisor_id' => $rosterSupervisor->id,
+        ]);
+
+        $response = $this->actingAs($rosterSupervisor)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/my-team-roster');
+
+        $response->assertStatus(200)->assertJsonCount(1, 'data');
+        $this->assertSame($subordinateHere->id, $response->json('data.0.id'));
+    }
+
+    /**
+     * El roster resuelve saldo + "de vacaciones ahora" + "próxima pendiente"
+     * EN LOTE (whereIn), sin importar N: el número de queries HTTP con 1
+     * subordinado debe ser igual que con 8 (dos supervisores DISTINTOS, cada
+     * uno con caché de tenant en frío, para que la comparación no la
+     * distorsione la caché de TenantFilter — ver activeTenantIdsKey).
+     */
+    public function test_my_team_roster_resolves_in_a_single_batch(): void
+    {
+        $createSupervisorWithSubordinates = function (int $count) {
+            $supervisor = User::factory()
+                ->withTenantRole($this->tenant, 'admin', true)
+                ->create([
+                    'name' => "Sup{$count}",
+                    'last_name' => 'Lote',
+                    'email' => "sup.lote.{$count}@example.com",
+                    'status' => 'active',
+                ]);
+
+            foreach (range(1, $count) as $i) {
+                $subordinate = User::factory()->client()->create([
+                    'name' => "Empleado{$count}_{$i}",
+                    'last_name' => 'Lote',
+                    'email' => "empleado.lote.{$count}.{$i}@example.com",
+                    'status' => 'active',
+                ]);
+                $subordinate->tenants()->attach($this->tenant->id, [
+                    'is_primary' => true,
+                    'supervisor_id' => $supervisor->id,
+                    'vacation_balance_initial' => 5,
+                ]);
+
+                VacationRequest::factory()->create([
+                    'user_id' => $subordinate->id,
+                    'tenant_id' => $this->tenant->id,
+                    'status' => 'pending',
+                    'start_date' => now()->addDays($i)->format('Y-m-d'),
+                    'end_date' => now()->addDays($i + 1)->format('Y-m-d'),
+                ]);
+            }
+
+            return $supervisor;
+        };
+
+        $supervisor1 = $createSupervisorWithSubordinates(1);
+        $supervisor8 = $createSupervisorWithSubordinates(8);
+
+        DB::enableQueryLog();
+        $this->actingAs($supervisor1)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/my-team-roster')
+            ->assertJsonCount(1, 'data');
+        $queryCount1 = count(DB::getQueryLog());
+        DB::flushQueryLog();
+
+        $this->actingAs($supervisor8)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/my-team-roster')
+            ->assertJsonCount(8, 'data');
+        $queryCount8 = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame($queryCount1, $queryCount8);
+    }
+
+    public function test_my_team_roster_returns_empty_list_when_supervisor_has_no_subordinates(): void
+    {
+        $lonelySupervisor = User::factory()
+            ->withTenantRole($this->tenant, 'aprobador', true)
+            ->create([
+                'name' => 'Nadie',
+                'last_name' => 'ATuCargo',
+                'email' => 'nadie.acargo@example.com',
+                'status' => 'active',
+            ]);
+
+        $response = $this->actingAs($lonelySupervisor)
+            ->withHeader('X-Tenant-Ids', $this->tenant->id)
+            ->getJson('/api/vacation-requests/my-team-roster');
+
+        $response->assertStatus(200)->assertExactJson(['data' => []]);
     }
 
     public function test_unauthenticated_cannot_access_vacation_requests(): void

@@ -21,6 +21,7 @@ import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/present
 import { VacationRequestCard } from "@/presentation/components/features/vacations/VacationRequestCard";
 import { VacationRejectModal } from "@/presentation/components/features/vacations/VacationRejectModal";
 import { VacationCalendar } from "@/presentation/components/features/vacations/VacationCalendar";
+import { TeamRosterCard } from "@/presentation/components/features/vacations/TeamRosterCard";
 import { VacationRequest } from "@/core/domain/entities";
 import { toast } from "sonner";
 import { showApiError } from "@/presentation/utils/showApiError";
@@ -45,10 +46,13 @@ export function TeamVacationsPage() {
         myDecisions,
         myDecisionsTotal,
         myTeam,
+        teamRoster,
+        teamRosterLoading,
         fetchPendingApprovals,
         fetchPendingConfirmations,
         fetchMyDecisions,
         fetchMyTeam,
+        fetchMyTeamRoster,
         approveRequest,
         rejectRequest,
         markAsTaken,
@@ -57,10 +61,13 @@ export function TeamVacationsPage() {
         error,
     } = useVacationsStore();
 
-    // URL-synced tab
+    // URL-synced tab. Default "roster" (no "pending"): el cliente pidió que
+    // "Mi Equipo" reemplace la bandeja vacía como primera pantalla — antes el
+    // supervisor entraba y, sin solicitudes activas, veía "¡Todo al día!" sin
+    // ver a su gente (ítem 43).
     const { filters, setFilters } = useUrlFilters({
         defaultValues: {
-            tab: 'pending',
+            tab: 'roster',
         }
     });
 
@@ -93,6 +100,7 @@ export function TeamVacationsPage() {
         fetchPendingConfirmations();
         fetchMyDecisions();
         fetchMyTeam();
+        fetchMyTeamRoster();
     };
 
     // Approve handlers
@@ -223,7 +231,21 @@ export function TeamVacationsPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <Card
+                    className={`cursor-pointer transition-all ${filters.tab === "roster" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
+                    onClick={() => setFilters({ tab: "roster" })}
+                >
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-3 rounded-full bg-indigo-100">
+                            <Users className="w-6 h-6 text-indigo-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-600">Mi Equipo</p>
+                            <p className="text-2xl font-bold text-indigo-600">{teamRoster.length}</p>
+                        </div>
+                    </CardContent>
+                </Card>
                 <Card
                     className={`cursor-pointer transition-all ${filters.tab === "pending" ? "ring-2 ring-blue-500" : "hover:shadow-md"}`}
                     onClick={() => setFilters({ tab: "pending" })}
@@ -284,7 +306,11 @@ export function TeamVacationsPage() {
 
             {/* Tabs Content */}
             <Tabs value={filters.tab} onValueChange={(value) => setFilters({ tab: value })} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
+                    <TabsTrigger value="roster" className="flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        <span className="hidden sm:inline">Mi Equipo</span>
+                    </TabsTrigger>
                     <TabsTrigger value="pending" className="flex items-center gap-2">
                         <Clock className="w-4 h-4" />
                         <span className="hidden sm:inline">Pendientes</span>
@@ -308,6 +334,42 @@ export function TeamVacationsPage() {
                         <span className="hidden sm:inline">Calendario</span>
                     </TabsTrigger>
                 </TabsList>
+
+                {/* Tab: Mi Equipo (ítem 43) — directorio del personal a cargo, no
+                    solicitudes. Es la pestaña por defecto. */}
+                <TabsContent value="roster" className="mt-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Users className="w-5 h-5 text-indigo-600" />
+                                Mi Equipo
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {teamRosterLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                                </div>
+                            ) : teamRoster.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                        Aún no tienes personal a cargo
+                                    </h3>
+                                    <p className="text-gray-600">
+                                        Cuando te asignen empleados como supervisor, aparecerán aquí.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                    {teamRoster.map((member) => (
+                                        <TeamRosterCard key={member.id} member={member} />
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
 
                 {/* Tab: Pending Approvals */}
                 <TabsContent value="pending" className="mt-6">

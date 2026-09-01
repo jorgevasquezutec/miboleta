@@ -457,6 +457,31 @@ export function ProfilePage() {
                 />
               </div>
 
+              {/* [ítem 46] El cargo ya viajaba en /api/me dentro de cada
+                  empresa del usuario (user_tenants.position, lo asigna el
+                  admin al crear la cuenta o en la carga masiva), pero el
+                  empleado nunca lo veía. Como el saldo y la fecha de ingreso,
+                  es un dato POR EMPRESA: se lee el de la empresa activa. */}
+              <div className="space-y-2">
+                <Label htmlFor="profile-position">
+                  <div className="flex items-center gap-2 text-[#1E293B]">
+                    <Briefcase className="w-4 h-4" />
+                    Cargo{currentTenant ? ` (${currentTenant.name})` : ""} (Solo lectura)
+                  </div>
+                </Label>
+                <Input
+                  id="profile-position"
+                  value={
+                    !currentTenant
+                      ? "Sin empresa activa"
+                      : user.tenants?.find((t) => String(t.id) === String(currentTenant.id))?.position
+                        || "No registrado"
+                  }
+                  disabled
+                  className="bg-gray-50 border-[rgba(0,0,0,0.1)]"
+                />
+              </div>
+
               {user.document_type && (
                 <>
                   <div className="space-y-2">

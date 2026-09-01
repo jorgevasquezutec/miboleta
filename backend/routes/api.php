@@ -180,6 +180,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/vacation-requests/pending-approval', [VacationRequestController::class, 'pendingApprovals']);
     Route::get('/vacation-requests/pending-confirmation', [VacationRequestController::class, 'pendingConfirmations']);
     Route::get('/vacation-requests/my-team', [VacationRequestController::class, 'myTeam']);
+    // Directorio del personal a cargo (ítem 43, pestaña "Mi Equipo"), no
+    // solicitudes: id/cargo/área/saldo + estado de vacaciones de cada
+    // subordinado en la empresa activa. Ver ability 'vacations.view_team_roster'.
+    Route::get('/vacation-requests/my-team-roster', [VacationRequestController::class, 'myTeamRoster']);
     Route::get('/vacation-requests/my-decisions', [VacationRequestController::class, 'myDecisions']);
 
     // Vacation Requests - CRUD

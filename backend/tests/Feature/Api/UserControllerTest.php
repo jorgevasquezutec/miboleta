@@ -196,10 +196,14 @@ class UserControllerTest extends TestCase
 
     public function test_index_global_mode_returns_primary_tenant_balance(): void
     {
-        // Root sin header ni ?tenant_id: modo "todas las empresas". Se
-        // devuelve el saldo de la empresa PRIMARIA del usuario, etiquetado
+        // Sin header ni ?tenant_id: modo "todas las empresas". Se devuelve el
+        // saldo de la empresa PRIMARIA del usuario, etiquetado
         // (tenant_id/tenant_name/is_primary) para que la UI muestre de qué
         // empresa es la cifra — nunca una suma inventada entre empresas.
+        //
+        // El actor es admin_tenant y no root: desde el ítem 47 root no recibe
+        // saldos (ver test_index_omits_vacation_balance_for_root), pero la
+        // lógica de esta rama sigue viva para quien sí puede verlos.
         $now = Carbon::parse('2026-07-31')->startOfDay();
         Carbon::setTestNow($now);
 
@@ -208,7 +212,10 @@ class UserControllerTest extends TestCase
             'vacation_balance_initial' => 10,
         ]);
 
-        $response = $this->actingAs($this->root)->getJson('/api/users');
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+
+        $response = $this->actingAs($adminTenant)->getJson('/api/users');
 
         $response->assertStatus(200);
         $row = collect($response->json('data'))->firstWhere('id', $this->client->id);
@@ -245,7 +252,18 @@ class UserControllerTest extends TestCase
             'vacation_balance_initial' => 5,
         ]);
 
-        $response = $this->actingAs($this->root)->getJson('/api/users?per_page=50');
+        // admin_tenant en AMBAS empresas: ve a los dos clientes y, a
+        // diferencia de root, conserva la ability de ver saldos (ítem 47).
+        $adminTenant = User::factory()->withTenantRole($this->tenant, 'admin_tenant', true)
+            ->create(['status' => 'active']);
+        $adminTenant->tenants()->attach($otherTenant->id, ['is_primary' => false]);
+        \App\Models\UserTenantRole::create([
+            'user_id' => $adminTenant->id,
+            'tenant_id' => $otherTenant->id,
+            'role_id' => Role::where('name', 'admin_tenant')->first()->id,
+        ]);
+
+        $response = $this->actingAs($adminTenant)->getJson('/api/users?per_page=50');
 
         $response->assertStatus(200);
         $rows = collect($response->json('data'));
@@ -274,8 +292,15 @@ class UserControllerTest extends TestCase
         $this->assertNull($row['vacation_balance']);
     }
 
-    public function test_index_includes_vacation_balance_for_root_with_explicit_tenant_id(): void
+    public function test_index_omits_vacation_balance_for_root(): void
     {
+        // [ítem 47] El cliente pidió retirarle Vacaciones a root ("es un tema
+        // más interno, responsable el ADMIN EMPLEADO"). La columna de saldos
+        // del listado de usuarios era la última puerta que le quedaba, así que
+        // el backend no se los manda — ni con ?tenant_id explícito, que es el
+        // camino por el que root fuerza una empresa concreta. Ocultar solo la
+        // columna en la tabla habría dejado los saldos de toda la planilla
+        // viajando igual en la respuesta.
         $now = Carbon::parse('2026-07-31')->startOfDay();
         Carbon::setTestNow($now);
 
@@ -291,6 +316,14 @@ class UserControllerTest extends TestCase
         $row = collect($response->json('data'))->firstWhere('id', $this->client->id);
 
         $this->assertNotNull($row);
+        $this->assertNull($row['vacation_balance']);
+
+        // El mismo saldo SÍ le llega a quien conserva la ability, para que el
+        // test no pueda pasar por un fallo genérico del cálculo.
+        $response = $this->actingAs($this->admin)
+            ->getJson('/api/users?tenant_id=' . $this->tenant->id);
+
+        $row = collect($response->json('data'))->firstWhere('id', $this->client->id);
         $this->assertNotNull($row['vacation_balance']);
         $this->assertEquals(30.0, $row['vacation_balance']['pending']); // 0 + 1*30
 

@@ -265,7 +265,7 @@ export const NAV_LABELS = {
   USERS: 'Usuarios',
   TENANTS: 'Empresas',
   DOCUMENTS: 'Documentos',
-  BATCHES: 'Lotes de Carga',
+  BATCHES: 'Historial de Carga',
   SETTINGS: 'Configuración',
   REPORTS: 'Reportes',
 } as const;
