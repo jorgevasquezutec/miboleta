@@ -98,7 +98,8 @@ distintos en cada una.
 | Aprobar o rechazar vacaciones del equipo | — | Sí | Sí | Sí | — |
 | Confirmar si unas vacaciones se tomaron | — | Sí | Sí | Sí | — |
 | Ver el calendario del equipo | — | Sí | Sí | — | — |
-| Ver el histórico de vacaciones | Sí | Sí | Sí | — | Sí |
+| Ver el directorio de su personal a cargo | — | Sí | Sí | Sí | — |
+| Ver el histórico de vacaciones | — | Sí | Sí | — | Sí |
 
 ### Auditoría
 

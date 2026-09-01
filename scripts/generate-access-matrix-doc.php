@@ -75,6 +75,7 @@ const ETIQUETAS = [
     'vacations.approve_reject_team' => 'Aprobar o rechazar vacaciones del equipo',
     'vacations.confirm_preapproved' => 'Confirmar si unas vacaciones se tomaron',
     'vacations.view_team_calendar' => 'Ver el calendario del equipo',
+    'vacations.view_team_roster' => 'Ver el directorio de su personal a cargo',
     'vacations.view_history' => 'Ver el histórico de vacaciones',
     'audit.view' => 'Ver el registro de auditoría',
     'audit.export' => 'Exportar el registro de auditoría',
@@ -107,7 +108,8 @@ const SECCIONES = [
     'Vacaciones' => [
         'vacations.request_own', 'vacations.view_own_requests', 'vacations.cancel_own_pending',
         'vacations.approve_reject_team', 'vacations.confirm_preapproved',
-        'vacations.view_team_calendar', 'vacations.view_history',
+        'vacations.view_team_calendar', 'vacations.view_team_roster',
+        'vacations.view_history',
     ],
     'Auditoría' => ['audit.view', 'audit.export'],
     'Paneles' => ['dashboard.global_metrics', 'dashboard.org_metrics', 'dashboard.own_summary'],
