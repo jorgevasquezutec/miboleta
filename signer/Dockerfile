@@ -57,6 +57,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 # tanto app.py (API HTTP productiva) como spike_sign.py (CLI de diagnóstico).
 COPY pipeline.py app.py spike_sign.py ./
 
+# CA adicionales en las que confía la verificación (ver signer/trust/README.md).
+COPY trust/ ./trust/
+
 # El working_dir en tiempo de ejecución se fija a /var/www/html desde
 # docker-compose.yml (donde vive el bind mount de storage/app), para que las
 # rutas relativas al PDF de la boleta sean cómodas al usar spike_sign.py a

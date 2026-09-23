@@ -23,6 +23,7 @@ JSON en la API).
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
 import shutil
 import subprocess
@@ -54,6 +55,14 @@ DEFAULT_FIELD_NAME = "MiBoletaFirma"
 DEFAULT_MD_ALGORITHM = "sha256"
 DEFAULT_REASON = "Firma digital de documento laboral - MiBoleta (DS-009-2011-TR)"
 DEFAULT_LOCATION = "MiBoleta - plataforma"
+
+# Certificados de CA (PEM/CRT) en los que la verificación confía ADEMÁS del
+# almacén del sistema: las CA raíz autofirmadas entran como trust roots y las
+# intermedias solo como material para construir la cadena. Así el campo
+# "trusted" sale True para firmas de una CA acreditada por INDECOPI que no
+# está en el almacén del sistema (p.ej. Llama.pe), sin perder las CA públicas
+# que sí lo están (p.ej. la de la TSA). Ver signer/trust/README.md.
+TRUST_DIR = Path(os.environ.get("SIGNER_TRUST_DIR", Path(__file__).parent / "trust"))
 
 
 # --------------------------------------------------------------------------
@@ -554,13 +563,43 @@ def sign_pdf(
 # --------------------------------------------------------------------------
 # Etapa 4: verificar la firma
 # --------------------------------------------------------------------------
+def load_trust_material(trust_dir: Path = TRUST_DIR) -> tuple[list, list]:
+    """Lee los certificados de `trust_dir` y los separa en (raíces, intermedias).
+
+    Una raíz es un certificado autofirmado (subject == issuer); el resto se
+    usa solo para construir la cadena. Un directorio inexistente o vacío
+    devuelve dos listas vacías: la verificación queda como antes, contra el
+    almacén del sistema.
+    """
+    from asn1crypto import pem, x509
+
+    roots: list = []
+    intermediates: list = []
+    if not trust_dir.is_dir():
+        return roots, intermediates
+
+    for path in sorted(trust_dir.iterdir()):
+        if path.suffix.lower() not in (".pem", ".crt", ".cer"):
+            continue
+        data = path.read_bytes()
+        blobs = (
+            [der for _, _, der in pem.unarmor(data, multiple=True)]
+            if pem.detect(data)
+            else [data]
+        )
+        for der in blobs:
+            cert = x509.Certificate.load(der)
+            # self_issued es bool; self_signed devuelve "no"/"maybe"/"yes".
+            (roots if cert.self_issued else intermediates).append(cert)
+    return roots, intermediates
+
+
 def verify_signed_pdf(signed_path: Path) -> VerifyResult:
     """Relee `signed_path` y valida la(s) firma(s) embebidas con pyHanko.
 
-    A propósito NO agrega ningún certificado como trust root: reporta
-    `trusted` tal cual lo determine pyHanko contra el ValidationContext por
-    defecto (sin fetching de red). Lanza VerificationError si el PDF no
-    tiene firmas embebidas o si la validación en sí falla de forma
+    Confía en el almacén del sistema más las CA de TRUST_DIR (ver
+    load_trust_material), sin fetching de red. Lanza VerificationError si el
+    PDF no tiene firmas embebidas o si la validación en sí falla de forma
     inesperada (no confundir con `valid=False`, que es un resultado válido,
     no una excepción).
     """
@@ -578,7 +617,12 @@ def verify_signed_pdf(signed_path: Path) -> VerifyResult:
                     "El PDF firmado no contiene ninguna firma embebida detectable."
                 )
             sig = sigs[-1]
-            vc = ValidationContext(allow_fetching=False)
+            roots, intermediates = load_trust_material()
+            vc = ValidationContext(
+                extra_trust_roots=roots,
+                other_certs=intermediates,
+                allow_fetching=False,
+            )
             status = validate_pdf_signature(sig, signer_validation_context=vc)
     except VerificationError:
         raise
