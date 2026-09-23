@@ -249,6 +249,10 @@ Implementado:
   existe; un fallo en cualquier paso previo deja el original intacto.
 - Metadata persistida en `Document::signature` (método, sujeto del firmante,
   hora de firma, si se aplicó TSA, digest, sha256, etc.) y `Document::signed_at`.
+- `ValidationContext` con la cadena de confianza del certificado real
+  (Llama.pe): la verificación confía en el almacén del sistema más las CA de
+  `signer/trust/` (ver `signer/trust/README.md`), así que `trusted` sale
+  `true` para firmas de esa CA.
 
 Pendiente (fuera de alcance de esta iteración, ver S3-D):
 
@@ -257,10 +261,6 @@ Pendiente (fuera de alcance de esta iteración, ver S3-D):
 - Validación de conformidad PDF/A-2b estricta con una herramienta externa
   tipo veraPDF (Ghostscript ya embebe el `OutputIntent`, pero no se corrió
   un validador dedicado sobre boletas reales firmadas en producción).
-- `ValidationContext` con la cadena de confianza real del certificado del
-  cliente (CA intermedia/raíz), para que `trusted` pueda dar `true` con un
-  certificado real (hoy pyHanko valida `intact`/`valid` correctamente pero
-  no se le pasó ninguna cadena de confianza adicional).
 - PAdES-LTA / re-sellado de tiempo a largo plazo (hoy el TSA, si se
   configura, se aplica de forma síncrona dentro del mismo request de firma).
 - Pruebas de carga con volúmenes reales (miles de boletas por carga masiva).
