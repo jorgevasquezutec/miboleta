@@ -271,6 +271,48 @@ docker exec -i $(docker ps -qf "name=miboleta_db") \
   mysql -u root -p$DB_ROOT_PASSWORD miboleta_prod < backup.sql
 ```
 
+### Limpiar datos de negocio (dejar solo el/los root)
+
+`php artisan miboleta:limpiar-datos` borra empresas, usuarios no-root,
+documentos, vacaciones, notificaciones, auditoría, colas/caché y los archivos
+asociados (documentos, avatares, logos), dejando solo la(s) cuenta(s) root
+indicada(s). Pensado para dejar limpio un ambiente de entrega/demo antes de
+pasarlo a producción real. **Es irreversible: hacer backup (BD + storage)
+antes de ejecutarlo, siempre.**
+
+Lo normal es usar el Makefile, que hace el backup, detiene Horizon, corre el
+comando y vuelve a levantar Horizon en un solo paso:
+
+```bash
+make limpiar                  # local (docker-compose.yml), backup en ~/miboleta-backups
+make limpiar-prod             # producción por SSH (VPN puesta), backup en /opt/miboleta/backups
+make limpiar-prod CONFIRMAR="BORRAR <base>@<host>"   # sin pregunta interactiva
+```
+
+A mano, paso a paso:
+
+```bash
+# 1. Backup primero (ver "Backups de base de datos" arriba)
+
+# 2. Dry-run (por defecto no borra nada, solo muestra qué se borraría)
+docker exec $APP_CONTAINER php artisan miboleta:limpiar-datos
+
+# 3. Ejecutar de verdad, dejando solo el usuario con id 1
+docker exec -it $APP_CONTAINER php artisan miboleta:limpiar-datos \
+  --ejecutar --mantener-id=1
+```
+
+Pide escribir a mano `BORRAR <base_de_datos>@<host_de_APP_URL>` para
+confirmar (o `--confirmar="..."` en modo no interactivo); en producción exige
+además `--force`. Nunca toca `roles`, `document_types`, `platform_settings`,
+`audit_settings`, `signature_settings` ni el certificado de firma
+(disco `certificates`).
+
+Opciones relevantes: `--mantener-root=email` (repetible, alternativa a
+`--mantener-id`; no se pueden combinar), `--mantener-auditoria` (conserva
+`audit_logs`), `--borrar-logs` (además vacía `storage/logs`),
+`--sin-reiniciar-ids` (no reinicia el `AUTO_INCREMENT`, solo aplica en mysql).
+
 ---
 
 ## 🐛 Troubleshooting

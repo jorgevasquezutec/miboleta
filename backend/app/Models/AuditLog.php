@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Audit Log Model
- * 
+ *
  * Stores all important actions performed in the system for auditing purposes.
  */
 class AuditLog extends Model
@@ -52,36 +52,55 @@ class AuditLog extends Model
 
     // Authentication
     public const ACTION_USER_LOGIN = 'user.login';
+
     public const ACTION_USER_LOGOUT = 'user.logout';
+
     public const ACTION_USER_LOGIN_FAILED = 'user.login_failed';
+
     public const ACTION_PASSWORD_CHANGED = 'user.password_changed';
+
     public const ACTION_PASSWORD_RESET = 'user.password_reset';
 
     // User Management
     public const ACTION_USER_CREATED = 'user.created';
+
     public const ACTION_USER_UPDATED = 'user.updated';
+
     public const ACTION_USER_DELETED = 'user.deleted';
+
     public const ACTION_USER_RESTORED = 'user.restored';
 
     // Document Actions
     public const ACTION_DOCUMENT_UPLOADED = 'document.uploaded';
+
     public const ACTION_DOCUMENT_VIEWED = 'document.viewed';
+
     public const ACTION_DOCUMENT_DOWNLOADED = 'document.downloaded';
+
     public const ACTION_DOCUMENT_SIGNED = 'document.signed';
+
     public const ACTION_DOCUMENT_DELETED = 'document.deleted';
+
     public const ACTION_BATCH_CREATED = 'batch.created';
+
     public const ACTION_BATCH_COMPLETED = 'batch.completed';
 
     // Vacation Actions
     public const ACTION_VACATION_REQUESTED = 'vacation.requested';
+
     public const ACTION_VACATION_APPROVED = 'vacation.approved';
+
     public const ACTION_VACATION_REJECTED = 'vacation.rejected';
+
     public const ACTION_VACATION_CONFIRMED = 'vacation.confirmed';
+
     public const ACTION_VACATION_CANCELLED = 'vacation.cancelled';
 
     // Tenant Actions
     public const ACTION_TENANT_CREATED = 'tenant.created';
+
     public const ACTION_TENANT_UPDATED = 'tenant.updated';
+
     public const ACTION_TENANT_DELETED = 'tenant.deleted';
 
     // Role Actions (roles por empresa: user_tenant_roles)
@@ -92,18 +111,25 @@ class AuditLog extends Model
 
     // Signature Actions (firma digital)
     public const ACTION_SIGNATURE_SETTINGS_UPDATED = 'signature.settings_updated';
+
     public const ACTION_SIGNATURE_CERT_UPLOADED = 'signature.certificate_uploaded';
+
     public const ACTION_SIGNATURE_CERT_DELETED = 'signature.certificate_deleted';
+
     public const ACTION_SIGNATURE_TERMS_ACCEPTED = 'signature.terms_accepted';
 
     // User Batch (carga masiva de usuarios)
     public const ACTION_USER_BATCH_CREATED = 'user_batch.created';
+
     public const ACTION_USER_BATCH_COMPLETED = 'user_batch.completed';
 
     // Profile Actions
     public const ACTION_PROFILE_UPDATED = 'profile.updated';
+
     public const ACTION_PROFILE_DATA_CHANGE_REQUESTED = 'profile.data_change_requested';
+
     public const ACTION_EMAIL_CHANGED = 'user.email_changed';
+
     public const ACTION_PASSWORD_RESET_REQUESTED = 'user.password_reset_requested';
 
     // Audit maintenance (meta-evento: cambios al mantenedor de auditoría).
@@ -118,7 +144,15 @@ class AuditLog extends Model
     // acciones QUE SÍ hace el empleado (con root detrás) mientras la sesión
     // impersonada está activa.
     public const ACTION_IMPERSONATION_STARTED = 'impersonation.started';
+
     public const ACTION_IMPERSONATION_STOPPED = 'impersonation.stopped';
+
+    // Mantenimiento de plataforma (miboleta:limpiar-datos, ver App\Console\
+    // Commands\LimpiarDatos): borrado masivo de datos de negocio dejando solo
+    // los root indicados. Siempre auditado (ver ALWAYS_ON) y escrito DESPUÉS
+    // del commit, cuando la tabla audit_logs ya volvió a existir (o se
+    // conservó, con --mantener-auditoria).
+    public const ACTION_PLATFORM_DATA_WIPED = 'platform.data_wiped';
 
     /**
      * Acciones que NUNCA pueden desactivarse desde el mantenedor de auditoría
@@ -154,6 +188,7 @@ class AuditLog extends Model
         self::ACTION_AUDIT_SETTINGS_UPDATED,
         self::ACTION_IMPERSONATION_STARTED,
         self::ACTION_IMPERSONATION_STOPPED,
+        self::ACTION_PLATFORM_DATA_WIPED,
     ];
 
     /**
@@ -263,13 +298,13 @@ class AuditLog extends Model
      */
     public function getEntity(): ?Model
     {
-        if (!$this->entity_type || !$this->entity_id) {
+        if (! $this->entity_type || ! $this->entity_id) {
             return null;
         }
 
-        $entityClass = 'App\\Models\\' . $this->entity_type;
+        $entityClass = 'App\\Models\\'.$this->entity_type;
 
-        if (!class_exists($entityClass)) {
+        if (! class_exists($entityClass)) {
             return null;
         }
 
@@ -321,6 +356,7 @@ class AuditLog extends Model
             self::ACTION_AUDIT_SETTINGS_UPDATED => 'Actualizó la configuración de auditoría',
             self::ACTION_IMPERSONATION_STARTED => 'Inició sesión como otro usuario',
             self::ACTION_IMPERSONATION_STOPPED => 'Salió de la sesión de otro usuario',
+            self::ACTION_PLATFORM_DATA_WIPED => 'Borró los datos de negocio de la plataforma',
         ];
 
         return $descriptions[$this->action] ?? $this->action;
@@ -332,6 +368,7 @@ class AuditLog extends Model
     public function getCategoryAttribute(): string
     {
         $parts = explode('.', $this->action);
+
         return $parts[0] ?? 'other';
     }
 }

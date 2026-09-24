@@ -58,7 +58,7 @@ STORAGE_VOL  ?= miboleta_swarm_storage_data
 MYSQL = docker compose -f $(COMPOSE) exec -T -e MYSQL_PWD=$(LOCAL_DB_PWD) db mysql -uroot
 
 .DEFAULT_GOAL := help
-.PHONY: help publish signer-build stack deploy nginx db-pull storage-pull prod-pull db-sanitize db-archives db-restore db-passwords docs paquete disco entregables entregables-limpiar
+.PHONY: help publish signer-build stack deploy nginx limpiar limpiar-prod db-pull storage-pull prod-pull db-sanitize db-archives db-restore db-passwords docs paquete disco entregables entregables-limpiar
 
 # Todo lo que se genera para el cliente vive aquí y solo aquí. Nada de
 # entregables sueltos por el repositorio: `dist/` está en .gitignore, así que
@@ -123,6 +123,92 @@ deploy: ## Server: pull imágenes + stack deploy + migrate + caches + estado
 	  docker exec $$APP php artisan view:cache; \
 	  echo "== estado final =="; \
 	  docker stack services $(STACK)'
+
+# ---------------------------------------------------------------------------
+# Limpiar datos de negocio (dejar solo el usuario KEEP_ID, root)
+# ---------------------------------------------------------------------------
+# Un solo comando por entorno. Los dos hacen lo mismo, en este orden:
+#   1. backup de BD + storage (y en prod también los .env: APP_KEY descifra
+#      la contraseña del certificado de firma);
+#   2. detener Horizon, para que ningún job toque IDs que se van a borrar;
+#   3. `miboleta:limpiar-datos --ejecutar`: muestra los conteos y pide la
+#      frase de confirmación. Si no la escribes, no borra nada;
+#   4. levantar Horizon otra vez, se haya borrado o no.
+#
+#   make limpiar                 local (docker-compose.yml)
+#   make limpiar-prod            producción (Swarm, por SSH; la VPN la pones tú)
+#   make limpiar KEEP_ID=5       conservar otro usuario root
+#   make limpiar CONFIRMAR="BORRAR miboleta@localhost"
+#                                sin pregunta interactiva (p.ej. desde una
+#                                terminal sin TTY, donde la pregunta aborta)
+#
+# El comando se niega a correr si KEEP_ID no es un root activo. En prod el
+# código del comando tiene que estar desplegado (merge a main) antes.
+# ---------------------------------------------------------------------------
+KEEP_ID           ?= 1
+CONFIRMAR         ?=
+# --confirmar solo si se pasó CONFIRMAR; si no, el comando pregunta.
+CONFIRMAR_OPT      = $(if $(CONFIRMAR),--confirmar="$(CONFIRMAR)")
+BACKUP_DIR        ?= $(HOME)/miboleta-backups
+REMOTE_BACKUP_DIR ?= $(REMOTE_DIR)/backups
+
+limpiar: ## LOCAL: backup + borra datos de negocio, deja solo el usuario KEEP_ID (default 1)
+	@set -e; \
+	  docker compose -f $(COMPOSE) exec -T app php artisan list --raw | grep -q '^miboleta:limpiar-datos' \
+	    || { echo "❌ el app local no tiene miboleta:limpiar-datos (¿rama correcta?)"; exit 1; }; \
+	  TS=$$(date +%Y%m%d_%H%M%S); mkdir -p $(BACKUP_DIR); \
+	  DUMP=$(BACKUP_DIR)/local_$$TS.sql.gz; FILES=$(BACKUP_DIR)/local_storage_$$TS.tgz; \
+	  echo "==> backup BD -> $$DUMP"; \
+	  docker compose -f $(COMPOSE) exec -T -e MYSQL_PWD=$(LOCAL_DB_PWD) db \
+	    mysqldump -uroot --single-transaction --routines $(LOCAL_DB) | gzip > $$DUMP; \
+	  gunzip -c $$DUMP | tail -1 | grep -q 'Dump completed' || { echo "❌ dump incompleto, no se borra nada"; exit 1; }; \
+	  echo "==> backup storage -> $$FILES"; \
+	  docker compose -f $(COMPOSE) exec -T app tar czf - -C /var/www/html/storage app > $$FILES; \
+	  echo "==> detener horizon"; \
+	  docker compose -f $(COMPOSE) stop horizon; \
+	  set +e; \
+	  docker compose -f $(COMPOSE) exec app php artisan miboleta:limpiar-datos --mantener-id=$(KEEP_ID) --ejecutar $(CONFIRMAR_OPT); \
+	  RC=$$?; \
+	  echo "==> levantar horizon"; \
+	  docker compose -f $(COMPOSE) start horizon; \
+	  echo ""; \
+	  echo "Backup: $$DUMP"; \
+	  echo "        $$FILES"; \
+	  echo "Revertir: gunzip -c $$DUMP | $(MYSQL) $(LOCAL_DB)"; \
+	  echo "          docker compose -f $(COMPOSE) exec -T app sh -c 'rm -rf storage/app/* && tar xzf - -C storage' < $$FILES"; \
+	  exit $$RC
+
+limpiar-prod: ## PROD: backup en el server + borra datos de negocio, deja solo el usuario KEEP_ID (default 1)
+	@echo "⚠  Vas a BORRAR los datos de negocio de PRODUCCIÓN ($(SSH_HOST):$(REMOTE_DIR))."
+	@echo "   Queda solo el usuario id=$(KEEP_ID). Antes se hace backup en $(REMOTE_BACKUP_DIR)/."
+	@if [ "$(FORCE)" != "1" ]; then \
+	  printf "   Escribe 'si' para continuar: "; read ans; \
+	  [ "$$ans" = "si" ] || { echo "Cancelado."; exit 1; }; \
+	fi
+	@ssh -t $(SSH_HOST) 'set -e; cd $(REMOTE_DIR); \
+	  DB=$$(docker ps -qf name=$(STACK)_db | head -1); \
+	  APP=$$(docker ps -qf name=$(STACK)_app | head -1); \
+	  if [ -z "$$DB" ] || [ -z "$$APP" ]; then echo "❌ contenedor db/app no encontrado"; exit 1; fi; \
+	  docker exec $$APP php artisan list --raw | grep -q "^miboleta:limpiar-datos" \
+	    || { echo "❌ la imagen desplegada no tiene miboleta:limpiar-datos: haz merge a main primero"; exit 1; }; \
+	  B=$(REMOTE_BACKUP_DIR)/pre_limpieza_$$(date +%Y%m%d_%H%M%S); mkdir -p $$B; \
+	  echo "==> backup BD -> $$B/db.sql.gz"; \
+	  docker exec $$DB bash -c "MYSQL_PWD=\"\$$MYSQL_ROOT_PASSWORD\" mysqldump -u root \
+	    --single-transaction --quick --routines --no-tablespaces \"\$$MYSQL_DATABASE\"" | gzip > $$B/db.sql.gz; \
+	  gunzip -c $$B/db.sql.gz | tail -1 | grep -q "Dump completed" || { echo "❌ dump incompleto, no se borra nada"; exit 1; }; \
+	  echo "==> backup storage -> $$B/storage.tgz"; \
+	  docker run --rm -v $(STORAGE_VOL):/data:ro -v $$B:/out alpine tar czf /out/storage.tgz -C /data app; \
+	  cp config/.env $$B/app.env; cp .env.stack $$B/env.stack; chmod 600 $$B/app.env $$B/env.stack; \
+	  ls -la $$B; \
+	  echo "==> horizon a 0"; \
+	  docker service scale $(STACK)_horizon=0 --detach=false; \
+	  set +e; \
+	  docker exec -it $$APP php artisan miboleta:limpiar-datos --mantener-id=$(KEEP_ID) --ejecutar --force $(CONFIRMAR_OPT); \
+	  RC=$$?; \
+	  echo "==> horizon a 1"; \
+	  docker service scale $(STACK)_horizon=1 --detach=false; \
+	  echo ""; echo "Backup en $(SSH_HOST):$$B (bájalo con scp si lo quieres fuera del server)"; \
+	  exit $$RC'
 
 # ---------------------------------------------------------------------------
 # Copia de producción -> local
