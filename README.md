@@ -209,7 +209,7 @@ Servicios del stack: `app`, `nginx`, `db`, `redis`, `horizon`, `reverb`, `admine
 ```
 VPN_HOST, VPN_PORT, VPN_USER, VPN_PASS, VPN_CERT   # conexión VPN del runner
 SSH_HOST, SSH_PORT, SSH_USER, SSH_PASS             # SSH al servidor
-VITE_REVERB_APP_KEY, VITE_REVERB_HOST              # se hornean en el frontend en build time
+VITE_REVERB_APP_KEY                                # se hornea en el frontend en build time
 ```
 
 ### Deploy MANUAL desde tu Mac (`Makefile`) — plan B del CI

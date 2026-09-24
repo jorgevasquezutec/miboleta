@@ -111,6 +111,15 @@ if [ "${APP_URL:-}" = "http://localhost" ]; then
   ama "     Los enlaces de los correos apuntarán ahí y no funcionarán fuera del servidor."
 fi
 
+# Los correos arman el enlace de login con FRONTEND_URL (o APP_URL si falta).
+# Con una IP privada el enlace solo abre dentro de la red del cliente.
+URL_CORREOS="${FRONTEND_URL:-${APP_URL:-}}"
+HOST_CORREOS="$(printf '%s' "$URL_CORREOS" | sed -E 's#^[a-zA-Z]+://##; s#[:/].*$##')"
+if printf '%s' "$HOST_CORREOS" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
+  ama "     Aviso: los correos enlazarán a una IP ($URL_CORREOS)."
+  ama "     Si el sistema tiene dominio, ponlo en APP_URL (y FRONTEND_URL si la usas)."
+fi
+
 verde "     Configuración completa."
 
 # --- 3. Clave de cifrado ---------------------------------------------------

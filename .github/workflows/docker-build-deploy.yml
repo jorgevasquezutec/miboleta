@@ -64,10 +64,10 @@ jobs:
           # Auto-generated from GitHub Secrets
           VITE_API_URL=/api
           VITE_REVERB_APP_KEY="${{ secrets.VITE_REVERB_APP_KEY }}"
-          VITE_REVERB_HOST="${{ secrets.VITE_REVERB_HOST }}"
-          VITE_REVERB_PORT="80"
-          VITE_REVERB_SCHEME="http"
           EOF
+          # Sin VITE_REVERB_HOST/PORT/SCHEME: echo.ts usa el origen de la
+          # página (nginx proxya /app a Reverb). Horneados, forzaban ws:// y el
+          # navegador lo bloquea en una página https (contenido mixto).
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -284,8 +284,11 @@ jobs:
           # un `docker exec ... nginx -t` sobre el contenedor vivo estaria
           # validando el archivo VIEJO y daria OK aunque el nuevo este roto.
           echo "=== Applying nginx config ==="
+          # ssl/ también: el conf referencia el certificado y sin él `nginx -t`
+          # falla aunque la sintaxis esté bien.
           if ! docker run --rm \
               -v /opt/miboleta/config/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
+              -v /opt/miboleta/ssl:/etc/nginx/ssl:ro \
               nginx:1.27-alpine nginx -t; then
             echo "❌ nginx.conf invalido: no se recarga, el sitio sigue con el conf anterior"
             exit 1
