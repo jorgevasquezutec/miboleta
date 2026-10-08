@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Events\BatchProgress;
 use App\Models\Document;
 use App\Models\DocumentBatch;
-use App\Models\SignatureSettings;
+use App\Services\DocumentSigningService;
 use App\Models\User;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -118,13 +118,41 @@ class ProcessDocumentChunk implements ShouldQueue
         $requiresSignature = $this->batch->requires_signature ||
                              ($this->batch->documentType->requires_signature ?? false);
 
-        $document = DB::transaction(function () use ($content, $storagePath, $file, $documentNumber, $user, $isOrphan, $existingDocument, $isReplacement, $requiresSignature) {
+        $signingService = app(DocumentSigningService::class);
+
+        $persist = function () use ($content, $storagePath, $file, $documentNumber, $user, $isOrphan, $existingDocument, $isReplacement, $requiresSignature) {
+            $disk = Storage::disk('documents');
+
+            if ($isReplacement) {
+                // La fila se leyó ANTES de tomar el lock: un cierre de
+                // SignDocument o una conformidad pudieron escribirla en
+                // medio. Se vuelve a leer ahora (bajo el lock) para que el
+                // diff de Eloquent compare contra el estado real y los null
+                // / false de abajo siempre se escriban.
+                $existingDocument->refresh();
+
+                // El signer corre como root y deja el archivo firmado 0644
+                // root: un file_put_contents encima fallaría con EACCES para
+                // www-data. Se borra primero (el directorio es de www-data).
+                if ($existingDocument->file_path === $storagePath && $disk->exists($storagePath)) {
+                    $disk->delete($storagePath);
+                }
+            }
+
             // Guardar archivo
-            Storage::disk('documents')->put($storagePath, $content);
+            $disk->put($storagePath, $content);
 
             $status = $isOrphan ? 'orphan' : ($requiresSignature ? 'pending' : 'active');
 
             if ($isReplacement) {
+                // La base de re-firma del archivo anterior ya no sirve: se
+                // borra junto con TODA la firma digital (el job SignDocument
+                // en vuelo descarta su resultado al ver otra `version`).
+                $oldOriginal = $existingDocument->original_file_path;
+                if ($oldOriginal && Storage::disk('documents')->exists($oldOriginal)) {
+                    Storage::disk('documents')->delete($oldOriginal);
+                }
+
                 // Actualizar documento existente
                 $existingDocument->update([
                     'batch_id' => $this->batch->id,
@@ -136,6 +164,12 @@ class ProcessDocumentChunk implements ShouldQueue
                     'requires_signature' => $requiresSignature,
                     'signature' => null,
                     'signed_at' => null,
+                    'digital_signature' => null,
+                    'digitally_signed_at' => null,
+                    'digital_signature_status' => null,
+                    'digital_signature_error' => null,
+                    'original_file_path' => null,
+                    'original_has_conformity' => false,
                     'notified' => false,
                     'notified_at' => null,
                     'version' => $existingDocument->version + 1,
@@ -160,7 +194,13 @@ class ProcessDocumentChunk implements ShouldQueue
                 'requires_signature' => $requiresSignature,
                 'expires_at' => now()->addDays(30), // Expira en 30 días
             ]);
-        });
+        };
+
+        // Un reemplazo escribe file_path / original_* / digital_*: va bajo el
+        // lock por documento (ver DocumentSigningService).
+        $document = $isReplacement
+            ? $signingService->withDocumentLock($existingDocument->id, fn () => DB::transaction($persist))
+            : DB::transaction($persist);
 
         // Actualizar contadores del batch
         $this->batch->incrementProcessed(
@@ -170,13 +210,14 @@ class ProcessDocumentChunk implements ShouldQueue
         );
 
         // Firma digital automática: si el documento quedó 'pending' (no
-        // huérfano y requiere firma) y la firma criptográfica de plataforma
-        // está activada, encolar SignDocument. Si está desactivada, el
-        // documento simplemente queda 'pending' como hasta ahora (firmable
-        // luego on-demand vía POST /documents/{id}/sign-digital una vez que
-        // se active, o vía el flujo de 2FA de email existente).
-        if ($document->status === 'pending' && SignatureSettings::current()->signature_enabled) {
-            SignDocument::dispatch($document->id)->onQueue('signing');
+        // huérfano y requiere firma) y le aplica el pipeline PAdES (firma de
+        // plataforma activada con certificado vigente), se marca
+        // digital_signature_status='pending' y se encola SignDocument. Si no
+        // aplica, el documento queda 'pending' como hasta ahora (firmable
+        // luego on-demand vía POST /documents/{id}/sign-digital, o vía el
+        // flujo de 2FA de email existente).
+        if ($document->status === 'pending' && $signingService->appliesTo($document)) {
+            $signingService->markPendingAndDispatch($document, 'signing');
         }
     }
 

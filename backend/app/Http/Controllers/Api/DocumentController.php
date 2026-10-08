@@ -8,15 +8,16 @@ use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AssignOrphanRequest;
 use App\Http\Resources\DocumentResource;
-use App\Jobs\SignDocument;
 use App\Models\Document;
 use App\Models\User;
 use App\Services\ActiveTenantResolver;
 use App\Services\DocumentService;
 use App\Services\DocumentSigningService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -136,6 +137,7 @@ class DocumentController extends Controller
             'my_documents' => $request->boolean('my_documents'),
             'tenant_id' => $request->tenant_id, // Manual tenant filter for root users
             'status' => $request->status,
+            'digital_status' => $request->digital_status,
             'doc_type_id' => $request->doc_type_id,
             'period' => $request->period,
             'search' => $request->search,
@@ -146,8 +148,20 @@ class DocumentController extends Controller
 
         $documents = $this->documentService->getDocuments($user, $filters);
 
+        // El listado devuelve el modelo directo: el detalle de soporte de la
+        // firma digital (error del sidecar, hash) solo es para quien puede firmar.
+        $items = collect($documents->items())->each(function (Document $doc) use ($user) {
+            if ($user->can('documents.sign_digital', $doc->tenant_id)) {
+                return;
+            }
+            $doc->makeHidden('digital_signature_error');
+            if (is_array($doc->signature) && array_key_exists('document_sha256', $doc->signature)) {
+                $doc->setAttribute('signature', Arr::except($doc->signature, ['document_sha256']));
+            }
+        })->all();
+
         return response()->json([
-            'data' => $documents->items(),
+            'data' => $items,
             'meta' => [
                 'current_page' => $documents->currentPage(),
                 'last_page' => $documents->lastPage(),
@@ -433,8 +447,8 @@ class DocumentController extends Controller
      * @OA\Post(
      *     path="/api/documents/{id}/sign-digital",
      *     tags={"Documentos"},
-     *     summary="Firmar documento con el certificado digital de plataforma (on-demand)",
-     *     description="Encola la firma digital CRIPTOGRÁFICA (PAdES, certificado de plataforma) de un documento puntual. Distinto del flujo de firma por 2FA de email (/documents/{id}/sign). Requiere que la firma de plataforma esté activada (Configuración > Firma Digital) y que el documento sea elegible (no huérfano, no firmado ya, requires_signature=true). Solo root/admin. Asíncrono: despacha el Job SignDocument (cola 'signing') y responde 202 de inmediato; el resultado final se refleja luego en Document.status/signature.",
+     *     summary="Firmar documento con el certificado digital de su empresa o el global (on-demand)",
+     *     description="Encola la firma digital CRIPTOGRÁFICA (PAdES, con el certificado de la empresa del documento o, si no tiene, el global de la plataforma) de un documento puntual. Distinto del flujo de firma por 2FA de email (/documents/{id}/sign). Sirve para firmar y para REINTENTAR la re-firma que incluye la conformidad del trabajador (documento en digital_signature_status='failed'). Primera firma: requiere la firma de plataforma activada (Configuración > Firma Digital) y que el documento sea elegible (no huérfano, requires_signature=true); el trabajador ya puede haber dado su conformidad. Re-firma: requiere un certificado vigente del MISMO firmante. Solo root/admin. Asíncrono: despacha el Job SignDocument (cola 'signing-priority') y responde 202 de inmediato; el resultado final se refleja luego en Document.digital_signature_status/digital_signature (nunca en status/signature, que son de la conformidad del trabajador).",
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(
      *         name="id",
@@ -473,10 +487,17 @@ class DocumentController extends Controller
             return response()->json(['message' => $e->getMessage()], $e->getCode() ?: 422);
         }
 
-        SignDocument::dispatch($document->id)->onQueue('signing');
+        // 'pending' bajo el lock + cola de prioridad: sirve para firmar y para
+        // reintentar la re-firma de un documento en 'failed'.
+        try {
+            $this->documentSigningService->markPendingAndDispatch($document, 'signing-priority');
+        } catch (LockTimeoutException $e) {
+            return response()->json(['message' => 'El documento se está procesando. Inténtalo de nuevo en unos segundos.'], 409);
+        }
 
         return response()->json([
-            'message' => 'Firma digital encolada correctamente. El estado del documento se actualizará cuando el proceso termine.',
+            'message' => 'Firma digital encolada correctamente. El estado de la firma digital del documento se actualizará cuando el proceso termine.',
+            'digital_signature_status' => 'pending',
         ], 202);
     }
 
@@ -485,7 +506,7 @@ class DocumentController extends Controller
      *     path="/api/documents/{id}/verify-signature",
      *     tags={"Documentos"},
      *     summary="Verificar la firma digital criptográfica de un documento",
-     *     description="Verifica (vía sidecar pyHanko) la firma PAdES embebida en el PDF: integridad, validez, confianza de la cadena de certificación y sello de tiempo (TSA). Autorizado igual que GET /documents/{id} (dueño del documento o root/admin/admin_tenant según reglas de DocumentService). Si el documento no tiene una firma criptográfica (p. ej. fue firmado con el flujo de 2FA de email, o aún no está firmado), devuelve verifiable=false con un motivo en vez de un error.",
+     *     description="Verifica (vía sidecar pyHanko) la firma PAdES embebida en el PDF: integridad, validez, confianza de la cadena de certificación y sello de tiempo (TSA). Autorizado igual que GET /documents/{id} (dueño del documento o root/admin/admin_tenant según reglas de DocumentService). Si el documento no tiene firma digital de la empresa (p. ej. solo tiene la conformidad del trabajador por 2FA de email, que no es criptográfica, o aún no está firmado), devuelve verifiable=false con un motivo en vez de un error.",
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(
      *         name="id",
@@ -507,7 +528,8 @@ class DocumentController extends Controller
      *                 @OA\Property(property="signer_subject", type="string", nullable=true),
      *                 @OA\Property(property="signing_time", type="string", nullable=true),
      *                 @OA\Property(property="tsa_applied", type="boolean", nullable=true),
-     *                 @OA\Property(property="tsa_time", type="string", nullable=true)
+     *                 @OA\Property(property="tsa_time", type="string", nullable=true),
+     *                 @OA\Property(property="includes_conformity", type="boolean", description="El PDF firmado incluye el nombre del trabajador (su conformidad)")
      *             )
      *         )
      *     ),
@@ -527,21 +549,23 @@ class DocumentController extends Controller
             return response()->json(['message' => $e->getMessage()], 403);
         }
 
-        $signature = $document->signature ?? [];
+        $digital = $document->digital_signature ?? [];
 
-        // Solo el pipeline criptográfico (PAdES/pyHanko) es verificable por
-        // el sidecar. El flujo de 2FA por email (SignatureService) deja
-        // signature['verification_method'] = 'email_2fa' y NO produce una
-        // firma embebida en el PDF: no lo tratamos como error, sino como un
+        // Solo la firma digital de la empresa (PAdES/pyHanko) es verificable
+        // por el sidecar. La conformidad del trabajador (código 2FA por correo)
+        // NO produce una firma criptográfica en el PDF: no es un error, es un
         // estado claro para la UI.
-        if (($signature['method'] ?? null) !== 'pades_pyhanko') {
+        if (($digital['method'] ?? null) !== 'pades_pyhanko') {
+            $message = 'Este documento no tiene firma digital de la empresa.';
+            if ($document->isSigned()) {
+                $message .= ' La conformidad del trabajador (código por correo) no es una firma criptográfica.';
+            }
+
             return response()->json([
                 'data' => [
                     'verifiable' => false,
                     'reason' => 'not_cryptographically_signed',
-                    'message' => $document->isSigned()
-                        ? 'Este documento fue firmado mediante el flujo de confirmación por código (2FA de email), que no genera una firma criptográfica verificable en el PDF.'
-                        : 'Este documento aún no tiene una firma digital criptográfica aplicada.',
+                    'message' => $message,
                 ],
             ]);
         }
@@ -553,7 +577,9 @@ class DocumentController extends Controller
         }
 
         return response()->json([
-            'data' => array_merge(['verifiable' => true], $verification),
+            'data' => array_merge(['verifiable' => true], $verification, [
+                'includes_conformity' => $document->digitalSignatureIncludesConformity(),
+            ]),
         ]);
     }
 }

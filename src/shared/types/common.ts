@@ -11,7 +11,7 @@ export type DocumentStatus =
   | 'processing'
   | 'completed'
   | 'failed'
-  | 'signed';
+  | 'signed'; // conformidad del trabajador (código por correo); la firma digital de la empresa va aparte
 
 export type BatchStatus =
   | 'pending'

@@ -24,8 +24,12 @@ import { Badge } from '@/presentation/components/ui/badge';
 import { ArrowLeft, Save, Loader2, Building2, X, ImageIcon, Mail, Users, PlugZap } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadTenantLogo, validateImageFile } from '@/infrastructure/http/fileUpload';
+import { signatureSettingsRepository } from '@/infrastructure/persistence/repositories';
+import { TenantCertificateSection } from '@/presentation/components/features/signature/TenantCertificateSection';
+import { TSA_URL_ERROR, isValidTsaUrl } from '@/presentation/components/features/signature/tsaUrl';
 import { tenantRepository } from '@/infrastructure/persistence/repositories/TenantRepository';
 import { useFormErrors } from '@/presentation/hooks/useFormErrors';
+import { getErrorMessage } from '@/infrastructure/http/apiClient';
 import { showApiError } from '@/presentation/utils/showApiError';
 import { FieldError, FormErrorSummary } from '@/presentation/components/shared/FieldError';
 import type { CreateTenantData, UpdateTenantData, MailEncryption } from '@/core/domain/entities/Tenant';
@@ -39,6 +43,9 @@ export function TenantFormPage() {
     // creación (/tenants/new), que ya está gateado aparte por 'tenants.manage'
     // en la ruta: nadie sin ese permiso llega hasta aquí con isEditing=false.
     const canManageTenants = useCan('tenants.manage');
+    // Carga/renovación del certificado de firma de la empresa: solo root
+    // (misma ability que la ruta de Firma Digital).
+    const canManageSignature = useCan('platform.manage');
     const readOnly = isEditing && !canManageTenants;
     useDocumentTitle(isEditing ? (readOnly ? 'Detalle de Empresa' : 'Editar Empresa') : 'Nueva Empresa');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +93,12 @@ export function TenantFormPage() {
             'mail_from_address', 'mail_from_name',
         ],
     });
+    // Certificado de firma (solo creación): se sube tras crear la empresa.
+    const [certFile, setCertFile] = useState<File | null>(null);
+    const [certPassword, setCertPassword] = useState('');
+    const [certTsaUrl, setCertTsaUrl] = useState('');
+    const [certError, setCertError] = useState<string | null>(null);
+    const [isProcessingCert, setIsProcessingCert] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
@@ -148,6 +161,10 @@ export function TenantFormPage() {
             newErrors.name = 'El nombre es requerido';
         }
 
+        if (!formData.business_name.trim()) {
+            newErrors.business_name = 'La razón social es obligatoria.';
+        }
+
         if (!formData.ruc.trim()) {
             newErrors.ruc = 'El RUC es requerido';
         } else if (formData.ruc.length !== 11) {
@@ -167,9 +184,39 @@ export function TenantFormPage() {
         // pero esto cubre un submit disparado sin pasar por los inputs.
         if (readOnly) return;
 
-        if (!validateForm()) {
+        const formValid = validateForm();
+        const withCertificate = !isEditing && canManageSignature && certFile !== null;
+        const certValid = !withCertificate || certPassword !== '';
+        if (!certValid) {
+            setCertError('Ingresa la contraseña del certificado');
+        }
+        const tsaValid = !withCertificate || isValidTsaUrl(certTsaUrl);
+        if (!tsaValid) {
+            setCertError(TSA_URL_ERROR);
+        }
+        if (!formValid || !certValid || !tsaValid) {
             toast.error('Por favor corrige los errores del formulario');
             return;
+        }
+
+        // Con certificado: se verifica ANTES de crear la empresa, para no dejar
+        // una empresa creada si el archivo/contraseña son inválidos.
+        if (withCertificate && certFile) {
+            setIsProcessingCert(true);
+            try {
+                await signatureSettingsRepository.previewCertificate({
+                    certificate: certFile,
+                    password: certPassword,
+                    ruc: formData.ruc || undefined,
+                });
+            } catch (error) {
+                const message = getErrorMessage(error);
+                setCertError(message);
+                toast.error(message);
+                setIsProcessingCert(false);
+                return;
+            }
+            setIsProcessingCert(false);
         }
 
         try {
@@ -183,7 +230,11 @@ export function TenantFormPage() {
             } else {
                 const result = await createTenant(payload as CreateTenantData);
                 if (result) {
-                    toast.success('Organización creada exitosamente');
+                    if (withCertificate && certFile) {
+                        await uploadCertificateAfterCreate(result.id, certFile);
+                    } else {
+                        toast.success('Organización creada exitosamente');
+                    }
                     navigate('/tenants');
                 }
             }
@@ -193,6 +244,33 @@ export function TenantFormPage() {
             // tueste completo, con todos los mensajes (showApiError).
             const apiError = applyApiError(error);
             showApiError(apiError);
+        }
+    };
+
+    /**
+     * Sube el certificado de firma a la empresa recién creada. Si falla, la
+     * empresa ya existe: se avisa con un único toast y se sigue con la
+     * navegación normal (se puede cargar desde la edición).
+     */
+    const uploadCertificateAfterCreate = async (tenantId: string, file: File) => {
+        setIsProcessingCert(true);
+        try {
+            const res = await signatureSettingsRepository.uploadTenantCertificate(Number(tenantId), {
+                certificate: file,
+                password: certPassword,
+                tsaUrl: certTsaUrl.trim() || undefined,
+            });
+            if (res.item.rucMismatch) {
+                toast.warning(res.message);
+            } else {
+                toast.success('Empresa creada y certificado de firma cargado');
+            }
+        } catch (error) {
+            toast.error(
+                `La empresa se creó, pero no se pudo cargar el certificado: ${getErrorMessage(error)}. Puedes cargarlo desde la edición de la empresa.`
+            );
+        } finally {
+            setIsProcessingCert(false);
         }
     };
 
@@ -564,7 +642,9 @@ export function TenantFormPage() {
 
                         {/* Business Name */}
                         <div className="space-y-2">
-                            <Label htmlFor="business_name">Razón Social</Label>
+                            <Label htmlFor="business_name">
+                                Razón Social <span className="text-red-500">*</span>
+                            </Label>
                             <Input
                                 id="business_name"
                                 value={formData.business_name}
@@ -847,18 +927,35 @@ export function TenantFormPage() {
                 </Card>
                 </fieldset>
 
+                {/* Firma digital de la empresa (solo root). Fuera del fieldset: en
+                    edición sus acciones son independientes del submit. */}
+                {canManageSignature && (
+                    <TenantCertificateSection
+                        tenantId={isEditing ? id : undefined}
+                        tenantRuc={formData.ruc}
+                        file={certFile}
+                        password={certPassword}
+                        onFileChange={setCertFile}
+                        onPasswordChange={setCertPassword}
+                        tsaUrl={certTsaUrl}
+                        onTsaUrlChange={setCertTsaUrl}
+                        error={certError}
+                        onErrorChange={setCertError}
+                    />
+                )}
+
                 {/* Actions */}
                 <div className="flex justify-start gap-4 sticky bottom-0 bg-white py-4 pl-8 border-t">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => navigate('/tenants')}
-                        disabled={isLoading || isUploading}
+                        disabled={isLoading || isUploading || isProcessingCert}
                     >
                         {readOnly ? 'Volver' : 'Cancelar'}
                     </Button>
                     {!readOnly && (
-                        <Button type="submit" disabled={isLoading || isUploading}>
+                        <Button type="submit" disabled={isLoading || isUploading || isProcessingCert}>
                             {isLoading ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

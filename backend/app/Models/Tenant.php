@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
@@ -126,6 +127,15 @@ class Tenant extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
+    }
+
+    /**
+     * Certificado de firma digital propio de la empresa (opcional; si no
+     * existe se usa el certificado global de la plataforma).
+     */
+    public function signatureCertificate(): HasOne
+    {
+        return $this->hasOne(TenantSignatureCertificate::class);
     }
 
     /**

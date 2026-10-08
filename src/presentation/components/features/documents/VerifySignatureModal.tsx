@@ -17,7 +17,8 @@ import {
   Clock,
 } from "lucide-react";
 import { VerifySignatureResponse } from "@/core/domain/repositories/IDocumentRepository";
-import { formatDateTime } from "@/presentation/utils";
+import { formatDateTime, formatSignerDetails } from "@/presentation/utils";
+import type { SignerDetails } from "@/core/domain/entities/Document";
 
 interface VerifySignatureModalProps {
   isOpen: boolean;
@@ -25,6 +26,10 @@ interface VerifySignatureModalProps {
   isLoading: boolean;
   error: string | null;
   result: VerifySignatureResponse | null;
+  // Si el documento trae datos limpios del firmante, se muestran en vez del DN crudo
+  signerDetails?: SignerDetails | null;
+  // signer_subject guardado al firmar: los datos limpios solo valen si coincide con el firmante verificado
+  storedSignerSubject?: string | null;
 }
 
 function ResultRow({
@@ -57,7 +62,7 @@ function ResultRow({
   );
 }
 
-export function VerifySignatureModal({ isOpen, onClose, isLoading, error, result }: VerifySignatureModalProps) {
+export function VerifySignatureModal({ isOpen, onClose, isLoading, error, result, signerDetails, storedSignerSubject }: VerifySignatureModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
@@ -117,12 +122,33 @@ export function VerifySignatureModal({ isOpen, onClose, isLoading, error, result
               hint="La firma abarca el documento completo, sin contenido agregado después"
             />
             <Separator />
+            <ResultRow
+              label="Incluye conformidad del trabajador"
+              ok={result.includesConformity}
+              hint="El nombre del trabajador (código por correo) está dentro del PDF firmado por la empresa"
+            />
+            <Separator />
 
             <div className="pt-3 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-[#64748B]">Firmante</span>
-                <span className="font-medium text-right">{result.signerSubject || "-"}</span>
-              </div>
+              {(() => {
+                // Los datos guardados solo se usan si corresponden a la firma realmente verificada
+                const matchesStored = !!storedSignerSubject && result.signerSubject === storedSignerSubject;
+                const rows = matchesStored ? formatSignerDetails(signerDetails) : [];
+                if (rows.length > 0) {
+                  return rows.map((row) => (
+                    <div key={row.label} className="flex justify-between text-sm gap-2">
+                      <span className="text-[#64748B]">{row.label}</span>
+                      <span className="font-medium text-right">{row.value}</span>
+                    </div>
+                  ));
+                }
+                return (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#64748B]">Firmante</span>
+                    <span className="font-medium text-right">{result.signerSubject || "-"}</span>
+                  </div>
+                );
+              })()}
               <div className="flex justify-between text-sm">
                 <span className="text-[#64748B]">Fecha de firma</span>
                 <span className="font-medium">{result.signingTime ? formatDateTime(result.signingTime) : "-"}</span>

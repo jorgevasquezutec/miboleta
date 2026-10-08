@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search, Loader2, AlertCircle } from "lucide-react";
+import { FileText, Download, CheckCircle, Clock, Calendar, Bell, Search, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/presentation/components/ui/card";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
@@ -307,7 +307,7 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
                 <SelectItem value="pending">Pendientes</SelectItem>
-                <SelectItem value="signed">Firmados</SelectItem>
+                <SelectItem value="signed">Firmados por mí</SelectItem>
                 <SelectItem value="expired">Vencidos</SelectItem>
               </SelectContent>
             </Select>
@@ -406,6 +406,15 @@ export function EmployeeDashboardView({ onViewDocument }: EmployeeDashboardViewP
                           >
                             <Download className="w-4 h-4" />
                           </Button>
+                          {doc.digitalSignature && (
+                            <span
+                              title="Firmado digitalmente por la empresa"
+                              data-testid="digital-signature-icon"
+                              className="inline-flex items-center text-emerald-600"
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                            </span>
+                          )}
                           {doc.status === "pending" && (doc.requiresSignature || doc.documentType?.requiresSignature) && (
                             <Button
                               size="sm"

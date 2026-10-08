@@ -64,6 +64,9 @@ class ReportsService
         $pending = (clone $query)->where('status', 'pending')->count();
         $active = (clone $query)->where('status', 'active')->count();
         $orphan = (clone $query)->where('status', 'orphan')->count();
+        // Firma digital (PAdES) de la empresa: independiente de 'signed' (conformidad del trabajador).
+        $digitallySigned = (clone $query)->whereNotNull('digital_signature')->count();
+        $digitalFailed = (clone $query)->where('digital_signature_status', 'failed')->count();
 
         // Documents by month for the trend chart — driven by the selected date range
         // (falls back to the last 6 months when no range is provided).
@@ -95,6 +98,8 @@ class ReportsService
             'pending' => $pending,
             'active' => $active,
             'orphan' => $orphan,
+            'digitally_signed' => $digitallySigned,
+            'digital_failed' => $digitalFailed,
             'by_month' => $byMonth,
             'by_type' => $byType,
             'status_distribution' => $statusDistribution,
@@ -427,7 +432,9 @@ class ReportsService
                 'email' => $doc->user?->email ?? 'N/A',
                 'estado' => $this->translateStatus($doc->status),
                 'fecha_creacion' => $doc->created_at?->format('Y-m-d H:i'),
-                'fecha_firma' => $doc->signed_at?->format('Y-m-d H:i') ?? 'N/A',
+                // Conformidad del trabajador (código por correo), no la firma digital.
+                'conformidad_trabajador' => $doc->signed_at?->format('Y-m-d H:i') ?? 'N/A',
+                'firma_digital' => $this->translateDigitalSignature($doc),
                 'organizacion' => $doc->tenant?->name ?? 'N/A',
             ];
         });
@@ -754,11 +761,25 @@ class ReportsService
         return match ($status) {
             'pending' => 'Pendiente',
             'active' => 'Activo',
-            'signed' => 'Firmado',
+            'signed' => 'Firmado por el trabajador',
             'expired' => 'Vencido',
             'orphan' => 'Huérfano',
             default => ucfirst($status),
         };
+    }
+
+    /** Estado de la firma digital (PAdES) de la empresa para el export. */
+    private function translateDigitalSignature($doc): string
+    {
+        if ($doc->digital_signature_status === 'failed') {
+            return 'Error';
+        }
+
+        if ($doc->digital_signature !== null) {
+            return 'Sí ' . ($doc->digitally_signed_at?->format('d/m/Y') ?? '');
+        }
+
+        return $doc->digital_signature_status === 'pending' ? 'Pendiente' : 'No';
     }
 
     private function translateVacationStatus(string $status): string

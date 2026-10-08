@@ -11,6 +11,7 @@ Endpoints:
     GET  /health   -> {"status": "ok"}
     POST /sign     -> firma un PDF con un certificado .pfx/.p12 REAL
     POST /verify   -> verifica la(s) firma(s) embebidas en un PDF ya firmado
+    POST /extract-base -> recupera la revisión 0 (sin firma) de un PDF firmado
 
 Seguridad (trade-off documentado, ver signer/README.md):
     - Este servicio NO publica puerto al host (`expose:` en docker-compose,
@@ -34,6 +35,7 @@ Ejecuta con:
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -50,6 +52,9 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 logger = logging.getLogger("signer.app")
+
+# Todo archivo que escribe el sidecar (root) debe poder leerlo Laravel (www-data).
+os.umask(0o022)
 
 # Ruido esperado: pyHanko registra a nivel WARNING (con traceback) cuando no
 # puede construir una cadena de confianza para un certificado que no
@@ -74,13 +79,55 @@ class SignRequest(BaseModel):
     certificate_path: str = Field(..., description="Ruta absoluta al certificado .pfx/.p12 real.")
     certificate_password: Optional[str] = Field(None, description="Contraseña del certificado, si aplica.")
     tsa_url: Optional[str] = Field(None, description="URL de una TSA RFC 3161. Si se omite, no se sella el tiempo.")
-    visible: bool = Field(False, description="Si True, agrega una apariencia de firma visible en la última página.")
+    visible: bool = Field(False, description="Si True, agrega un sello de firma visible en el pie de la última página (firmante, cargo, razón social, RUC, país/provincia, fecha).")
     field_name: str = Field(pipeline.DEFAULT_FIELD_NAME, description="Nombre del campo de firma PDF.")
     md_algorithm: str = Field(pipeline.DEFAULT_MD_ALGORITHM, description="Algoritmo de digest (default: sha256).")
     reason: str = Field(pipeline.DEFAULT_REASON, description="Motivo de firma embebido en la firma PAdES.")
     location: str = Field(pipeline.DEFAULT_LOCATION, description="Ubicación de firma embebida.")
     gs_bin: str = Field("gs", description="Nombre/ruta del binario de Ghostscript.")
     icc_profile: Optional[str] = Field(None, description="Ruta explícita a un perfil ICC (por defecto se autodetecta).")
+    conformity: Optional[Conformity] = Field(None, description="Si se envía, dibuja nombre y fecha del trabajador en la última página, en la misma revisión de la firma.")
+    base_output_path: Optional[str] = Field(None, description="Si se envía, copia aquí la revisión 0 normalizada (antes de dibujar/firmar).")
+    skip_normalize: bool = Field(False, description="True: input_path ya es la base normalizada (1 revisión, 0 firmas) y se usa tal cual.")
+
+
+class ExtractBaseRequest(BaseModel):
+    input_path: str = Field(..., description="Ruta absoluta de un PDF firmado exactamente una vez.")
+    output_path: str = Field(..., description="Ruta absoluta donde escribir la revisión 0.")
+
+
+class ExtractBaseResponse(BaseModel):
+    success: bool
+    output_path: Optional[str] = None
+    error: Optional[str] = None
+    stage: Optional[str] = None
+
+
+class ConformityLayout(BaseModel):
+    """Layout del nombre/fecha del trabajador (mm), tal como sale de config/signature.php."""
+
+    mode: str = Field("absolute", description="'absolute' (x/name_y fijos) o 'auto' (esquina inferior derecha).")
+    x_mm: Optional[float] = None
+    name_y_mm: Optional[float] = None
+    width_mm: float = 50
+    align: str = "C"
+    name_font_size: float = 12
+    name_height_mm: float = 8
+    date_offset_y_mm: float = 8
+    date_font_size: float = 7
+
+
+class Conformity(BaseModel):
+    name: str = Field(..., description="Nombre del trabajador (se dibuja en Segoe Script).")
+    date_text: str = Field("", description="Fecha ya formateada, se dibuja debajo del nombre.")
+    layout: ConformityLayout = Field(default_factory=ConformityLayout)
+    layouts: Optional[dict[str, ConformityLayout]] = Field(
+        None,
+        description="Opcional: layout por formato (key -> layout). Si viene junto con page_dimensions_mm, el sidecar elige la key cuyo tamaño calza con el de la página; si ninguna calza usa `layout`.",
+    )
+    page_dimensions_mm: Optional[dict[str, list[float]]] = Field(
+        None, description="Opcional: key -> [ancho, alto] en mm de cada formato de `layouts`."
+    )
 
 
 class SignResponse(BaseModel):
@@ -183,6 +230,9 @@ def sign(req: SignRequest) -> JSONResponse:
             md_algorithm=req.md_algorithm,
             reason=req.reason,
             location=req.location,
+            conformity=req.conformity.model_dump() if req.conformity else None,
+            base_output_path=Path(req.base_output_path) if req.base_output_path else None,
+            skip_normalize=req.skip_normalize,
         )
     except pipeline.PipelineError as e:
         logger.error("Fallo firmando %s en etapa '%s': %s", input_path, e.stage, e)
@@ -212,6 +262,27 @@ def sign(req: SignRequest) -> JSONResponse:
             "output_path": str(output_path),
             "signature": signature,
         },
+    )
+
+
+# --------------------------------------------------------------------------
+# POST /extract-base
+# --------------------------------------------------------------------------
+@app.post("/extract-base", response_model=ExtractBaseResponse)
+def extract_base(req: ExtractBaseRequest) -> JSONResponse:
+    input_path = Path(req.input_path)
+    output_path = Path(req.output_path)
+    logger.info("POST /extract-base input=%s output=%s", input_path, output_path)
+    try:
+        pipeline.extract_base(input_path, output_path)
+    except pipeline.PipelineError as e:
+        logger.warning("Fallo extrayendo base de %s en etapa '%s': %s", input_path, e.stage, e)
+        return JSONResponse(
+            status_code=200,
+            content={"success": False, "error": str(e), "stage": e.stage},
+        )
+    return JSONResponse(
+        status_code=200, content={"success": True, "output_path": str(output_path)}
     )
 
 

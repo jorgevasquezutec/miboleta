@@ -1,6 +1,17 @@
 import { DocumentType } from './DocumentType';
 
-// Domain Entity - Document (aligned with backend)
+// Estado de la firma PAdES de la empresa: null = no aplica o nunca se intentó;
+// pending = en cola o en proceso; signed = el archivo coincide con lo deseado;
+// failed = falló la última (re)firma (se sigue sirviendo la última firma válida).
+export type DigitalSignatureStatus = 'pending' | 'signed' | 'failed';
+
+// Filtro de listado por estado de firma digital ('none' = sin firma digital)
+export type DigitalStatusFilter = DigitalSignatureStatus | 'none';
+
+// Domain Entity - Document (aligned with backend).
+// Dos firmas independientes:
+//  - signature / signedAt / status='signed': conformidad del trabajador (2FA por correo).
+//  - digitalSignature / digitallySignedAt / digitalSignatureStatus: firma PAdES de la empresa.
 export interface Document {
   id: number;
   tenantId: number;
@@ -15,8 +26,16 @@ export interface Document {
   status: 'pending' | 'signed' | 'active' | 'orphan' | 'expired';
   uploadedBy: number;
   requiresSignature: boolean;
-  signature: SignatureData | null;
+  // Conformidad del trabajador (código por correo). NO es criptográfica.
+  signature: Email2FASignatureData | null;
   signedAt: string | null;
+  // Firma digital PAdES de la empresa (columnas digital_*). Independiente de la
+  // conformidad del trabajador: ambas conviven en el mismo documento.
+  digitalSignature: PadesSignatureData | null;
+  digitallySignedAt: string | null;
+  digitalSignatureStatus: DigitalSignatureStatus | null;
+  // Solo llega con valor a quien tiene documents.sign_digital
+  digitalSignatureError?: string | null;
   expiresAt: string | null;
   notified: boolean;
   notifiedAt: string | null;
@@ -42,12 +61,26 @@ export interface Email2FASignatureData {
   user_id: number;
   verification_method: 'email_2fa';
   code_id: number;
+  user_name?: string;
+  // Cómo se dibujó el nombre en el PDF: sidecar (PAdES), FPDI, o FPDI falló
+  pdf_mark?: 'pades' | 'fpdi' | 'fpdi_failed';
+  document_sha256?: string;
 }
 
 // Metadata guardada en Document.signature cuando el pipeline CRIPTOGRÁFICO
-// (App\Services\DocumentSigningService, certificado único de plataforma vía
-// el sidecar `signer`) firma el documento: sí produce una firma PAdES
+// (App\Services\DocumentSigningService, con el certificado de la empresa o,
+// como fallback, el de la plataforma, vía el sidecar `signer`) firma el documento: sí produce una firma PAdES
 // embebida y verificable en el PDF (ver GET /documents/{id}/verify-signature).
+export interface SignerDetails {
+  name: string | null;
+  organization: string | null;
+  ruc: string | null;
+  title: string | null;
+  country: string | null;
+  locality: string | null;
+  signed_at_local: string | null;
+}
+
 export interface PadesSignatureData {
   method: 'pades_pyhanko';
   signer_subject: string | null;
@@ -60,6 +93,20 @@ export interface PadesSignatureData {
   intact: boolean | null;
   valid: boolean | null;
   trusted: boolean | null;
+  // Sello visible en el pie y datos limpios del firmante. Ausentes en
+  // documentos firmados antes de este cambio (usar signer_subject).
+  stamp_applied?: boolean;
+  signer_details?: SignerDetails | null;
+  // Ausentes en documentos firmados antes de existir el certificado por empresa
+  // (tratar como 'global'). No hay flag de RUC no coincidente a propósito.
+  certificate_source?: 'tenant' | 'global';
+  certificate_ruc?: string | null;
+  certificate_organization?: string | null;
+  // La firma de la empresa se regenera para incluir el nombre del trabajador.
+  includes_conformity?: boolean;
+  conformity_signed_at?: string | null;
+  first_signed_at?: string | null;
+  resign_count?: number;
 }
 
 // Unión discriminada: Email2FASignatureData no trae 'method' (solo
@@ -92,7 +139,7 @@ export interface DocumentBatchSummary {
 // Status helpers
 export const documentStatusLabels: Record<Document['status'], string> = {
   pending: 'Pendiente Firma',
-  signed: 'Firmado',
+  signed: 'Firmado por trabajador',
   active: 'Disponible',
   orphan: 'Huérfano',
   expired: 'Expirado',

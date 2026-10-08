@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Signature\SignatureLayout;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Tcpdf\Fpdi;
@@ -16,7 +17,8 @@ class PdfWatermarkService
      * @param string|null $pageSizeKey Tamaño de boleta (a4|a5|a10|letter) del
      *        batch al que pertenece el documento (ítem 36). Selecciona el
      *        sub-array de coordenadas correspondiente en
-     *        config('signature.watermark.sizes'). Si es null o no existe en
+     *        config('signature.watermark.sizes'). Si es null se detecta por el tamaño real de la
+     *        página (SignatureLayout::detectSizeKey); si no existe en
      *        el config, cae a 'a10' (config('signature.watermark.default_size')),
      *        que es el comportamiento histórico para no romper lotes viejos
      *        sin page_size.
@@ -117,7 +119,11 @@ class PdfWatermarkService
         // tamaño solicitado no existe en el config (defensivo).
         $sizesConfig = config('signature.watermark.sizes', []);
         $defaultSizeKey = config('signature.watermark.default_size', 'a10');
-        $resolvedSizeKey = ($pageSizeKey && isset($sizesConfig[$pageSizeKey])) ? $pageSizeKey : $defaultSizeKey;
+        if (!$pageSizeKey) {
+            // Sin elección explícita: formato según el tamaño REAL de la página.
+            $pageSizeKey = SignatureLayout::detectSizeKey((float) $pageWidth, (float) $pageHeight);
+        }
+        $resolvedSizeKey = isset($sizesConfig[$pageSizeKey]) ? $pageSizeKey : $defaultSizeKey;
         $cfg = $sizesConfig[$resolvedSizeKey] ?? [];
         $mode = config('signature.watermark.mode', 'absolute');
 
@@ -237,7 +243,7 @@ class PdfWatermarkService
      * @param string $timestamp
      * @return string
      */
-    protected function formatTimestamp(string $timestamp): string
+    public function formatTimestamp(string $timestamp): string
     {
         try {
             $date = new \DateTime($timestamp);

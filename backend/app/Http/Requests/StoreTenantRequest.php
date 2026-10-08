@@ -29,7 +29,7 @@ class StoreTenantRequest extends FormRequest
         return [
             'name' => 'required|string|max:255',
             'ruc' => 'required|string|size:11|unique:tenants,ruc',
-            'business_name' => 'nullable|string|max:255',
+            'business_name' => 'required|string|max:200',
             'address' => 'nullable|string|max:500',
             'phone' => 'nullable|string|max:20',
             'logo_path' => 'nullable|string|max:500',
@@ -61,7 +61,8 @@ class StoreTenantRequest extends FormRequest
             'ruc.required' => 'El RUC es requerido',
             'ruc.size' => 'El RUC debe tener exactamente 11 dígitos',
             'ruc.unique' => 'Este RUC ya está registrado',
-            'business_name.max' => 'La razón social no puede exceder 255 caracteres',
+            'business_name.required' => 'La razón social es obligatoria.',
+            'business_name.max' => 'La razón social no puede exceder 200 caracteres',
             'address.max' => 'La dirección no puede exceder 500 caracteres',
             'phone.max' => 'El teléfono no puede exceder 20 caracteres',
             'status.in' => 'El estado debe ser: active, inactive o suspended',

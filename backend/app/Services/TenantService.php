@@ -108,7 +108,7 @@ class TenantService
         $tenant = Tenant::create([
             'name' => $data['name'],
             'ruc' => $data['ruc'],
-            'business_name' => $data['business_name'] ?? null,
+            'business_name' => $data['business_name'],
             'address' => $data['address'] ?? null,
             'phone' => $data['phone'] ?? null,
             'logo_path' => $data['logo_path'] ?? null,

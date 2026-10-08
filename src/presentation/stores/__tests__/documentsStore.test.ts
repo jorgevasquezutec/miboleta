@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import { useDocumentsStore } from '../documentsStore';
 import { mockDocument } from '@/test/mocks/handlers';
@@ -20,6 +20,8 @@ vi.mock('@/infrastructure/persistence/repositories', () => ({
     acceptSignatureTerms: vi.fn(),
     requestSignatureCode: vi.fn(),
     signDocument: vi.fn(),
+    getSignatureStatus: vi.fn(),
+    signDigital: vi.fn(),
   },
 }));
 
@@ -330,21 +332,116 @@ describe('documentsStore', () => {
       expect(useDocumentsStore.getState().signatureLoading).toBe(false);
     });
 
-    it('should sign document', async () => {
-      useDocumentsStore.setState({
-        currentDocument: mockDocument as any,
-        documents: [mockDocument as any],
-      });
+    it('should sign document and reload the document from the API', async () => {
+      const before = { ...mockDocument, id: 1, status: 'pending', digitalSignatureStatus: null } as any;
+      const after = { ...before, status: 'signed', signedAt: 'x', digitalSignatureStatus: 'pending' } as any;
+      useDocumentsStore.setState({ currentDocument: before, documents: [before] });
 
-      vi.mocked(documentRepository.signDocument).mockResolvedValueOnce(undefined);
+      vi.mocked(documentRepository.signDocument).mockResolvedValueOnce(undefined as any);
+      vi.mocked(documentRepository.findById).mockResolvedValueOnce(after);
 
       await act(async () => {
-        await useDocumentsStore.getState().signDocument(Number(mockDocument.id), '123456');
+        await useDocumentsStore.getState().signDocument(1, '123456');
       });
 
       const state = useDocumentsStore.getState();
+      expect(documentRepository.findById).toHaveBeenCalledWith(1);
       expect(state.currentDocument?.status).toBe('signed');
+      expect(state.currentDocument?.digitalSignatureStatus).toBe('pending');
+      expect(state.documents[0].status).toBe('signed');
       expect(state.signatureLoading).toBe(false);
+    });
+
+    it('signDocument no falla si la recarga falla (la conformidad ya se registró)', async () => {
+      vi.mocked(documentRepository.signDocument).mockResolvedValueOnce(undefined as any);
+      vi.mocked(documentRepository.findById).mockRejectedValueOnce(new Error('net'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await act(async () => {
+        await useDocumentsStore.getState().signDocument(1, '123456');
+      });
+      expect(useDocumentsStore.getState().error).toBeNull();
+    });
+  });
+
+  describe('pollDigitalSignature', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const status = (s: string | null) => ({
+      documentId: 1, requiresSignature: true, isSigned: true, signedAt: 'x', signature: {},
+      digitalSignatureStatus: s as any, digitallySignedAt: null, includesConformity: false,
+    });
+
+    it('usa getSignatureStatus y se detiene en signed, recargando el documento', async () => {
+      vi.mocked(documentRepository.getSignatureStatus)
+        .mockResolvedValueOnce(status('pending'))
+        .mockResolvedValueOnce(status('signed'));
+      vi.mocked(documentRepository.findById).mockResolvedValue({ ...mockDocument, id: 1 } as any);
+
+      const p = useDocumentsStore.getState().pollDigitalSignature(1, { intervalMs: 3000, timeoutMs: 120000 });
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(documentRepository.findById).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(3000);
+
+      await expect(p).resolves.toBe('signed');
+      expect(documentRepository.getSignatureStatus).toHaveBeenCalledTimes(2);
+      expect(documentRepository.findById).toHaveBeenCalledTimes(1);
+    });
+
+    it('se detiene en failed', async () => {
+      vi.mocked(documentRepository.getSignatureStatus).mockResolvedValueOnce(status('failed'));
+      vi.mocked(documentRepository.findById).mockResolvedValue({ ...mockDocument, id: 1 } as any);
+
+      const p = useDocumentsStore.getState().pollDigitalSignature(1);
+      await vi.advanceTimersByTimeAsync(3000);
+      await expect(p).resolves.toBe('failed');
+    });
+
+    it('devuelve none (sin toast de éxito) cuando el estado pasa a null', async () => {
+      vi.mocked(documentRepository.getSignatureStatus).mockResolvedValueOnce(status(null));
+      vi.mocked(documentRepository.findById).mockResolvedValue({ ...mockDocument, id: 1 } as any);
+
+      const p = useDocumentsStore.getState().pollDigitalSignature(1);
+      await vi.advanceTimersByTimeAsync(3000);
+      await expect(p).resolves.toBe('none');
+      expect(documentRepository.findById).toHaveBeenCalledTimes(1);
+    });
+
+    it('devuelve timeout al agotar el tiempo', async () => {
+      vi.mocked(documentRepository.getSignatureStatus).mockResolvedValue(status('pending'));
+
+      const p = useDocumentsStore.getState().pollDigitalSignature(1, { intervalMs: 3000, timeoutMs: 9000 });
+      await vi.advanceTimersByTimeAsync(10000);
+
+      await expect(p).resolves.toBe('timeout');
+      expect(documentRepository.findById).not.toHaveBeenCalled();
+    });
+
+    it('se puede cancelar con AbortSignal', async () => {
+      vi.mocked(documentRepository.getSignatureStatus).mockResolvedValue(status('pending'));
+      const ctrl = new AbortController();
+
+      const p = useDocumentsStore.getState().pollDigitalSignature(1, { signal: ctrl.signal });
+      ctrl.abort();
+      await vi.advanceTimersByTimeAsync(3000);
+
+      await expect(p).resolves.toBe('cancelled');
+      expect(documentRepository.getSignatureStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('retryDigitalSignature', () => {
+    it('llama a signDigital y recarga', async () => {
+      vi.mocked(documentRepository.signDigital).mockResolvedValueOnce(undefined);
+      vi.mocked(documentRepository.findById).mockResolvedValueOnce({ ...mockDocument, id: 1 } as any);
+      await useDocumentsStore.getState().retryDigitalSignature(1);
+      expect(documentRepository.signDigital).toHaveBeenCalledWith(1);
+      expect(documentRepository.findById).toHaveBeenCalledWith(1);
     });
   });
 

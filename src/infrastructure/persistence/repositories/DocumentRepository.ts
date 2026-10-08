@@ -53,6 +53,7 @@ export class DocumentRepository implements IDocumentRepository {
     if (filters?.dateFrom) params.append('date_from', filters.dateFrom);
     if (filters?.dateTo) params.append('date_to', filters.dateTo);
     if (filters?.myDocuments) params.append('my_documents', 'true');
+    if (filters?.digitalStatus) params.append('digital_status', filters.digitalStatus);
 
     try {
       const response = await apiClient.get<{ data: Document[]; meta: any }>(
@@ -268,6 +269,9 @@ export class DocumentRepository implements IDocumentRepository {
         isSigned: response.data.is_signed,
         signedAt: response.data.signed_at,
         signature: response.data.signature,
+        digitalSignatureStatus: response.data.digital_signature_status ?? null,
+        digitallySignedAt: response.data.digitally_signed_at ?? null,
+        includesConformity: !!response.data.includes_conformity,
       };
     } catch (error) {
       throw toApiError(error);
@@ -295,6 +299,7 @@ export class DocumentRepository implements IDocumentRepository {
       return {
         message: response.data.message,
         signedAt: response.data.signed_at,
+        digitalSignatureStatus: response.data.digital_signature_status ?? null,
         document: response.data.document,
       };
     } catch (error) {
@@ -319,7 +324,16 @@ export class DocumentRepository implements IDocumentRepository {
         signingTime: data.signing_time,
         tsaApplied: data.tsa_applied,
         tsaTime: data.tsa_time,
+        includesConformity: data.includes_conformity,
       };
+    } catch (error) {
+      throw toApiError(error);
+    }
+  }
+
+  async signDigital(documentId: number): Promise<void> {
+    try {
+      await apiClient.post(`/documents/${documentId}/sign-digital`);
     } catch (error) {
       throw toApiError(error);
     }
@@ -354,8 +368,12 @@ export class DocumentRepository implements IDocumentRepository {
       status: data.status,
       uploadedBy: data.uploaded_by,
       requiresSignature: data.requires_signature,
-      signature: data.signature,
+      signature: data.signature ?? null,
       signedAt: data.signed_at,
+      digitalSignature: data.digital_signature ?? null,
+      digitallySignedAt: data.digitally_signed_at ?? null,
+      digitalSignatureStatus: data.digital_signature_status ?? null,
+      digitalSignatureError: data.digital_signature_error ?? null,
       expiresAt: data.expires_at,
       notified: data.notified,
       notifiedAt: data.notified_at,

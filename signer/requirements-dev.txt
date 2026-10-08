@@ -1,0 +1,4 @@
+# Solo para correr los tests del signer (no entra a la imagen de producción):
+#   docker compose run --rm -v "$PWD/signer:/src" -w /src signer sh -c \
+#     "pip install -q -r requirements-dev.txt && python -m pytest tests -q"
+pytest==8.3.4

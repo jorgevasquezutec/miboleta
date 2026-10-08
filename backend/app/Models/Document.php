@@ -38,14 +38,33 @@ class Document extends Model
         'requires_signature',
         'signature',
         'signed_at',
+        'digital_signature',
+        'digitally_signed_at',
+        'digital_signature_status',
+        'digital_signature_error',
+        'original_file_path',
+        'original_has_conformity',
         'expires_at',
         'notified',
         'notified_at',
         'version',
     ];
 
+    /**
+     * Detalle interno del pipeline de re-firma: no sale en ninguna
+     * serialización (DocumentResource ya lo omite; esto cubre los listados
+     * que devuelven el modelo directo).
+     */
+    protected $hidden = [
+        'original_file_path',
+        'original_has_conformity',
+    ];
+
     protected $casts = [
         'signature' => 'array',
+        'digital_signature' => 'array',
+        'digitally_signed_at' => 'datetime',
+        'original_has_conformity' => 'boolean',
         'requires_signature' => 'boolean',
         'notified' => 'boolean',
         'file_size' => 'integer',
@@ -121,6 +140,14 @@ class Document extends Model
     }
 
     /**
+     * Scope para documentos con firma digital (PAdES) de la empresa.
+     */
+    public function scopeDigitallySigned($query)
+    {
+        return $query->whereNotNull('digital_signature');
+    }
+
+    /**
      * Scope for documents by period
      */
     public function scopeByPeriod($query, string $period)
@@ -173,6 +200,49 @@ class Document extends Model
             'signature' => $signatureData,
             'signed_at' => now(),
         ]);
+    }
+
+    /**
+     * ¿Tiene firma digital (PAdES) de la empresa aplicada? Es independiente
+     * de la conformidad del trabajador (isSigned()).
+     */
+    public function hasDigitalSignature(): bool
+    {
+        return $this->digital_signature !== null;
+    }
+
+    /**
+     * ¿El PDF firmado digitalmente que se sirve ya incluye el nombre del
+     * trabajador (su conformidad)?
+     */
+    public function digitalSignatureIncludesConformity(): bool
+    {
+        return (bool) ($this->digital_signature['includes_conformity'] ?? false);
+    }
+
+    /**
+     * Guarda la metadata de la firma PAdES de la empresa. Toca SOLO las
+     * columnas digital_*: nunca `status`, `signature` ni `signed_at`, que son
+     * de la conformidad del trabajador.
+     */
+    public function applyDigitalSignature(array $meta): void
+    {
+        $this->update([
+            'digital_signature' => $meta,
+            'digitally_signed_at' => now(),
+        ]);
+    }
+
+    /**
+     * Ruta relativa (disco 'documents') de la base de re-firma: la revisión 0
+     * normalizada a PDF/A. Vive junto al archivo, en `.originals/`.
+     */
+    public function originalStoragePath(): string
+    {
+        $dir = dirname($this->file_path);
+
+        return ($dir === '.' ? '' : $dir . '/') . '.originals/'
+            . pathinfo($this->file_path, PATHINFO_FILENAME) . '.pdfa.pdf';
     }
 
     /**

@@ -73,6 +73,18 @@ return [
             'after_commit' => false,
         ],
 
+        // Conexión dedicada a la firma digital (SignDocument). retry_after DEBE
+        // superar el timeout del job (180s) para que Redis no lo re-entregue
+        // mientras el sidecar aún trabaja (TSA de hasta 20s + verificación).
+        'redis-signing' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => env('REDIS_QUEUE', 'default'),
+            'retry_after' => (int) env('REDIS_SIGNING_RETRY_AFTER', 300),
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
         'deferred' => [
             'driver' => 'deferred',
         ],

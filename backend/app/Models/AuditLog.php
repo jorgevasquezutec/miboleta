@@ -79,6 +79,8 @@ class AuditLog extends Model
 
     public const ACTION_DOCUMENT_SIGNED = 'document.signed';
 
+    public const ACTION_DOCUMENT_DIGITALLY_SIGNED = 'document.digitally_signed';
+
     public const ACTION_DOCUMENT_DELETED = 'document.deleted';
 
     public const ACTION_BATCH_CREATED = 'batch.created';
@@ -115,6 +117,10 @@ class AuditLog extends Model
     public const ACTION_SIGNATURE_CERT_UPLOADED = 'signature.certificate_uploaded';
 
     public const ACTION_SIGNATURE_CERT_DELETED = 'signature.certificate_deleted';
+
+    public const ACTION_SIGNATURE_TENANT_CERT_UPLOADED = 'signature.tenant_certificate_uploaded';
+
+    public const ACTION_SIGNATURE_TENANT_CERT_DELETED = 'signature.tenant_certificate_deleted';
 
     public const ACTION_SIGNATURE_TERMS_ACCEPTED = 'signature.terms_accepted';
 
@@ -181,9 +187,12 @@ class AuditLog extends Model
         self::ACTION_PLATFORM_SETTINGS_UPDATED,
         self::ACTION_DOCUMENT_DELETED,
         self::ACTION_DOCUMENT_SIGNED,
+        self::ACTION_DOCUMENT_DIGITALLY_SIGNED,
         self::ACTION_SIGNATURE_SETTINGS_UPDATED,
         self::ACTION_SIGNATURE_CERT_UPLOADED,
         self::ACTION_SIGNATURE_CERT_DELETED,
+        self::ACTION_SIGNATURE_TENANT_CERT_UPLOADED,
+        self::ACTION_SIGNATURE_TENANT_CERT_DELETED,
         self::ACTION_SIGNATURE_TERMS_ACCEPTED,
         self::ACTION_AUDIT_SETTINGS_UPDATED,
         self::ACTION_IMPERSONATION_STARTED,
@@ -330,6 +339,7 @@ class AuditLog extends Model
             self::ACTION_DOCUMENT_VIEWED => 'Visualizó un documento',
             self::ACTION_DOCUMENT_DOWNLOADED => 'Descargó un documento',
             self::ACTION_DOCUMENT_SIGNED => 'Firmó un documento',
+            self::ACTION_DOCUMENT_DIGITALLY_SIGNED => 'Firma digital (certificado) aplicada',
             self::ACTION_DOCUMENT_DELETED => 'Eliminó un documento',
             self::ACTION_BATCH_CREATED => 'Creó un lote de documentos',
             self::ACTION_BATCH_COMPLETED => 'Completó un lote de documentos',
@@ -346,6 +356,8 @@ class AuditLog extends Model
             self::ACTION_SIGNATURE_SETTINGS_UPDATED => 'Actualizó la configuración de firma',
             self::ACTION_SIGNATURE_CERT_UPLOADED => 'Cargó el certificado de firma',
             self::ACTION_SIGNATURE_CERT_DELETED => 'Eliminó el certificado de firma',
+            self::ACTION_SIGNATURE_TENANT_CERT_UPLOADED => 'Cargó el certificado de firma de una empresa',
+            self::ACTION_SIGNATURE_TENANT_CERT_DELETED => 'Eliminó el certificado de firma de una empresa',
             self::ACTION_SIGNATURE_TERMS_ACCEPTED => 'Aceptó los términos de firma',
             self::ACTION_USER_BATCH_CREATED => 'Creó una carga masiva de usuarios',
             self::ACTION_USER_BATCH_COMPLETED => 'Completó una carga masiva de usuarios',

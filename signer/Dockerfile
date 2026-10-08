@@ -32,6 +32,10 @@ ENV PYTHONUNBUFFERED=1 \
 #                         conformidad sería, en el mejor de los casos, parcial.
 # ca-certificates      -> validar TLS al llamar a una TSA externa por HTTPS
 #                         (p.ej. freetsa.org) para el sellado de tiempo opcional.
+# fonts-urw-base35     -> Nimbus Sans (OpenType, tildes/ñ) para el sello de firma
+#                         visible del pie de página (ver pipeline.find_stamp_font).
+#                         Ghostscript ya lo trae como dependencia; se declara
+#                         explícito porque el sello depende de él.
 # libssl3              -> runtime de OpenSSL. `cryptography` trae su propio
 #                         OpenSSL vendorizado en la wheel manylinux, pero se
 #                         deja explícito por si alguna dependencia del SO lo
@@ -42,6 +46,7 @@ RUN apt-get update \
         icc-profiles-free \
         ca-certificates \
         libssl3 \
+        fonts-urw-base35 \
     && rm -rf /var/lib/apt/lists/*
 
 # El script vive fuera de /var/www/html a propósito: ese path lo pisa el
@@ -55,7 +60,13 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # pipeline.py concentra la lógica normalizar->firmar->verificar; la usan
 # tanto app.py (API HTTP productiva) como spike_sign.py (CLI de diagnóstico).
-COPY pipeline.py app.py spike_sign.py ./
+COPY pipeline.py signer_details.py app.py spike_sign.py ./
+
+# Segoe Script para el nombre de conformidad del trabajador (se reescala a
+# 1000 upem en el primer uso; ver pipeline.load_conformity_font). Va dentro de
+# la imagen porque en producción el signer solo monta el storage.
+COPY fonts/ /app/fonts/
+ENV SIGNER_CONFORMITY_FONT=/app/fonts/segoesc.ttf
 
 # CA adicionales en las que confía la verificación (ver signer/trust/README.md).
 COPY trust/ ./trust/
