@@ -68,6 +68,33 @@ class DocumentsControllerTest extends TestCase
             ]);
     }
 
+    public function test_usuario_sin_rol_global_lista_solo_sus_documentos_sin_500(): void
+    {
+        // Solo rol por empresa (sin user_roles): getCurrentRole() devuelve null.
+        $sinRolGlobal = User::factory()
+            ->withTenantRole($this->tenant, 'client', true)
+            ->create(['status' => 'active']);
+        $this->assertNull($sinRolGlobal->getCurrentRole());
+
+        $propio = Document::factory()->create([
+            'user_id' => $sinRolGlobal->id,
+            'tenant_id' => $this->tenant->id,
+            'doc_type_id' => $this->docType->id,
+            'uploaded_by' => $this->admin->id,
+        ]);
+        Document::factory()->create([
+            'user_id' => $this->user->id,
+            'tenant_id' => $this->tenant->id,
+            'doc_type_id' => $this->docType->id,
+            'uploaded_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($sinRolGlobal)->getJson('/api/documents');
+
+        $response->assertStatus(200);
+        $this->assertSame([$propio->id], array_column($response->json('data'), 'id'));
+    }
+
     public function test_user_can_view_their_document(): void
     {
         $document = Document::factory()->create([
