@@ -28,7 +28,10 @@ class DocumentService
      */
     public function getDocuments(User $user, array $filters = []): LengthAwarePaginator
     {
-        $role = $user->getCurrentRole();
+        // Sin rol global (usuario creado fuera de UserService, que es quien
+        // sincroniza user_roles) se trata como 'client': fail-closed, solo sus
+        // propios documentos, en vez de un TypeError 500 en applyRoleFilters.
+        $role = $user->getCurrentRole() ?? 'client';
 
         $query = Document::with(['documentType', 'user:id,name,last_name,document_text', 'batch:id,period,original_filename'])
             ->orderBy('created_at', 'desc');
