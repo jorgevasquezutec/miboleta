@@ -14,6 +14,10 @@ requests==2.34.2
 pyyaml==6.0.3
 lxml==6.1.1
 
+# Fuente TrueType embebida en el sello visible (pyhanko[opentype]): tildes/ñ.
+fonttools==4.66.1
+uharfbuzz==0.56.3
+
 # API HTTP interna (signer/app.py), consumida por el backend Laravel
 # (Job SignDocument) vía Http client, solo dentro de miboleta_network.
 fastapi==0.115.6

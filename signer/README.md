@@ -41,15 +41,96 @@ publicado al host).
     "output_path": "/var/www/html/storage/app/documents/.../.signing-tmp/xxx.pdf",
     "certificate_path": "/var/www/html/storage/app/certificates/xxx.pfx",
     "certificate_password": "...",
-    "tsa_url": null
+    "tsa_url": null,
+    "visible": true
   }
   ```
+  `visible: true` (lo que envía Laravel siempre) dibuja un sello en el PIE de
+  la última página (ancho de la página menos márgenes de 36pt, 58pt de alto,
+  18pt desde abajo) con SOLO: firmante, cargo, razón social, RUC,
+  país/provincia y fecha (hora de Lima). Usa Nimbus Sans (`fonts-urw-base35`,
+  OpenType con tildes/ñ y 1000 unidades/em; DejaVu/2048 unidades/em sale mal
+  en pyHanko 0.35) y reduce la fuente (mín. 6pt) o trunca con "…" si una línea no
+  entra. El sello NO tapa contenido: en la misma revisión incremental se
+  amplía el MediaBox/CropBox de la última página (88pt en el borde que se ve
+  como inferior) y el sello va en esa franja nueva. Respeta `/Rotate`
+  (0/90/180/270, heredable): en 90/270 el widget es una franja vertical y la
+  apariencia lleva un `/Matrix` que la deja legible en horizontal.
   Responde siempre `HTTP 200` con `{"success": true, "output_path", "signature": {...}}`
   o `{"success": false, "error": "...", "stage": "..."}` para fallos de
   negocio del pipeline (certificado inválido, Ghostscript falló, TSA no
   respondió, firma no íntegra). `422`/`500` quedan para errores de
   transporte (request malformado / excepción no manejada), con el mismo
   envelope `{success, error, stage}`.
+
+  `signature` incluye, además de `intact/valid/trusted/signer_subject/...`:
+  ```json
+  "stamp_applied": true,
+  "signer_details": {
+    "name": "BASILIO VENTURA WILLIAM",
+    "organization": "OVERHEAD MEN SOCIEDAD ANONIMA CERRADA - OVERHEAD MEN S.A.C.",
+    "ruc": "20603839961",
+    "title": "GERENTE GENERAL",
+    "country": "PE",
+    "locality": "LIMA",
+    "signed_at_local": "06/10/2026 16:24"
+  }
+  ```
+  `signer_details` (ver `signer_details.py`) sale del subject del certificado
+  (campos ausentes = `null`) y se devuelve también con `visible=false`
+  (`stamp_applied=false`). `signed_at_local` es `dd/mm/yyyy HH:MM` en
+  America/Lima (UTC-5 fijo).
+  **Campos opcionales de `/sign` (conformidad del trabajador y base de re-firma)**:
+  ```json
+  {
+    "base_output_path": ".../.originals/0001.pdfa.pdf",
+    "skip_normalize": false,
+    "conformity": {
+      "name": "Jorge Luis Vásquez",
+      "date_text": "06/10/2026 15:30",
+      "layout": {"mode": "absolute", "x_mm": 137, "name_y_mm": 238.8, "width_mm": 56,
+                 "align": "C", "name_font_size": 13, "name_height_mm": 7,
+                 "date_offset_y_mm": 5, "date_font_size": 7}
+    }
+  }
+  ```
+  - `base_output_path`: tras normalizar (y antes de dibujar o firmar) copia la
+    revisión 0 normalizada a PDF/A a esa ruta (escritura atómica). Es la base
+    de las re-firmas.
+  - `skip_normalize: true`: `input_path` ya es esa base; se usa tal cual (se
+    valida 1 revisión y 0 firmas, si no `stage: "input"`).
+  - `conformity`: dibuja el nombre (Segoe Script) y la fecha (Nimbus Sans) del
+    trabajador en la última página, en la MISMA revisión incremental de la
+    firma de la empresa (`TextStamp` -> reservar pie -> `PdfSigner`). Usa la
+    misma geometría que `PdfWatermarkService` (`config/signature.php`, mm
+    desde arriba-izquierda, modos `absolute`/`auto`, auto-ajuste del tamaño,
+    CropBox y `/Rotate`). Cualquier fallo es `stage: "conformity"` y no deja
+    salida. Sin `conformity` el resultado es el de siempre.
+  - `conformity.layouts` + `conformity.page_dimensions_mm` (opcionales; Laravel
+    los envía SOLO cuando el lote no eligió formato): mapas `key -> layout` y
+    `key -> [ancho_mm, alto_mm]` (de `config/signature.php`). El sidecar
+    compara el tamaño VISUAL real de la última página (CropBox/MediaBox y
+    `/Rotate`) con cada dimensión (tolerancia max(3%, 5 mm) por lado; gana el
+    menor error) y usa el layout de esa key; si ninguna calza, usa `layout`.
+    Sin `layouts` el comportamiento es el de siempre (solo `layout`).
+  - La respuesta `signature` agrega `conformity_applied` y `base_written`
+    (Laravel debe exigir `conformity_applied === true` si envió `conformity`).
+  - **Fuente embebida**: `fonts/segoesc.ttf` va dentro de la imagen
+    (`SIGNER_CONFORMITY_FONT=/app/fonts/segoesc.ttf`; en producción el signer
+    solo monta el storage). Tiene 2048 unidades/em y pyHanko escribe mal los
+    anchos, así que se reescala a 1000 en el primer uso y se cachea en
+    `/tmp/signer-fonts/<sha1>.ttf`. No hay `font_path` en el contrato; si la
+    fuente falta es un error, no un warning.
+  - **Permisos**: todo archivo que escribe el sidecar (salida, base, extract)
+    queda `0644` (y el proceso usa `umask 022`) para que `www-data` lo lea.
+  - **TSA**: cada firma pide un sello de tiempo; una re-firma con conformidad
+    implica como mínimo 2 por documento. Revisar límites/costo de la TSA.
+- `POST /extract-base` `{input_path, output_path}` -> recupera la revisión 0
+  (byte a byte) de un PDF con EXACTAMENTE 1 firma embebida en la última
+  revisión: corta en el `%%EOF` (con su fin de línea) de la revisión anterior
+  a la firmada y valida que el resultado tenga 1 revisión y 0 firmas. Responde
+  `{success: true, output_path}` o `{success: false, stage: "input"|"extract",
+  error}`. Sirve para documentos firmados antes de existir la base.
 - `POST /verify` -> verifica la(s) firma(s) embebidas en un PDF ya firmado
   (mismo envelope de respuesta, con `verification` en vez de `signature`).
 
@@ -116,7 +197,7 @@ docker compose run --rm signer python /opt/signer/spike_sign.py \
 Otras TSA públicas alternativas si `freetsa.org` no responde:
 `http://timestamp.digicert.com`, `http://timestamp.sectigo.com`.
 
-### Con apariencia de firma visible (sello de texto en la última página)
+### Con apariencia de firma visible (sello de texto en el pie de la última página)
 
 ```bash
 docker compose run --rm signer python /opt/signer/spike_sign.py \
@@ -264,3 +345,13 @@ Pendiente (fuera de alcance de esta iteración, ver S3-D):
 - PAdES-LTA / re-sellado de tiempo a largo plazo (hoy el TSA, si se
   configura, se aplica de forma síncrona dentro del mismo request de firma).
 - Pruebas de carga con volúmenes reales (miles de boletas por carga masiva).
+
+## Tests
+
+Los tests de Python (`signer/tests/`) corren dentro del contenedor, sin
+instalar nada en el host:
+
+```bash
+docker compose run --rm -v "$PWD/signer:/src" -w /src signer sh -c \
+  "pip install -q -r requirements-dev.txt && python -m pytest tests -q"
+```
