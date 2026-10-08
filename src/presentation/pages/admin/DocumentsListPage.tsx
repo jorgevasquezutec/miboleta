@@ -25,10 +25,10 @@ import { ConfirmDialog } from "@/presentation/components/shared/ConfirmDialog";
 import { PaginationControls } from "@/presentation/components/shared/PaginationControls";
 import { useUrlFilters, useTenantAwareEffect, useDocumentTitle } from "@/presentation/hooks";
 import { useDocumentsStore } from "@/presentation/stores";
-import { Document } from "@/core/domain/entities/Document";
+import { Document, DigitalStatusFilter } from "@/core/domain/entities/Document";
 import { useCan } from "@/presentation/hooks/useCan";
 import { useTenantFilterStore } from "@/presentation/stores";
-import { getDocumentStatusBadgeInline } from "@/presentation/utils";
+import { getDocumentStatusBadgeInline, getDigitalSignatureBadge } from "@/presentation/utils";
 import { reportsRepository } from "@/infrastructure/persistence/repositories";
 import { toast } from "sonner";
 import { showApiError } from "@/presentation/utils/showApiError";
@@ -55,6 +55,7 @@ export function DocumentsListPage() {
         defaultValues: {
             search: '',
             status: 'all',
+            digital_status: 'all',
             doc_type_id: '',
             date_from: '',
             date_to: '',
@@ -147,11 +148,12 @@ export function DocumentsListPage() {
             perPage: filters.per_page,
             search: filters.search || undefined,
             status: filters.status !== 'all' ? (filters.status as Document['status']) : undefined,
+            digitalStatus: filters.digital_status !== 'all' ? (filters.digital_status as DigitalStatusFilter) : undefined,
             docTypeId: filters.doc_type_id ? parseInt(filters.doc_type_id) : undefined,
             dateFrom: filters.date_from || undefined,
             dateTo: filters.date_to || undefined,
         });
-    }, [filters.page, filters.per_page, filters.search, filters.status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments, tenantFilterKey]);
+    }, [filters.page, filters.per_page, filters.search, filters.status, filters.digital_status, filters.doc_type_id, filters.date_from, filters.date_to, fetchDocuments, tenantFilterKey]);
 
     const handleSearch = () => {
         setFilters({ page: 1 });
@@ -164,6 +166,10 @@ export function DocumentsListPage() {
 
     const handleStatusChange = (value: string) => {
         setFilters({ status: value, page: 1 });
+    };
+
+    const handleDigitalStatusChange = (value: string) => {
+        setFilters({ digital_status: value, page: 1 });
     };
 
     const handleDocTypeChange = (value: string) => {
@@ -308,10 +314,29 @@ export function DocumentsListPage() {
                                 <SelectContent>
                                     <SelectItem value="all">Todos</SelectItem>
                                     <SelectItem value="pending">Pendiente Firma</SelectItem>
-                                    <SelectItem value="signed">Firmado</SelectItem>
+                                    <SelectItem value="signed">Firmado por trabajador</SelectItem>
                                     <SelectItem value="active">Disponible</SelectItem>
                                     <SelectItem value="orphan">Huérfano</SelectItem>
                                     <SelectItem value="expired">Expirado</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Firma digital (PAdES) de la empresa */}
+                        <div className="min-w-[140px]">
+                            <label className="text-xs font-medium mb-1 block text-gray-600">
+                                Firma digital
+                            </label>
+                            <Select value={filters.digital_status} onValueChange={handleDigitalStatusChange}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Todas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todas</SelectItem>
+                                    <SelectItem value="signed">Firmada</SelectItem>
+                                    <SelectItem value="pending">Pendiente</SelectItem>
+                                    <SelectItem value="failed">Error</SelectItem>
+                                    <SelectItem value="none">Sin firma digital</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -407,7 +432,12 @@ export function DocumentsListPage() {
                                                         minute: '2-digit'
                                                     })}
                                                 </TableCell>
-                                                <TableCell>{getDocumentStatusBadgeInline(doc.status)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        {getDocumentStatusBadgeInline(doc.status)}
+                                                        {getDigitalSignatureBadge(doc)}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <Button

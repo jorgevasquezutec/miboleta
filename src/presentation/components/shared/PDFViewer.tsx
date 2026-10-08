@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, PanelLeftClose, PanelLeft, MoveHorizontal } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/button';
 import { cn } from '@/presentation/components/ui/utils';
 
@@ -36,6 +36,30 @@ export function PDFViewer({ url }: PDFViewerProps) {
     });
     const thumbnailsRef = useRef<HTMLDivElement>(null);
 
+    // Ajuste al ancho: por defecto la página se escala para caber completa en
+    // el ancho del área de lectura (p. ej. la boleta apaisada se cortaba al
+    // 100%). Se desactiva al hacer zoom manual y se recupera con el botón
+    // "Ajustar al ancho".
+    const viewRef = useRef<HTMLDivElement>(null);
+    const [autoFit, setAutoFit] = useState(true);
+    const [pageWidthPt, setPageWidthPt] = useState<number | null>(null);
+    const [viewWidth, setViewWidth] = useState<number | null>(null);
+
+    useEffect(() => {
+        const el = viewRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver(([entry]) => setViewWidth(entry.contentRect.width));
+        observer.observe(el);
+        return () => observer.disconnect();
+        // El área de lectura existe recién cuando react-pdf terminó de cargar.
+    }, [numPages]);
+
+    useEffect(() => {
+        if (!autoFit || !pageWidthPt || !viewWidth) return;
+        // Tope en 1.5 para que una página angosta no se vea gigante.
+        setScale(Math.min(Math.max(viewWidth / pageWidthPt, 0.25), 1.5));
+    }, [autoFit, pageWidthPt, viewWidth]);
+
     // Track previous width to detect mobile <-> desktop transitions
     const prevWidthRef = useRef<number>(typeof window !== 'undefined' ? window.innerWidth : 640);
 
@@ -47,13 +71,12 @@ export function PDFViewer({ url }: PDFViewerProps) {
             const BREAKPOINT = 640;
 
             // Transitioning from mobile to desktop
+            // (la escala la recalcula el ajuste al ancho)
             if (prevWidth < BREAKPOINT && currentWidth >= BREAKPOINT) {
-                setScale(1.0);
                 setShowThumbnails(true);
             }
             // Transitioning from desktop to mobile
             else if (prevWidth >= BREAKPOINT && currentWidth < BREAKPOINT) {
-                setScale(0.5);
                 setShowThumbnails(false);
             }
 
@@ -141,12 +164,16 @@ export function PDFViewer({ url }: PDFViewerProps) {
     };
 
     const zoomIn = () => {
+        setAutoFit(false);
         setScale((prev) => Math.min(prev + 0.25, 2.5));
     };
 
     const zoomOut = () => {
-        setScale((prev) => Math.max(prev - 0.25, 0.5));
+        setAutoFit(false);
+        setScale((prev) => Math.max(prev - 0.25, 0.25));
     };
+
+    const fitToWidth = () => setAutoFit(true);
 
     // Scroll thumbnail into view when page changes
     useEffect(() => {
@@ -261,6 +288,16 @@ export function PDFViewer({ url }: PDFViewerProps) {
                     <Button variant="outline" size="sm" onClick={zoomIn} className="h-8 w-8 sm:h-9 sm:w-9 p-0">
                         <ZoomIn className="w-4 h-4" />
                     </Button>
+                    <Button
+                        variant={autoFit ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={fitToWidth}
+                        className="h-8 w-8 sm:h-9 sm:w-9 p-0"
+                        aria-label="Ajustar al ancho"
+                        title="Ajustar al ancho"
+                    >
+                        <MoveHorizontal className="w-4 h-4" />
+                    </Button>
                 </div>
             </div>
 
@@ -276,7 +313,7 @@ export function PDFViewer({ url }: PDFViewerProps) {
                                 <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
                             </div>
                         }
-                        className="flex flex-1"
+                        className="flex flex-1 min-w-0"
                     >
                         {/* Thumbnails sidebar */}
                         {showThumbnails && numPages > 0 && (
@@ -322,11 +359,12 @@ export function PDFViewer({ url }: PDFViewerProps) {
                         )}
 
                         {/* Main PDF view - allows horizontal scroll on mobile */}
-                        <div className="flex-1 overflow-x-auto overflow-y-auto bg-gray-200 p-2 sm:p-4">
+                        <div ref={viewRef} className="flex-1 min-w-0 overflow-x-auto overflow-y-auto bg-gray-200 p-2 sm:p-4">
                             <div className="min-w-fit flex justify-center">
                                 <Page
                                     pageNumber={pageNumber}
                                     scale={scale}
+                                    onLoadSuccess={(page) => setPageWidthPt(page.originalWidth)}
                                     renderTextLayer={false}
                                     renderAnnotationLayer={false}
                                     className="shadow-lg"

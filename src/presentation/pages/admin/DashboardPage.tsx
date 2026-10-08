@@ -22,6 +22,7 @@ import {
   UserCog,
   Building2,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import { StatsCard } from "@/presentation/components/common";
 import { Button } from "@/presentation/components/ui/button";
@@ -222,9 +223,10 @@ export function AdminDashboardView() {
       }
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         {isLoadingDashboard ? (
           <>
+            <StatsCardSkeleton />
             <StatsCardSkeleton />
             <StatsCardSkeleton />
             <StatsCardSkeleton />
@@ -246,10 +248,16 @@ export function AdminDashboardView() {
               color="#10B981"
             />
             <StatsCard
-              title="Documentos Firmados"
+              title="Conformidad del trabajador"
               value={documentStats?.signed?.toLocaleString() ?? '0'}
               icon={CheckCircle}
               color="#10B981"
+            />
+            <StatsCard
+              title="Con firma digital"
+              value={documentStats?.digitally_signed?.toLocaleString() ?? '0'}
+              icon={ShieldCheck}
+              color="#059669"
             />
             <StatsCard
               title="Pendientes"

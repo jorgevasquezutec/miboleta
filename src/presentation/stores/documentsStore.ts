@@ -1,8 +1,18 @@
 import { create } from "zustand";
-import { Document, DocumentType, DocumentBatch, ZipPreviewResponse, PageSize } from "@/core/domain/entities";
+import { Document, DocumentType, DocumentBatch, ZipPreviewResponse, PageSize, DigitalStatusFilter } from "@/core/domain/entities";
 import { VerifySignatureResponse } from "@/core/domain/repositories/IDocumentRepository";
 import { documentRepository } from "@/infrastructure/persistence/repositories";
 import { getErrorMessage } from "@/infrastructure/http/apiClient";
+
+export interface PollDigitalSignatureOptions {
+  intervalMs?: number;
+  timeoutMs?: number;
+  // Permite cancelar el polling (p. ej. al desmontar la vista)
+  signal?: AbortSignal;
+}
+
+// 'signed' | 'failed' = terminó; 'timeout' = sigue en proceso; 'cancelled' = abortado
+export type PollDigitalSignatureResult = 'signed' | 'failed' | 'none' | 'timeout' | 'cancelled';
 
 interface DocumentsState {
   // Documents
@@ -22,6 +32,7 @@ interface DocumentsState {
   statusFilter: Document['status'] | 'all';
   typeFilter: number | null;
   periodFilter: string;
+  digitalStatusFilter: DigitalStatusFilter | 'all';
 
   // Document Types
   documentTypes: DocumentType[];
@@ -61,6 +72,7 @@ interface DocumentsState {
     dateFrom?: string;
     dateTo?: string;
     myDocuments?: boolean;
+    digitalStatus?: DigitalStatusFilter;
   }) => Promise<void>;
   fetchDocumentById: (id: number) => Promise<void>;
   deleteDocument: (id: number) => Promise<void>;
@@ -70,6 +82,7 @@ interface DocumentsState {
   setStatusFilter: (status: Document['status'] | 'all') => void;
   setTypeFilter: (typeId: number | null) => void;
   setPeriodFilter: (period: string) => void;
+  setDigitalStatusFilter: (status: DigitalStatusFilter | 'all') => void;
   setPage: (page: number) => void;
   setPerPage: (size: number) => void;
 
@@ -100,6 +113,9 @@ interface DocumentsState {
   acceptSignatureTerms: () => Promise<void>;
   requestSignatureCode: (documentId: number) => Promise<{ expiresIn: number; emailSentTo: string }>;
   signDocument: (documentId: number, code: string) => Promise<void>;
+  refreshDocument: (id: number) => Promise<void>;
+  pollDigitalSignature: (documentId: number, options?: PollDigitalSignatureOptions) => Promise<PollDigitalSignatureResult>;
+  retryDigitalSignature: (documentId: number) => Promise<void>;
   verifyDocumentSignature: (documentId: number) => Promise<void>;
   clearSignatureVerification: () => void;
 
@@ -121,6 +137,7 @@ const initialState = {
   statusFilter: "all" as const,
   typeFilter: null,
   periodFilter: "",
+  digitalStatusFilter: "all" as const,
   documentTypes: [],
   typesLoading: false,
   batches: [],
@@ -159,6 +176,8 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       dateFrom: params?.dateFrom || undefined,
       dateTo: params?.dateTo || undefined,
       myDocuments: params?.myDocuments || undefined,
+      digitalStatus: params?.digitalStatus
+        ?? (state.digitalStatusFilter !== 'all' ? state.digitalStatusFilter : undefined),
     };
 
     try {
@@ -235,6 +254,11 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
 
   setPeriodFilter: (period) => {
     set({ periodFilter: period, page: 1 });
+    get().fetchDocuments();
+  },
+
+  setDigitalStatusFilter: (status) => {
+    set({ digitalStatusFilter: status, page: 1 });
     get().fetchDocuments();
   },
 
@@ -430,19 +454,7 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
 
     try {
       await documentRepository.signDocument(documentId, code);
-
-      // Update document in state
-      set((state) => ({
-        currentDocument: state.currentDocument
-          ? { ...state.currentDocument, status: 'signed' as const, signedAt: new Date().toISOString() }
-          : null,
-        documents: state.documents.map((d) =>
-          d.id === documentId
-            ? { ...d, status: 'signed' as const, signedAt: new Date().toISOString() }
-            : d
-        ),
-        signatureLoading: false,
-      }));
+      set({ signatureLoading: false });
     } catch (error: any) {
       const errorMessage = getErrorMessage(error);
       set({
@@ -451,6 +463,60 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
       });
       throw error;
     }
+
+    // La conformidad ya quedó registrada: recargar el documento real (estado, firma
+    // digital pendiente, etc.) en vez de mutarlo a mano. Recarga silenciosa (sin
+    // isLoading) para no desmontar el visor ni el modal; si falla no invalida la firma.
+    await get().refreshDocument(documentId);
+  },
+
+  refreshDocument: async (id: number) => {
+    try {
+      const document = await documentRepository.findById(id);
+      set((state) => ({
+        currentDocument: state.currentDocument?.id === id ? document : state.currentDocument,
+        documents: state.documents.map((d) => (d.id === id ? document : d)),
+      }));
+    } catch (error) {
+      console.error('[documentsStore] Error refreshing document:', error);
+    }
+  },
+
+  pollDigitalSignature: async (documentId, options) => {
+    const intervalMs = options?.intervalMs ?? 3000;
+    const timeoutMs = options?.timeoutMs ?? 120000;
+    const signal = options?.signal;
+    const startedAt = Date.now();
+
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+    while (Date.now() - startedAt < timeoutMs) {
+      await sleep(intervalMs);
+      if (signal?.aborted) return 'cancelled';
+
+      try {
+        // Endpoint liviano de estado (no recarga todo el documento en cada tick)
+        const status = await documentRepository.getSignatureStatus(documentId);
+        if (signal?.aborted) return 'cancelled';
+        if (status.digitalSignatureStatus !== 'pending') {
+          await get().refreshDocument(documentId);
+          // null = sin firma digital (p. ej. el archivo fue reemplazado): resultado neutro, sin toast
+          if (status.digitalSignatureStatus === 'signed') return 'signed';
+          if (status.digitalSignatureStatus === 'failed') return 'failed';
+          return 'none';
+        }
+      } catch (error) {
+        // Error transitorio de red: se sigue intentando hasta agotar el tiempo
+        console.error('[documentsStore] Error polling digital signature:', error);
+      }
+    }
+
+    return 'timeout';
+  },
+
+  retryDigitalSignature: async (documentId: number) => {
+    await documentRepository.signDigital(documentId);
+    await get().refreshDocument(documentId);
   },
 
   verifyDocumentSignature: async (documentId: number) => {

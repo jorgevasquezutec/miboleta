@@ -16,6 +16,7 @@ import {
     Calendar,
     Upload,
     Shield,
+  ShieldCheck,
     Settings,
     KeyRound,
     UserCog,
@@ -55,6 +56,7 @@ const getActionIcon = (action: string) => {
     if (action.startsWith('user.logout')) return <LogOut className="w-4 h-4 text-gray-500" />;
     if (action.startsWith('user.created') || action.startsWith('user.updated')) return <UserPlus className="w-4 h-4 text-blue-500" />;
     if (action.startsWith('user.deleted')) return <Trash2 className="w-4 h-4 text-red-500" />;
+    if (action.startsWith('document.digitally_signed')) return <ShieldCheck className="w-4 h-4 text-emerald-600" />;
     if (action.startsWith('document.signed')) return <FileSignature className="w-4 h-4 text-green-500" />;
     if (action.startsWith('document.viewed')) return <Eye className="w-4 h-4 text-blue-500" />;
     if (action.startsWith('document.uploaded') || action.startsWith('batch.')) return <Upload className="w-4 h-4 text-purple-500" />;
@@ -124,6 +126,7 @@ const actionDescriptions: Record<string, string> = {
     'document.viewed': 'Documento visualizado',
     'document.downloaded': 'Documento descargado',
     'document.signed': 'Documento firmado',
+    'document.digitally_signed': 'Firma digital (certificado) aplicada',
     'document.deleted': 'Documento eliminado',
     'batch.created': 'Lote de documentos creado',
     'batch.completed': 'Lote completado',
@@ -140,6 +143,8 @@ const actionDescriptions: Record<string, string> = {
     'signature.settings_updated': 'Actualizó la configuración de firma',
     'signature.certificate_uploaded': 'Cargó el certificado de firma',
     'signature.certificate_deleted': 'Eliminó el certificado de firma',
+    'signature.tenant_certificate_uploaded': 'Cargó el certificado de firma de una empresa',
+    'signature.tenant_certificate_deleted': 'Eliminó el certificado de firma de una empresa',
     'signature.terms_accepted': 'Aceptó los términos de firma',
     'user_batch.created': 'Creó una carga masiva de usuarios',
     'user_batch.completed': 'Completó una carga masiva de usuarios',
@@ -409,6 +414,7 @@ export function AuditLogsPage() {
                                     <SelectItem value="user.logout">Cierre de sesión</SelectItem>
                                     <SelectItem value="user.login_failed">Login fallido</SelectItem>
                                     <SelectItem value="document.signed">Firma de documento</SelectItem>
+                                    <SelectItem value="document.digitally_signed">Firma digital (certificado)</SelectItem>
                                     <SelectItem value="document.viewed">Visualización</SelectItem>
                                     <SelectItem value="document.downloaded">Descarga</SelectItem>
                                     <SelectItem value="vacation.approved">Vacaciones aprobadas</SelectItem>
@@ -417,6 +423,7 @@ export function AuditLogsPage() {
                                     <SelectItem value="platform.settings_updated">Configuración de plataforma</SelectItem>
                                     <SelectItem value="user.password_reset">Reset de contraseña</SelectItem>
                                     <SelectItem value="signature.certificate_uploaded">Carga de certificado</SelectItem>
+                                    <SelectItem value="signature.tenant_certificate_uploaded">Carga de certificado de empresa</SelectItem>
                                     <SelectItem value="user_batch.completed">Carga masiva completada</SelectItem>
                                 </SelectContent>
                             </Select>

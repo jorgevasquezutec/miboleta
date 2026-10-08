@@ -7,6 +7,8 @@ export interface DocumentStats {
     total: number;
     signed: number;
     pending: number;
+    digitally_signed?: number;
+    digital_failed?: number;
     active: number;
     orphan: number;
     by_month: MonthlyData[];

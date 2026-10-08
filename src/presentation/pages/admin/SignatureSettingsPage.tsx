@@ -1,18 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ShieldCheck,
   ShieldOff,
-  Upload,
   Trash2,
   Loader2,
   FileKey,
-  Info,
   AlertCircle,
+  AlertTriangle,
+  RefreshCw,
+  Upload,
 } from "lucide-react";
 import { useDocumentTitle } from "@/presentation/hooks";
 import { Button } from "@/presentation/components/ui/button";
-import { Input } from "@/presentation/components/ui/input";
-import { Label } from "@/presentation/components/ui/label";
 import {
   Card,
   CardContent,
@@ -23,7 +23,7 @@ import {
 import { Separator } from "@/presentation/components/ui/separator";
 import { Switch } from "@/presentation/components/ui/switch";
 import { Badge } from "@/presentation/components/ui/badge";
-import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/presentation/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,25 +36,49 @@ import {
 } from "@/presentation/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useSignatureSettingsStore } from "@/presentation/stores";
-import { formatDateTime } from "@/presentation/utils";
+import { formatDate, formatDateTime } from "@/presentation/utils";
+import {
+  TenantCertificatesCard,
+  GlobalCertificateUploadDialog,
+  GlobalCertificateUploadForm,
+  getExpiryState,
+} from "@/presentation/components/features/signature";
+
+type TabValue = "empresas" | "global";
 
 export function SignatureSettingsPage() {
   useDocumentTitle("Firma Digital");
 
-  const { settings, isLoading, isSaving, error, fetchSettings, uploadCertificate, setEnabled, deleteCertificate, clearError } =
+  const { settings, isLoading, isSaving, error, fetchSettings, setEnabled, deleteCertificate, clearError, fetchTenantCertificates, tenantSummary } =
     useSignatureSettingsStore();
 
-  const [certificateFile, setCertificateFile] = useState<File | null>(null);
-  const [password, setPassword] = useState("");
-  const [tsaUrl, setTsaUrl] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  // Se incrementa tras cada carga exitosa para remontar el <input type="file">
-  // nativo (Input no es un forwardRef, así que no podemos limpiarlo vía ref).
-  const [fileInputKey, setFileInputKey] = useState(0);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+
+  // Pestaña en la URL con push (navegación normal): así "atrás" vuelve a la pestaña anterior.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab: TabValue = searchParams.get("tab") === "global" ? "global" : "empresas";
+  // Radix notifica el mismo valor dos veces (click + foco) y el router aplica
+  // la navegación de forma asíncrona, así que activeTab aún no cambió en la
+  // segunda llamada: sin este ref se apilan dos entradas iguales y "atrás"
+  // no cambia de pestaña.
+  const requestedTab = useRef<TabValue>(activeTab);
+  useEffect(() => {
+    requestedTab.current = activeTab;
+  }, [activeTab]);
+  const setActiveTab = (value: string) => {
+    if (value === requestedTab.current) return;
+    requestedTab.current = value === "global" ? "global" : "empresas";
+    const next = new URLSearchParams(searchParams);
+    if (value === "global") next.set("tab", "global");
+    else next.delete("tab");
+    setSearchParams(next);
+  };
 
   useEffect(() => {
     fetchSettings();
-  }, [fetchSettings]);
+    fetchTenantCertificates();
+  }, [fetchSettings, fetchTenantCertificates]);
 
   useEffect(() => {
     if (error) {
@@ -62,41 +86,6 @@ export function SignatureSettingsPage() {
       clearError();
     }
   }, [error, clearError]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
-    setCertificateFile(file);
-  };
-
-  const resetForm = () => {
-    setCertificateFile(null);
-    setPassword("");
-    setTsaUrl("");
-    setFileInputKey((key) => key + 1);
-  };
-
-  const handleUpload = async () => {
-    if (!certificateFile) {
-      toast.error("Selecciona un archivo de certificado (.pfx o .p12)");
-      return;
-    }
-    if (!password) {
-      toast.error("Ingresa la contraseña del certificado");
-      return;
-    }
-
-    try {
-      await uploadCertificate({
-        certificate: certificateFile,
-        password,
-        tsaUrl: tsaUrl.trim() || undefined,
-      });
-      toast.success("Certificado de firma cargado exitosamente");
-      resetForm();
-    } catch {
-      // El store ya guarda el error y el useEffect lo muestra en un toast
-    }
-  };
 
   const handleToggleEnabled = async (checked: boolean) => {
     if (checked && !settings?.hasCertificate) {
@@ -122,6 +111,13 @@ export function SignatureSettingsPage() {
     }
   };
 
+  const expiryState = getExpiryState(settings?.certificateExpiresAt);
+
+  const hasCertificate = !!settings?.hasCertificate;
+  const warnings = tenantSummary?.withWarnings ?? 0;
+  const expiryColor =
+    expiryState === "expired" ? "text-red-600" : expiryState === "expiring_soon" ? "text-amber-700" : "text-[#64748B]";
+
   if (isLoading && !settings) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -137,23 +133,78 @@ export function SignatureSettingsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
           <FileKey className="w-6 h-6 text-[#2563EB]" />
         </div>
         <div>
           <h1 className="text-xl font-semibold">Firma Digital</h1>
           <p className="text-[#64748B]">
-            Configura el certificado de firma digital criptográfica (PAdES) de la plataforma
+            Configura el certificado global y los certificados por empresa de la firma digital criptográfica (PAdES)
           </p>
         </div>
       </div>
 
-      {/* Status Card */}
+      {/* Franja de estado (siempre visible) */}
+      <div
+        data-testid="signature-status-strip"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-white px-4 py-2.5 text-sm"
+      >
+        <span
+          className={`inline-flex items-center gap-1.5 font-medium ${
+            settings?.signatureEnabled ? "text-green-600" : "text-[#64748B]"
+          }`}
+        >
+          {settings?.signatureEnabled ? <ShieldCheck className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+          {settings?.signatureEnabled ? "Firma digital activada" : "Firma digital desactivada"}
+        </span>
+        {hasCertificate ? (
+          <span className={expiryColor}>
+            Certificado global vence {formatDate(settings?.certificateExpiresAt ?? null)}
+          </span>
+        ) : (
+          <>
+            <span className="inline-flex items-start gap-1.5 text-amber-700 min-w-0">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                No hay certificado global. Es necesario para activar la firma y para las empresas sin certificado propio.
+              </span>
+            </span>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setActiveTab("global")}>
+              <Upload className="w-3.5 h-3.5" />
+              Cargar certificado global
+            </Button>
+          </>
+        )}
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
+          <TabsTrigger value="empresas" className="gap-2">
+            Empresas
+            {warnings > 0 && (
+              <span
+                aria-label={`${warnings} ${warnings === 1 ? "empresa con aviso" : "empresas con aviso"}`}
+                className="inline-flex items-center gap-0.5 rounded-full border border-amber-300 bg-amber-100 px-1.5 text-xs font-medium text-amber-800"
+              >
+                <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+                {warnings}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="global">Certificado global</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="empresas" className="space-y-6">
+          <TenantCertificatesCard />
+        </TabsContent>
+
+        <TabsContent value="global" className="space-y-6">
+      {/* Certificado global */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Estado de la Firma Digital</CardTitle>
+              <CardTitle>Certificado global de la plataforma</CardTitle>
               <CardDescription>
                 Al activarla, los documentos elegibles podrán firmarse criptográficamente con el certificado configurado
               </CardDescription>
@@ -180,8 +231,8 @@ export function SignatureSettingsPage() {
               <h4 className="text-sm font-medium">Activar firma digital</h4>
               <p className="text-sm text-[#64748B]">
                 {settings?.hasCertificate
-                  ? "Habilita el uso del certificado configurado para firmar documentos"
-                  : "Necesitas cargar un certificado antes de poder activarla"}
+                  ? "La firma digital se activa para toda la plataforma; requiere el certificado global."
+                  : "Necesitas cargar el certificado global antes de poder activarla"}
               </p>
             </div>
             <Switch
@@ -196,11 +247,33 @@ export function SignatureSettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <span className="text-sm text-[#64748B]">Certificado cargado</span>
-              <p className="font-medium">{settings?.hasCertificate ? "Sí" : "No"}</p>
+              <p className="font-medium flex items-center gap-2">
+                {settings?.hasCertificate ? "Sí" : "No"}
+                {expiryState === "expired" && (
+                  <Badge className="text-white border-none" style={{ backgroundColor: "#ef4444" }}>
+                    Vencido
+                  </Badge>
+                )}
+                {expiryState === "expiring_soon" && (
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-300">Por vencer</Badge>
+                )}
+              </p>
             </div>
             <div className="space-y-1">
               <span className="text-sm text-[#64748B]">Titular del certificado</span>
               <p className="font-medium">{settings?.certificateSubject || "-"}</p>
+            </div>
+            <div className="space-y-1">
+              <span className="text-sm text-[#64748B]">RUC del certificado</span>
+              <p className="font-medium">{settings?.certificateRuc || "-"}</p>
+            </div>
+            <div className="space-y-1">
+              <span className="text-sm text-[#64748B]">Razón social (certificado)</span>
+              <p className="font-medium">{settings?.certificateOrganization || "-"}</p>
+            </div>
+            <div className="space-y-1">
+              <span className="text-sm text-[#64748B]">Vence</span>
+              <p className="font-medium">{formatDate(settings?.certificateExpiresAt ?? null)}</p>
             </div>
             <div className="space-y-1">
               <span className="text-sm text-[#64748B]">URL de sello de tiempo (TSA)</span>
@@ -217,6 +290,16 @@ export function SignatureSettingsPage() {
           {settings?.hasCertificate && (
             <>
               <Separator />
+              <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setShowUploadDialog(true)}
+                disabled={isSaving}
+              >
+                <RefreshCw className="w-4 h-4" />
+                Renovar / Reemplazar certificado
+              </Button>
               <Button
                 variant="outline"
                 className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
@@ -226,87 +309,29 @@ export function SignatureSettingsPage() {
                 <Trash2 className="w-4 h-4" />
                 Eliminar Certificado
               </Button>
+              </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* Upload Certificate Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{settings?.hasCertificate ? "Reemplazar Certificado" : "Cargar Certificado"}</CardTitle>
-          <CardDescription>
-            Sube el archivo .pfx o .p12 del certificado de firma digital de la plataforma (DS-009-2011-TR)
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert className="border-blue-200 bg-blue-50">
-            <Info className="w-4 h-4 text-blue-600" />
-            <AlertDescription className="text-sm text-gray-700">
-              Este es el certificado ÚNICO de la plataforma: se usa para firmar todos los documentos elegibles,
-              sin importar la empresa. Al subir uno nuevo, reemplaza al anterior.
-            </AlertDescription>
-          </Alert>
+          {!hasCertificate && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Cargar Certificado</CardTitle>
+                <CardDescription>
+                  Sube el archivo .pfx o .p12 del certificado global de firma digital de la plataforma (DS-009-2011-TR)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <GlobalCertificateUploadForm />
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
-          <div className="space-y-2">
-            <Label htmlFor="certificate-file">Archivo del certificado (.pfx / .p12)</Label>
-            <Input
-              id="certificate-file"
-              key={fileInputKey}
-              type="file"
-              accept=".pfx,.p12"
-              onChange={handleFileChange}
-              disabled={isSaving}
-            />
-            {certificateFile && (
-              <p className="text-sm text-[#64748B]">Seleccionado: {certificateFile.name}</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="certificate-password">Contraseña del certificado</Label>
-              <Input
-                id="certificate-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isSaving}
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tsa-url">URL de sello de tiempo (TSA) - opcional</Label>
-              <Input
-                id="tsa-url"
-                type="url"
-                placeholder="https://freetsa.org/tsr"
-                value={tsaUrl}
-                onChange={(e) => setTsaUrl(e.target.value)}
-                disabled={isSaving}
-              />
-            </div>
-          </div>
-
-          <Button
-            className="gap-2 bg-[#2563EB] hover:bg-[#1E40AF]"
-            onClick={handleUpload}
-            disabled={isSaving || !certificateFile || !password}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Subiendo...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4" />
-                Cargar Certificado
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+      <GlobalCertificateUploadDialog open={showUploadDialog} onOpenChange={setShowUploadDialog} />
 
       {/* Delete Confirmation */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

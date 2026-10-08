@@ -5,6 +5,7 @@ export {
   getDocumentStatusBadgeInline,
   getDocumentStatusLabel,
   getDocumentStatusColor,
+  getDigitalSignatureBadge,
 } from "./documentStatus";
 
 // Batch status utilities
@@ -26,3 +27,7 @@ export {
   formatVacationDays,
   truncateText,
 } from "./formatters";
+
+// Datos limpios del firmante (sello de firma)
+export { formatSignerDetails, formatCountry } from "./signerDetails";
+export type { SignerDetailRow } from "./signerDetails";

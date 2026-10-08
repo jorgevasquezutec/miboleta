@@ -1,4 +1,4 @@
-import { Document } from '../entities/Document';
+import { Document, DigitalSignatureStatus, DigitalStatusFilter } from '../entities/Document';
 import { DocumentType } from '../entities/DocumentType';
 import { DocumentBatch, BatchUploadRequest, ZipPreviewResponse } from '../entities/DocumentBatch';
 
@@ -13,6 +13,7 @@ export interface DocumentFilters {
   dateFrom?: string;
   dateTo?: string;
   myDocuments?: boolean;
+  digitalStatus?: DigitalStatusFilter;
 }
 
 export interface PaginatedDocuments {
@@ -39,6 +40,7 @@ export interface RequestCodeResponse {
 export interface SignDocumentResponse {
   message: string;
   signedAt: string;
+  digitalSignatureStatus: DigitalSignatureStatus | null;
   document: any;
 }
 
@@ -48,6 +50,9 @@ export interface SignatureStatusResponse {
   isSigned: boolean;
   signedAt: string | null;
   signature: any;
+  digitalSignatureStatus: DigitalSignatureStatus | null;
+  digitallySignedAt: string | null;
+  includesConformity: boolean;
 }
 
 /**
@@ -68,6 +73,7 @@ export interface VerifySignatureResponse {
   signingTime?: string | null;
   tsaApplied?: boolean | null;
   tsaTime?: string | null;
+  includesConformity?: boolean | null;
 }
 
 export interface IDocumentRepository {
@@ -110,4 +116,6 @@ export interface IDocumentRepository {
 
   // Firma digital criptográfica (PAdES) - verificación
   verifySignature(documentId: number): Promise<VerifySignatureResponse>;
+  // Firma (o reintenta la re-firma) PAdES de la empresa; responde 202
+  signDigital(documentId: number): Promise<void>;
 }

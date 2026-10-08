@@ -20,3 +20,6 @@ export * from './vacations';
 
 // Profile
 export * from './profile';
+
+// Signature
+export * from './signature';

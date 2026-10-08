@@ -2,6 +2,8 @@ import { FileText, Download, Eye, Edit, CheckCircle, Clock, XCircle } from "luci
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
+import { getDigitalSignatureBadge } from "@/presentation/utils";
+import type { Document } from "@/core/domain/entities/Document";
 
 export type DocumentStatus = "pending" | "signed" | "expired" | "draft";
 export type DocumentCategory = "payslip" | "contract" | "certificate" | "other";
@@ -12,6 +14,9 @@ interface DocumentCardProps {
   category: DocumentCategory;
   status: DocumentStatus;
   date: string;
+  // Firma digital (PAdES) de la empresa; independiente de la conformidad del trabajador
+  digitalSignature?: Document['digitalSignature'];
+  digitalSignatureStatus?: Document['digitalSignatureStatus'];
   onView?: () => void;
   onDownload?: () => void;
   onSign?: () => void;
@@ -19,7 +24,7 @@ interface DocumentCardProps {
 
 const statusConfig: Record<DocumentStatus, { label: string; color: string; icon: any }> = {
   pending: { label: "Pendiente", color: "bg-[#F59E0B] text-white", icon: Clock },
-  signed: { label: "Firmado", color: "bg-[#10B981] text-white", icon: CheckCircle },
+  signed: { label: "Firmado por trabajador", color: "bg-[#10B981] text-white", icon: CheckCircle },
   expired: { label: "Vencido", color: "bg-[#EF4444] text-white", icon: XCircle },
   draft: { label: "Borrador", color: "bg-[#64748B] text-white", icon: Edit },
 };
@@ -37,11 +42,14 @@ export function DocumentCard({
   category,
   status,
   date,
+  digitalSignature = null,
+  digitalSignatureStatus = null,
   onView,
   onDownload,
   onSign,
 }: DocumentCardProps) {
   const StatusIcon = statusConfig[status].icon;
+  const digitalBadge = getDigitalSignatureBadge({ digitalSignature, digitalSignatureStatus });
 
   return (
     <Card className="hover:shadow-md transition-shadow duration-200">
@@ -69,6 +77,7 @@ export function DocumentCard({
                 {categoryConfig[category].label}
               </Badge>
               <span className="text-[#64748B]">{date}</span>
+              {digitalBadge}
             </div>
 
             {/* Actions */}
