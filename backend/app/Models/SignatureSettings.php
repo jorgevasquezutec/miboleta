@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Configuración ÚNICA de la plataforma para la firma digital con
+ * Configuración GLOBAL de la plataforma (certificado por defecto) para la firma digital con
  * certificado (.pfx/.p12), usada para firmar documentos bajo DS-009-2011-TR.
  *
  * Es una tabla singleton: siempre existe (o se crea de forma perezosa) una
@@ -27,6 +27,9 @@ class SignatureSettings extends Model
         'certificate_path',
         'certificate_password',
         'certificate_subject',
+        'certificate_ruc',
+        'certificate_organization',
+        'certificate_expires_at',
         'tsa_url',
         'uploaded_by',
         'uploaded_at',
@@ -44,6 +47,7 @@ class SignatureSettings extends Model
     protected $casts = [
         'signature_enabled' => 'boolean',
         'certificate_password' => 'encrypted',
+        'certificate_expires_at' => 'datetime',
         'uploaded_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

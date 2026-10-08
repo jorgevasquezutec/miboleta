@@ -34,9 +34,11 @@ use Illuminate\Support\Facades\Storage;
  *  - Se reinicia el AUTO_INCREMENT (mysql) de las tablas que quedan
  *    completamente vacías, salvo --sin-reiniciar-ids.
  *  - storage/logs se conserva salvo --borrar-logs.
- *  - El certificado de firma (disco "certificates") y las filas de
- *    signature_settings/platform_settings/audit_settings/roles/document_types
- *    NUNCA se tocan (son catálogo/configuración, no datos de negocio).
+ *  - Los certificados de firma POR EMPRESA (tabla tenant_signature_certificates
+ *    + sus binarios en el disco "certificates") se borran junto con las
+ *    empresas. El certificado GLOBAL (disco "certificates" y fila de
+ *    signature_settings) y platform_settings/audit_settings/roles/
+ *    document_types NUNCA se tocan (catálogo/configuración).
  *
  * Es DESTRUCTIVO e IRREVERSIBLE: exige --ejecutar (si no, solo simula) y,
  * dentro de --ejecutar, una confirmación escrita exacta con el nombre de la
@@ -79,6 +81,7 @@ class LimpiarDatos extends Command
         'user_batches',
         'user_tenant_roles',
         'user_tenants',
+        'tenant_signature_certificates',
         'tenants',
     ];
 
@@ -148,13 +151,17 @@ class LimpiarDatos extends Command
 
         $idsAConservar = $usuariosAConservar->pluck('id')->all();
 
+        // Rutas de binarios por empresa: se leen ANTES del borrado (la tabla
+        // queda vacía) y se eliminan después del commit.
+        $rutasCertEmpresas = $this->rutasCertificadosEmpresas();
+
         $conteos = $this->ejecutarBorrado($idsAConservar);
 
         if (DB::connection()->getDriverName() === 'mysql' && ! $this->option('sin-reiniciar-ids')) {
             $this->reiniciarAutoIncrement();
         }
 
-        $this->vaciarArchivos($usuariosAConservar);
+        $this->vaciarArchivos($usuariosAConservar, $rutasCertEmpresas);
         $this->limpiarColasYCache();
         $this->registrarAuditoria($usuariosAConservar, $conteos);
         $this->mostrarResumenFinal($usuariosAConservar, $conteos);
@@ -371,6 +378,17 @@ class LimpiarDatos extends Command
     }
 
     /**
+     * Rutas de los binarios de certificados por empresa (disco "certificates").
+     * Se borran SOLO estas rutas exactas; nunca allFiles() de ese disco.
+     *
+     * @return Collection<int, string>
+     */
+    private function rutasCertificadosEmpresas(): Collection
+    {
+        return DB::table('tenant_signature_certificates')->pluck('certificate_path')->filter()->values();
+    }
+
+    /**
      * @return array<string, int>
      */
     private function contarArchivos(Collection $usuariosAConservar): array
@@ -387,6 +405,7 @@ class LimpiarDatos extends Command
         }
 
         $conteos['public (avatars + logos de tenants)'] = $this->contarArchivosPublicos($usuariosAConservar);
+        $conteos['certificates (empresas)'] = $this->rutasCertificadosEmpresas()->count();
 
         return $conteos;
     }
@@ -510,7 +529,7 @@ class LimpiarDatos extends Command
 
     // ============ Archivos ============
 
-    private function vaciarArchivos(Collection $usuariosAConservar): void
+    private function vaciarArchivos(Collection $usuariosAConservar, Collection $rutasCertEmpresas): void
     {
         $this->info('Vaciando archivos...');
 
@@ -522,8 +541,12 @@ class LimpiarDatos extends Command
 
         $this->vaciarLogosYAvataresPublicos($usuariosAConservar);
 
-        // El certificado de firma digital (disco "certificates") NUNCA se
-        // toca: no aparece en ningún lado de este método a propósito.
+        // Disco "certificates": SOLO se borran los binarios por empresa
+        // (rutas leídas de la tabla antes del borrado, ver handle()). El
+        // certificado global NUNCA se toca.
+        foreach ($rutasCertEmpresas as $ruta) {
+            Storage::disk('certificates')->delete($ruta);
+        }
 
         if ($this->option('borrar-logs')) {
             $this->vaciarLogs();

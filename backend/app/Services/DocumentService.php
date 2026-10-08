@@ -119,6 +119,13 @@ class DocumentService
 
         $document->assignToUser($targetUser);
 
+        // Firma digital de la empresa: si pasó a 'pending' y le aplica el
+        // pipeline PAdES, se encola (igual que al subir el lote).
+        $signing = app(DocumentSigningService::class);
+        if ($document->status === 'pending' && $signing->appliesTo($document)) {
+            $signing->markPendingAndDispatch($document, 'signing');
+        }
+
         return $document->fresh(['documentType', 'user']);
     }
 
@@ -215,6 +222,12 @@ class DocumentService
 
         if ($deleteFile && $document->fileExists()) {
             Storage::disk('documents')->delete($document->file_path);
+        }
+
+        // La base de re-firma (.originals) también es un archivo del documento.
+        if ($deleteFile && $document->original_file_path
+            && Storage::disk('documents')->exists($document->original_file_path)) {
+            Storage::disk('documents')->delete($document->original_file_path);
         }
 
         $snapshot = [
@@ -316,6 +329,18 @@ class DocumentService
     {
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
+        }
+
+        // Firma digital de la empresa (independiente de la conformidad del
+        // trabajador): signed | pending | failed | none.
+        if (!empty($filters['digital_status'])) {
+            match ($filters['digital_status']) {
+                'signed' => $query->whereNotNull('digital_signature'),
+                'pending' => $query->where('digital_signature_status', 'pending'),
+                'failed' => $query->where('digital_signature_status', 'failed'),
+                'none' => $query->whereNull('digital_signature')->whereNull('digital_signature_status'),
+                default => null,
+            };
         }
 
         if (!empty($filters['doc_type_id'])) {

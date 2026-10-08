@@ -279,6 +279,7 @@ class DocumentBatchService
             'total' => $batch->documents->count(),
             'pending' => $batch->documents->where('status', 'pending')->count(),
             'signed' => $batch->documents->where('status', 'signed')->count(),
+            'digitally_signed' => $batch->documents->whereNotNull('digital_signature')->count(),
             'orphan' => $batch->documents->where('status', 'orphan')->count(),
         ];
 

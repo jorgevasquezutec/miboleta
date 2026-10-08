@@ -18,8 +18,9 @@ use InvalidArgumentException;
  *     description="Configuración del certificado de firma digital (.pfx/.p12) de la plataforma. Solo accesible para root."
  * )
  *
- * Endpoints SOLO ROOT para configurar el certificado de firma digital ÚNICO
- * de la plataforma (DS-009-2011-TR). Este controller es AGNÓSTICO al
+ * Endpoints SOLO ROOT para configurar el certificado de firma digital GLOBAL
+ * de la plataforma (DS-009-2011-TR), usado por defecto para las empresas sin
+ * certificado propio. Este controller es AGNÓSTICO al
  * firmador: no dispara ninguna firma, solo permite cargar/activar/eliminar
  * la configuración de forma segura. Nunca expone la password ni el binario
  * del certificado.
@@ -46,6 +47,9 @@ class SignatureSettingsController extends Controller
      *                 @OA\Property(property="signature_enabled", type="boolean"),
      *                 @OA\Property(property="has_certificate", type="boolean"),
      *                 @OA\Property(property="certificate_subject", type="string", nullable=true),
+     *                 @OA\Property(property="certificate_ruc", type="string", nullable=true),
+     *                 @OA\Property(property="certificate_organization", type="string", nullable=true),
+     *                 @OA\Property(property="certificate_expires_at", type="string", format="date-time", nullable=true),
      *                 @OA\Property(property="tsa_url", type="string", nullable=true),
      *                 @OA\Property(property="uploaded_at", type="string", format="date-time", nullable=true)
      *             )
@@ -72,7 +76,7 @@ class SignatureSettingsController extends Controller
      *     path="/api/signature/certificate",
      *     tags={"Configuración de Firma Digital"},
      *     summary="Cargar certificado de firma digital",
-     *     description="Sube el certificado (.pfx/.p12) único de la plataforma. Reemplaza el certificado anterior si existía. Solo root.",
+     *     description="Sube el certificado (.pfx/.p12) global de la plataforma (se usa como fallback para empresas sin certificado propio). Reemplaza el certificado anterior si existía. Solo root.",
      *     security={{"sanctum":{}}},
      *     @OA\RequestBody(
      *         required=true,
@@ -199,6 +203,9 @@ class SignatureSettingsController extends Controller
             'signature_enabled' => (bool) $settings->signature_enabled,
             'has_certificate' => $settings->hasCertificate(),
             'certificate_subject' => $settings->certificate_subject,
+            'certificate_ruc' => $settings->certificate_ruc,
+            'certificate_organization' => $settings->certificate_organization,
+            'certificate_expires_at' => $settings->certificate_expires_at?->toJSON(),
             'tsa_url' => $settings->tsa_url,
             'uploaded_at' => $settings->uploaded_at,
         ];

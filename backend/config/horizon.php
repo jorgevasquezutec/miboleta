@@ -254,7 +254,10 @@ return [
         'emails-supervisor' => [
             'connection' => 'redis',
             'queue' => ['emails'],
-            'balance' => 'simple',
+            // Sin balanceo: con 'simple' Horizon crea un pool por cola (2
+            // workers, sin prioridad estricta). Con false hay un solo pool
+            // que recorre las colas en orden y respeta maxProcesses=1.
+            'balance' => false,
             'maxProcesses' => 1, // Solo 1 proceso para enviar emails secuencialmente
             'maxTime' => 0,
             'maxJobs' => 0,
@@ -277,9 +280,14 @@ return [
             'nice' => 0,
         ],
         'signing-supervisor' => [
-            'connection' => 'redis',
-            'queue' => ['signing'],
-            'balance' => 'simple',
+            // Conexión propia (retry_after=300 > timeout) y la conformidad del
+            // trabajador (signing-priority) se atiende antes que los lotes.
+            'connection' => 'redis-signing',
+            'queue' => ['signing-priority', 'signing'],
+            // Sin balanceo: con 'simple' Horizon crea un pool por cola (2
+            // workers, sin prioridad estricta). Con false hay un solo pool
+            // que recorre las colas en orden y respeta maxProcesses=1.
+            'balance' => false,
             'maxProcesses' => 1, // Solo 1 proceso: el sidecar signer procesa 1 PDF a la vez de forma predecible
             'maxTime' => 0,
             'maxJobs' => 0,

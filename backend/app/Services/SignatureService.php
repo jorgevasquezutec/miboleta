@@ -8,14 +8,18 @@ use App\Mail\SignatureCodeMail;
 use App\Models\Document;
 use App\Models\DocumentSignatureCode;
 use App\Models\User;
+use App\Jobs\SignDocument;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class SignatureService
 {
     public function __construct(
         protected AuditService $auditService,
         protected PdfWatermarkService $pdfWatermarkService,
-        protected TenantMailerService $tenantMailerService
+        protected TenantMailerService $tenantMailerService,
+        protected DocumentSigningService $documentSigningService
     ) {
     }
 
@@ -251,8 +255,6 @@ class SignatureService
         }
 
         // Code correct - sign document
-        $signatureCode->markAsUsed();
-
         $signatureData = [
             'ip' => $requestData['ip'] ?? null,
             'user_agent' => $requestData['user_agent'] ?? null,
@@ -263,28 +265,38 @@ class SignatureService
             'code_id' => $signatureCode->id,
         ];
 
-        $document->sign($signatureData);
+        // La conformidad convive con la firma digital (PAdES) de la empresa:
+        // se decide la rama bajo el lock por documento, con la fila releída,
+        // para no pisar ni ser pisado por el job de firma (invariante: con
+        // digital_signature_status = 'pending' el archivo es del pipeline PAdES).
+        try {
+            $document = $this->documentSigningService->withDocumentLock(
+                $document->id,
+                function () use ($document, $signatureData, $signatureCode) {
+                    $signed = $this->registerConformity($document, $signatureData);
+                    if ($signed !== null) {
+                        $signatureCode->markAsUsed();
+                    }
 
-        // Apply watermark to PDF
-        if ($document->file_path) {
-            // Ítem 36: el tamaño de página elegido en la carga masiva vive
-            // en el batch, no en el documento. Si el documento no tiene
-            // batch (no debería pasar en el flujo normal) o el batch quedó
-            // sin page_size (lotes anteriores al ítem 36), se usa 'a10'
-            // (formato calibrado por defecto) — ver DocumentBatch::getResolvedPageSizeAttribute().
-            $pageSizeKey = $document->batch?->resolved_page_size ?? 'a10';
-
-            $watermarkApplied = $this->pdfWatermarkService->addSignatureWatermark(
-                $document->file_path,
-                $signatureData,
-                $pageSizeKey
+                    return $signed;
+                }
             );
+        } catch (LockTimeoutException $e) {
+            // La conformidad NO quedó registrada y el código NO se consumió:
+            // el trabajador puede reintentar con el mismo código.
+            return [
+                'success' => false,
+                'error' => 'El documento se está procesando. Inténtalo de nuevo en unos segundos.',
+                'status_code' => 409,
+            ];
+        }
 
-            if (!$watermarkApplied) {
-                Log::warning('[SignatureService] Watermark could not be applied but document was signed', [
-                    'document_id' => $document->id,
-                ]);
-            }
+        if ($document === null) {
+            return [
+                'success' => false,
+                'error' => 'Este documento ya fue firmado',
+                'status_code' => 400,
+            ];
         }
 
         // Audit log
@@ -294,6 +306,7 @@ class SignatureService
             'success' => true,
             'message' => 'Documento firmado correctamente',
             'signed_at' => $document->signed_at,
+            'digital_signature_status' => $document->digital_signature_status,
             'document' => [
                 'id' => $document->id,
                 'type' => $document->documentType->display_name,
@@ -301,6 +314,66 @@ class SignatureService
                 'status' => $document->status,
             ],
         ];
+    }
+
+    /**
+     * Registra la conformidad del trabajador. Se ejecuta bajo el lock del
+     * documento. Devuelve el documento actualizado, o null si entretanto ya
+     * había sido firmado.
+     *
+     *  - Si el documento pasa por el pipeline PAdES de la empresa: se guarda la
+     *    conformidad y se encola SignDocument (cola 'signing-priority') para
+     *    regenerar el PDF firmado con el nombre del trabajador. NO se usa FPDI
+     *    (no puede abrir PDFs firmados y reescribirlos invalidaría la firma).
+     *    La conformidad no depende de que el sidecar esté disponible.
+     *  - Si no aplica: FPDI estampa el nombre sobre el archivo, como siempre.
+     */
+    protected function registerConformity(Document $document, array $signatureData): ?Document
+    {
+        $fresh = Document::with(['documentType', 'batch'])->find($document->id);
+
+        if (!$fresh || $fresh->isSigned()) {
+            return null;
+        }
+
+        // Lo que vio el trabajador al firmar (antes de cualquier estampado).
+        $signatureData['document_sha256'] = $this->hashDocument($fresh);
+
+        if ($this->documentSigningService->appliesTo($fresh)) {
+            $signatureData['pdf_mark'] = 'pades';
+
+            $fresh->sign($signatureData);
+            $fresh->forceFill([
+                'digital_signature_status' => 'pending',
+                'digital_signature_error' => null,
+            ])->save();
+
+            SignDocument::dispatch($fresh->id)->onQueue('signing-priority');
+
+            return $fresh;
+        }
+
+        // Sin PAdES: FPDI como siempre. pdf_mark se agrega ANTES de sign().
+        $signatureData['pdf_mark'] = $fresh->file_path
+            ? $this->documentSigningService->applyFpdiMark($fresh, $signatureData)
+            : 'fpdi_failed';
+
+        $fresh->sign($signatureData);
+
+        return $fresh;
+    }
+
+    protected function hashDocument(Document $document): ?string
+    {
+        try {
+            if (!$document->file_path || !$document->fileExists()) {
+                return null;
+            }
+
+            return hash_file('sha256', Storage::disk('documents')->path($document->file_path)) ?: null;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -343,6 +416,11 @@ class SignatureService
                 'timestamp' => $document->signature['timestamp'] ?? null,
                 'verification_method' => $document->signature['verification_method'] ?? null,
             ] : null,
+            // Firma digital (PAdES) de la empresa: es lo que consulta el
+            // polling del visor mientras se regenera el PDF con la conformidad.
+            'digital_signature_status' => $document->digital_signature_status,
+            'digitally_signed_at' => $document->digitally_signed_at,
+            'includes_conformity' => $document->digitalSignatureIncludesConformity(),
         ];
     }
 

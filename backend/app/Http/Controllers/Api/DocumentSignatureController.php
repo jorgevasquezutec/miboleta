@@ -178,6 +178,7 @@ class DocumentSignatureController extends Controller
      *         @OA\JsonContent(
      *             @OA\Property(property="message", type="string", example="Documento firmado correctamente"),
      *             @OA\Property(property="signed_at", type="string", format="date-time"),
+     *             @OA\Property(property="digital_signature_status", type="string", nullable=true, enum={"pending","signed","failed"}, description="pending = se está regenerando el PDF firmado por la empresa con tu conformidad"),
      *             @OA\Property(property="document", type="object",
      *                 @OA\Property(property="id", type="integer"),
      *                 @OA\Property(property="type", type="string"),
@@ -233,6 +234,9 @@ class DocumentSignatureController extends Controller
             return response()->json([
                 'message' => $result['message'],
                 'signed_at' => $result['signed_at'],
+                // 'pending' si el PDF firmado de la empresa se está regenerando
+                // con la conformidad (el visor consulta signature-status).
+                'digital_signature_status' => $result['digital_signature_status'] ?? null,
                 'document' => $result['document'],
             ]);
 
@@ -268,6 +272,10 @@ class DocumentSignatureController extends Controller
      *             @OA\Property(property="signature", type="object", nullable=true,
      *                 @OA\Property(property="timestamp", type="string"),
      *                 @OA\Property(property="verification_method", type="string", example="email_2fa")
+     *             ),
+     *             @OA\Property(property="digital_signature_status", type="string", nullable=true, enum={"pending","signed","failed"}),
+     *             @OA\Property(property="digitally_signed_at", type="string", format="date-time", nullable=true),
+     *             @OA\Property(property="includes_conformity", type="boolean"
      *             )
      *         )
      *     ),

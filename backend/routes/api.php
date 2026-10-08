@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\Api\UserBatchController;
 use App\Http\Controllers\Api\SignatureSettingsController;
+use App\Http\Controllers\Api\TenantSignatureCertificateController;
 use App\Http\Controllers\Api\PlatformSettingsController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -164,6 +165,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/signature/settings', [SignatureSettingsController::class, 'update']);
     Route::post('/signature/certificate', [SignatureSettingsController::class, 'store']);
     Route::delete('/signature/certificate', [SignatureSettingsController::class, 'destroy']);
+
+    // Certificados de firma POR EMPRESA (fallback al global) - solo root
+    Route::get('/signature/tenants', [TenantSignatureCertificateController::class, 'index']);
+    Route::get('/signature/tenants/{tenantId}/certificate', [TenantSignatureCertificateController::class, 'show'])->whereNumber('tenantId');
+    Route::post('/signature/certificate/preview', [TenantSignatureCertificateController::class, 'preview']);
+    Route::post('/signature/tenants/{tenantId}/certificate', [TenantSignatureCertificateController::class, 'store'])->whereNumber('tenantId');
+    Route::delete('/signature/tenants/{tenantId}/certificate', [TenantSignatureCertificateController::class, 'destroy'])->whereNumber('tenantId');
 
     // Platform Settings (IP pública del servidor - solo root, ítem 23)
     Route::get('/platform/settings', [PlatformSettingsController::class, 'show']);

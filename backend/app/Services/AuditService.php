@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\AuditSettings;
+use App\Models\Tenant;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
@@ -411,6 +413,25 @@ class AuditService
         );
     }
 
+    /**
+     * Firma digital (PAdES) de la empresa aplicada o re-aplicada. Sin
+     * secretos: solo origen del certificado y banderas. Lo dispara el job
+     * (no hay usuario en sesión), por eso $userId es opcional.
+     *
+     * @param array $meta certificate_source, includes_conformity, resign, tenant_id
+     */
+    public function logDocumentDigitallySigned(int $documentId, ?int $userId, array $meta): ?AuditLog
+    {
+        return $this->log(
+            action: AuditLog::ACTION_DOCUMENT_DIGITALLY_SIGNED,
+            entityType: 'Document',
+            entityId: $documentId,
+            metadata: Arr::only($meta, ['certificate_source', 'includes_conformity', 'resign', 'tenant_id']),
+            userId: $userId,
+            tenantId: $meta['tenant_id'] ?? null
+        );
+    }
+
     public function logDocumentDeleted(int $documentId, array $documentData): ?AuditLog
     {
         return $this->log(
@@ -516,6 +537,35 @@ class AuditService
             action: AuditLog::ACTION_SIGNATURE_CERT_DELETED,
             entityType: 'SignatureSettings',
             userId: $userId
+        );
+    }
+
+    /**
+     * tenantId null a propósito (igual que los logs root de firma): la
+     * metadata incluye RUC/razón social y no debe ser visible para el admin
+     * de la empresa vía /reports/audit.
+     */
+    public function logTenantCertificateUploaded(int $userId, Tenant $tenant, array $metadata): ?AuditLog
+    {
+        return $this->log(
+            action: AuditLog::ACTION_SIGNATURE_TENANT_CERT_UPLOADED,
+            entityType: 'Tenant',
+            entityId: $tenant->id,
+            metadata: $metadata,
+            userId: $userId,
+            tenantId: null
+        );
+    }
+
+    public function logTenantCertificateDeleted(int $userId, Tenant $tenant): ?AuditLog
+    {
+        return $this->log(
+            action: AuditLog::ACTION_SIGNATURE_TENANT_CERT_DELETED,
+            entityType: 'Tenant',
+            entityId: $tenant->id,
+            metadata: ['tenant_id' => $tenant->id, 'tenant_name' => $tenant->name],
+            userId: $userId,
+            tenantId: null
         );
     }
 

@@ -12,6 +12,7 @@ use App\Models\Notification;
 use App\Models\PlatformSettings;
 use App\Models\SignatureSettings;
 use App\Models\Tenant;
+use App\Models\TenantSignatureCertificate;
 use App\Models\User;
 use App\Models\UserBatch;
 use App\Models\VacationRequest;
@@ -95,6 +96,9 @@ class LimpiarDatosTest extends TestCase
             'file_path' => 'documento1.pdf',
         ]);
         Storage::disk('documents')->put('documento1.pdf', 'contenido');
+        // Base de re-firma de la firma digital de la empresa (.originals) y su temporal.
+        Storage::disk('documents')->put('.originals/documento1.pdfa.pdf', 'base');
+        Storage::disk('documents')->put('.signing-tmp/documento1-abc.pdf', 'tmp');
 
         // Documento soft-deleted: debe desaparecer de verdad (DB::table no
         // respeta el global scope de SoftDeletes).
@@ -254,6 +258,9 @@ class LimpiarDatosTest extends TestCase
         // Archivos.
         Storage::disk('certificates')->assertExists('certificado.pfx');
         $this->assertEmpty(Storage::disk('documents')->allFiles());
+        // La base de re-firma (.originals) y los temporales de firma también se vacían.
+        Storage::disk('documents')->assertMissing('.originals/documento1.pdfa.pdf');
+        Storage::disk('documents')->assertMissing('.signing-tmp/documento1-abc.pdf');
         $this->assertEmpty(Storage::disk('private')->allFiles());
         $this->assertEmpty(Storage::disk('local')->allFiles());
         Storage::disk('public')->assertExists('avatars/root.png');
@@ -403,5 +410,41 @@ class LimpiarDatosTest extends TestCase
         $this->assertTrue(
             DB::table('audit_logs')->where('action', AuditLog::ACTION_USER_LOGIN)->exists()
         );
+    }
+
+    public function test_borra_los_certificados_de_empresa_pero_no_el_global(): void
+    {
+        User::factory()->root()->create();
+        $datos = $this->crearDatosDeNegocio();
+
+        SignatureSettings::query()->create([
+            'signature_enabled' => true,
+            'certificate_path' => 'global.pfx',
+        ]);
+        Storage::disk('certificates')->put('global.pfx', 'global');
+        Storage::disk('certificates')->put('suelto.pfx', 'no referenciado');
+        Storage::disk('certificates')->put('empresa.pfx', 'empresa');
+        TenantSignatureCertificate::create([
+            'tenant_id' => $datos['tenant']->id,
+            'certificate_path' => 'empresa.pfx',
+            'certificate_password' => 'secret',
+        ]);
+
+        // Dry-run: muestra la fila y no borra nada.
+        $this->artisan('miboleta:limpiar-datos')
+            ->expectsOutputToContain('certificates (empresas)')
+            ->assertExitCode(0);
+        Storage::disk('certificates')->assertExists('empresa.pfx');
+        $this->assertSame(1, DB::table('tenant_signature_certificates')->count());
+
+        $this->artisan('miboleta:limpiar-datos', [
+            '--ejecutar' => true,
+            '--confirmar' => $this->fraseConfirmacion(),
+        ])->assertExitCode(0);
+
+        $this->assertSame(0, DB::table('tenant_signature_certificates')->count());
+        Storage::disk('certificates')->assertMissing('empresa.pfx');
+        Storage::disk('certificates')->assertExists('global.pfx');
+        Storage::disk('certificates')->assertExists('suelto.pfx');
     }
 }
