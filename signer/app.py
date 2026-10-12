@@ -39,7 +39,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -80,6 +80,7 @@ class SignRequest(BaseModel):
     certificate_password: Optional[str] = Field(None, description="Contraseña del certificado, si aplica.")
     tsa_url: Optional[str] = Field(None, description="URL de una TSA RFC 3161. Si se omite, no se sella el tiempo.")
     visible: bool = Field(False, description="Si True, agrega un sello de firma visible en el pie de la última página (firmante, cargo, razón social, RUC, país/provincia, fecha).")
+    stamp_position: Literal["footer", "bottom_center"] = Field("footer", description="Solo con visible=True. 'footer': sello en el pie de la última página; 'bottom_center': sello compacto en la pie de la última página, centrado, con 4 líneas.")
     field_name: str = Field(pipeline.DEFAULT_FIELD_NAME, description="Nombre del campo de firma PDF.")
     md_algorithm: str = Field(pipeline.DEFAULT_MD_ALGORITHM, description="Algoritmo de digest (default: sha256).")
     reason: str = Field(pipeline.DEFAULT_REASON, description="Motivo de firma embebido en la firma PAdES.")
@@ -226,6 +227,7 @@ def sign(req: SignRequest) -> JSONResponse:
             gs_bin=req.gs_bin,
             icc_override=req.icc_profile,
             visible=req.visible,
+            stamp_position=req.stamp_position,
             field_name=req.field_name,
             md_algorithm=req.md_algorithm,
             reason=req.reason,
