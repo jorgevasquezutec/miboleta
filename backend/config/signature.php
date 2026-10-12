@@ -11,8 +11,8 @@ $mediaHoja = [
     'name_height' => (float) env('SIGNATURE_NAME_HEIGHT', 7),  // alto celda nombre (mm)
     'date_offset_y' => (float) env('SIGNATURE_DATE_OFFSET', 5), // positivo = fecha DEBAJO del nombre (sobre la línea)
     'date_font_size' => (float) env('SIGNATURE_DATE_SIZE', 8),
-    // Dentro de la boleta, abajo a la derecha (ver 'placement' más abajo).
-    'placement' => 'document',
+    // En la franja del sello, como A4 y Carta (ver 'placement' más abajo).
+    'placement' => 'footer',
 ];
 
 return [
@@ -82,9 +82,9 @@ return [
     | placement (por formato):
     |   'footer'   -> con el sello abajo a la izquierda, la conformidad va en
     |                 la MISMA franja del sello, a la derecha y a su altura
-    |                 (A4 y Carta). x/name_y solo se usan sin sello izquierdo
-    |                 (p. ej. el flujo FPDI, sin certificado).
-    |   'document' -> siempre en x/name_y, dentro del documento (A5).
+    |                 (A4, A5 y Carta). x/name_y solo se usan sin sello
+    |                 izquierdo (p. ej. el flujo FPDI, sin certificado).
+    |   'document' -> siempre en x/name_y, dentro del documento.
     |
     | a5 = MEDIA HOJA A4 HORIZONTAL (210 x 148 mm), lo que antes se llamaba
     | 'a10': mismas coordenadas, calibradas con boletas reales. 'a10' se
@@ -136,8 +136,8 @@ return [
                 'placement' => 'footer',
             ],
 
-            // Media hoja A4 horizontal: 210 x 148 mm. Dentro de la boleta,
-            // abajo a la derecha (coordenadas calibradas del antiguo a10).
+            // Media hoja A4 horizontal: 210 x 148 mm. Conformidad en la franja
+            // del sello; x/name_y (sin sello izquierdo) = antiguo a10.
             'a5' => $mediaHoja,
 
             // Página Carta/Letter portrait: 215.9 x 279.4 mm. Conformidad en
@@ -169,9 +169,9 @@ return [
     |
     | visible_stamp_position:
     |   'bottom_left'   -> sello compacto abajo a la izquierda (por defecto). En
-    |                      los formatos con placement 'footer' (A4, Carta) la
+    |                      los formatos con placement 'footer' (A4, A5, Carta) la
     |                      conformidad va en la MISMA franja, a la derecha y a la
-    |                      altura del sello; en A5 va dentro de la boleta.
+    |                      altura del sello.
     |   'bottom_center' -> el mismo sello compacto, abajo al centro.
     |   'footer'    -> sello ancho heredado en el pie de la última página, con
     |                  representante, razón social, RUC, cargo, país/provincia y
