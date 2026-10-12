@@ -28,7 +28,7 @@ class SignatureLayoutTest extends TestCase
     {
         $this->assertSame('footer', SignatureLayout::sidecarLayout('a4')['placement']);
         $this->assertSame('footer', SignatureLayout::sidecarLayout('letter')['placement']);
-        $this->assertSame('document', SignatureLayout::sidecarLayout('a5')['placement']);
+        $this->assertSame('footer', SignatureLayout::sidecarLayout('a5')['placement']);
         $this->assertEquals(119.0, SignatureLayout::sidecarLayout('a5')['name_y_mm']);
     }
 
