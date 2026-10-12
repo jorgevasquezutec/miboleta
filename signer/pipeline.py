@@ -85,6 +85,22 @@ STAMP_FONT_MAX = 8.0
 STAMP_FONT_MIN = 6.0
 STAMP_FONT_STEP = 0.25
 STAMP_SEPARATOR = " · "
+
+# Sello compacto (stamp_position="bottom_center"): caja centrada en una franja de
+# pie nueva de la última página, tipo boleta peruana (4 líneas, etiquetas en negrita).
+COMPACT_STAMP_WIDTH = 330.0  # ancho deseado (se recorta al ancho visual - 2 márgenes)
+COMPACT_STAMP_HEIGHT = 52.0
+COMPACT_STAMP_BOTTOM = 12.0  # distancia desde el borde inferior
+COMPACT_STAMP_PADDING = 6.0
+COMPACT_RESERVE = COMPACT_STAMP_BOTTOM + COMPACT_STAMP_HEIGHT + 6.0  # franja que se agrega al pie
+COMPACT_FONT_MAX = 7.5
+COMPACT_LEADING = 1.25       # interlineado relativo al cuerpo
+COMPACT_BG = (0.96, 0.97, 0.98)  # gris muy claro
+COMPACT_TITLE = "FIRMADO DIGITALMENTE"
+# Marca del título, por orden de preferencia, según lo que tenga la fuente.
+COMPACT_CHECK_GLYPHS = ["\u2713", "\u221a"]  # ✓, √
+COMPACT_CHECK_FALLBACK = "X"
+STAMP_POSITIONS = ("footer", "bottom_center")
 # Nimbus Sans (fonts-urw-base35, la misma que usa Ghostscript): TrueType/OpenType
 # con tildes/ñ y 1000 unidades por em. Se prefiere a DejaVu Sans porque pyHanko
 # 0.35 escribe mal los anchos (/W) de fuentes con 2048 unidades por em (DejaVu,
@@ -92,6 +108,10 @@ STAMP_SEPARATOR = " · "
 STAMP_FONT_CANDIDATES = [
     "/usr/share/fonts/opentype/urw-base35/NimbusSans-Regular.otf",
     "/usr/share/fonts/urw-base35/NimbusSans-Regular.otf",
+]
+STAMP_BOLD_FONT_CANDIDATES = [
+    "/usr/share/fonts/opentype/urw-base35/NimbusSans-Bold.otf",
+    "/usr/share/fonts/urw-base35/NimbusSans-Bold.otf",
 ]
 COUNTRY_NAMES = {"PE": "Perú"}
 
@@ -543,6 +563,15 @@ def find_stamp_font() -> Optional[Path]:
     return None
 
 
+def find_stamp_bold_font() -> Optional[Path]:
+    """Ruta a Nimbus Sans Bold (SIGNER_STAMP_FONT_BOLD la puede forzar), o None."""
+    explicit = os.environ.get("SIGNER_STAMP_FONT_BOLD")
+    for candidate in ([explicit] if explicit else []) + STAMP_BOLD_FONT_CANDIDATES:
+        if candidate and Path(candidate).is_file():
+            return Path(candidate)
+    return None
+
+
 def build_stamp_lines(details: dict) -> list[str]:
     """Arma las líneas del sello (dos campos por línea, separados por " · ").
 
@@ -598,6 +627,12 @@ class _TextMeter:
             total += self._hmtx[glyph][0] if glyph in self._hmtx.metrics else self._upem // 2
         return total * size / self._upem
 
+    def has_glyph(self, ch: str) -> bool:
+        """True si la fuente tiene glifo para `ch` (sin fuente: solo latin-1)."""
+        if self._cmap is None:
+            return ord(ch) < 256
+        return ord(ch) in self._cmap
+
     def fit(self, text: str, size: float, max_width: float) -> str:
         """Trunca con "…" hasta que el texto quepa en `max_width`."""
         if self.width(text, size) <= max_width:
@@ -607,19 +642,111 @@ class _TextMeter:
         return text.rstrip() + "…"
 
 
+Run = tuple[str, bool]  # (texto, negrita)
+
+
+def short_organization(org: Optional[str]) -> Optional[str]:
+    """Razón social corta para el sello compacto.
+
+    Los certificados peruanos suelen traer "RAZÓN SOCIAL COMPLETA - SIGLAS"
+    (p.ej. "OVERHEAD MEN SOCIEDAD ANONIMA CERRADA - OVERHEAD MEN S.A.C."); se
+    usa el último tramo para que el sello no tenga que achicar la fuente.
+    """
+    if not org:
+        return None
+    short = org.rsplit(" - ", 1)[-1].strip()
+    return short or org.strip()
+
+
+def build_compact_stamp_runs(details: dict, meter: Optional[_TextMeter] = None) -> list[list[Run]]:
+    """Líneas del sello compacto como tramos (texto, negrita); 4 como máximo:
+
+        [✓] FIRMADO DIGITALMENTE                                   (todo en negrita)
+        Titular: NOMBRE | Cargo: Representante Legal               (etiquetas en negrita)
+        Razón social: EMPRESA S.A.C. - RUC: 20603839961
+        Fecha: 31/08/2025
+
+    El nombre va en mayúsculas; razón social y cargo tal como vienen del
+    certificado. Los campos faltantes se omiten (nunca "None") y una línea sin
+    ningún dato no se emite (salvo la primera). La marca "✓" se elige según
+    `meter` (✓, luego √, luego "X") para no dibujar nunca un glifo faltante.
+    """
+    check = COMPACT_CHECK_FALLBACK
+    if meter is not None:
+        check = next((c for c in COMPACT_CHECK_GLYPHS if meter.has_glyph(c)), COMPACT_CHECK_FALLBACK)
+
+    def field(label: str, value: Optional[str]) -> list[Run]:
+        return [(label, True), (f" {value}", False)] if value else []
+
+    def join(parts: list[list[Run]], sep: str) -> list[Run]:
+        parts = [p for p in parts if p]
+        out: list[Run] = []
+        for i, p in enumerate(parts):
+            out += ([(sep, False)] if i else []) + p
+        return out
+
+    name = (details.get("name") or "").strip().upper() or None
+    ruc = details.get("ruc")
+    rows = [
+        join([field("Titular:", name), field("Cargo:", details.get("title"))], " | "),
+        join([field("Razón social:", short_organization(details.get("organization"))), field("RUC:", str(ruc) if ruc else None)], " - "),
+        field("Fecha:", details.get("signed_date_local")),
+    ]
+    return [[(f"[{check}] {COMPACT_TITLE}", True)]] + [r for r in rows if r]
+
+
+def build_compact_stamp_lines(details: dict, meter: Optional[_TextMeter] = None) -> list[str]:
+    """Las mismas líneas de build_compact_stamp_runs, como texto plano."""
+    return ["".join(t for t, _ in row) for row in build_compact_stamp_runs(details, meter)]
+
+
 def fit_stamp_lines(
-    lines: list[str], max_width: float, meter: _TextMeter
+    lines: list[str], max_width: float, meter: _TextMeter, font_max: float = STAMP_FONT_MAX
 ) -> tuple[list[str], float]:
     """Devuelve (líneas, tamaño de fuente) que caben en `max_width`.
 
     Reduce la fuente desde STAMP_FONT_MAX hasta STAMP_FONT_MIN; si aun así
     alguna línea no entra, la trunca con "…". NUNCA desborda el ancho.
     """
-    size = STAMP_FONT_MAX
+    size = font_max
     while size > STAMP_FONT_MIN and any(meter.width(l, size) > max_width for l in lines):
         size -= STAMP_FONT_STEP
     size = max(size, STAMP_FONT_MIN)
     return [meter.fit(l, size, max_width) for l in lines], size
+
+
+def _runs_width(row: list[Run], size: float, regular: _TextMeter, bold: Optional[_TextMeter]) -> float:
+    return sum((bold if (b and bold) else regular).width(t, size) for t, b in row)
+
+
+def fit_stamp_runs(
+    rows: list[list[Run]], max_width: float, regular: _TextMeter, bold: Optional[_TextMeter],
+    font_max: float = COMPACT_FONT_MAX,
+) -> tuple[list[list[Run]], float]:
+    """Como fit_stamp_lines pero para tramos (texto, negrita).
+
+    Reduce la fuente hasta STAMP_FONT_MIN; si aun así una línea no entra, trunca
+    con "…" el valor (tramo regular) más ancho de esa línea. NUNCA desborda.
+    """
+    size = font_max
+    while size > STAMP_FONT_MIN and any(_runs_width(r, size, regular, bold) > max_width for r in rows):
+        size -= STAMP_FONT_STEP
+    size = max(size, STAMP_FONT_MIN)
+    out: list[list[Run]] = []
+    for row in rows:
+        row = list(row)
+        while _runs_width(row, size, regular, bold) > max_width:
+            # tramo a recortar: el regular más ancho; si no hay, el último
+            cand = [i for i, (t, b) in enumerate(row) if not (b and bold) and len(t.rstrip("…").strip()) > 0]
+            if not cand:
+                break
+            i = max(cand, key=lambda k: regular.width(row[k][0], size))
+            text = row[i][0].rstrip("…")
+            row[i] = (text[:-1].rstrip() + "…" if len(text) > 1 else "…", row[i][1])
+            if row[i][0] == "…" and _runs_width(row, size, regular, bold) > max_width:
+                row.pop(i)
+        out.append(row)
+    return out, size
 
 
 def _inherited(page: Any, key: str) -> Any:
@@ -651,7 +778,7 @@ def _page_rotation(page: Any) -> int:
         return 0
 
 
-def reserve_footer_space(page: Any) -> None:
+def reserve_footer_space(page: Any, reserve: float = STAMP_RESERVE) -> None:
     """Amplía MediaBox (y CropBox) de la página para reservar el pie del sello.
 
     El contenido original no se toca ni se tapa: la franja nueva queda en el
@@ -672,13 +799,13 @@ def reserve_footer_space(page: Any) -> None:
         x0, x1 = min(x0, x1), max(x0, x1)
         y0, y1 = min(y0, y1), max(y0, y1)
         if rot == 0:
-            y0 -= STAMP_RESERVE
+            y0 -= reserve
         elif rot == 180:
-            y1 += STAMP_RESERVE
+            y1 += reserve
         elif rot == 90:
-            x1 += STAMP_RESERVE
+            x1 += reserve
         else:  # 270
-            x0 -= STAMP_RESERVE
+            x0 -= reserve
         page[key] = ArrayObject(FloatObject(v) for v in (x0, y0, x1, y1))
 
 
@@ -707,6 +834,33 @@ def compute_stamp_box(page: Any) -> tuple[tuple[float, float, float, float], int
         box = (px1 - STAMP_BOTTOM - STAMP_HEIGHT, a0, px1 - STAMP_BOTTOM, a1)
     else:  # 270
         box = (px0 + STAMP_BOTTOM, a0, px0 + STAMP_BOTTOM + STAMP_HEIGHT, a1)
+    return box, rot, width
+
+
+def compute_compact_stamp_box(
+    page: Any,
+) -> tuple[tuple[float, float, float, float], int, float]:
+    """Caja compacta CENTRADA en el pie visual (ya con franja reservada).
+
+    Devuelve ((x0, y0, x1, y1) en espacio de usuario, rotación, ancho visual).
+    Centrada en el ancho visual y a COMPACT_STAMP_BOTTOM del borde inferior
+    visual; con 90/270 la caja es vertical (se contra-rota).
+    """
+    px0, py0, px1, py1 = _page_box(page)
+    rot = _page_rotation(page)
+    along_lo, along_hi = (py0, py1) if rot in (90, 270) else (px0, px1)
+    width = min(COMPACT_STAMP_WIDTH, max(along_hi - along_lo - 2 * STAMP_MARGIN_X, 100.0))
+    h, b = COMPACT_STAMP_HEIGHT, COMPACT_STAMP_BOTTOM
+    c0 = (along_lo + along_hi - width) / 2
+    c1 = c0 + width
+    if rot == 0:
+        box = (c0, py0 + b, c1, py0 + b + h)
+    elif rot == 180:
+        box = (c0, py1 - b - h, c1, py1 - b)
+    elif rot == 90:
+        box = (px1 - b - h, c0, px1 - b, c1)
+    else:  # 270
+        box = (px0 + b, c0, px0 + b + h, c1)
     return box, rot, width
 
 
@@ -752,7 +906,9 @@ def _make_rotated_style_class():
 
 
 def _build_stamp_style(
-    lines: list[str], size: float, box_width: float, font_path: Optional[Path], rotation: int = 0
+    lines: list[str], size: float, box_width: float, font_path: Optional[Path], rotation: int = 0,
+    box_height: float = STAMP_HEIGHT,
+    padding: float = STAMP_PADDING,
 ):
     """TextStampStyle con borde gris fino y fondo blanco opaco."""
     from pyhanko import stamp
@@ -784,7 +940,7 @@ def _build_stamp_style(
     else:
         text_box_style = TextBoxStyle(font=font_factory, font_size=size, leading=leading)
 
-    white_bg = RawContent(b"q 1 1 1 rg 0 0 %f %f re f Q" % (box_width, STAMP_HEIGHT))
+    white_bg = RawContent(b"q 1 1 1 rg 0 0 %f %f re f Q" % (box_width, box_height))
     return _make_rotated_style_class()(
         rotation=rotation,
         stamp_text=text,
@@ -801,9 +957,123 @@ def _build_stamp_style(
         inner_content_layout=layout.SimpleBoxLayoutRule(
             x_align=layout.AxisAlignment.ALIGN_MIN,
             y_align=layout.AxisAlignment.ALIGN_MID,
-            margins=layout.Margins.uniform(int(STAMP_PADDING)),
+            margins=layout.Margins.uniform(int(padding)),
         ),
     ), font_factory is not None
+
+
+def _make_compact_style_class():
+    """TextStampStyle del sello compacto: compone tramos regular/negrita.
+
+    TextStamp de pyHanko usa una sola fuente, así que el contenido interior se
+    arma a mano: un BT por tramo, con dos fuentes OpenType EMBEBIDAS (PDF/A-2b).
+    Reusa la contra-rotación de _make_rotated_style_class para /Rotate 90/270.
+    """
+    from pyhanko import stamp
+    from pyhanko.pdf_utils import layout
+    from pyhanko.pdf_utils.font.basic import SimpleFontEngineFactory
+    from pyhanko.pdf_utils.content import ResourceType
+    from pyhanko.pdf_utils import generic
+
+    base = _make_rotated_style_class()
+
+    @dataclass(frozen=True)
+    class CompactStampStyle(base):
+        rows: tuple = ()
+        size: float = COMPACT_FONT_MAX
+        regular_font: Optional[str] = None
+        bold_font: Optional[str] = None
+
+        def create_stamp(self, writer, box, text_params):
+            inner_box = box if self.rotation not in (90, 270) else layout.BoxConstraints(
+                width=box.height, height=box.width)
+            return _CompactStamp(writer=writer, style=self, box=inner_box, text_params=text_params)
+
+    class _CompactStamp(stamp.TextStamp):
+        def _engine(self, font: Optional[str]):
+            if font:
+                from pyhanko.pdf_utils.font.opentype import GlyphAccumulatorFactory
+
+                return GlyphAccumulatorFactory(font, font_size=self.style.size).create_font_engine(self.writer)
+            return SimpleFontEngineFactory.default_factory().create_font_engine(self.writer)
+
+        def _inner_layout_natural_size(self):
+            st = self.style
+            size = st.size
+            leading = size * COMPACT_LEADING
+            reg = self._engine(st.regular_font)
+            bold = self._engine(st.bold_font) if st.bold_font else reg
+            self.set_resource(category=ResourceType.FONT, name=generic.pdf_name("/FR"), value=reg.as_resource())
+            if bold is not reg:
+                self.set_resource(category=ResourceType.FONT, name=generic.pdf_name("/FB"), value=bold.as_resource())
+            simple = not st.regular_font
+
+            def enc(t):  # fuente básica: solo latin-1
+                return t.encode("latin-1", errors="replace").decode("latin-1") if simple else t
+
+            n = len(st.rows)
+            height = n * leading
+            width = 0.0
+            ops = []
+            for i, row in enumerate(st.rows):
+                x = 0.0
+                y = height - (i + 1) * leading + (leading - size) / 2 + 0.2 * size
+                for text, is_bold in row:
+                    text = enc(text)
+                    if not text:
+                        continue
+                    eng, name = (bold, b"FB") if (is_bold and bold is not reg) else (reg, b"FR")
+                    res = eng.shape(text)
+                    ops.append(b"BT /%s %g Tf %g %g Td %s ET" % (name, size, x, y, res.graphics_ops))
+                    x += res.x_advance * size
+                width = max(width, x)
+            return [b"0 g"] + ops, (width, height)
+
+        def as_form_xobject(self):
+            xobj = super().as_form_xobject()
+            matrix = _ROTATION_MATRIX.get(self.style.rotation)
+            if matrix:
+                xobj["/Matrix"] = generic.ArrayObject(generic.FloatObject(v) for v in matrix)
+            return xobj
+
+    return CompactStampStyle
+
+
+def _build_compact_stamp_style(
+    rows: list[list[Run]], size: float, box_width: float, box_height: float,
+    regular_font: Optional[Path], bold_font: Optional[Path], rotation: int = 0,
+):
+    """Estilo del sello compacto: borde gris, fondo gris muy claro, texto a la izquierda."""
+    from pyhanko.pdf_utils import layout
+    from pyhanko.pdf_utils.content import RawContent
+
+    if regular_font is None:
+        logger.warning("Sello visible: no se encontró Nimbus Sans; se usa la fuente básica.")
+        bold_font = None
+    elif bold_font is None:
+        logger.warning("Sello visible: no se encontró Nimbus Sans Bold; el sello sale sin negrita.")
+    bg = RawContent(b"q %g %g %g rg 0 0 %f %f re f Q" % (*COMPACT_BG, box_width, box_height))
+    return _make_compact_style_class()(
+        rotation=rotation,
+        rows=tuple(tuple(r) for r in rows),
+        size=size,
+        regular_font=str(regular_font) if regular_font else None,
+        bold_font=str(bold_font) if bold_font else None,
+        border_width=0.5,
+        border_color=(0.6, 0.6, 0.6),
+        background=bg,
+        background_opacity=1.0,
+        background_layout=layout.SimpleBoxLayoutRule(
+            x_align=layout.AxisAlignment.ALIGN_MIN,
+            y_align=layout.AxisAlignment.ALIGN_MIN,
+            margins=layout.Margins.uniform(0),
+        ),
+        inner_content_layout=layout.SimpleBoxLayoutRule(
+            x_align=layout.AxisAlignment.ALIGN_MIN,
+            y_align=layout.AxisAlignment.ALIGN_MID,
+            margins=layout.Margins.uniform(int(COMPACT_STAMP_PADDING)),
+        ),
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1228,6 +1498,7 @@ def sign_pdf(
     location: str = DEFAULT_LOCATION,
     signer_details: Optional[dict] = None,
     conformity: Optional[dict] = None,
+    stamp_position: str = "footer",
 ) -> SignResult:
     """Firma `normalized_path` (ya normalizado a PDF/A-2b) en modo PAdES.
 
@@ -1235,6 +1506,10 @@ def sign_pdf(
     de la página menos márgenes) con los datos de `signer_details` (ver
     signer_details.extract_signer_details): firmante, cargo, razón social,
     RUC, país/provincia y fecha.
+
+    `stamp_position="bottom_center"` (solo con `visible=True`) dibuja en cambio un
+    sello compacto en la franja inferior, centrado, de la ÚLTIMA página
+    (ver build_compact_stamp_runs); "footer" es el comportamiento de siempre.
 
     Lanza TsaError si la TSA indicada no respondió, o SigningError ante
     cualquier otro fallo de pyHanko.
@@ -1267,7 +1542,28 @@ def sign_pdf(
 
             new_field_spec = None
             stamp_style = None
-            if visible:
+            if visible and stamp_position == "bottom_center":
+                # Franja baja nueva en el pie de la última página (misma revisión
+                # incremental): el sello no tapa contenido. La conformidad ya se
+                # dibujó con la caja original y su espacio de usuario no cambia.
+                page_ref, _ = w.find_page_for_modification(-1)
+                page = page_ref.get_object()
+                reserve_footer_space(page, COMPACT_RESERVE)
+                w.update_container(page)
+                box, rotation, width = compute_compact_stamp_box(page)
+                font_path, bold_path = find_stamp_font(), find_stamp_bold_font()
+                regular = _TextMeter(font_path)
+                bold = _TextMeter(bold_path) if (font_path and bold_path) else None
+                rows, size = fit_stamp_runs(
+                    build_compact_stamp_runs(signer_details or {}, bold or regular),
+                    width - 2 * COMPACT_STAMP_PADDING - 1.0,
+                    regular, bold,
+                )
+                stamp_style = _build_compact_stamp_style(
+                    rows, size, width, COMPACT_STAMP_HEIGHT, font_path, bold_path, rotation,
+                )
+                new_field_spec = fields.SigFieldSpec(field_name, on_page=-1, box=box)
+            elif visible:
                 # Reserva el pie en la MISMA revisión incremental (la firma cubre
                 # el cambio): el sello va en una franja nueva y no tapa contenido.
                 page_ref, _ = w.find_page_for_modification(-1)
@@ -1440,6 +1736,7 @@ def run_sign_pipeline(
     conformity: Optional[dict] = None,
     base_output_path: Optional[Path] = None,
     skip_normalize: bool = False,
+    stamp_position: str = "footer",
 ) -> dict:
     """Corre el pipeline completo normalizar -> firmar -> [TSA] -> verificar
     con un certificado REAL, y deja el PDF firmado en `output_path`.
@@ -1494,6 +1791,7 @@ def run_sign_pipeline(
         location=location,
         signer_details=signer_details,
         conformity=conformity,
+        stamp_position=stamp_position,
     )
 
     verify_result = verify_signed_pdf(output_path)

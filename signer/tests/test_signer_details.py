@@ -43,6 +43,7 @@ def test_subject_real_llamape():
         "country": "PE",
         "locality": "LIMA",
         "signed_at_local": None,
+        "signed_date_local": None,
     }
 
 

@@ -114,10 +114,15 @@ def format_local_datetime(moment: datetime) -> str:
     return moment.astimezone(LIMA_TZ).strftime("%d/%m/%Y %H:%M")
 
 
+def format_local_date(moment: datetime) -> str:
+    """dd/mm/yyyy en hora de Lima (UTC-5). `moment` debe ser aware."""
+    return moment.astimezone(LIMA_TZ).strftime("%d/%m/%Y")
+
+
 def extract_signer_details(subject: Any, signed_at: Optional[datetime] = None) -> dict:
     """Devuelve los datos limpios del firmante a partir de un `Name` de asn1crypto.
 
-    Claves: name, organization, ruc, title, country, locality, signed_at_local.
+    Claves: name, organization, ruc, title, country, locality, signed_at_local, signed_date_local.
     Todo lo que no esté en el certificado sale como None (nunca "None" como
     texto). `signed_at_local` es None si no se pasa `signed_at`.
     """
@@ -131,4 +136,5 @@ def extract_signer_details(subject: Any, signed_at: Optional[datetime] = None) -
         "locality": _first(attrs, "state_or_province_name")
         or _first(attrs, "locality_name"),
         "signed_at_local": format_local_datetime(signed_at) if signed_at else None,
+        "signed_date_local": format_local_date(signed_at) if signed_at else None,
     }

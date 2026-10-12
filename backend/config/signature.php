@@ -142,13 +142,21 @@ return [
     | Sello visible de la firma con certificado (PAdES)
     |--------------------------------------------------------------------------
     |
-    | Si es true, el sidecar dibuja en el pie de la última página un sello con
-    | los datos del certificado (representante, razón social, RUC, cargo,
-    | país/provincia y fecha) y alarga la página para no tapar contenido. Por
-    | pedido del cliente va desactivado: lo único visible es la conformidad del
-    | trabajador ("RECIBÍ CONFORME"); la firma con certificado queda invisible
-    | (criptográfica) y sus datos se muestran en el visor de miBoleta.
+    | Si es true, el sidecar dibuja un sello visible con los datos del
+    | certificado. Por pedido del cliente ahora va visible (antes era invisible)
+    | y en la parte inferior central: "FIRMADO DIGITALMENTE", titular, RUC y
+    | fecha.
+    |
+    | visible_stamp_position:
+    |   'bottom_center' -> sello compacto abajo al centro (por defecto).
+    |   'footer'    -> sello ancho heredado en el pie de la última página, con
+    |                  representante, razón social, RUC, cargo, país/provincia y
+    |                  fecha; alarga la página para no tapar contenido.
+    |
+    | Solo aplica cuando visible_stamp es true. Un valor inválido cae a
+    | 'bottom_center'.
     |
     */
-    'visible_stamp' => (bool) env('SIGNATURE_VISIBLE_STAMP', false),
+    'visible_stamp' => (bool) env('SIGNATURE_VISIBLE_STAMP', true),
+    'visible_stamp_position' => env('SIGNATURE_VISIBLE_STAMP_POSITION', 'bottom_center'),
 ];

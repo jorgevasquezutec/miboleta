@@ -257,9 +257,10 @@ class DocumentSigningService
             'output_path' => $tempAbsolutePath,
             'certificate_path' => $certificate->absolutePath,
             'certificate_password' => $certificate->password,
-            // Sello del pie con los datos del certificado: desactivado por defecto
+            // Sello visible con los datos del certificado y su posición
             // (ver config/signature.php 'visible_stamp').
             'visible' => (bool) config('signature.visible_stamp'),
+            'stamp_position' => $this->stampPosition(),
             // TSA de la empresa si el certificado es propio y la tiene; si no, la global.
             'tsa_url' => $certificate->tsaUrl ?? SignatureSettings::current()->tsa_url,
         ];
@@ -803,6 +804,14 @@ class DocumentSigningService
      * distinto (p.ej. 'local'), porque el sidecar recibe rutas absolutas de
      * ese volumen compartido.
      */
+    /** Posición del sello visible; valores válidos: footer | bottom_center (otro valor cae a bottom_center). */
+    protected function stampPosition(): string
+    {
+        $position = config('signature.visible_stamp_position');
+
+        return in_array($position, ['footer', 'bottom_center'], true) ? $position : 'bottom_center';
+    }
+
     protected function buildTempPath(string $originalRelativePath): string
     {
         $dir = dirname($originalRelativePath);

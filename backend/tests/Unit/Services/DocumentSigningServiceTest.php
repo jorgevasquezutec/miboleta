@@ -184,7 +184,7 @@ class DocumentSigningServiceTest extends TestCase
         $this->assertSame('pades_pyhanko', $sig['method']);
     }
 
-    public function test_por_defecto_no_pide_sello_visible_del_pie(): void
+    public function test_por_defecto_pide_sello_visible_abajo_al_centro(): void
     {
         $this->globalCert();
         $doc = $this->document();
@@ -200,8 +200,34 @@ class DocumentSigningServiceTest extends TestCase
 
         app(DocumentSigningService::class)->signDocument($doc);
 
-        Http::assertSent(fn ($r) => $r['visible'] === false);
+        Http::assertSent(fn ($r) => $r['visible'] === true && $r['stamp_position'] === 'bottom_center');
         $this->assertFalse($doc->fresh()->digital_signature['stamp_applied']);
+    }
+
+    public function test_posicion_del_sello_configurable_y_valor_invalido_cae_a_bottom_center(): void
+    {
+        foreach ([['footer', 'footer'], ['bottom_center', 'bottom_center'], ['otra', 'bottom_center']] as [$config, $esperado]) {
+            $this->globalCert();
+            $doc = $this->document();
+            $this->fakeSigner();
+            config(['signature.visible_stamp_position' => $config]);
+
+            app(DocumentSigningService::class)->signDocument($doc);
+
+            Http::assertSent(fn ($r) => $r['stamp_position'] === $esperado);
+        }
+    }
+
+    public function test_sello_desactivado_por_config_envia_visible_false(): void
+    {
+        $this->globalCert();
+        $doc = $this->document();
+        $this->fakeSigner();
+        config(['signature.visible_stamp' => false]);
+
+        app(DocumentSigningService::class)->signDocument($doc);
+
+        Http::assertSent(fn ($r) => $r['visible'] === false);
     }
 
     public function test_envia_visible_true_y_guarda_signer_details_y_stamp_applied(): void
