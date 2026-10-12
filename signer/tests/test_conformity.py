@@ -439,11 +439,12 @@ def test_conformidad_en_la_franja_del_sello_a_la_derecha(tmp_path, handle, w, h)
     assert res.conformity_applied and res.stamp_applied
     (name, date), _ = stamps(out)[0][:2], None
     _, page = last_page(out)
-    sello = [float(v) for v in page["/Annots"][0].get_object()["/Rect"]]
+    from test_compact_stamp import content_stamp
+    sello = content_stamp(page)[0]
     sello_h = pipeline.COMPACT_STAMP_HEIGHT
     # nombre y fecha DENTRO del alto del sello (misma franja, debajo del contenido)
     assert sello[1] <= date[1] and name[1] + LAYOUT_A4["name_height_mm"] * MM <= sello[3]
-    assert name[1] < 0 and sello[3] - sello[1] == sello_h
+    assert name[1] < 0 and sello[3] - sello[1] == pytest.approx(sello_h)
     # bloque centrado en el alto del sello
     bloque = (date[1] + name[1] + LAYOUT_A4["name_height_mm"] * MM) / 2
     assert bloque == pytest.approx((sello[1] + sello[3]) / 2, abs=4)

@@ -1056,6 +1056,26 @@ def _make_compact_style_class():
     return CompactStampStyle
 
 
+def draw_stamp_in_content(w: Any, stamp_style: Any, box: tuple[float, float, float, float]) -> None:
+    """Dibuja el sello en el CONTENIDO de la última página, ocupando `box` (espacio de usuario).
+
+    Muchos visores (iPhone/Quick Look, visores de celular, vistas previas de
+    correo, el visor de la app con la capa de anotaciones apagada) no dibujan la
+    apariencia de los campos de firma; dibujado en la página se ve en todos. El
+    XObject puede llevar /Matrix (contra-rotación): se traslada de modo que su
+    BBox transformada caiga exactamente en `box`, como haría un visor con /Rect.
+    """
+    from pyhanko.pdf_utils import layout
+
+    x0, y0, x1, y1 = box
+    st = stamp_style.create_stamp(w, layout.BoxConstraints(width=x1 - x0, height=y1 - y0), None)
+    rot = getattr(stamp_style, "rotation", 0)
+    iw, ih = (x1 - x0, y1 - y0) if rot not in (90, 270) else (y1 - y0, x1 - x0)
+    a, b, c, d, _, _ = _ROTATION_MATRIX.get(rot, [1, 0, 0, 1, 0, 0])
+    corners = [(a * u + c * v, b * u + d * v) for u, v in ((0, 0), (iw, 0), (0, ih), (iw, ih))]
+    st.apply(-1, x0 - min(p[0] for p in corners), y0 - min(p[1] for p in corners))
+
+
 def _build_compact_stamp_style(
     rows: list[list[Run]], size: float, box_width: float, box_height: float,
     regular_font: Optional[Path], bold_font: Optional[Path], rotation: int = 0,
@@ -1639,10 +1659,12 @@ def sign_pdf(
                     width - 2 * COMPACT_STAMP_PADDING - 1.0,
                     regular, bold,
                 )
-                stamp_style = _build_compact_stamp_style(
+                # El sello va en el contenido de la página (se ve en cualquier
+                # visor); el campo de firma queda invisible, en la misma revisión.
+                draw_stamp_in_content(w, _build_compact_stamp_style(
                     rows, size, width, COMPACT_STAMP_HEIGHT, font_path, bold_path, rotation,
-                )
-                new_field_spec = fields.SigFieldSpec(field_name, on_page=-1, box=box)
+                ), box)
+                new_field_spec = fields.SigFieldSpec(field_name, on_page=-1)
             elif visible:
                 # Reserva el pie en la MISMA revisión incremental (la firma cubre
                 # el cambio): el sello va en una franja nueva y no tapa contenido.
