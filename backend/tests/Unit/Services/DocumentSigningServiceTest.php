@@ -532,7 +532,7 @@ class DocumentSigningServiceTest extends TestCase
         // el tamaño real de la página gana; el page_size del lote es el respaldo ('layout')
         $conf = $this->lastRequest('/sign')['conformity'];
         $this->assertEquals(268.5, $conf['layout']['name_y_mm']);
-        $this->assertSame('document', $conf['layouts']['a5']['placement']);
+        $this->assertSame('footer', $conf['layouts']['a5']['placement']);
         $this->assertEquals([210.0, 148.0], $conf['page_dimensions_mm']['a5']);
     }
 
