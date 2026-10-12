@@ -133,4 +133,24 @@ class UploadBatchValidationTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_page_size_solo_acepta_a4_a5_y_carta(): void
+    {
+        foreach (['a10' => true, 'a3' => true, 'a4' => false, 'a5' => false, 'letter' => false] as $size => $rechazado) {
+            $response = $this->actingAs($this->admin)
+                ->postJson('/api/document-batches/upload', [
+                    'file' => UploadedFile::fake()->create('documents.zip', 10, 'application/zip'),
+                    'type_id' => $this->docType->id,
+                    'period' => '2025-01',
+                    'tenant_id' => $this->tenant->id,
+                    'page_size' => $size,
+                ]);
+
+            if ($rechazado) {
+                $response->assertStatus(422)->assertJsonValidationErrors(['page_size']);
+            } else {
+                $response->assertJsonMissingValidationErrors(['page_size']);
+            }
+        }
+    }
 }

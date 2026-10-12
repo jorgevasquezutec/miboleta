@@ -112,7 +112,7 @@ class DocumentBatchService
             // Ítem 36: tamaño de página elegido por el usuario antes de la
             // carga masiva, usado luego para calibrar la posición de la
             // firma (ver PdfWatermarkService / config/signature.php).
-            'page_size' => $data['page_size'] ?? 'a10',
+            'page_size' => $data['page_size'] ?? 'a4',
             'status' => 'pending',
         ]);
 

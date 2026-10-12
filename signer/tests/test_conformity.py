@@ -9,6 +9,7 @@ from pyhanko.pdf_utils.reader import PdfFileReader
 
 import pipeline
 from conftest import LAYOUT_A4, PFX_PASSWORD, make_pdf
+from test_stamp import DETAILS
 
 MM = pipeline.MM
 CONF = {"name": "Jorge Luis Vásquez Ñuñez", "date_text": "06/10/2026 15:30", "layout": LAYOUT_A4}
@@ -427,3 +428,62 @@ def test_nombre_largo_no_desborda_mas_que_fpdi(tmp_path, handle):
     expected = max(5.0, 16 * (56.0 * MM) / meter.width(name, 16) * 0.96)
     assert n_size == pytest.approx(expected, rel=1e-3)
     # con el mínimo de 5 pt puede sobrar ancho, igual que en FPDI (misma fórmula y mismo mínimo)
+
+
+@pytest.mark.parametrize("w,h", [(595.0, 842.0), (420.0, 595.0), (612.0, 792.0)])
+def test_conformidad_en_la_franja_del_sello_a_la_derecha(tmp_path, handle, w, h):
+    src = make_pdf(tmp_path / "in.pdf", media_box=(0, 0, w, h))
+    out = tmp_path / "out.pdf"
+    res = sign(src, out, handle, {**CONF, "layout": {**LAYOUT_A4, "placement": "footer"}}, visible=True,
+               stamp_position="bottom_left", signer_details=DETAILS)
+    assert res.conformity_applied and res.stamp_applied
+    (name, date), _ = stamps(out)[0][:2], None
+    _, page = last_page(out)
+    sello = [float(v) for v in page["/Annots"][0].get_object()["/Rect"]]
+    sello_h = pipeline.COMPACT_STAMP_HEIGHT
+    # nombre y fecha DENTRO del alto del sello (misma franja, debajo del contenido)
+    assert sello[1] <= date[1] and name[1] + LAYOUT_A4["name_height_mm"] * MM <= sello[3]
+    assert name[1] < 0 and sello[3] - sello[1] == sello_h
+    # bloque centrado en el alto del sello
+    bloque = (date[1] + name[1] + LAYOUT_A4["name_height_mm"] * MM) / 2
+    assert bloque == pytest.approx((sello[1] + sello[3]) / 2, abs=4)
+    # sello a la izquierda, conformidad a la derecha, sin solaparse
+    assert sello[0] == pipeline.STAMP_MARGIN_X
+    assert name[0] >= sello[2] + pipeline.FOOTER_GAP - 0.01
+    _, x, cw = pipeline.footer_row(w, LAYOUT_A4["width_mm"] * MM)
+    assert name[0] == pytest.approx(x, abs=0.01) and x + cw == pytest.approx(w - pipeline.STAMP_MARGIN_X)
+    verify_ok(out)
+
+
+def test_placement_footer_sin_sello_izquierdo_usa_el_layout(tmp_path, handle):
+    src = make_pdf(tmp_path / "in.pdf")
+    out = tmp_path / "out.pdf"
+    sign(src, out, handle, {**CONF, "layout": {**LAYOUT_A4, "placement": "footer"}}, visible=True, stamp_position="bottom_center",
+         signer_details=DETAILS)
+    name = stamps(out)[0][0]
+    assert name[0] == pytest.approx(LAYOUT_A4["x_mm"] * MM, abs=0.01)
+
+
+def test_placement_document_con_sello_izquierdo_queda_dentro_del_documento(tmp_path, handle):
+    # A5 (media hoja horizontal): la conformidad va en x/name_y aunque el sello vaya a la izquierda
+    lay = {**LAYOUT_A4, "x_mm": 137.0, "name_y_mm": 119.0, "placement": "document"}
+    src = make_pdf(tmp_path / "in.pdf", media_box=(0, 0, 595.32, 419.52))
+    out = tmp_path / "out.pdf"
+    sign(src, out, handle, {**CONF, "layout": lay}, visible=True, stamp_position="bottom_left",
+         signer_details=DETAILS)
+    name = stamps(out)[0][0]
+    assert name[0] == pytest.approx(137.0 * MM, abs=0.01)
+    assert name[1] == pytest.approx(419.52 - (119.0 + LAYOUT_A4["name_height_mm"]) * MM, abs=0.01)
+
+
+def test_el_tamano_real_gana_sobre_el_formato_elegido(tmp_path, handle):
+    # lote marcado A4 (footer) pero la página es media hoja: se usa el layout de a5 (document)
+    a4 = {**LAYOUT_A4, "x_mm": 137.0, "name_y_mm": 268.5, "placement": "footer"}
+    a5 = {**LAYOUT_A4, "x_mm": 137.0, "name_y_mm": 119.0, "placement": "document"}
+    conf = {**CONF, "layout": a4, "layouts": {"a4": a4, "a5": a5},
+            "page_dimensions_mm": {"a4": [210.0, 297.0], "a5": [210.0, 148.0]}}
+    src = make_pdf(tmp_path / "in.pdf", media_box=(0, 0, 595.32, 419.52))
+    out = tmp_path / "out.pdf"
+    sign(src, out, handle, conf, visible=True, stamp_position="bottom_left", signer_details=DETAILS)
+    name = stamps(out)[0][0]
+    assert name[1] == pytest.approx(419.52 - (119.0 + LAYOUT_A4["name_height_mm"]) * MM, abs=0.01)
