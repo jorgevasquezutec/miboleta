@@ -86,8 +86,9 @@ STAMP_FONT_MIN = 6.0
 STAMP_FONT_STEP = 0.25
 STAMP_SEPARATOR = " · "
 
-# Sello compacto (stamp_position="bottom_center"): caja centrada en una franja de
-# pie nueva de la última página, tipo boleta peruana (4 líneas, etiquetas en negrita).
+# Sello compacto (stamp_position="bottom_center" o "bottom_left"): caja centrada o
+# alineada a la izquierda en una franja de pie nueva de la última página, tipo
+# boleta peruana (4 líneas, etiquetas en negrita).
 COMPACT_STAMP_WIDTH = 330.0  # ancho deseado (se recorta al ancho visual - 2 márgenes)
 COMPACT_STAMP_HEIGHT = 52.0
 COMPACT_STAMP_BOTTOM = 12.0  # distancia desde el borde inferior
@@ -100,7 +101,8 @@ COMPACT_TITLE = "FIRMADO DIGITALMENTE"
 # Marca del título, por orden de preferencia, según lo que tenga la fuente.
 COMPACT_CHECK_GLYPHS = ["\u2713", "\u221a"]  # ✓, √
 COMPACT_CHECK_FALLBACK = "X"
-STAMP_POSITIONS = ("footer", "bottom_center")
+STAMP_POSITIONS = ("footer", "bottom_center", "bottom_left")
+COMPACT_POSITIONS = ("bottom_center", "bottom_left")
 # Nimbus Sans (fonts-urw-base35, la misma que usa Ghostscript): TrueType/OpenType
 # con tildes/ñ y 1000 unidades por em. Se prefiere a DejaVu Sans porque pyHanko
 # 0.35 escribe mal los anchos (/W) de fuentes con 2048 unidades por em (DejaVu,
@@ -838,21 +840,36 @@ def compute_stamp_box(page: Any) -> tuple[tuple[float, float, float, float], int
 
 
 def compute_compact_stamp_box(
-    page: Any,
+    page: Any, align: str = "center", max_width: Optional[float] = None,
 ) -> tuple[tuple[float, float, float, float], int, float]:
-    """Caja compacta CENTRADA en el pie visual (ya con franja reservada).
+    """Caja compacta en el pie visual (ya con franja reservada).
 
     Devuelve ((x0, y0, x1, y1) en espacio de usuario, rotación, ancho visual).
-    Centrada en el ancho visual y a COMPACT_STAMP_BOTTOM del borde inferior
-    visual; con 90/270 la caja es vertical (se contra-rota).
+    `align="center"` la centra en el ancho visual; `align="left"` la pega al
+    borde IZQUIERDO visual (a STAMP_MARGIN_X). Siempre a COMPACT_STAMP_BOTTOM
+    del borde inferior visual; con 90/270 la caja es vertical (se contra-rota).
+    `max_width` acota el ancho (p. ej. para dejar lugar a la conformidad en la
+    misma franja, ver footer_row).
     """
     px0, py0, px1, py1 = _page_box(page)
     rot = _page_rotation(page)
     along_lo, along_hi = (py0, py1) if rot in (90, 270) else (px0, px1)
     width = min(COMPACT_STAMP_WIDTH, max(along_hi - along_lo - 2 * STAMP_MARGIN_X, 100.0))
+    if max_width is not None:
+        width = min(width, max_width)
     h, b = COMPACT_STAMP_HEIGHT, COMPACT_STAMP_BOTTOM
-    c0 = (along_lo + along_hi - width) / 2
-    c1 = c0 + width
+    if align == "left":
+        # El eje visual X corre en sentido inverso al de usuario con /Rotate 180
+        # y 270 (ver _visual_to_user): ahí la izquierda visual es el extremo alto.
+        if rot in (180, 270):
+            c1 = along_hi - STAMP_MARGIN_X
+            c0 = c1 - width
+        else:
+            c0 = along_lo + STAMP_MARGIN_X
+            c1 = c0 + width
+    else:
+        c0 = (along_lo + along_hi - width) / 2
+        c1 = c0 + width
     if rot == 0:
         box = (c0, py0 + b, c1, py0 + b + h)
     elif rot == 180:
@@ -1150,9 +1167,9 @@ DETECT_TOL_MM = 5.0
 
 
 def detect_layout(conformity: dict, vw: float, vh: float) -> dict:
-    """Layout a usar: si hay `layouts` + `page_dimensions_mm` (sin elección explícita de
-    formato), el de la key cuyo tamaño calza con el VISUAL real de la página (tolerancia
-    max(3%, 5 mm) por lado, gana el menor error); si ninguna calza, `layout`."""
+    """Layout a usar: si hay `layouts` + `page_dimensions_mm`, el de la key cuyo tamaño
+    calza con el VISUAL real de la página (tolerancia max(3%, 5 mm) por lado, gana el
+    menor error), aunque el lote haya elegido otro formato; si ninguna calza, `layout`."""
     default = conformity.get("layout") or {}
     layouts = conformity.get("layouts")
     dims = conformity.get("page_dimensions_mm")
@@ -1204,6 +1221,52 @@ def conformity_cells(conformity: dict, vw: float, vh: float) -> dict:
         "name_h": name_h_mm * MM,
         "date_top": (y_mm + date_off_mm) * MM,
         "date_h": 4.0 * MM,
+        "name_size": float(lay.get("name_font_size", 12)),
+        "date_size": float(lay.get("date_font_size", 7)),
+        "align": align if align in _ALIGN_FLAGS else "C",
+    }
+
+
+# Conformidad en la franja del sello (conformity.placement = "footer"): con el sello
+# abajo a la izquierda, el nombre y la fecha del trabajador van en la MISMA franja,
+# a la derecha y centrados en el alto del sello.
+FOOTER_GAP = 12.0                # separación entre el sello y la conformidad (pt)
+FOOTER_CONFORMITY_MAX_RATIO = 0.4  # en páginas angostas la conformidad cede ancho
+
+
+def footer_row(vw: float, conformity_width: float) -> tuple[float, float, float]:
+    """Reparte el ancho visual `vw` entre el sello (izquierda) y la conformidad (derecha).
+
+    Devuelve (ancho del sello, x visual de la conformidad, ancho de la conformidad),
+    con STAMP_MARGIN_X a cada lado y FOOTER_GAP entre ambos, sin solaparse.
+    """
+    avail = vw - 2 * STAMP_MARGIN_X
+    cw = min(conformity_width, avail * FOOTER_CONFORMITY_MAX_RATIO)
+    sw = min(COMPACT_STAMP_WIDTH, max(avail - cw - FOOTER_GAP, 100.0))
+    return sw, vw - STAMP_MARGIN_X - cw, cw
+
+
+def footer_conformity_cells(conformity: dict, vw: float, vh: float) -> dict:
+    """Como conformity_cells, pero en la franja del sello compacto (debajo de `vh`).
+
+    `vw`/`vh` son el tamaño visual ANTES de reservar la franja: el bloque nombre +
+    fecha queda centrado en el alto del sello y alineado al borde derecho.
+    """
+    lay = detect_layout(conformity, vw, vh)
+    _, x, width = footer_row(vw, float(lay.get("width_mm", 50)) * MM)
+    name_h = float(lay.get("name_height_mm", 8)) * MM
+    date_off = float(lay.get("date_offset_y_mm", 8)) * MM
+    date_h = 4.0 * MM
+    stamp_top = vh + COMPACT_RESERVE - COMPACT_STAMP_BOTTOM - COMPACT_STAMP_HEIGHT
+    name_top = stamp_top + (COMPACT_STAMP_HEIGHT - (date_off + date_h)) / 2
+    align = str(lay.get("align", "C")).upper()
+    return {
+        "x": x,
+        "width": width,
+        "name_top": name_top,
+        "name_h": name_h,
+        "date_top": name_top + date_off,
+        "date_h": date_h,
         "name_size": float(lay.get("name_font_size", 12)),
         "date_size": float(lay.get("date_font_size", 7)),
         "align": align if align in _ALIGN_FLAGS else "C",
@@ -1342,12 +1405,14 @@ def _text_stamp(w, text: str, font_path: Path, size: float, width: float, height
     return st
 
 
-def draw_conformity(w: Any, page_ref: Any, page: Any, conformity: dict) -> None:
+def draw_conformity(w: Any, page_ref: Any, page: Any, conformity: dict, footer: bool = False) -> None:
     """Dibuja nombre (Segoe Script) y fecha (Nimbus Sans) del trabajador en la página.
 
     Se llama ANTES de reserve_footer_space y con el mismo IncrementalPdfFileWriter
     de la firma, así todo cae en una única revisión incremental. Las coordenadas
     se toman de la caja de página vigente (CropBox o MediaBox) y respetan /Rotate.
+    Con `footer=True` el nombre y la fecha van en la franja del sello compacto
+    (ver footer_conformity_cells), que el llamador reserva después.
     Lanza ConformityError ante cualquier fallo (el llamador no escribe salida).
     """
     try:
@@ -1363,7 +1428,7 @@ def draw_conformity(w: Any, page_ref: Any, page: Any, conformity: dict) -> None:
         box = _page_box(page)
         rot = _page_rotation(page)
         vw, vh = _visual_size(box, rot)
-        c = conformity_cells(conformity, vw, vh)
+        c = (footer_conformity_cells if footer else conformity_cells)(conformity, vw, vh)
 
         # Auto-ajuste igual que PHP (addSignatureText): si no cabe, se reduce.
         name_size = c["name_size"]
@@ -1507,9 +1572,10 @@ def sign_pdf(
     signer_details.extract_signer_details): firmante, cargo, razón social,
     RUC, país/provincia y fecha.
 
-    `stamp_position="bottom_center"` (solo con `visible=True`) dibuja en cambio un
-    sello compacto en la franja inferior, centrado, de la ÚLTIMA página
-    (ver build_compact_stamp_runs); "footer" es el comportamiento de siempre.
+    `stamp_position="bottom_center"` / `"bottom_left"` (solo con `visible=True`)
+    dibuja en cambio un sello compacto en la franja inferior de la ÚLTIMA página,
+    centrado o a la izquierda (ver build_compact_stamp_runs); "footer" es el
+    comportamiento de siempre.
 
     Lanza TsaError si la TSA indicada no respondió, o SigningError ante
     cualquier otro fallo de pyHanko.
@@ -1534,15 +1600,27 @@ def sign_pdf(
         with normalized_path.open("rb") as inf:
             w = IncrementalPdfFileWriter(inf)
 
+            stamp_max_width = None
             if conformity:
                 # Nombre y fecha del trabajador en la MISMA revisión incremental
                 # (antes de reservar el pie, para usar la caja original de la página).
                 page_ref, _ = w.find_page_for_modification(-1)
-                draw_conformity(w, page_ref, page_ref.get_object(), conformity)
+                page = page_ref.get_object()
+                vw, vh = _visual_size(_page_box(page), _page_rotation(page))
+                lay = detect_layout(conformity, vw, vh)
+                # Con el sello abajo a la izquierda, los formatos con placement
+                # "footer" llevan la conformidad en la misma franja (a la
+                # derecha); el sello cede el ancho que ocupa.
+                footer_conformity = (
+                    visible and stamp_position == "bottom_left" and lay.get("placement") == "footer"
+                )
+                draw_conformity(w, page_ref, page, conformity, footer=footer_conformity)
+                if footer_conformity:
+                    stamp_max_width = footer_row(vw, float(lay.get("width_mm", 50)) * MM)[0]
 
             new_field_spec = None
             stamp_style = None
-            if visible and stamp_position == "bottom_center":
+            if visible and stamp_position in COMPACT_POSITIONS:
                 # Franja baja nueva en el pie de la última página (misma revisión
                 # incremental): el sello no tapa contenido. La conformidad ya se
                 # dibujó con la caja original y su espacio de usuario no cambia.
@@ -1550,7 +1628,9 @@ def sign_pdf(
                 page = page_ref.get_object()
                 reserve_footer_space(page, COMPACT_RESERVE)
                 w.update_container(page)
-                box, rotation, width = compute_compact_stamp_box(page)
+                box, rotation, width = compute_compact_stamp_box(
+                    page, "left" if stamp_position == "bottom_left" else "center", stamp_max_width
+                )
                 font_path, bold_path = find_stamp_font(), find_stamp_bold_font()
                 regular = _TextMeter(font_path)
                 bold = _TextMeter(bold_path) if (font_path and bold_path) else None

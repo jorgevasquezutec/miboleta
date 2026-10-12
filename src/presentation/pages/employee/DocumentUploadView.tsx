@@ -29,7 +29,7 @@ import { PageSize, pageSizeLabels } from "@/core/domain/entities";
 import { toast } from "sonner";
 import { showApiError } from "@/presentation/utils/showApiError";
 
-const PAGE_SIZE_OPTIONS: PageSize[] = ["a10", "a4", "a5", "letter"];
+const PAGE_SIZE_OPTIONS: PageSize[] = ["a4", "a5", "letter"];
 
 interface DocumentUploadViewProps {
   onBack?: () => void;
@@ -79,8 +79,8 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
   const [notifyEmployees, setNotifyEmployees] = useState(true);
   const [requiresSignature, setRequiresSignature] = useState(true);
   // Ítem 36: tamaño de página de las boletas del ZIP, para calibrar
-  // correctamente la posición de la firma. 'a10' = formato estándar actual.
-  const [pageSize, setPageSize] = useState<PageSize>("a10");
+  // correctamente la posición de la firma. Solo A4, A5 y Carta.
+  const [pageSize, setPageSize] = useState<PageSize>("a4");
   const [uploadSuccess, setUploadSuccess] = useState<{ batchId: number } | null>(null);
 
   // Reset form and load document types on mount
@@ -91,7 +91,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setPeriod("");
     setNotifyEmployees(true);
     setRequiresSignature(true);
-    setPageSize("a10");
+    setPageSize("a4");
     setUploadSuccess(null);
     clearZipPreview();
     clearError();
@@ -197,7 +197,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
     setPeriod("");
     setNotifyEmployees(true);
     setRequiresSignature(true);
-    setPageSize("a10");
+    setPageSize("a4");
     setUploadSuccess(null);
     clearZipPreview();
     clearError();
@@ -523,7 +523,7 @@ export function DocumentUploadView({ onBack }: DocumentUploadViewProps) {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-[#64748B]">
-                    Determina dónde se coloca la firma sobre el PDF. Si no estás seguro, deja "A10".
+                    Determina dónde se coloca la firma del trabajador (abajo a la derecha). Si no estás seguro, deja "A4".
                   </p>
                 </div>
               </div>

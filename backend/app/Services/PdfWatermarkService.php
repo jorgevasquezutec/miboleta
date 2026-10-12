@@ -118,11 +118,10 @@ class PdfWatermarkService
         // siendo global (no depende del tamaño). Fallback a 'a10' si el
         // tamaño solicitado no existe en el config (defensivo).
         $sizesConfig = config('signature.watermark.sizes', []);
-        $defaultSizeKey = config('signature.watermark.default_size', 'a10');
-        if (!$pageSizeKey) {
-            // Sin elección explícita: formato según el tamaño REAL de la página.
-            $pageSizeKey = SignatureLayout::detectSizeKey((float) $pageWidth, (float) $pageHeight);
-        }
+        $defaultSizeKey = config('signature.watermark.default_size', 'a4');
+        // Formato según el tamaño REAL de la página; el del lote solo decide
+        // si el tamaño no calza con ninguno.
+        $pageSizeKey = SignatureLayout::detectSizeKey((float) $pageWidth, (float) $pageHeight, $pageSizeKey);
         $resolvedSizeKey = isset($sizesConfig[$pageSizeKey]) ? $pageSizeKey : $defaultSizeKey;
         $cfg = $sizesConfig[$resolvedSizeKey] ?? [];
         $mode = config('signature.watermark.mode', 'absolute');

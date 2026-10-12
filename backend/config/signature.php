@@ -1,5 +1,20 @@
 <?php
 
+// Media hoja A4 horizontal (210 x 148 mm): coordenadas calibradas con boletas
+// reales en producción (antes 'a10', ahora 'a5'). Mismas env vars de siempre.
+$mediaHoja = [
+    'x' => (float) env('SIGNATURE_X', 137),        // mm desde la izquierda (centro ≈ 165)
+    'name_y' => (float) env('SIGNATURE_NAME_Y', 119), // mm desde arriba (nombre, más cerca de la línea)
+    'width' => (float) env('SIGNATURE_WIDTH', 56),    // ancho del bloque (mm) — el nombre se auto-ajusta
+    'align' => env('SIGNATURE_ALIGN', 'C'),           // C | L | R
+    'name_font_size' => (float) env('SIGNATURE_NAME_SIZE', 16),
+    'name_height' => (float) env('SIGNATURE_NAME_HEIGHT', 7),  // alto celda nombre (mm)
+    'date_offset_y' => (float) env('SIGNATURE_DATE_OFFSET', 5), // positivo = fecha DEBAJO del nombre (sobre la línea)
+    'date_font_size' => (float) env('SIGNATURE_DATE_SIZE', 8),
+    // Dentro de la boleta, abajo a la derecha (ver 'placement' más abajo).
+    'placement' => 'document',
+];
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -57,23 +72,43 @@ return [
     | caen dentro del recuadro "RECIBÍ CONFORME". Ajustar los mm aquí sin
     | tocar código si hace falta.
     |
+    | ---------------------------------------------------------------------
+    | Formatos vigentes: A4, A5 y Carta (a10 ya no se ofrece)
+    | ---------------------------------------------------------------------
+    | Por pedido del cliente solo se cargan lotes A4, A5 o Carta, con la
+    | conformidad del trabajador ABAJO A LA DERECHA y el sello de la empresa
+    | abajo a la izquierda (ver visible_stamp_position).
+    |
+    | placement (por formato):
+    |   'footer'   -> con el sello abajo a la izquierda, la conformidad va en
+    |                 la MISMA franja del sello, a la derecha y a su altura
+    |                 (A4 y Carta). x/name_y solo se usan sin sello izquierdo
+    |                 (p. ej. el flujo FPDI, sin certificado).
+    |   'document' -> siempre en x/name_y, dentro del documento (A5).
+    |
+    | a5 = MEDIA HOJA A4 HORIZONTAL (210 x 148 mm), lo que antes se llamaba
+    | 'a10': mismas coordenadas, calibradas con boletas reales. 'a10' se
+    | conserva solo para los lotes viejos que lo tienen guardado.
+    |
+    | El formato se detecta por el tamaño REAL de la página; el page_size del
+    | lote solo decide si el tamaño no calza con ninguno de page_dimensions_mm.
+    |
     */
     'watermark' => [
         'mode' => env('SIGNATURE_MODE', 'absolute'),
 
-        // Tamaño usado cuando el batch/documento no tiene page_size
-        // asignado (lotes viejos, anteriores al ítem 36).
-        'default_size' => 'a10',
+        // Tamaño usado cuando el lote no eligió page_size y el tamaño real de
+        // la página no calza con ninguno de page_dimensions_mm.
+        'default_size' => 'a4',
 
-        // Dimensiones reales [ancho, alto] en mm (portrait / formato natural)
-        // de cada tamaño. ÚNICA fuente para detectar el formato por el tamaño
-        // real de la página cuando el lote no eligió page_size explícito
-        // (SignatureLayout::detectSizeKey y el sidecar). La comparación es
-        // por ancho/alto con tolerancia. 'a10' es el formato custom 210x148.
+        // Dimensiones reales [ancho, alto] en mm de cada formato. ÚNICA fuente
+        // para detectar el formato por el tamaño real de la página
+        // (SignatureLayout::detectSizeKey y el sidecar), que tiene prioridad
+        // sobre el page_size del lote. Comparación por ancho/alto con
+        // tolerancia. 'a5' es la media hoja HORIZONTAL (210 x 148).
         'page_dimensions_mm' => [
-            'a10' => [210.0, 148.0],
             'a4' => [210.0, 297.0],
-            'a5' => [148.0, 210.0],
+            'a5' => [210.0, 148.0],
             'letter' => [215.9, 279.4],
         ],
 
@@ -82,57 +117,42 @@ return [
         'detect_tolerance_mm' => 5.0,
 
         'sizes' => [
-            // Formato calibrado en producción (comportamiento por defecto,
-            // SIN CAMBIOS respecto al config anterior). Página de
-            // referencia real: 210 x 148 mm.
-            'a10' => [
-                'x' => (float) env('SIGNATURE_X', 137),        // mm desde la izquierda (centro ≈ 165)
-                'name_y' => (float) env('SIGNATURE_NAME_Y', 119), // mm desde arriba (nombre, más cerca de la línea)
-                'width' => (float) env('SIGNATURE_WIDTH', 56),    // ancho del bloque (mm) — el nombre se auto-ajusta
-                'align' => env('SIGNATURE_ALIGN', 'C'),           // C | L | R
-                'name_font_size' => (float) env('SIGNATURE_NAME_SIZE', 16),
-                'name_height' => (float) env('SIGNATURE_NAME_HEIGHT', 7),  // alto celda nombre (mm)
-                'date_offset_y' => (float) env('SIGNATURE_DATE_OFFSET', 5), // positivo = fecha DEBAJO del nombre (sobre la línea)
-                'date_font_size' => (float) env('SIGNATURE_DATE_SIZE', 8),
-            ],
+            // Nombre anterior de la media hoja; ya no se ofrece al cargar. Se
+            // conserva para los lotes viejos que tienen 'a10' guardado.
+            'a10' => $mediaHoja,
 
-            // NUEVO — derivado proporcionalmente de a10 (ver nota arriba).
-            // Página A4 portrait: 210 x 297 mm.
+            // Página A4 portrait: 210 x 297 mm. Conformidad en la franja del
+            // sello; x/name_y (sin sello izquierdo) calibrados con boleta real
+            // de 2 copias por hoja: "RECIBÍ CONFORME" de la copia de abajo.
             'a4' => [
                 'x' => 137.0,
-                'name_y' => 238.8,
+                'name_y' => 268.5,
                 'width' => 56.0,
                 'align' => 'C',
                 'name_font_size' => 16,
                 'name_height' => 7,
                 'date_offset_y' => 5,
                 'date_font_size' => 8,
+                'placement' => 'footer',
             ],
 
-            // NUEVO — derivado proporcionalmente de a10 (ver nota arriba).
-            // Página A5 portrait: 148 x 210 mm.
-            'a5' => [
-                'x' => 96.55,
-                'name_y' => 168.85,
-                'width' => 39.47,
-                'align' => 'C',
-                'name_font_size' => 16,
-                'name_height' => 7,
-                'date_offset_y' => 5,
-                'date_font_size' => 8,
-            ],
+            // Media hoja A4 horizontal: 210 x 148 mm. Dentro de la boleta,
+            // abajo a la derecha (coordenadas calibradas del antiguo a10).
+            'a5' => $mediaHoja,
 
-            // NUEVO — derivado proporcionalmente de a10 (ver nota arriba).
-            // Página Carta/Letter portrait: 215.9 x 279.4 mm.
+            // Página Carta/Letter portrait: 215.9 x 279.4 mm. Conformidad en
+            // la franja del sello; x/name_y (sin sello izquierdo) abajo a la
+            // derecha con los márgenes de a4 (sin validar con boleta real).
             'letter' => [
-                'x' => 140.87,
-                'name_y' => 224.69,
-                'width' => 57.57,
+                'x' => 142.9,
+                'name_y' => 250.9,
+                'width' => 56.0,
                 'align' => 'C',
                 'name_font_size' => 16,
                 'name_height' => 7,
                 'date_offset_y' => 5,
                 'date_font_size' => 8,
+                'placement' => 'footer',
             ],
         ],
     ],
@@ -144,19 +164,23 @@ return [
     |
     | Si es true, el sidecar dibuja un sello visible con los datos del
     | certificado. Por pedido del cliente ahora va visible (antes era invisible)
-    | y en la parte inferior central: "FIRMADO DIGITALMENTE", titular, RUC y
-    | fecha.
+    | y en la parte inferior izquierda: "FIRMADO DIGITALMENTE", titular, RUC y
+    | fecha (la conformidad del trabajador va abajo a la derecha).
     |
     | visible_stamp_position:
-    |   'bottom_center' -> sello compacto abajo al centro (por defecto).
+    |   'bottom_left'   -> sello compacto abajo a la izquierda (por defecto). En
+    |                      los formatos con placement 'footer' (A4, Carta) la
+    |                      conformidad va en la MISMA franja, a la derecha y a la
+    |                      altura del sello; en A5 va dentro de la boleta.
+    |   'bottom_center' -> el mismo sello compacto, abajo al centro.
     |   'footer'    -> sello ancho heredado en el pie de la última página, con
     |                  representante, razón social, RUC, cargo, país/provincia y
     |                  fecha; alarga la página para no tapar contenido.
     |
     | Solo aplica cuando visible_stamp es true. Un valor inválido cae a
-    | 'bottom_center'.
+    | 'bottom_left'.
     |
     */
     'visible_stamp' => (bool) env('SIGNATURE_VISIBLE_STAMP', true),
-    'visible_stamp_position' => env('SIGNATURE_VISIBLE_STAMP_POSITION', 'bottom_center'),
+    'visible_stamp_position' => env('SIGNATURE_VISIBLE_STAMP_POSITION', 'bottom_left'),
 ];

@@ -3,19 +3,21 @@
 namespace App\Services\Signature;
 
 /**
- * Detección del formato de boleta (a4|a5|a10|letter) por el tamaño REAL de la
- * página, para cuando el lote no eligió page_size explícito. Las dimensiones
- * viven en config('signature.watermark.page_dimensions_mm').
+ * Detección del formato de boleta (a4|a5|letter) por el tamaño REAL de la
+ * página, que tiene prioridad sobre el page_size del lote (este solo decide
+ * si el tamaño no calza con ninguno). Las dimensiones viven en
+ * config('signature.watermark.page_dimensions_mm').
  */
 class SignatureLayout
 {
     /**
-     * @return string key de config('signature.watermark.sizes'); si el tamaño no
-     *                calza con ninguno, default_size ('a10').
+     * @param string|null $fallback key a usar si el tamaño no calza con ninguno
+     *                              (el page_size del lote); si es null, default_size.
+     * @return string key de config('signature.watermark.sizes')
      */
-    public static function detectSizeKey(float $wMm, float $hMm): string
+    public static function detectSizeKey(float $wMm, float $hMm, ?string $fallback = null): string
     {
-        $default = config('signature.watermark.default_size', 'a10');
+        $default = config('signature.watermark.default_size', 'a4');
         $ratio = (float) config('signature.watermark.detect_tolerance_ratio', 0.03);
         $absMm = (float) config('signature.watermark.detect_tolerance_mm', 5.0);
 
@@ -35,7 +37,7 @@ class SignatureLayout
             }
         }
 
-        return $best ?? $default;
+        return $best ?? $fallback ?? $default;
     }
 
     /**
@@ -44,7 +46,7 @@ class SignatureLayout
     public static function sidecarLayout(string $key): array
     {
         $sizes = config('signature.watermark.sizes', []);
-        $default = config('signature.watermark.default_size', 'a10');
+        $default = config('signature.watermark.default_size', 'a4');
         $cfg = $sizes[$key] ?? $sizes[$default] ?? [];
 
         return [
@@ -57,6 +59,7 @@ class SignatureLayout
             'name_height_mm' => (float) ($cfg['name_height'] ?? 8),
             'date_offset_y_mm' => (float) ($cfg['date_offset_y'] ?? 8),
             'date_font_size' => (float) ($cfg['date_font_size'] ?? 7),
+            'placement' => ($cfg['placement'] ?? 'document') === 'footer' ? 'footer' : 'document',
         ];
     }
 }

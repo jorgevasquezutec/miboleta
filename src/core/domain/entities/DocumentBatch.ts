@@ -39,14 +39,14 @@ export interface DocumentBatch {
 export type BatchStatus = 'pending' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'partial';
 
 // Ítem 36: tamaño de página de las boletas, elegido antes de la carga
-// masiva para calibrar correctamente la posición de la firma. 'a10' es el
-// formato calibrado histórico (comportamiento por defecto).
+// masiva para calibrar correctamente la posición de la firma. Solo se
+// cargan A4, A5 y Carta; 'a10' queda para mostrar lotes viejos.
 export type PageSize = 'a4' | 'a5' | 'a10' | 'letter';
 
 export const pageSizeLabels: Record<PageSize, string> = {
-    a10: 'A10 (formato estándar de boleta)',
+    a10: 'A10 (formato anterior)',
     a4: 'A4',
-    a5: 'A5',
+    a5: 'A5 (media hoja horizontal)',
     letter: 'Carta (Letter)',
 };
 
@@ -89,7 +89,7 @@ export interface BatchUploadRequest {
     notifyEmployees: boolean;
     requiresSignature: boolean;
     tenantId?: number;
-    /** Tamaño de página de las boletas del ZIP (default 'a10' si se omite). */
+    /** Tamaño de página de las boletas del ZIP (default 'a4' si se omite). */
     pageSize?: PageSize;
 }
 

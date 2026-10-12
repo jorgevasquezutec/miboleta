@@ -80,7 +80,7 @@ class SignRequest(BaseModel):
     certificate_password: Optional[str] = Field(None, description="Contraseña del certificado, si aplica.")
     tsa_url: Optional[str] = Field(None, description="URL de una TSA RFC 3161. Si se omite, no se sella el tiempo.")
     visible: bool = Field(False, description="Si True, agrega un sello de firma visible en el pie de la última página (firmante, cargo, razón social, RUC, país/provincia, fecha).")
-    stamp_position: Literal["footer", "bottom_center"] = Field("footer", description="Solo con visible=True. 'footer': sello en el pie de la última página; 'bottom_center': sello compacto en la pie de la última página, centrado, con 4 líneas.")
+    stamp_position: Literal["footer", "bottom_center", "bottom_left"] = Field("footer", description="Solo con visible=True. 'footer': sello en el pie de la última página; 'bottom_center' / 'bottom_left': sello compacto de 4 líneas en el pie de la última página, centrado o a la izquierda.")
     field_name: str = Field(pipeline.DEFAULT_FIELD_NAME, description="Nombre del campo de firma PDF.")
     md_algorithm: str = Field(pipeline.DEFAULT_MD_ALGORITHM, description="Algoritmo de digest (default: sha256).")
     reason: str = Field(pipeline.DEFAULT_REASON, description="Motivo de firma embebido en la firma PAdES.")
@@ -116,6 +116,10 @@ class ConformityLayout(BaseModel):
     name_height_mm: float = 8
     date_offset_y_mm: float = 8
     date_font_size: float = 7
+    placement: Literal["document", "footer"] = Field(
+        "document",
+        description="'document': en x/name_y. 'footer': en la franja del sello, a la derecha y a su misma altura (solo con visible=True y stamp_position='bottom_left'; si no, x/name_y).",
+    )
 
 
 class Conformity(BaseModel):

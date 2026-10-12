@@ -200,13 +200,13 @@ class DocumentSigningServiceTest extends TestCase
 
         app(DocumentSigningService::class)->signDocument($doc);
 
-        Http::assertSent(fn ($r) => $r['visible'] === true && $r['stamp_position'] === 'bottom_center');
+        Http::assertSent(fn ($r) => $r['visible'] === true && $r['stamp_position'] === 'bottom_left');
         $this->assertFalse($doc->fresh()->digital_signature['stamp_applied']);
     }
 
-    public function test_posicion_del_sello_configurable_y_valor_invalido_cae_a_bottom_center(): void
+    public function test_posicion_del_sello_configurable_y_valor_invalido_cae_a_bottom_left(): void
     {
-        foreach ([['footer', 'footer'], ['bottom_center', 'bottom_center'], ['otra', 'bottom_center']] as [$config, $esperado]) {
+        foreach ([['footer', 'footer'], ['bottom_center', 'bottom_center'], ['bottom_left', 'bottom_left'], ['otra', 'bottom_left']] as [$config, $esperado]) {
             $this->globalCert();
             $doc = $this->document();
             $this->fakeSigner();
@@ -491,7 +491,7 @@ class DocumentSigningServiceTest extends TestCase
         $layout = $this->lastRequest('/sign')['conformity']['layout'];
         $this->assertSame('absolute', $layout['mode']);
         $this->assertEquals(137.0, $layout['x_mm']);
-        $this->assertEquals(238.8, $layout['name_y_mm']);
+        $this->assertEquals(268.5, $layout['name_y_mm']);
         $this->assertEquals(56.0, $layout['width_mm']);
         $this->assertSame('C', $layout['align']);
         $this->assertEquals(16.0, $layout['name_font_size']);
@@ -509,13 +509,14 @@ class DocumentSigningServiceTest extends TestCase
         app(DocumentSigningService::class)->signDocument($doc);
 
         $conf = $this->lastRequest('/sign')['conformity'];
-        $this->assertEquals(119.0, $conf['layout']['name_y_mm']);
+        // default_size = a4 (a10 ya no es el formato por defecto)
+        $this->assertEquals(268.5, $conf['layout']['name_y_mm']);
         $this->assertEqualsCanonicalizing(['a10', 'a4', 'a5', 'letter'], array_keys($conf['layouts']));
-        $this->assertEquals(238.8, $conf['layouts']['a4']['name_y_mm']);
+        $this->assertEquals(268.5, $conf['layouts']['a4']['name_y_mm']);
         $this->assertEquals([210.0, 297.0], $conf['page_dimensions_mm']['a4']);
     }
 
-    public function test_con_eleccion_explicita_no_envia_layouts(): void
+    public function test_con_eleccion_explicita_igual_envia_layouts_para_detectar_por_tamano(): void
     {
         $this->globalCert();
         $docType = \App\Models\DocumentType::factory()->create();
@@ -528,9 +529,11 @@ class DocumentSigningServiceTest extends TestCase
 
         app(DocumentSigningService::class)->signDocument($doc);
 
+        // el tamaño real de la página gana; el page_size del lote es el respaldo ('layout')
         $conf = $this->lastRequest('/sign')['conformity'];
-        $this->assertArrayNotHasKey('layouts', $conf);
-        $this->assertArrayNotHasKey('page_dimensions_mm', $conf);
+        $this->assertEquals(268.5, $conf['layout']['name_y_mm']);
+        $this->assertSame('document', $conf['layouts']['a5']['placement']);
+        $this->assertEquals([210.0, 148.0], $conf['page_dimensions_mm']['a5']);
     }
 
     public function test_sin_conformity_applied_lanza_y_deja_el_archivo_intacto(): void

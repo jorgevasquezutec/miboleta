@@ -539,12 +539,12 @@ class DocumentSigningService
      */
     private function buildConformityPayload(Document $doc): array
     {
-        // Elección explícita = batch con page_size en la columna cruda (NO
-        // resolved_page_size, que rellena 'a10'). Sin elección el formato se
-        // detecta por el tamaño real de la página (en el sidecar).
+        // El sidecar detecta el formato por el tamaño REAL de la página
+        // (layouts + page_dimensions_mm); 'layout' (el page_size del lote, o
+        // default_size) solo se usa si el tamaño no calza con ninguno.
         $explicit = $doc->batch?->page_size;
         $sizes = config('signature.watermark.sizes', []);
-        $default = config('signature.watermark.default_size', 'a10');
+        $default = config('signature.watermark.default_size', 'a4');
         $key = $explicit ?: $default;
         if (!isset($sizes[$key])) {
             $key = $default;
@@ -560,12 +560,10 @@ class DocumentSigningService
             'layout' => SignatureLayout::sidecarLayout($key),
         ];
 
-        if (!$explicit) {
-            $payload['layouts'] = collect(array_keys($sizes))
-                ->mapWithKeys(fn ($k) => [$k => SignatureLayout::sidecarLayout($k)])
-                ->all();
-            $payload['page_dimensions_mm'] = config('signature.watermark.page_dimensions_mm', []);
-        }
+        $payload['layouts'] = collect(array_keys($sizes))
+            ->mapWithKeys(fn ($k) => [$k => SignatureLayout::sidecarLayout($k)])
+            ->all();
+        $payload['page_dimensions_mm'] = config('signature.watermark.page_dimensions_mm', []);
 
         return $payload;
     }
@@ -809,7 +807,7 @@ class DocumentSigningService
     {
         $position = config('signature.visible_stamp_position');
 
-        return in_array($position, ['footer', 'bottom_center'], true) ? $position : 'bottom_center';
+        return in_array($position, ['footer', 'bottom_center', 'bottom_left'], true) ? $position : 'bottom_left';
     }
 
     protected function buildTempPath(string $originalRelativePath): string

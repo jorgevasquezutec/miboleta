@@ -1,4 +1,4 @@
-"""Tests del sello de cabecera (stamp_position="bottom_center")."""
+"""Tests del sello compacto (stamp_position="bottom_center" | "bottom_left")."""
 import json
 from datetime import datetime, timezone
 
@@ -263,3 +263,41 @@ def test_razon_social_usa_las_siglas_del_certificado():
     assert lines[1] == "Razón social: OVERHEAD MEN S.A.C. - RUC: 20603839961"
     assert pipeline.short_organization("EMPRESA SAC") == "EMPRESA SAC"
     assert pipeline.short_organization(None) is None
+
+
+@pytest.mark.parametrize("rot", [0, 90, 180, 270])
+def test_caja_a_la_izquierda_en_la_franja_inferior(rot):
+    page = make_page((0, 0, 595, 842), rotate=rot, inherit=True)
+    reserve_footer_space(page, COMPACT_RESERVE)
+    (x0, y0, x1, y1), r, width = compute_compact_stamp_box(page, "left")
+    assert r == rot and width == COMPACT_STAMP_WIDTH
+    m = STAMP_MARGIN_X
+    # izquierda VISUAL: con 180/270 el eje visual X corre al revés en espacio de usuario
+    if rot == 0:
+        assert y1 <= 0 and x0 == m
+    elif rot == 180:
+        assert y0 >= 842 and x1 == 595 - m
+    elif rot == 90:
+        assert x0 >= 595 and y0 == m
+    else:
+        assert x1 <= 0 and y1 == 842 - m
+    assert sorted((x1 - x0, y1 - y0)) == sorted((COMPACT_STAMP_WIDTH, COMPACT_STAMP_HEIGHT))
+
+
+def test_firma_valida_con_sello_abajo_a_la_izquierda(tmp_path, handle, pfx):
+    import app
+    from pyhanko.sign.validation import validate_pdf_signature
+
+    src, out = tmp_path / "in.pdf", tmp_path / "out.pdf"
+    make_pdf(src)
+    res = pipeline.sign_pdf(src, out, handle, visible=True, signer_details=HDR, stamp_position="bottom_left")
+    assert res.stamp_applied
+    r, page, widget = _widget(out)
+    rect = [float(v) for v in widget["/Rect"]]
+    assert rect[0] == STAMP_MARGIN_X and rect[3] <= 0
+    assert rect[2] - rect[0] == COMPACT_STAMP_WIDTH
+    status = validate_pdf_signature(r.embedded_signatures[0])
+    assert status.intact and status.valid
+    body = dict(input_path=str(src), output_path=str(out), certificate_path=str(pfx),
+                certificate_password=PFX_PASSWORD, visible=True)
+    assert app.SignRequest(**body, stamp_position="bottom_left").stamp_position == "bottom_left"
