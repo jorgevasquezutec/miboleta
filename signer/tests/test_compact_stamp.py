@@ -154,6 +154,22 @@ def _widget(path, page_index=0):
     return r, page, page["/Annots"][0].get_object()
 
 
+def content_stamp(page):
+    """(rect en espacio de usuario, XObject) del ÚLTIMO sello dibujado en el contenido."""
+    import re
+
+    contents = page["/Contents"].get_object()
+    streams = list(contents) if isinstance(contents, list) else [contents]
+    text = b"\n".join(x.get_object().data for x in streams).decode("latin-1")
+    e, f, name = re.findall(r"1 0 0 1 ([-\d.]+) ([-\d.]+) cm /(Stamp\w+) Do", text)[-1]
+    xobj = page["/Resources"]["/XObject"]["/" + name].get_object()
+    bx0, by0, bx1, by1 = (float(v) for v in xobj["/BBox"])
+    a, b, c, d = ([float(v) for v in xobj["/Matrix"]] if "/Matrix" in xobj else [1, 0, 0, 1])[:4]
+    pts = [(a * u + c * v + float(e), b * u + d * v + float(f)) for u in (bx0, bx1) for v in (by0, by1)]
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return [min(xs), min(ys), max(xs), max(ys)], xobj
+
+
 @pytest.mark.parametrize("rotate", [0, 90, 180, 270])
 def test_firma_valida_con_sello_abajo_al_centro(tmp_path, handle, rotate):
     from pyhanko.sign.validation import validate_pdf_signature
@@ -163,7 +179,9 @@ def test_firma_valida_con_sello_abajo_al_centro(tmp_path, handle, rotate):
     res = pipeline.sign_pdf(src, out, handle, visible=True, signer_details=HDR, stamp_position="bottom_center")
     assert res.stamp_applied
     r, page, widget = _widget(out)
-    rect = [float(v) for v in widget["/Rect"]]
+    rect, xobj = content_stamp(page)
+    # el sello va en el CONTENIDO de la página (se ve en cualquier visor); el campo es invisible
+    assert [float(v) for v in widget["/Rect"]] == [0, 0, 0, 0]
     mb = [float(v) for v in page["/MediaBox"]]
     assert mb == {
         0: [0, -COMPACT_RESERVE, 595, 842],
@@ -172,11 +190,13 @@ def test_firma_valida_con_sello_abajo_al_centro(tmp_path, handle, rotate):
         270: [-COMPACT_RESERVE, 0, 595, 842],
     }[rotate]
     dims = (COMPACT_STAMP_WIDTH, COMPACT_STAMP_HEIGHT)
-    assert (rect[2] - rect[0], rect[3] - rect[1]) == (dims if rotate in (0, 180) else dims[::-1])
+    assert (rect[2] - rect[0], rect[3] - rect[1]) == pytest.approx(dims if rotate in (0, 180) else dims[::-1])
+    box = pipeline.compute_compact_stamp_box(page)[0]
+    assert rect == pytest.approx(list(box))
     status = validate_pdf_signature(r.embedded_signatures[0])
     assert status.intact and status.valid
     # fuentes regular y negrita EMBEBIDAS (PDF/A-2b), nada de Helvetica sin embeber
-    fonts = widget["/AP"]["/N"].get_object()["/Resources"]["/Font"]
+    fonts = xobj["/Resources"]["/Font"]
     assert set(fonts.keys()) == {"/FR", "/FB"}
     for f in fonts.values():
         desc = f.get_object()["/DescendantFonts"][0].get_object()["/FontDescriptor"].get_object()
@@ -207,7 +227,7 @@ def test_sin_fuente_bold_cae_a_regular_con_warning(tmp_path, handle, monkeypatch
     make_pdf(src)
     pipeline.sign_pdf(src, out, handle, visible=True, signer_details=HDR, stamp_position="bottom_center")
     r, page, widget = _widget(out)
-    fonts = widget["/AP"]["/N"].get_object()["/Resources"]["/Font"]
+    fonts = content_stamp(page)[1]["/Resources"]["/Font"]
     assert set(fonts.keys()) == {"/FR"}
     assert "sin negrita" in caplog.text
     assert pipeline.verify_signed_pdf(out).valid
@@ -238,7 +258,8 @@ def test_conformidad_y_sello_compacto_en_una_pagina(tmp_path, pfx):
     verify_ok(outs["bottom_center"])
     # nombre y fecha del trabajador: misma posición en espacio de usuario en ambos modos
     sf, st = stamps(outs["footer"])[0], stamps(outs["bottom_center"])[0]
-    assert len(st) == 2 and [s[:4] for s in st] == [s[:4] for s in sf]
+    # bottom_center: nombre + fecha + el sello (dibujado en el contenido)
+    assert len(st) == 3 and [s[:4] for s in st[:2]] == [s[:4] for s in sf]
 
 
 def test_http_sign_acepta_stamp_position(tmp_path, pfx):
@@ -293,9 +314,9 @@ def test_firma_valida_con_sello_abajo_a_la_izquierda(tmp_path, handle, pfx):
     res = pipeline.sign_pdf(src, out, handle, visible=True, signer_details=HDR, stamp_position="bottom_left")
     assert res.stamp_applied
     r, page, widget = _widget(out)
-    rect = [float(v) for v in widget["/Rect"]]
-    assert rect[0] == STAMP_MARGIN_X and rect[3] <= 0
-    assert rect[2] - rect[0] == COMPACT_STAMP_WIDTH
+    rect = content_stamp(page)[0]
+    assert rect[0] == pytest.approx(STAMP_MARGIN_X) and rect[3] <= 0
+    assert rect[2] - rect[0] == pytest.approx(COMPACT_STAMP_WIDTH)
     status = validate_pdf_signature(r.embedded_signatures[0])
     assert status.intact and status.valid
     body = dict(input_path=str(src), output_path=str(out), certificate_path=str(pfx),
