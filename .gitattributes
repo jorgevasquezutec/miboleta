@@ -83,3 +83,11 @@ entrega/                                export-ignore
 
 # ── Este mismo archivo ─────────────────────────────────────────────────────
 .gitattributes                          export-ignore
+
+# ── Build viejo del frontend en backend/public/ ────────────────────────────
+# Restos de diciembre 2025, de cuando el bundle se versionaba. La imagen los
+# pisa con el build fresco (COPY --from=frontend_builder /app/dist ./public),
+# así que no sirven para nada; y ese build antiguo trae el bloque de "usuarios
+# de prueba" con las credenciales de demostración. No van al cliente.
+backend/public/assets/                  export-ignore
+backend/public/index.html               export-ignore

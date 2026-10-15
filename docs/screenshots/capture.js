@@ -89,6 +89,24 @@ const CAPTURAS = [
     // por substring pulsaba el banner y nunca abria el visor.
     accion: (page) => pulsarTextoExacto(page, 'Ver'),
   },
+  /*
+   * Visor rediseñado, con una boleta PENDIENTE: panel derecho con la tarjeta
+   * azul "Tu conformidad" y el botón "Firmar documento". 03 enseña el caso
+   * firmado (tarjeta verde). Se pulsa "Firmar" (tarjeta pendiente del
+   * dashboard), que lleva al visor, y NO se abre el modal. viewport: el visor
+   * ocupa el alto de la ventana y PDF.js no deja medir bien la página entera.
+   */
+  {
+    archivo: '36_employee_viewer_pending.png', rol: 'empleado', ruta: '/dashboard',
+    viewport: true,
+    accion: async (page) => {
+      await pulsarTexto(page, 'Firmar');
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Tu conformidad'),
+        { timeout: 15000 },
+      );
+    },
+  },
   { archivo: '08_admin_dashboard.png', rol: 'admin', ruta: '/dashboard' },
   { archivo: '10_admin_users.png', rol: 'admin', ruta: '/users' },
   { archivo: '11_admin_documents.png', rol: 'admin', ruta: '/documents' },
@@ -144,6 +162,9 @@ const CAPTURAS = [
 
   // Las tres pestañas de la bandeja de aprobación: son las que cambiaron por
   // completo al añadir el saldo del solicitante y rediseñar la fila.
+  // Pestaña "Mi Equipo" (directorio del personal a cargo): el aprobador del
+  // seeder supervisa a tres empleados, así que salen las tres tarjetas.
+  { archivo: '34_aprobador_mi_equipo.png', rol: 'aprobador', ruta: '/team-vacations?tab=roster', espera: 'Saldo de vacaciones' },
   { archivo: '23_admin_vacaciones_pendientes.png', rol: 'aprobador', ruta: '/team-vacations?tab=pending', espera: 'Solicitudes Pendientes' },
   { archivo: '24_admin_vacaciones_confirmar.png', rol: 'aprobador', ruta: '/team-vacations?tab=confirm' },
   { archivo: '25_admin_vacaciones_historial.png', rol: 'aprobador', ruta: '/team-vacations?tab=history' },
@@ -174,15 +195,10 @@ const CAPTURAS = [
   { archivo: '33_admin_clientes_usuarios.png', rol: 'adminTenant', ruta: '/users' },
 
   /*
-   * Las dos capturas del modal de firma van LAS ULTIMAS a proposito.
-   *
-   * Dejan la pagina en el visor con el PDF cargado, un Dialog de Radix abierto
-   * y el temporizador de reenvio de codigo corriendo. En ese estado el cambio
-   * de rol siguiente se colgaba indefinidamente — cuatro tandas completas
-   * murieron ahi, siempre en el mismo punto. Cerrar el modal con Escape y
-   * navegar con 'domcontentloaded' ayudan, pero lo que lo zanja es que no
-   * quede ninguna captura despues: al ser las ultimas, el navegador se cierra
-   * a continuacion y da igual como quede la pagina.
+   * Capturas del modal de firma. Dejan la pagina en el visor con el PDF
+   * cargado, un Dialog de Radix abierto y el temporizador de reenvio de codigo
+   * corriendo; antes eso colgaba el cambio de rol siguiente y por eso iban las
+   * ultimas. Ya no hace falta: cada rol abre un contexto de navegador nuevo.
    */
   {
     archivo: '04_signature_modal_step1.png', rol: 'empleado', ruta: '/dashboard',
@@ -193,7 +209,7 @@ const CAPTURAS = [
       // firmar. Entrando por "Ver" caiamos en el primero de la lista, que el
       // seeder deja ya firmado, y alli no hay boton que pulsar.
       await pulsarTexto(page, 'Firmar');
-      await pulsarTexto(page, 'Firmar Documento');
+      await pulsarTexto(page, 'Firmar documento');
     },
   },
   {
@@ -201,7 +217,7 @@ const CAPTURAS = [
     viewport: true,
     accion: async (page) => {
       await pulsarTexto(page, 'Firmar');
-      await pulsarTexto(page, 'Firmar Documento');
+      await pulsarTexto(page, 'Firmar documento');
       // El modal arranca en "terms" si el empleado no ha aceptado todavia. Ese
       // paso puede no existir (de ahi el catch), pero cuando existe hay que
       // MARCAR LA CASILLA antes: sin ella "Aceptar y Continuar" esta
@@ -230,8 +246,35 @@ const CAPTURAS = [
       );
     },
   },
-  { archivo: '29_root_ajustes_firma.png', rol: 'root', ruta: '/signature-settings' },
+  // Pestaña "Empresas" (la que abre por defecto): certificados por empresa.
+  { archivo: '29_root_ajustes_firma.png', rol: 'root', ruta: '/signature-settings', espera: 'Certificados por empresa' },
+  // Pestaña "Certificado global".
+  {
+    archivo: '35_root_firma_certificado_global.png', rol: 'root', ruta: '/signature-settings?tab=global',
+    espera: 'Certificado global de la plataforma',
+  },
   { archivo: '30_root_ajustes_plataforma.png', rol: 'root', ruta: '/platform-settings' },
+
+  /*
+   * "Iniciar sesión como este usuario": LA ÚLTIMA a propósito. Entrar como
+   * otro usuario recarga la app con la identidad del empleado, deja una cookie
+   * de "boleto de vuelta" del root y escribe en la auditoría. Como es la
+   * última, el navegador se cierra a continuación y nada posterior hereda ese
+   * estado. Se pulsa el primer botón de entrada de la lista (el botón no se
+   * ofrece sobre root ni sobre uno mismo, así que cualquier fila vale) y se
+   * espera a la franja ámbar.
+   */
+  {
+    archivo: '37_root_entrar_como_usuario.png', rol: 'root', ruta: '/users',
+    accion: async (page) => {
+      await page.waitForSelector('button[title="Iniciar sesión como este usuario"]', { timeout: 15000 });
+      await page.click('button[title="Iniciar sesión como este usuario"]');
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Estás viendo la aplicación como'),
+        { timeout: 20000 },
+      );
+    },
+  },
 ];
 
 /*
@@ -354,26 +397,6 @@ async function iniciarSesion(page, email) {
     .catch(() => { throw new Error(`No se pudo iniciar sesión como ${email}`); });
 }
 
-async function cerrarSesion(page) {
-  // En about:blank (antes de la primera navegación) el navegador prohíbe el
-  // acceso a localStorage: hay que estar en el origen de la app para poder
-  // limpiarlo.
-  if (!page.url().startsWith(BASE_URL)) return;
-
-  // Se navega FUERA antes de tocar el almacenamiento. Si la pagina actual es
-  // el visor con un PDF cargado, PDF.js deja el hilo principal ocupado y el
-  // page.evaluate de abajo no vuelve nunca: la tanda se colgaba siempre en el
-  // cambio de rol posterior a la captura del visor. /login es del mismo origen
-  // (requisito para poder limpiar localStorage) y no carga nada pesado.
-  await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
-
-  // Solo localStorage: ahí vive la sesión (auth-storage). Las cookies NO se
-  // tocan — borrarlas tumba el token CSRF de Sanctum y el siguiente login
-  // falla con 419, que es exactamente lo que pasaba: la primera sesión
-  // funcionaba y todos los cambios de rol posteriores no.
-  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-}
-
 (async () => {
   if (!fs.existsSync(SALIDA)) fs.mkdirSync(SALIDA, { recursive: true });
 
@@ -388,8 +411,19 @@ async function cerrarSesion(page) {
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
 
-  const page = await browser.newPage();
-  await page.setViewport(VIEWPORT);
+  // Un contexto de navegador NUEVO por rol, en vez de reutilizar la pestaña y
+  // limpiar localStorage: tras capturar el visor, PDF.js deja el hilo principal
+  // ocupado y hasta el goto/evaluate para limpiar la sesión se quedaba colgado
+  // sin timeout. Cerrar el contexto mata la pestaña sin pedirle nada a la página.
+  let contexto = null;
+  let page = null;
+  async function nuevaSesion() {
+    if (contexto) await contexto.close().catch(() => {});
+    contexto = await browser.createBrowserContext();
+    page = await contexto.newPage();
+    await page.setViewport(VIEWPORT);
+  }
+  await nuevaSesion();
 
   let rolActual = undefined;
   let ok = 0;
@@ -398,7 +432,7 @@ async function cerrarSesion(page) {
   for (const captura of pendientes) {
     try {
       if (captura.rol !== rolActual) {
-        await cerrarSesion(page);
+        await nuevaSesion();
         if (captura.rol) await iniciarSesion(page, USUARIOS[captura.rol]);
         rolActual = captura.rol;
       }
@@ -422,6 +456,29 @@ async function cerrarSesion(page) {
       // Margen para que terminen las animaciones de entrada; si no, se capturan
       // tarjetas a media opacidad.
       await new Promise((r) => setTimeout(r, 700));
+
+      // Sin transiciones durante la captura: fullPage redimensiona la ventana
+      // y el sidebar (transition-all 300ms) salía a medio deslizar, con el
+      // menú fuera de cuadro.
+      await page.addStyleTag({
+        content: '*, *::before, *::after { transition: none !important; animation: none !important; }',
+      });
+
+      // Los gráficos (Recharts) salían en blanco: sus datos llegan después del
+      // networkidle2 y además animan por JS, no por CSS. Se espera a que haya
+      // barras o sectores pintados y luego a que termine la animación.
+      if (await page.$('.recharts-wrapper')) {
+        // Solo se dibujan al entrar en pantalla: se baja hasta el final para
+        // dispararlos y se vuelve arriba.
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await new Promise((r) => setTimeout(r, 800));
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.waitForFunction(
+          () => document.querySelectorAll('.recharts-sector, .recharts-bar-rectangle').length > 0,
+          { timeout: 15000 },
+        ).catch(() => {});
+        await new Promise((r) => setTimeout(r, 2000));
+      }
 
       const destino = path.join(SALIDA, captura.archivo);
 
@@ -449,7 +506,15 @@ async function cerrarSesion(page) {
         // vez de en su sitio. Le paso justo con 09_admin_upload_filled.
         await page.evaluate(() => window.scrollTo(0, 0));
         await new Promise((r) => setTimeout(r, 400));
-        await page.screenshot({ path: destino, fullPage: true });
+        // Ventana del alto de la página ANTES de capturar, en vez de fullPage:
+        // fullPage redimensiona en el momento del disparo, los gráficos
+        // (ResponsiveContainer) se vuelven a animar desde cero y salían vacíos.
+        const alto = await page.evaluate(() => document.documentElement.scrollHeight);
+        await page.setViewport({ ...VIEWPORT, height: Math.max(alto, VIEWPORT.height) });
+        const conGraficos = Boolean(await page.$('.recharts-wrapper'));
+        await new Promise((r) => setTimeout(r, conGraficos ? 2500 : 400));
+        await page.screenshot({ path: destino, fullPage: false });
+        await page.setViewport(VIEWPORT);
       }
 
       // Un modal abierto deja el <body> con el scroll bloqueado por Radix, y
