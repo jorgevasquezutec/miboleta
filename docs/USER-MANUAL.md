@@ -1299,6 +1299,16 @@ global (ver sección 21). Es la firma que da validez frente a terceros: permite
 comprobar, en cualquier lector de PDF, que el documento es auténtico y que no
 fue alterado.
 
+**Cuándo se aplica.** Nadie tiene que pulsar nada: con la firma digital
+activada (sección 21), cada boleta se firma sola en cuanto se procesa la carga
+del lote, antes de que el trabajador la abra. Cuando el trabajador da su
+conformidad, el PDF se vuelve a firmar para incluirla (sección 15.3).
+
+![Sello de la firma digital y conformidad en el PDF](images/39_pdf_sello_firma_empresa.png)
+
+*Pie de la boleta firmada: a la izquierda el sello de la empresa y a la
+derecha la conformidad del trabajador con su nombre y la fecha.*
+
 **Sello visible.** En la última página, **abajo a la izquierda**, se dibuja un
 sello compacto *"FIRMADO DIGITALMENTE"* con el titular del certificado, su
 cargo, la razón social con su RUC y la fecha. Está dibujado en la propia
@@ -1307,6 +1317,8 @@ previa del correo o la del navegador. No tapa el contenido de la boleta, porque
 ocupa una franja añadida al pie.
 
 **Tarjeta "Firmado por la empresa" en el visor:**
+
+![Tarjeta Firmado por la empresa con los detalles abiertos](images/38_employee_viewer_firma_empresa.png)
 
 | Elemento | Descripción |
 | --- | --- |

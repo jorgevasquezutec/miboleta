@@ -15,6 +15,8 @@
  *
  * Requiere el stack de entrega levantado (ver entrega/docker-compose.entrega.yml):
  *   docker compose -f entrega/docker-compose.entrega.yml -p miboleta_entrega up -d
+ * y con la firma digital activada (certificados de prueba ficticios):
+ *   sh docs/screenshots/preparar-firma-demo.sh
  *
  * Necesita puppeteer, que vive en el generador de PDF:
  *   NODE_PATH=docs/pdf-generator/node_modules node docs/screenshots/capture.js
@@ -105,6 +107,24 @@ const CAPTURAS = [
         () => document.body.innerText.includes('Tu conformidad'),
         { timeout: 15000 },
       );
+    },
+  },
+  /*
+   * Visor de una boleta ya firmada por la empresa (firma digital automática
+   * con certificado): tarjeta verde "Firmado por la empresa" con "Ver
+   * detalles" abierto. Requiere la firma digital activada en la demo, con
+   * certificados de prueba cargados (preparar-firma-demo.sh).
+   */
+  {
+    archivo: '38_employee_viewer_firma_empresa.png', rol: 'empleado', ruta: '/dashboard',
+    viewport: true,
+    accion: async (page) => {
+      await pulsarTextoExacto(page, 'Ver');
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Firmado por la empresa'),
+        { timeout: 15000 },
+      );
+      await pulsarTexto(page, 'Ver detalles');
     },
   },
   { archivo: '08_admin_dashboard.png', rol: 'admin', ruta: '/dashboard' },
