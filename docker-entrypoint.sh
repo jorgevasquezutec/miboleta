@@ -114,6 +114,12 @@ if [ "$FIRST_TIME" = true ]; then
         SEEDER_CLASS="${SEEDER_CLASS:-DatabaseSeeder}"
         echo "🌱 Running database seeders (${SEEDER_CLASS})..."
         php artisan db:seed --class="${SEEDER_CLASS}" --force
+        # El seeder corre como root y DemoSeeder escribe PDFs en storage con
+        # 0600/0700 (los permisos por defecto del disco local). El chown de
+        # arriba ya pasó, así que php-fpm (www-data) no podía leerlos y el
+        # visor mostraba "Error al cargar el PDF". Se repite tras sembrar.
+        chown -R www-data:www-data /var/www/html/storage
+        chmod -R 775 /var/www/html/storage
     fi
 else
     echo "🔄 Running migrations (if any)..."

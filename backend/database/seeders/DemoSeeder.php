@@ -244,6 +244,16 @@ class DemoSeeder extends Seeder
                     'uploaded_by' => $subidoPor?->id,
                     'requires_signature' => true,
                     'signed_at' => $firmado ? now()->subDays(20 - $i) : null,
+                    // Mismo payload que guarda SignatureService al firmar con
+                    // el código: sin user_name, la conformidad que se estampa
+                    // en el PDF firmado por la empresa decía "FIRMADO
+                    // CONFORME" en vez del nombre del trabajador.
+                    'signature' => $firmado ? [
+                        'timestamp' => now()->subDays(20 - $i)->toISOString(),
+                        'user_id' => $empleado->id,
+                        'user_name' => $empleado->full_name,
+                        'verification_method' => 'email_2fa',
+                    ] : null,
                     'notified' => true,
                     'notified_at' => now()->subDays(25 - $i),
                     'version' => 1,

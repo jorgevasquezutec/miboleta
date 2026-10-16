@@ -6,7 +6,7 @@
 | --------------------------------- | ------------------------------------------- |
 | **Nombre del Sistema**      | MiBoleta                                    |
 | **Versión**                | 1.0                                         |
-| **Fecha de Documentación** | Agosto 2026                                 |
+| **Fecha de Documentación** | Octubre 2026                                |
 | **Tipo**                    | Sistema de Gestión Documental y Vacaciones |
 
 ---
@@ -30,7 +30,7 @@ distintos en cada una.
 
 | Rol | Nombre en pantalla | Para qué sirve |
 | --- | --- | --- |
-| `root` | Super Administrador | Administra la plataforma: crea empresas, gestiona el certificado de firma y la configuración global. No participa en la operación diaria de ninguna empresa. |
+| `root` | Super Administrador | Administra la plataforma: crea empresas, gestiona los certificados de firma (el global y el de cada empresa) y la configuración global. Puede entrar como otro usuario para dar soporte. No participa en la operación diaria de ninguna empresa: no ve ni gestiona vacaciones, que son tarea del Admin Empleados. |
 | `admin_tenant` | Admin Clientes | Administra su empresa: usuarios Aprobador y Empleado, y la carga masiva de personal. Puede **asignar** el rol Admin a alguien, pero no editar ni restablecer la contraseña de una cuenta Admin ya existente: eso queda reservado al Super Administrador. |
 | `admin` | Admin Empleados | Gestiona el día a día de su empresa: documentos, usuarios, vacaciones y reportes. |
 | `aprobador` | Aprobador | Aprueba o rechaza las vacaciones de las personas que tiene a cargo, y confirma si se tomaron. |
@@ -293,7 +293,7 @@ Formulario para crear una nueva organización en el sistema.
 | ------------------ | ------ | --------- | ------------------------------- |
 | **Nombre**   | Text   | Sí       | Nombre de la organización      |
 | **RUC**      | Text   | Sí       | Identificador fiscal (11 dígitos) |
-| **Razón Social** | Text | No       | Nombre legal de la empresa      |
+| **Razón Social** | Text | Sí       | Nombre legal de la empresa (obligatorio al crear y al editar) |
 | **Estado**   | Select | Sí       | Activo / Inactivo               |
 
 ### 3.3 Formulario de Nueva Empresa (Parte Inferior)
@@ -307,6 +307,13 @@ Formulario para crear una nueva organización en el sistema.
 | **Dirección** | Text | No        | Dirección física    |
 | **Teléfono**  | Text | No        | Número de contacto   |
 
+**Sección Firma digital de la empresa** (solo Super Administrador):
+
+Permite cargar el certificado digital propio de la empresa (archivo `.pfx` o
+`.p12`, su contraseña y, opcionalmente, la URL del sello de tiempo). Si no se
+carga ninguno, los documentos de la empresa se firman con el certificado global
+de la plataforma. El detalle está en la sección 21.2.
+
 **Botones de acción:**
 
 | Botón                    | Función                           |
@@ -318,10 +325,11 @@ Formulario para crear una nueva organización en el sistema.
 
 1. Root accede a Empresas > "+ Organización"
 2. Opcionalmente sube logo de la empresa
-3. Completa información básica (Nombre, RUC)
+3. Completa información básica (Nombre, RUC y Razón Social, los tres obligatorios)
 4. Completa información de contacto (opcional)
-5. Clic en "Crear Organización"
-6. La empresa queda disponible para asignar usuarios
+5. Opcionalmente, en la sección "Firma digital de la empresa", carga el certificado propio de la empresa (ver sección 21.2)
+6. Clic en "Crear Organización"
+7. La empresa queda disponible para asignar usuarios
 
 ---
 
@@ -341,7 +349,7 @@ Vista global de todos los usuarios del sistema, con capacidad de filtrar por org
 | **Buscar**        | Por nombre, email o DNI |
 | **Organización** | Filtrar por empresa     |
 | **Rol**           | Root, Admin, Usuario    |
-| **Estado**        | Activo / Inactivo       |
+| **Estado**        | Activo / Inactivo / Eliminados (solo Super Administrador) |
 
 **Columnas de la tabla:**
 
@@ -353,7 +361,52 @@ Vista global de todos los usuarios del sistema, con capacidad de filtrar por org
 | **Tenants**    | Organizaciones asignadas |
 | **Supervisor** | Jefe inmediato asignado  |
 | **Estado**     | Activo / Inactivo        |
-| **Acciones**   | Editar, Ver              |
+| **Acciones**   | Ver, Editar, Eliminar, Iniciar sesión como este usuario |
+
+> El Super Administrador **no ve la columna de saldos de vacaciones**: las
+> vacaciones son responsabilidad del Admin Empleados de cada empresa.
+
+### 4.1bis Entrar como otro usuario
+
+![Entrar como otro usuario](images/37_root_entrar_como_usuario.png)
+
+**Quién puede hacerlo:** solo el Super Administrador.
+
+Sirve para dar soporte: ver la aplicación exactamente como la ve una persona,
+sin pedirle su contraseña.
+
+1. En la lista de usuarios, pulsar el botón **Iniciar sesión como este usuario**
+   de la fila (icono de entrada).
+2. La aplicación se recarga con la identidad de esa persona y aparece, fija en
+   la parte superior de todas las pantallas, una **franja ámbar** que dice
+   *"Estás viendo la aplicación como …"* y quién está conectado realmente.
+3. Para terminar, pulsar **Volver a mi cuenta** en la franja.
+
+**Condiciones importantes:**
+
+- No se ofrece sobre uno mismo, sobre otro Super Administrador ni sobre cuentas
+  eliminadas.
+- Todo lo que se haga queda a nombre de la persona (documentos, vacaciones,
+  auditoría), **pero el Registro de Auditoría deja constancia** de que fue el
+  Super Administrador quien operaba: los eventos *"Inició sesión como otro
+  usuario"* y *"Salió de la sesión de otro usuario"* marcan el inicio y el
+  fin.
+- No es posible firmar un documento a nombre del empleado: el código de firma
+  se envía al correo del propio empleado.
+
+### 4.1ter Cuentas eliminadas
+
+**Quién puede hacerlo:** solo el Super Administrador.
+
+Una cuenta eliminada no se pierde: se puede volver a habilitar.
+
+1. En la lista de usuarios, abrir el filtro **Estado** y elegir **Eliminados**.
+2. Pulsar **Habilitar usuario** en la fila correspondiente y confirmar.
+3. La persona recupera su acceso, sus empresas y sus documentos.
+
+Mientras una cuenta está eliminada, su DNI queda reservado: no se puede crear
+otra cuenta con el mismo documento. En la vista de eliminados solo está
+disponible la acción de habilitar.
 
 ### 4.2 Formulario de Nuevo Usuario (Parte Superior)
 
@@ -539,13 +592,15 @@ Vista principal del administrador con métricas globales de la organización.
 | Sección                     | Función                   |
 | ---------------------------- | -------------------------- |
 | **Dashboard**          | Vista principal            |
-| **Cargar Documentos**  | Carga masiva ZIP           |
+| **Documentos** (grupo desplegable) | Reúne: *Mis Documentos*, *Cargar Documentos* (carga masiva ZIP), *Historial de Carga* (lotes) y *Documentos de la Empresa* (buscador) |
 | **Usuarios**           | Gestión de empleados      |
-| **Lotes de Carga**     | Historial de cargas        |
-| **Documentos**         | Buscador de documentos     |
+| **Vacaciones** (grupo desplegable) | Reúne: *Mis Vacaciones*, *Mi Equipo* (personal a cargo y solicitudes) e *Histórico General* |
 | **Auditoría**         | Registro de actividad      |
-| **Mi Equipo**          | Vacaciones de subordinados |
-| **Histórico General** | Todas las vacaciones       |
+| **Mis Datos**          | Datos personales propios   |
+
+> El grupo **Documentos** reemplaza a cuatro opciones sueltas del menú. Si a
+> una persona solo le corresponde una opción dentro de un grupo, el menú la
+> muestra directamente, sin el desplegable.
 
 **Métricas principales:**
 
@@ -624,6 +679,7 @@ Una vez subido el archivo ZIP, el sistema analiza su contenido y muestra los res
 | **Organización**     | Empresa destino (auto-seleccionada) |
 | **Tipo de Documento** | Boleta, Contrato, Liquidación, etc. |
 | **Período**          | Mes y año del documento           |
+| **Tamaño de página de la boleta** | A4, A5 (media hoja horizontal) o Carta. Por defecto A4. Indica dónde se coloca la conformidad del trabajador al firmar. |
 
 **Opciones adicionales:**
 
@@ -641,7 +697,7 @@ carga_documentos.zip
 
 ---
 
-## 7. Lotes de Carga
+## 7. Historial de Carga (Lotes)
 
 ### 7.1 Historial de Lotes
 
@@ -795,6 +851,12 @@ Permite visualizar, buscar y gestionar los usuarios de la organización.
 | **Supervisor** | Supervisor directo           |
 | **Estado**     | Badge de estado              |
 | **Acciones**   | Ver perfil                   |
+| **Vacaciones** | Saldo de vacaciones del empleado |
+
+> En la columna **Vacaciones**, cuando la persona pertenece a varias empresas y
+> se está viendo "Todas las empresas", se muestra el saldo de su **empresa
+> principal**, señalada con una estrella (★) y el nombre de la empresa, para no
+> comparar por error cifras de empresas distintas.
 
 ---
 
@@ -854,13 +916,17 @@ Registro completo de todas las acciones realizadas en el sistema para cumplimien
 | **Usuario creado**               | Alta de empleado         |
 | **Vacación solicitada**         | Nueva solicitud          |
 | **Vacación aprobada/rechazada** | Decisión de supervisor  |
+| **Firma digital (certificado) aplicada** | La empresa firmó un documento con su certificado |
+| **Carga / eliminación de certificado de empresa** | Cambios en la firma digital de una empresa |
+| **Inició / salió de la sesión de otro usuario** | El Super Administrador entró o salió de una cuenta ajena |
+| **Habilitó un usuario eliminado** | Se recuperó una cuenta de la papelera |
 
 **Columnas del log:**
 
 | Columna              | Contenido                        |
 | -------------------- | -------------------------------- |
 | **Usuario**    | Nombre + email                   |
-| **Acción**    | Tipo de evento                   |
+| **Acción**    | Tipo de evento, escrito en lenguaje claro (por ejemplo, *Inició sesión como otro usuario*) |
 | **Detalle**    | Información adicional           |
 | **IP**         | Dirección de origen             |
 | **Fecha**      | Timestamp exacto                 |
@@ -880,16 +946,40 @@ Registro completo de todas las acciones realizadas en el sistema para cumplimien
 ### 11.1 Vista General
 
 **Descripción:**
-Permite al supervisor gestionar las solicitudes de vacaciones de sus subordinados directos. La interfaz está organizada en 4 pestañas para facilitar la gestión según el estado de cada solicitud.
+Permite al supervisor gestionar las solicitudes de vacaciones de sus subordinados directos. La interfaz está organizada en 5 pestañas. **Mi Equipo** es la que se abre por defecto; las otras cuatro facilitan la gestión según el estado de cada solicitud.
 
 **Cards de métricas:**
 
 | Métrica               | Descripción                      |
 | ----------------------- | --------------------------------- |
+| **Mi Equipo**     | Personas a cargo del supervisor   |
 | **Pendientes**    | Solicitudes por aprobar           |
 | **Por Confirmar** | Vacaciones aprobadas sin confirmar |
 | **Mi Historial**  | Solicitudes procesadas            |
 | **Calendario**    | Vista visual de eventos           |
+
+---
+
+### 11.1bis Pestaña: Mi Equipo
+
+![Mi Equipo](images/34_aprobador_mi_equipo.png)
+
+**Descripción:**
+Directorio de las personas a cargo del supervisor. Antes, un supervisor sin
+solicitudes activas solo veía bandejas vacías; ahora ve a su gente aunque no
+haya nada que aprobar.
+
+Cada persona se muestra en una **tarjeta**:
+
+| Dato | Descripción |
+| --- | --- |
+| **Nombre y correo** | Con su foto o iniciales |
+| **Cargo y área** | Los asignados en la empresa |
+| **Estado** | Insignia verde **De vacaciones** si está de licencia hoy; o insignia ámbar **Pendiente desde …** con la fecha de su próxima solicitud por aprobar |
+| **Saldo de vacaciones** | Días disponibles en este momento |
+
+Si el supervisor aún no tiene personal asignado, aparece el mensaje *"Aún no
+tienes personal a cargo"*.
 
 ---
 
@@ -1016,6 +1106,8 @@ Vista de calendario mensual que muestra de forma visual todas las vacaciones pro
 
 **Descripción:**
 Vista centralizada de todas las solicitudes de vacaciones de la organización.
+Está disponible para el Admin Empleados y el Admin Clientes; el Super
+Administrador ya no tiene acceso a las vacaciones.
 
 **Cards de métricas:**
 
@@ -1062,7 +1154,7 @@ El dashboard del empleado presenta un resumen de sus documentos pendientes y fir
 
 | Sección                      | Contenido                                           |
 | ----------------------------- | --------------------------------------------------- |
-| **Sidebar**             | Navegación: Inicio, Mis Documentos, Mis Vacaciones |
+| **Sidebar**             | Navegación: Inicio, Documentos (Mis Documentos), Mis Vacaciones, Mis Datos |
 | **Encabezado**          | Bienvenida personalizada con nombre del usuario     |
 | **Cards de Métricas**  | Total documentos, Firmados, Pendientes              |
 | **Filtros**             | Buscador, tipo de documento, estado                 |
@@ -1087,20 +1179,36 @@ El dashboard del empleado presenta un resumen de sus documentos pendientes y fir
 
 ![Document Viewer](images/03_document_viewer.png)
 
+*Boleta con las dos firmas: al pie, a la izquierda, el sello de la firma
+digital de la empresa; a la derecha, la conformidad del trabajador con su
+nombre y la fecha.*
+
 **Descripción:**
-El visor de documentos permite al empleado revisar el contenido completo del documento en formato PDF antes de firmarlo.
+El visor permite revisar el documento completo antes de firmarlo. La pantalla
+tiene dos zonas: a la izquierda, el PDF a toda la altura disponible; a la
+derecha, un panel con el estado del documento y de sus firmas.
 
-**Componentes:**
+**Barra superior:**
 
-| Componente                           | Función                                               |
-| ------------------------------------ | ------------------------------------------------------ |
-| **Breadcrumb**                 | Navegación: Inicio > Documento                        |
-| **Área de visualización**    | Renderizado del PDF embebido                           |
-| **Información del documento** | Tipo, período, fecha de carga                         |
-| **Estado**                     | Indicador visual del estado de firma                   |
-| **Botón "Firmar Documento"**  | Inicia el proceso de firma (visible solo si pendiente) |
-| **Botón "Descargar"**         | Obtiene copia del documento                            |
-| **Botón "Volver"**            | Regresa al dashboard                                   |
+| Componente | Función |
+| --- | --- |
+| **Flecha "Volver"** | Regresa a la pantalla anterior |
+| **Botón "Descargar"** | Obtiene copia del documento |
+
+**Panel derecho:**
+
+| Tarjeta | Contenido |
+| --- | --- |
+| **Información del documento** | Tipo, estado (Pendiente / Firmado), período y fecha de subida. Quien administra ve además el nombre del trabajador. |
+| **Tu conformidad** | Aparece en **azul** mientras el documento está pendiente, con el botón **Firmar documento** (solo para el dueño del documento). Una vez firmado pasa a **verde** e indica *"Firmada el …"* con fecha y hora. Quien administra la ve como *"Conformidad del trabajador"*. |
+| **Firmado por la empresa** | Aparece cuando la empresa ya aplicó su firma digital (ver sección 15.4). |
+
+![Visor con firma pendiente](images/36_employee_viewer_pending.png)
+
+Mientras la conformidad está pendiente, el panel muestra la tarjeta azul y el
+botón **Firmar documento**, que abre el proceso de la sección 15. La empresa
+ya firmó (su sello aparece al pie de la boleta), pero falta la conformidad del
+trabajador: el lado derecho del pie todavía está vacío.
 
 ---
 
@@ -1112,9 +1220,9 @@ no se sustituyen entre sí:
 | | Firma del trabajador | Firma digital de la empresa |
 | --- | --- | --- |
 | **Qué demuestra** | Que la persona recibió el documento y lo dio por conforme | Que el documento es auténtico y no fue alterado |
-| **Quién la hace** | El propio trabajador, sobre su documento | La plataforma, con el certificado de la empresa |
+| **Quién la hace** | El propio trabajador, sobre su documento | La plataforma, con el certificado de la empresa (o el global si la empresa no tiene uno) |
 | **Cómo se valida** | Con un código enviado a su correo | Criptográficamente, en cualquier lector de PDF |
-| **Dónde se ve** | Sello "RECIBÍ CONFORME" en el documento | Panel de firmas del lector de PDF |
+| **Dónde se ve** | Nombre y fecha del trabajador sobre "RECIBÍ CONFORME" | Sello "FIRMADO DIGITALMENTE" al pie de la página y panel de firmas del lector de PDF |
 | **Sección** | 15.1 a 15.3 (abajo) | 15.4 |
 
 La primera es la que usa el empleado en su día a día. La segunda la aplica un
@@ -1169,6 +1277,69 @@ El segundo paso solicita al usuario ingresar el código de 6 dígitos recibido p
 3. Sistema valida el código
 4. Si es válido: documento queda firmado con timestamp
 5. Si es inválido: muestra error y permite reintentar
+
+### 15.3 La conformidad en el documento
+
+Al completar el código, el documento queda en estado **Firmado** y el nombre
+del trabajador, junto con la fecha, se estampa sobre el recuadro **"RECIBÍ
+CONFORME"** del PDF. Esta conformidad no es una firma criptográfica: acredita
+que la persona recibió el documento y verificó su identidad con el código
+enviado a su correo.
+
+La posición se calcula según el **tamaño de página de la boleta**, que se
+elige al cargar el lote (A4, A5 o Carta) y que el sistema además contrasta con
+el tamaño real de cada página. En los tres formatos la conformidad queda **en
+la franja inferior, a la derecha y a la misma altura que el sello de la
+empresa** (sección 15.4).
+
+> Si el documento ya tenía la firma de la empresa, el sistema la **vuelve a
+> generar automáticamente** para incluir la conformidad del trabajador. Durante
+> unos segundos el panel muestra *"Actualizando el PDF firmado…"*; al terminar,
+> el visor recarga el PDF solo y avisa con un mensaje.
+
+### 15.4 Firma digital de la empresa
+
+**Quién la aplica:** la plataforma, de forma automática, con el certificado
+digital de la empresa; si la empresa no tiene uno propio se usa el certificado
+global (ver sección 21). Es la firma que da validez frente a terceros: permite
+comprobar, en cualquier lector de PDF, que el documento es auténtico y que no
+fue alterado.
+
+**Cuándo se aplica.** Nadie tiene que pulsar nada: con la firma digital
+activada (sección 21), cada boleta se firma sola en cuanto se procesa la carga
+del lote, antes de que el trabajador la abra. Cuando el trabajador da su
+conformidad, el PDF se vuelve a firmar para incluirla (sección 15.3).
+
+![Sello de la firma digital y conformidad en el PDF](images/39_pdf_sello_firma_empresa.png)
+
+*Pie de la boleta firmada: a la izquierda el sello de la empresa y a la
+derecha la conformidad del trabajador con su nombre y la fecha.*
+
+**Sello visible.** En la última página, **abajo a la izquierda**, se dibuja un
+sello compacto *"FIRMADO DIGITALMENTE"* con el titular del certificado, su
+cargo, la razón social con su RUC y la fecha. Está dibujado en la propia
+página, de modo que se ve igual en cualquier visor: el del celular, la vista
+previa del correo o la del navegador. No tapa el contenido de la boleta, porque
+ocupa una franja añadida al pie.
+
+**Tarjeta "Firmado por la empresa" en el visor:**
+
+![Tarjeta Firmado por la empresa con los detalles abiertos](images/38_employee_viewer_firma_empresa.png)
+
+| Elemento | Descripción |
+| --- | --- |
+| **Insignia de origen** | *Certificado de la empresa* o *Certificado de plataforma* |
+| **Razón social, RUC y Representante** | Datos del firmante, leídos del certificado |
+| **Incluye tu conformidad** | Indica que el PDF firmado ya contiene la conformidad del trabajador |
+| **Ver detalles** | Cargo, país/provincia, fecha de firma y si se aplicó el **sello de tiempo (TSA)** |
+| **Verificar firma** | Comprueba la firma en ese momento y muestra el resultado |
+| **Icono de información** | Explica que una firma solo se muestra como "confiable" si el certificado lo emitió una entidad acreditada |
+
+**Si algo falla.** Si la firma no se pudo aplicar o actualizar, la tarjeta lo
+indica (*"El PDF firmado aún no incluye la conformidad"*). Quien administra la
+firma (Super Administrador y Admin Empleados) ve además el detalle del error y
+el botón **Reintentar**, que vuelve a firmar el documento sin que el
+trabajador tenga que repetir nada.
 
 ---
 
@@ -1303,13 +1474,18 @@ Al pulsar la campana se abre el listado, donde se pueden marcar como leídas
 
 ![Perfil personal](images/27_perfil.png)
 
-Accesible desde el menú del propio nombre, en la esquina superior derecha.
+Accesible desde la opción **Mis Datos** del menú lateral, o desde el menú del
+propio nombre, en la esquina superior derecha.
 
 | Qué permite | Detalle |
 | --- | --- |
 | **Foto de perfil** | Subir o cambiar la imagen |
 | **Cambiar contraseña** | Exige la contraseña actual |
-| **Solicitar corrección de datos** | Envía una petición al administrador |
+| **Solicitar actualización de datos** | Envía una petición al administrador |
+
+En pantalla se ven, de solo lectura, el documento, el **cargo** y la fecha de
+inicio de labores de la empresa activa, además de los datos de contacto y el
+saldo de vacaciones.
 
 Los datos laborales —documento, área, cargo, fecha de ingreso— **no se editan
 desde aquí**: son los que sostienen el cálculo de vacaciones y la
@@ -1341,27 +1517,83 @@ hacer nada para ello: es el comportamiento por defecto.
 
 ---
 
-## 21. Ajustes de plataforma
+## 21. Ajustes de plataforma y firma digital
 
 **Quién puede hacerlo:** solo el Super Administrador.
 
-| Pantalla | Para qué sirve |
+| Opción del menú | Para qué sirve |
 | --- | --- |
-| **Ajustes de plataforma** | Servidor de correo por defecto y dirección pública del sistema |
-| **Certificado de firma** | Carga y gestión del certificado con el que se firman digitalmente los documentos |
-| **Ajustes de auditoría** | Activar o desactivar el registro de cada tipo de acción |
+| **Configuración** (Ajustes de plataforma) | Servidor de correo por defecto y dirección pública del sistema |
+| **Firma Digital** | Certificado global y certificados de cada empresa |
+| **Auditoría > Configuración** | Activar o desactivar el registro de cada tipo de acción |
 
 ![Ajustes de plataforma](images/30_root_ajustes_plataforma.png)
 
-Sobre el **certificado de firma**: es único para toda la plataforma, se sube una
-sola vez y su contraseña se guarda cifrada. Es lo que permite que los documentos
-firmados se validen en cualquier lector de PDF.
+### 21.1 Firma Digital: certificado global
 
-![Certificado de firma](images/29_root_ajustes_firma.png)
+![Certificado global](images/35_root_firma_certificado_global.png)
 
-Sobre la **auditoría**: permite decidir qué se registra. Conviene ser
-conservador al desactivar cosas — el registro de auditoría es la única forma de
-reconstruir qué pasó y quién lo hizo.
+La pantalla **Firma Digital** tiene una franja de estado siempre visible
+(*Firma digital activada / desactivada* y la fecha de vencimiento del
+certificado global) y dos pestañas: **Empresas** y **Certificado global**.
+
+El **certificado global** es el de respaldo de la plataforma: lo usan todas las
+empresas que no tienen certificado propio, y es necesario para poder activar la
+firma digital.
+
+| Dato | Descripción |
+| --- | --- |
+| **Activar firma digital** | Interruptor general; requiere tener cargado el certificado global |
+| **Titular, RUC y razón social** | Leídos del propio certificado |
+| **Vence** | Con insignia *Por vencer* o *Vencido* cuando corresponde |
+| **URL de sello de tiempo (TSA)** | Opcional; agrega una fecha y hora certificadas a la firma |
+| **Renovar / Reemplazar certificado** | Carga un archivo `.pfx` o `.p12` nuevo, con su contraseña |
+| **Eliminar certificado** | Desactiva la firma digital; los documentos ya firmados no se afectan |
+
+La contraseña del certificado se guarda cifrada y no vuelve a mostrarse.
+
+### 21.2 Certificados por empresa
+
+![Certificados por empresa](images/29_root_ajustes_firma.png)
+
+Cada empresa puede tener **su propio certificado digital**, adquirido a un
+proveedor acreditado. Tiene vigencia anual: se carga al crear la empresa y se
+renueva cuando vence. En la pestaña **Empresas** hay una tabla con todas las
+empresas:
+
+| Columna | Contenido |
+| --- | --- |
+| **Empresa** | Nombre y RUC |
+| **Certificado** | *Propio*, *Global (por defecto)* o *Sin certificado* |
+| **Datos del certificado** | RUC y razón social del certificado, y la TSA propia si la hay |
+| **Vence** | Fecha de vencimiento; en ámbar si está por vencer y en rojo si venció |
+| **Avisos** | *RUC no coincide*, *RUC no legible*, *Por vencer*, *Vencido* o *Sin certificado* |
+| **Acciones** | **Cargar** o **Reemplazar**, y eliminar el certificado propio |
+
+Arriba de la tabla hay un buscador por empresa o RUC y el filtro **Solo con
+avisos**.
+
+**Cargar el certificado de una empresa:** pulsar **Cargar** en su fila (o usar
+la sección *Firma digital de la empresa* en la ficha de la empresa, sección 3),
+elegir el archivo `.pfx` / `.p12`, escribir su contraseña y, si se desea,
+indicar una **URL de sello de tiempo (TSA) propia**. Si se deja vacía se usa la
+TSA global. Antes de guardar se puede pulsar **Verificar certificado** para ver
+el RUC, la razón social y el vencimiento que contiene.
+
+**Reglas a tener en cuenta:**
+
+- Si el RUC del certificado **no coincide** con el de la empresa, el
+  certificado se guarda igualmente y se muestra un aviso: no se rechaza.
+- Si el certificado propio de una empresa **falla o está vencido**, el sistema
+  no cambia en silencio al global: el documento queda con error de firma y se
+  puede reintentar desde el visor (sección 15.4).
+- Al **eliminar** el certificado de una empresa, sus documentos pasan a
+  firmarse con el certificado global.
+- Cargar y eliminar certificados queda registrado en la auditoría.
+
+Sobre la **auditoría** (Auditoría > Configuración): permite decidir qué se
+registra. Conviene ser conservador al desactivar cosas — el registro de
+auditoría es la única forma de reconstruir qué pasó y quién lo hizo.
 
 ---
 
@@ -1421,7 +1653,9 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[Root crea nueva empresa] --> B[Completa datos de organizacion]
-    B --> C[Empresa activa]
+    B --> B2[Opcional: certificado de firma de la empresa]
+    B2 --> C[Empresa activa]
+    B --> C
     C --> D[Root crea usuarios]
     D --> E[Asigna organizacion y supervisor]
     E --> F[Sistema envia email de bienvenida]
@@ -1477,4 +1711,4 @@ Para soporte técnico o consultas sobre el sistema:
 - **Email:** lgranda@tisvel.com
 
 *Documento generado automáticamente - MiBoleta v1.0*
-*Última actualización: Agosto 2026*
+*Última actualización: Octubre 2026*

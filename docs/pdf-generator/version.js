@@ -11,5 +11,5 @@
  */
 module.exports = {
   version: '1.0',
-  date: 'Agosto 2026',
+  date: 'Octubre 2026',
 };
