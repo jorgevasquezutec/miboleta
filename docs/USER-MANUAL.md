@@ -1179,6 +1179,10 @@ El dashboard del empleado presenta un resumen de sus documentos pendientes y fir
 
 ![Document Viewer](images/03_document_viewer.png)
 
+*Boleta con las dos firmas: al pie, a la izquierda, el sello de la firma
+digital de la empresa; a la derecha, la conformidad del trabajador con su
+nombre y la fecha.*
+
 **Descripción:**
 El visor permite revisar el documento completo antes de firmarlo. La pantalla
 tiene dos zonas: a la izquierda, el PDF a toda la altura disponible; a la
@@ -1202,7 +1206,9 @@ derecha, un panel con el estado del documento y de sus firmas.
 ![Visor con firma pendiente](images/36_employee_viewer_pending.png)
 
 Mientras la conformidad está pendiente, el panel muestra la tarjeta azul y el
-botón **Firmar documento**, que abre el proceso de la sección 15.
+botón **Firmar documento**, que abre el proceso de la sección 15. La empresa
+ya firmó (su sello aparece al pie de la boleta), pero falta la conformidad del
+trabajador: el lado derecho del pie todavía está vacío.
 
 ---
 

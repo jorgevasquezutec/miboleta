@@ -89,7 +89,13 @@ const CAPTURAS = [
     // Texto EXACTO, no pulsarTexto: el banner "Ver Documentos Pendientes"
     // contiene "Ver" como substring y esta antes en el DOM, asi que el match
     // por substring pulsaba el banner y nunca abria el visor.
-    accion: (page) => pulsarTextoExacto(page, 'Ver'),
+    // Se baja al pie del PDF: ahí están las dos firmas (sello de la empresa
+    // a la izquierda, conformidad del trabajador a la derecha).
+    viewport: true,
+    accion: async (page) => {
+      await pulsarTextoExacto(page, 'Ver');
+      await bajarPdfAlPie(page);
+    },
   },
   /*
    * Visor rediseñado, con una boleta PENDIENTE: panel derecho con la tarjeta
@@ -107,6 +113,8 @@ const CAPTURAS = [
         () => document.body.innerText.includes('Tu conformidad'),
         { timeout: 15000 },
       );
+      // Pie del PDF: solo el sello de la empresa, la conformidad aún falta.
+      await bajarPdfAlPie(page);
     },
   },
   /*
@@ -355,6 +363,24 @@ async function pulsarTextoExacto(page, texto, selector = 'button, a, [role="butt
  * <button role="checkbox">, no como <input>, asi que no valen ni page.check ni
  * un selector de input.
  */
+/**
+ * Desplaza el visor hasta el final del PDF, donde se dibujan el sello de la
+ * firma digital de la empresa y la conformidad del trabajador. El visor solo
+ * enseña la parte de arriba de la página, así que sin esto las firmas
+ * quedaban fuera de la captura.
+ */
+async function bajarPdfAlPie(page) {
+  await page.waitForSelector('canvas', { timeout: 20000 });
+  await new Promise((r) => setTimeout(r, 1500));
+  // El área de la página (no la columna de miniaturas, que va antes en el
+  // DOM y también tiene canvas): div.overflow-y-auto.bg-gray-200 de PDFViewer.
+  await page.evaluate(() => {
+    const el = document.querySelector('div.overflow-y-auto.bg-gray-200');
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+  await new Promise((r) => setTimeout(r, 1500));
+}
+
 async function marcarCasilla(page) {
   const marcada = await page.evaluate(() => {
     const casilla = document.querySelector('[role="dialog"] [role="checkbox"]');
